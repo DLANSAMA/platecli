@@ -336,7 +336,7 @@ def cmd_upload(args):
     task_id = None
     upload_callback = None
     try:
-        if not getattr(args, "json", False) and not getattr(args, "no_progress", False) and sys.stdout.isatty():
+        if not getattr(args, "json", False) and getattr(args, "progress", True) and sys.stdout.isatty():
             from rich.progress import Progress, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
             progress = Progress(
                 "[progress.description]{task.description}",

@@ -11,7 +11,7 @@ REQUIRED_SNIPPETS = {
     "linux runner": "ubuntu-latest",
     "macos runner": "macos-latest",
     "windows runner": "windows-latest",
-    "oldest supported python": '"3.8"',
+    "oldest supported python": '"3.9"',
     "current smoke python": '"3.14"',
     "unit tests": "python -W error::ResourceWarning -m unittest tests.test_bambu",
     "runtime package syntax": "bambu_cli/bambu.py",

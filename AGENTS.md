@@ -24,7 +24,9 @@ Agents may place `--json` before or after the subcommand; `bambu-cli --json --ve
 ## Packaging
 In pyproject.toml:
 ```toml
-[tool.setuptools.data-files]
-packages = ["bambu_cli"]
-"share/bambu-cli" = ["README.md", "AGENTS.md", "requirements.txt"]
+[tool.setuptools]
+packages = ["bambu_cli", "bambu_cli.protocols"]
+
+[tool.setuptools.package-data]
+"bambu_cli" = ["README.md", "AGENTS.md", "requirements.txt"]
 ```

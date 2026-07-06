@@ -2338,6 +2338,85 @@ class TestBambuCmdPrint(unittest.TestCase):
         )
         mock_execute.assert_called_once_with(ANY, "test_payload", "test.gcode", dry_run=False)
 
+class TestGrabCameraFrameDirect(unittest.TestCase):
+
+    def _mock_net(self, mock_ssl, mock_create_conn):
+        mock_sock = MagicMock()
+        mock_create_conn.return_value = mock_sock
+        mock_tls = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.wrap_socket.return_value = mock_tls
+        mock_ssl.return_value = mock_ctx
+        mock_tls.recv.side_effect = [
+            # first recv: size header (16 bytes)
+            (4).to_bytes(4, "little") + b"\x00" * 12,
+            # second recv: 4 bytes data representing valid JPEG
+            b"\xff\xd8\xff\xd9",
+        ]
+        return mock_sock, mock_tls, mock_ctx
+
+    @patch('bambu_cli.bambu.socket.create_connection')
+    @patch('bambu_cli.bambu.ssl.create_default_context')
+    def test_grab_camera_frame_direct_no_pin_fails_closed(self, mock_ssl, mock_create_conn):
+        """Without a pinned fingerprint (and insecure_tls unset) the camera
+        connection must fail closed before the access code is sent."""
+        import ssl as ssl_mod
+        from bambu_cli.bambu import _grab_camera_frame_direct
+        mock_sock, mock_tls, mock_ctx = self._mock_net(mock_ssl, mock_create_conn)
+        printer = _test_printer(ip="192.168.1.100", access_code="my_secret_code")
+
+        with self.assertRaises(ssl_mod.SSLError):
+            _grab_camera_frame_direct(printer)
+        mock_tls.sendall.assert_not_called()
+
+    @patch('bambu_cli.bambu.socket.create_connection')
+    @patch('bambu_cli.bambu.ssl.create_default_context')
+    def test_grab_camera_frame_direct_insecure(self, mock_ssl, mock_create_conn):
+        from bambu_cli.bambu import _grab_camera_frame_direct
+        mock_sock, mock_tls, mock_ctx = self._mock_net(mock_ssl, mock_create_conn)
+        printer = _test_printer(ip="192.168.1.100", access_code="my_secret_code", insecure_tls=True)
+
+        res = _grab_camera_frame_direct(printer)
+        self.assertEqual(res, b"\xff\xd8\xff\xd9")
+
+        mock_create_conn.assert_called_once_with(("192.168.1.100", 6000), timeout=12)
+        mock_ctx.wrap_socket.assert_called_once_with(mock_sock, server_hostname="192.168.1.100")
+        mock_tls.sendall.assert_called_once()
+        mock_tls.getpeercert.assert_not_called()
+
+    @patch('bambu_cli.config.fingerprint_sha256')
+    @patch('bambu_cli.bambu.socket.create_connection')
+    @patch('bambu_cli.bambu.ssl.create_default_context')
+    def test_grab_camera_frame_direct_with_pin(self, mock_ssl, mock_create_conn, mock_fp):
+        from bambu_cli.bambu import _grab_camera_frame_direct
+        mock_sock, mock_tls, mock_ctx = self._mock_net(mock_ssl, mock_create_conn)
+        mock_tls.getpeercert.return_value = b"der_cert"
+        mock_fp.return_value = "mock_fingerprint"
+        printer = _test_printer(ip="192.168.1.100", access_code="my_secret_code",
+                                cert_fingerprint="mock_fingerprint")
+
+        res = _grab_camera_frame_direct(printer)
+        self.assertEqual(res, b"\xff\xd8\xff\xd9")
+
+        mock_tls.getpeercert.assert_called_once_with(binary_form=True)
+        mock_fp.assert_called_once_with(b"der_cert")
+
+    @patch('bambu_cli.config.fingerprint_sha256')
+    @patch('bambu_cli.bambu.socket.create_connection')
+    @patch('bambu_cli.bambu.ssl.create_default_context')
+    def test_grab_camera_frame_direct_pin_mismatch(self, mock_ssl, mock_create_conn, mock_fp):
+        import ssl as ssl_mod
+        from bambu_cli.bambu import _grab_camera_frame_direct
+        mock_sock, mock_tls, mock_ctx = self._mock_net(mock_ssl, mock_create_conn)
+        mock_tls.getpeercert.return_value = b"der_cert"
+        mock_fp.return_value = "wrong_fingerprint"
+        printer = _test_printer(ip="192.168.1.100", access_code="my_secret_code",
+                                cert_fingerprint="mock_fingerprint")
+
+        with self.assertRaises(ssl_mod.SSLError):
+            _grab_camera_frame_direct(printer)
+        mock_tls.sendall.assert_not_called()
+
 class TestBambuCmdSnapshot(unittest.TestCase):
 
     @patch('bambu_cli.bambu.logger')

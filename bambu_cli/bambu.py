@@ -1496,10 +1496,10 @@ def collect_preflight_checks():
     """Collect local install/config checks without contacting the printer."""
     checks = []
     py_version = ".".join(str(part) for part in sys.version_info[:3])
-    if sys.version_info >= (3, 8):
+    if sys.version_info >= (3, 9):
         checks.append(_preflight_result("ok", "python", f"Python {py_version} is supported."))
     else:
-        checks.append(_preflight_result("error", "python", f"Python {py_version} is too old; Python 3.8+ is required."))
+        checks.append(_preflight_result("error", "python", f"Python {py_version} is too old; Python 3.9+ is required."))
 
     if mqtt is not None or _module_available("paho.mqtt.client"):
         checks.append(_preflight_result("ok", "paho-mqtt", "paho-mqtt is available."))
@@ -2201,6 +2201,7 @@ def _cmd_job(args):
                     name=getattr(args, 'name', None),
                     max_download_mb=getattr(args, 'max_download_mb', DEFAULT_MAX_DOWNLOAD_MB),
                     json=False,
+                    progress=not getattr(args, "json", False),
                 ))
             except SystemExit as exc:
                 detail = _last_error_for("download")
@@ -2370,8 +2371,9 @@ def _cmd_job(args):
 
         try:
             _LAST_ERROR_PAYLOAD = None
-            remote_name = cmd_upload(argparse.Namespace(file=printable_path, dry_run=False, json=False,
-                                                        no_progress=bool(getattr(args, 'json', False))))
+            remote_name = cmd_upload(argparse.Namespace(
+                file=printable_path, dry_run=False, json=False,
+                progress=not getattr(args, "json", False)))
         except SystemExit as exc:
             detail = _last_error_for("upload")
             _emit_job_failure(
@@ -2797,7 +2799,7 @@ def _cmd_download(args):
                 progress = None
                 task_id = None
                 try:
-                    if not getattr(args, "json", False):
+                    if not getattr(args, "json", False) and getattr(args, "progress", True):
                         from rich.progress import Progress, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
                         progress = Progress(
                             TextColumn("[bold blue]{task.description}", justify="right"),

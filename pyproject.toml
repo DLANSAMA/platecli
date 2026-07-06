@@ -1,14 +1,14 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "bambu-cli"
 version = "0.1.0"
-description = "Local Bambu Lab printer control for agents and humans"
+description = "Unofficial local Bambu Lab printer control for agents and humans (not affiliated with Bambu Lab)"
 readme = "README.md"
-requires-python = ">=3.8"
-license = { text = "MIT" }
+requires-python = ">=3.9"
+license = "MIT"
 authors = [{ name = "bambu-cli contributors" }]
 keywords = ["bambu", "3d-printing", "agent", "cli", "orcaslicer"]
 dependencies = [
@@ -20,12 +20,10 @@ classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
   "Intended Audience :: End Users/Desktop",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: MacOS",
   "Operating System :: Microsoft :: Windows",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -41,6 +39,11 @@ test = [
     "pytest-cov",
     "pytest-mock"
 ]
+
+[project.urls]
+Homepage = "https://github.com/DLANSAMA/bambu-cli"
+Repository = "https://github.com/DLANSAMA/bambu-cli"
+Issues = "https://github.com/DLANSAMA/bambu-cli/issues"
 
 [project.scripts]
 bambu-cli = "bambu_cli.bambu:main"

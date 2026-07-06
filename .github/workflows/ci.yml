@@ -24,7 +24,7 @@ jobs:
         # Full Python coverage on cheap Linux runners; one smoke job each on
         # macOS (10x minute multiplier) and Windows (2x) at the newest Python.
         os: [ubuntu-latest]
-        python-version: ["3.8", "3.12", "3.14"]
+        python-version: ["3.9", "3.12", "3.14"]
         include:
           - os: macos-latest
             python-version: "3.14"

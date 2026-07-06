@@ -3,7 +3,7 @@ import sys
 import json
 import socket
 import ssl
-from bambu_cli.utils import get_sequence_id
+from bambu_cli.utils import get_sequence_id, _resolve_ip
 import hashlib
 import logging
 import threading
@@ -80,17 +80,7 @@ class _SimMqttClient:
         return None
 
 
-def _resolve_ip(host):
-    """Resolve a hostname to an IP address (supporting IPv4 and IPv6) exactly once."""
-    if not host or host == "0.0.0.0":
-        return host
-    try:
-        addr_info = socket.getaddrinfo(host, None)
-        if addr_info:
-            return addr_info[0][4][0]
-    except Exception as e:
-        pass
-    return host
+# _resolve_ip is imported from bambu_cli.utils
 
 
 def probe_cert_fingerprint(host, port=990, timeout=5):
@@ -488,6 +478,8 @@ import tempfile
 import base64
 
 _TRUSTED_CERT_FILE = None
+
+# probe_cert_fingerprint is defined above
 
 def _get_and_verify_cert_pem(host, port, expected_fingerprint, timeout=5):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)

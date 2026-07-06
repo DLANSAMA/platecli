@@ -63,15 +63,15 @@ REQUIRED_WHEEL_DATA_SUFFIXES = {
 }
 
 STATIC_METADATA_SNIPPETS = {
-    "Summary: Local Bambu Lab printer control for agents and humans",
+    "Summary: Unofficial local Bambu Lab printer control for agents and humans (not affiliated with Bambu Lab)",
     "Keywords: bambu,3d-printing,agent,cli,orcaslicer",
-    "Requires-Python: >=3.8",
+    "Requires-Python: >=3.9",
     "Requires-Dist: paho-mqtt",
     "Requires-Dist: zeroconf",
     "Classifier: Operating System :: MacOS",
     "Classifier: Operating System :: Microsoft :: Windows",
     "Classifier: Operating System :: POSIX :: Linux",
-    "Classifier: Programming Language :: Python :: 3.8",
+    "Classifier: Programming Language :: Python :: 3.9",
     "Classifier: Programming Language :: Python :: 3.12",
     "Classifier: Programming Language :: Python :: 3.13",
     "Classifier: Programming Language :: Python :: 3.14",

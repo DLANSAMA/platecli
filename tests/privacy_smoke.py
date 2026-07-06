@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 BASE_EXCLUDED_DIRS = {
+    ".claude",
     ".git",
     ".mypy_cache",
     ".pytest_cache",
@@ -75,10 +76,31 @@ def local_identity_patterns():
             names.add(value)
             names.update(part for part in re.split(r"[^A-Za-z0-9_-]+", value) if part)
 
+    # Exclude repository owner from checks to avoid false positives on repo URLs
+    try:
+        remote_url = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=2,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        remote_url = ""
+
+    excluded_names = set()
+    if remote_url:
+        match = re.search(r"github\.com[:/]([^/]+)", remote_url)
+        if match:
+            excluded_names.add(match.group(1).lower())
+
     names = {
         name.strip()
         for name in names
-        if name and len(name.strip()) >= 4 and name.strip().lower() not in GENERIC_LOCAL_NAMES
+        if name and len(name.strip()) >= 4
+        and name.strip().lower() not in GENERIC_LOCAL_NAMES
+        and name.strip().lower() not in excluded_names
     }
 
     patterns = {
@@ -108,6 +130,9 @@ def iter_files(include_dist=False):
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = [name for name in dirnames if name not in excluded_dirs]
         for filename in filenames:
+            if filename == ".git":
+                # In a git worktree, .git is a file pointing at the local checkout path.
+                continue
             path = Path(dirpath) / filename
             if path.is_symlink() or not path.is_file():
                 continue

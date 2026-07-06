@@ -8,6 +8,8 @@ Fully local 3D printing pipeline for Bambu Lab printers. Runs on **Linux, macOS,
 
 **Supports:** P1P, P1S, X1C, X1E, A1, A1 Mini (any Bambu printer with LAN mode)
 
+> **Disclaimer:** bambu-cli is an unofficial, community-developed tool. It is not affiliated with, endorsed by, or supported by Bambu Lab. "Bambu Lab" and product names are trademarks of their respective owners, used here only to describe compatibility.
+
 ## Installation
 
 The examples below use the installed `bambu-cli` command.
@@ -20,7 +22,7 @@ pip install .
 
 - **Jobs & URL Support** — Use `job` when an agent or user gives either a website URL or a local file path. It handles everything in one shot.
 - **Safe Extraction** — ZIP archives containing model files are fully supported. Existing files are kept safe by creating a numbered sibling such as `model-1.stl`. URL downloads and ZIP extraction have a 2048 MB safety limit, adjustable via `--max-download-mb`.
-- **Modularity** — Run steps individually using `extract`, `slice`, `upload`, or `print`.
+- **Modularity** — Run steps individually using `download`, `slice`, `upload`, or `print`.
 - **Safety First** — The one-shot command will not start a print unless `--confirm` is present.
 - **Diagnostics** — Network, FTPS, and MQTT health checking with `doctor` and `preflight`.
 
