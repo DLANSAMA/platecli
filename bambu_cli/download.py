@@ -2,18 +2,11 @@
 extraction, HTML link scraping, and Printables GraphQL resolution."""
 import email.message
 import email.utils
-import functools
-import http.client
-import ipaddress
-import json
 import os
-import platform
 import re
-import socket
+import socket  # noqa: F401 -- re-exported for test compat (download.socket patching)
 import sys
 import tempfile
-import threading
-import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -23,8 +16,6 @@ from urllib.parse import unquote, urljoin, urlparse
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DEFAULT_MAX_DOWNLOAD_MB,
-    DEFAULT_NETWORK_TIMEOUT,
-    DNS_CACHE_TTL,
     DOWNLOADABLE_EXTENSIONS,
     DOWNLOAD_CANDIDATE_EXTENSIONS,
     DOWNLOAD_LINK_EXTENSION_PRIORITY,
@@ -59,151 +50,25 @@ from bambu_cli.protocols.ftps import (
     _noncolliding_path,
     _remove_partial_file,
 )
-
-
-_dns_cache = {}
-_dns_cache_lock = threading.Lock()
-
-# Explicit redirect hop cap. Each hop is independently re-validated (scheme via
-# handler registration, SSRF via _get_safe_connection on the real connect), but
-# without an explicit low cap a malicious/misconfigured server could otherwise
-# chain redirects up to urllib's built-in default of 10.
-MAX_DOWNLOAD_REDIRECT_HOPS = 5
-
-
-def _get_safe_connection(host, port, timeout, source_address):
-    """Perform DNS resolution and validate IP is not internal/reserved."""
-    cache_key = (host, port)
-    now = time.time()
-
-    addr_info = None
-    with _dns_cache_lock:
-        if cache_key in _dns_cache:
-            cached_info, timestamp = _dns_cache[cache_key]
-            if now - timestamp < DNS_CACHE_TTL:
-                addr_info = cached_info
-            else:
-                del _dns_cache[cache_key]
-
-    if addr_info is None:
-        try:
-            addr_info = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
-            with _dns_cache_lock:
-                if len(_dns_cache) > 1000:
-                    _dns_cache.clear()
-                _dns_cache[cache_key] = (addr_info, now)
-        except socket.gaierror as e:
-            raise urllib.error.URLError(f"DNS resolution failed for {host}: {e}") from e
-
-    for res in addr_info:
-        ip = res[4][0]
-        try:
-            ip_obj = ipaddress.ip_address(ip)
-            if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped:
-                ip_obj = ip_obj.ipv4_mapped
-            from bambu_cli import bambu
-            if not getattr(bambu, "ALLOW_PRIVATE_IPS", False) and not ip_obj.is_global:
-                logger.warning(f"Security Error: Refusing connection to non-public IP ({ip}) for {host}")
-                continue
-        except ValueError:
-            continue
-
-        # Connect directly to the validated IP to prevent TOCTOU/DNS rebinding
-        try:
-            return socket.create_connection((ip, port), timeout, source_address)
-        except OSError:
-            continue
-
-    # If all IPs fail, invalidate cache so next attempt resolves DNS again
-    with _dns_cache_lock:
-        _dns_cache.pop(cache_key, None)
-
-    raise urllib.error.URLError(f"Could not connect to {host}: No safe/reachable IP addresses found")
-
-
-class SafeHTTPConnection(http.client.HTTPConnection):
-    def connect(self):
-        self.sock = _get_safe_connection(self.host, self.port, self.timeout, self.source_address)
-
-
-class SafeHTTPSConnection(http.client.HTTPSConnection):
-    def connect(self):
-        sock = _get_safe_connection(self.host, self.port, self.timeout, self.source_address)
-        # Wrap with SSL using the original hostname for SNI
-        try:
-            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
-        except Exception:
-            try:
-                sock.close()
-            except Exception:
-                pass
-            raise
-
-
-class SafeHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Enforce an explicit, low redirect hop cap with a clear error.
-
-    Each hop still passes through the Safe* connection classes (per-hop SSRF
-    re-validation) and the caller re-checks scheme/extension/content-type on
-    the final URL, but without this the stock handler would allow up to its
-    own default of 10 hops before failing with a generic HTTPError.
-    """
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        hop_count = getattr(req, "_bambu_redirect_hops", 0) + 1
-        if hop_count > MAX_DOWNLOAD_REDIRECT_HOPS:
-            raise urllib.error.URLError(
-                f"Too many redirects: exceeded the {MAX_DOWNLOAD_REDIRECT_HOPS}-hop "
-                f"limit while fetching {_redact_url_credentials(req.full_url)}"
-            )
-        new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if new_req is not None:
-            new_req._bambu_redirect_hops = hop_count
-        return new_req
-
-
-class SafeHTTPHandler(urllib.request.HTTPHandler):
-    def http_open(self, req):
-        return self.do_open(SafeHTTPConnection, req)
-
-
-class SafeHTTPSHandler(urllib.request.HTTPSHandler):
-    def https_open(self, req):
-        kwargs = {}
-        if hasattr(self, '_context'):
-            kwargs['context'] = self._context
-        if hasattr(self, '_check_hostname'):
-            kwargs['check_hostname'] = self._check_hostname
-        return self.do_open(SafeHTTPSConnection, req, **kwargs)
-
-
-@functools.lru_cache(maxsize=1)
-def _default_user_agent():
-    """Construct a User-Agent string that reflects the actual host OS."""
-    system = platform.system()
-    machine = platform.machine() or "x86_64"
-    if system == "Darwin":
-        os_label = "Macintosh; Intel Mac OS X 10_15_7"
-    elif system == "Windows":
-        os_label = "Windows NT 10.0; Win64; x64"
-    else:
-        os_label = f"X11; Linux {machine}"
-    return (f"Mozilla/5.0 ({os_label}) AppleWebKit/537.36 "
-            f"(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-
-def build_safe_opener():
-    """Build a urllib opener that only uses safe handlers and restricts schemes."""
-    opener = urllib.request.OpenerDirector()
-    # Disable environment proxies so target IP validation cannot be bypassed by
-    # asking a proxy to fetch an internal/private address on our behalf.
-    opener.add_handler(urllib.request.ProxyHandler({}))
-    opener.add_handler(urllib.request.UnknownHandler())
-    opener.add_handler(urllib.request.HTTPDefaultErrorHandler())
-    opener.add_handler(SafeHTTPRedirectHandler())
-    opener.add_handler(SafeHTTPHandler())
-    opener.add_handler(SafeHTTPSHandler())
-    return opener
+# MAX_DOWNLOAD_REDIRECT_HOPS, _dns_cache, _get_safe_connection, and the Safe*
+# handler classes below are not used directly in this module; they are
+# re-exported so existing tests that patch/inspect them via
+# ``bambu_cli.download.<name>`` keep working after the SSRF-safety layer
+# moved to netsafety.py.
+from bambu_cli.netsafety import (  # noqa: F401
+    MAX_DOWNLOAD_REDIRECT_HOPS,
+    SafeHTTPHandler,
+    SafeHTTPRedirectHandler,
+    SafeHTTPSHandler,
+    _default_user_agent,
+    _dns_cache,
+    _get_safe_connection,
+    build_safe_opener,
+)
+from bambu_cli.printables import (
+    _is_printables_model_url,
+    resolve_printables_url,
+)
 
 
 def _looks_like_url(value):
@@ -267,12 +132,6 @@ def _validate_download_url_or_exit(args, source_url, normalized_source, url, fai
 def _name_for_message(value):
     """Return a local/remote name for messages without URL credentials."""
     return _redact_url_credentials(value)
-
-
-def _is_printables_model_url(value):
-    parsed = urlparse(value)
-    host = (parsed.hostname or "").lower()
-    return host in ("printables.com", "www.printables.com") and bool(re.search(r'/model/(\d+)', parsed.path))
 
 
 def _file_extension(path):
@@ -692,150 +551,6 @@ def _reject_non_print_ready(filename, action):
 def _print_ready_error_message(filename, action):
     supported = ", ".join(PRINT_READY_EXTENSIONS)
     return f"Cannot {action} '{filename}': expected a printer-ready file ({supported}). Use `job` or `slice` for model files."
-
-
-def _select_printables_file(files, file_desc, type_key="stl"):
-    if len(files) > 1:
-        logger.info(f"   Found {len(files)} {file_desc} files:")
-        for s in files:
-            logger.info(f"      • {s['name']} ({s.get('fileSize', 0) // 1024}KB)")
-    file_to_use = max(files, key=lambda x: x.get('fileSize', 0))
-    logger.info(f"   → Using {file_desc}: {file_to_use['name']} ({file_to_use.get('fileSize', 0) // 1024}KB)")
-    return file_to_use, type_key
-
-
-def _get_printables_file_info(model_id, gql_headers, opener):
-    """Helper to fetch file info from Printables API."""
-
-    payload = json.dumps({
-        "variables": {"id": model_id},
-        "query": "query($id: ID!){print(id: $id){name stls{name fileSize id} gcodes{name fileSize id}}}",
-    })
-    req = urllib.request.Request('https://api.printables.com/graphql/',
-        data=payload.encode(), headers=gql_headers)
-
-    file_type = "stl"
-    try:
-        with opener.open(req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
-            response_data = resp.read()
-    except urllib.error.URLError as e:
-        logger.error(f"Network error querying Printables API: {e}")
-        return None, None, None
-    except Exception as e:
-        logger.error(f"Failed to query Printables API: {e}")
-        return None, None, None
-
-    try:
-        result = json.loads(response_data)
-    except Exception as e:
-        logger.error(f"Failed to parse Printables API response: {e}")
-        return None, None, None
-
-    if not isinstance(result, dict):
-        logger.error("Invalid Printables API response structure.")
-        return None, None, None
-
-    model = result.get('data', {}).get('print')
-    if not model:
-        logger.error(f"Model #{model_id} not found on Printables")
-        return None, None, None
-
-    stls_raw = model.get('stls', [])
-    gcodes_raw = model.get('gcodes', [])
-
-    stls, steps, threemfs = [], [], []
-    for s in stls_raw:
-        ext = s.get('name', '').lower().rpartition('.')[-1]
-        if ext == 'stl':
-            stls.append(s)
-        elif ext in ('step', 'stp'):
-            steps.append(s)
-        elif ext == '3mf':
-            threemfs.append(s)
-    for g in gcodes_raw:
-        ext = g.get('name', '').lower().rpartition('.')[-1]
-        if ext == '3mf':
-            threemfs.append(g)
-
-    logger.info(f"   Model: {model.get('name', '?')}")
-    if stls:
-        file_to_use, file_type = _select_printables_file(stls, "STL", "stl")
-    elif steps:
-        file_to_use, file_type = _select_printables_file(steps, "STEP", "stl")
-    elif threemfs:
-        logger.warning("   ⚠️  No STL/STEP files — falling back to 3MF (cannot re-slice with custom settings)")
-        file_to_use = max(threemfs, key=lambda x: x.get('fileSize', 0))
-        if file_to_use in gcodes_raw:
-            file_type = "gcode"
-        else:
-            file_type = "stl"
-        logger.info(f"   → Using 3MF: {file_to_use['name']} ({file_to_use.get('fileSize', 0) // 1024}KB)")
-    else:
-        logger.error("No STL, STEP, or 3MF files found for this model")
-        return None, None, None
-
-    return file_to_use['id'], file_type, file_to_use['name']
-
-
-def _get_printables_download_link(file_id, model_id, file_type, stl_name, gql_headers, opener):
-    """Helper to fetch download link from Printables API."""
-
-    payload = json.dumps({
-        "operationName": "GetDownloadLink",
-        "variables": {"id": file_id, "printId": model_id, "source": "model_detail", "fileType": file_type},
-        "query": "mutation GetDownloadLink($id: ID!, $printId: ID!, $source: DownloadSourceEnum!, $fileType: DownloadFileTypeEnum!) { getDownloadLink(id: $id, printId: $printId, source: $source, fileType: $fileType) { ok output { link } errors { field messages } } }"
-    })
-    req = urllib.request.Request('https://api.printables.com/graphql/',
-        data=payload.encode(), headers=gql_headers)
-
-    try:
-        with opener.open(req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
-            result = json.loads(resp.read())
-            dl = result.get('data', {}).get('getDownloadLink', {})
-            if dl.get('ok') and dl.get('output', {}).get('link'):
-                download_url = dl['output']['link']
-                return download_url, stl_name
-            else:
-                errs = dl.get('errors', [])
-                msg = errs[0]['messages'][0] if errs else 'unknown error'
-                logger.error(f"Failed to get download link: {msg}")
-                return None, None
-    except urllib.error.URLError as e:
-        logger.error(f"Network error getting download link: {e}")
-        return None, None
-    except Exception as e:
-        logger.error(f"Failed to get download link: {e}")
-        return None, None
-
-
-def resolve_printables_url(url):
-    """Resolve a Printables model URL to a direct file download URL and filename.
-    Returns (download_url, filename) or (None, None) if resolution fails.
-    """
-    if not _is_printables_model_url(url):
-        return None, None
-
-    printables_match = re.search(r'/model/(\d+)', urlparse(url).path)
-    if not printables_match:
-        return None, None
-
-    model_id = printables_match.group(1)
-    logger.info(f"🔍 Detected Printables model #{model_id}, resolving files...")
-
-    headers = {
-        'User-Agent': _default_user_agent(),
-        'Accept': '*/*',
-    }
-    gql_headers = {**headers, 'Content-Type': 'application/json',
-                   'Origin': 'https://www.printables.com',
-                   'Referer': 'https://www.printables.com/'}
-
-    opener = build_safe_opener()
-    file_id, file_type, stl_name = _get_printables_file_info(model_id, gql_headers, opener)
-    if not file_id:
-        return None, None
-
-    return _get_printables_download_link(file_id, model_id, file_type, stl_name, gql_headers, opener)
 
 
 def _cmd_download(args):

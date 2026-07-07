@@ -1314,7 +1314,7 @@ class TestResolvePrintablesUrl(unittest.TestCase):
         self.assertEqual(result, (None, None))
         mock_logger.error.assert_called_with("Failed to get download link: Link Fetch Error")
 
-    @patch('bambu_cli.download.build_safe_opener')
+    @patch('bambu_cli.printables.build_safe_opener')
     @patch('bambu_cli.bambu.logger')
     def test_resolve_printables_url_success(self, mock_logger, mock_safe_opener):
         mock_urlopen = mock_safe_opener.return_value.open
@@ -1363,7 +1363,7 @@ class TestResolvePrintablesUrl(unittest.TestCase):
         self.assertIsNone(download_url)
         self.assertIsNone(filename)
 
-    @patch('bambu_cli.download.build_safe_opener')
+    @patch('bambu_cli.printables.build_safe_opener')
     @patch('bambu_cli.bambu.logger')
     def test_resolve_printables_model_not_found(self, mock_logger, mock_safe_opener):
         mock_urlopen = mock_safe_opener.return_value.open
@@ -1382,7 +1382,7 @@ class TestResolvePrintablesUrl(unittest.TestCase):
 
         self.assertTrue(any("Model #12345 not found on Printables" in call[0][0] for call in mock_logger.error.call_args_list))
 
-    @patch('bambu_cli.download.build_safe_opener')
+    @patch('bambu_cli.printables.build_safe_opener')
     @patch('bambu_cli.bambu.logger')
     def test_resolve_printables_no_valid_files(self, mock_logger, mock_safe_opener):
         mock_urlopen = mock_safe_opener.return_value.open
@@ -1409,7 +1409,7 @@ class TestResolvePrintablesUrl(unittest.TestCase):
 
         self.assertTrue(any("No STL, STEP, or 3MF files found for this model" in call[0][0] for call in mock_logger.error.call_args_list))
 
-    @patch('bambu_cli.download.build_safe_opener')
+    @patch('bambu_cli.printables.build_safe_opener')
     @patch('bambu_cli.bambu.logger')
     def test_resolve_printables_prioritize_step(self, mock_logger, mock_safe_opener):
         mock_urlopen = mock_safe_opener.return_value.open
@@ -1447,7 +1447,7 @@ class TestResolvePrintablesUrl(unittest.TestCase):
 
         self.assertTrue(any("→ Using STEP: part1.step (1KB)" in call[0][0] for call in mock_logger.info.call_args_list))
 
-    @patch('bambu_cli.download.build_safe_opener')
+    @patch('bambu_cli.printables.build_safe_opener')
     @patch('bambu_cli.bambu.logger')
     def test_resolve_printables_prioritize_3mf(self, mock_logger, mock_safe_opener):
         mock_urlopen = mock_safe_opener.return_value.open
@@ -1486,7 +1486,7 @@ class TestResolvePrintablesUrl(unittest.TestCase):
         self.assertTrue(any("falling back to 3MF" in call[0][0] for call in mock_logger.warning.call_args_list))
         self.assertTrue(any("→ Using 3MF: part1.3mf (1KB)" in call[0][0] for call in mock_logger.info.call_args_list))
 
-    @patch('bambu_cli.download.build_safe_opener')
+    @patch('bambu_cli.printables.build_safe_opener')
     @patch('bambu_cli.bambu.logger')
     def test_resolve_printables_download_link_error(self, mock_logger, mock_safe_opener):
         mock_urlopen = mock_safe_opener.return_value.open
@@ -1524,7 +1524,7 @@ class TestResolvePrintablesUrl(unittest.TestCase):
 
         self.assertTrue(any("Failed to get download link: Download limit reached" in call[0][0] for call in mock_logger.error.call_args_list))
 
-    @patch('bambu_cli.download.build_safe_opener')
+    @patch('bambu_cli.printables.build_safe_opener')
     @patch('bambu_cli.bambu.logger')
     def test_resolve_printables_exception(self, mock_logger, mock_safe_opener):
         mock_urlopen = mock_safe_opener.return_value.open
