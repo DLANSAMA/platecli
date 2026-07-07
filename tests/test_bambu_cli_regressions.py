@@ -325,3 +325,31 @@ def test_download_enforces_size_limit_mid_stream(tmp_path):
     assert excinfo.value.code == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
+
+
+def test_ftps_data_socket_unwrap_is_noop():
+    """Bambu firmware never answers TLS close-notify on the data channel;
+    ftplib's storbinary would hang in conn.unwrap() until the socket timeout
+    and misreport a completed transfer as failed. ntransfercmd must replace
+    unwrap with a no-op on secured data sockets (live-printer regression)."""
+    import ssl
+    from unittest.mock import Mock
+
+    client = ftps.ImplicitFTPS.__new__(ftps.ImplicitFTPS)
+    client._prot_p = True
+    client.host = "printer.local"
+    client.printer = types.SimpleNamespace(cert_fingerprint=None)
+    client.sock = Mock(spec=ssl.SSLSocket)
+    wrapped = Mock(spec=ssl.SSLSocket)
+    client.sock.context.wrap_socket.return_value = wrapped
+    client.sock.session = None
+
+    raw_conn = Mock()
+    with patch.object(ftps.ftplib.FTP, "ntransfercmd", return_value=(raw_conn, 42)):
+        conn, size = client.ntransfercmd("STOR test.3mf")
+
+    assert size == 42
+    assert conn is wrapped
+    # The no-op unwrap must not call through to the real TLS shutdown.
+    assert conn.unwrap() is conn
+    assert wrapped.method_calls == []  # unwrap was replaced, never invoked on the mock

@@ -121,6 +121,12 @@ class ImplicitFTPS(ftplib.FTP_TLS):
                     actual = hashlib.sha256(conn.getpeercert(binary_form=True)).hexdigest().lower()
                     if actual != pin.lower():
                         raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {pin.lower()}, got {actual}")
+                # Bambu firmware never answers the TLS close-notify on the data
+                # channel, so ftplib's storbinary/retrbinary hang in
+                # conn.unwrap() until the socket times out (and then treat the
+                # completed transfer as failed). Skip the shutdown handshake;
+                # the control-channel 226 already confirms the transfer.
+                conn.unwrap = lambda: conn
         return conn, size
 
 
