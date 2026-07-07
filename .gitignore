@@ -55,3 +55,9 @@ printer_snapshot.jpg
 .coverage
 .claude/
 .ruff_cache/
+
+# Local model files
+*.stl
+*.3mf
+*.gcode
+*.step
