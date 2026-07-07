@@ -1957,18 +1957,17 @@ class TestBambuGetStatus(unittest.TestCase):
         mock_logger.error.assert_called_with("Connection failed: rc=5")
 
     @patch('bambu_cli.bambu.get_status')
-    @patch('bambu_cli.bambu.logger')
-    @patch('sys.exit')
-    def test_cmd_status_connect_fail(self, mock_exit, mock_logger, mock_get_status):
+    def test_cmd_status_connect_fail(self, mock_get_status):
         from bambu_cli.bambu import cmd_status
+        from bambu_cli.errors import PrinterConnectionError
         mock_get_status.return_value = None
-        mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises(PrinterConnectionError) as cm:
             cmd_status(MagicMock())
 
-        self.assertEqual(cm.exception.code, 2)
-        mock_logger.error.assert_called_with("Could not connect to printer.")
+        self.assertEqual(str(cm.exception), "Could not connect to printer.")
+        self.assertEqual(cm.exception.exit_code, 2)
+        self.assertEqual(cm.exception.failed_step, "mqtt")
 
     @patch('bambu_cli.utils.emit_json')
     @patch('bambu_cli.protocols.mqtt.get_status')

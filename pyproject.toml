@@ -63,18 +63,20 @@ extend-exclude = ["docs", "scripts"]
 # Start conservative: correctness-focused rules only. Style rules can be
 # enabled once the codebase is formatted.
 select = ["E9", "F", "B", "PLE"]
-ignore = [
-    "F403", # star imports: bambu.py facade uses them deliberately (P1 cleanup)
-    "F405", # names from star imports
-]
 
 [tool.ruff.lint.per-file-ignores]
-# The facade re-imports every helper so tests/agents can reach them via
-# `bambu.<name>`; each one is "unused" by definition.
-"bambu_cli/bambu.py" = ["F401"]
 # MQTT callbacks close over per-iteration loop variables deliberately; each
 # callback's lifetime ends with its iteration.
 "bambu_cli/protocols/mqtt.py" = ["B023"]
+
+[tool.mypy]
+# Gradual typing: only the modules listed in CI's mypy step are checked.
+# Add a module here + to the CI list once it is fully annotated.
+python_version = "3.10"
+follow_imports = "silent"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = false
 
 [tool.bandit]
 exclude_dirs = ["tests", ".claude", "scripts"]

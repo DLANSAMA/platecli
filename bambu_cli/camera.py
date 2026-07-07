@@ -29,6 +29,7 @@ from bambu_cli.cli import (
     _namespace_get,
     _path_for_message,
 )
+from bambu_cli.context import RuntimeContext
 
 
 def _grab_camera_frame_direct(printer, timeout=12):
@@ -106,9 +107,10 @@ def _write_snapshot_atomic(outpath, data):
         raise
 
 
-def _cmd_snapshot(args):
+def _cmd_snapshot(args, ctx=None):
     """Capture a snapshot from the printer camera via BambuP1Streamer."""
     from bambu_cli import bambu
+    ctx = ctx or RuntimeContext.from_globals(args)
     outpath = _expand_path(args.output or "printer_snapshot.jpg")
     if outpath.startswith('-'):
         message = f"Invalid output path: {_path_for_message(outpath)}"
@@ -125,8 +127,7 @@ def _cmd_snapshot(args):
     # --- Primary path: direct P1/A1 camera grab (no Docker). Falls through to the
     #     Docker/RTSP streamer below for X1-series or if no frame is obtained. ---
     try:
-        from bambu_cli.printer import get_printer
-        printer = get_printer()
+        printer = ctx.printer()
         _frame = bambu._grab_camera_frame_direct(printer)
     except Exception as _exc:
         _frame = None
@@ -145,8 +146,8 @@ def _cmd_snapshot(args):
             })
         return
 
-    streamer_url = bambu.CAMERA_STREAM_URL
-    camera_image = bambu.CAMERA_IMAGE
+    streamer_url = ctx.settings.camera_stream_url
+    camera_image = ctx.settings.camera_image
 
     # Check if streamer container is running, start if needed
     if not shutil.which("docker"):
@@ -155,7 +156,7 @@ def _cmd_snapshot(args):
         emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="docker", output=outpath)
         sys.exit(EXIT_CONFIG_ERROR)
     try:
-        check = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", bambu.CAMERA_CONTAINER_NAME],
+        check = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", ctx.settings.camera_container_name],
             capture_output=True, text=True, timeout=5)
     except (FileNotFoundError, subprocess.SubprocessError) as e:
         message = f"Docker not reachable (is the daemon running?): {e}"
@@ -170,9 +171,9 @@ def _cmd_snapshot(args):
         # in argv, so the secret never appears in the process list (`ps`).
         docker_env = {**os.environ, "PRINTER_ACCESS_CODE": access_code}
         try:
-            subprocess.run(["docker", "rm", "-f", bambu.CAMERA_CONTAINER_NAME], capture_output=True, timeout=5)
-            run = subprocess.run(["docker", "run", "-d", "--name", bambu.CAMERA_CONTAINER_NAME, "-p", bambu.CAMERA_PORT,
-                "-e", f"PRINTER_ADDRESS={bambu.PRINTER_IP}",
+            subprocess.run(["docker", "rm", "-f", ctx.settings.camera_container_name], capture_output=True, timeout=5)
+            run = subprocess.run(["docker", "run", "-d", "--name", ctx.settings.camera_container_name, "-p", ctx.settings.camera_port,
+                "-e", f"PRINTER_ADDRESS={ctx.settings.printer_ip}",
                 "-e", "PRINTER_ACCESS_CODE",
                 camera_image], capture_output=True, timeout=10, env=docker_env)
         except (FileNotFoundError, subprocess.SubprocessError) as e:
@@ -186,8 +187,8 @@ def _cmd_snapshot(args):
                 detail = detail.decode(errors="replace")
             if access_code:
                 detail = detail.replace(access_code, "<redacted>")
-            if bambu.PRINTER_IP:
-                detail = detail.replace(bambu.PRINTER_IP, "<redacted>")
+            if ctx.settings.printer_ip:
+                detail = detail.replace(ctx.settings.printer_ip, "<redacted>")
             message = f"Could not start camera streamer Docker container using image {camera_image}: {detail.strip()}"
             logger.error(message)
             logger.info("   Build the BambuP1Streamer image locally or set `camera_image` in config.json.")

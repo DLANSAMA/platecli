@@ -4,6 +4,7 @@ import json
 import tempfile
 
 from bambu_cli.logging_utils import logger
+from bambu_cli.context import RuntimeContext
 
 # We dynamically import bambu at runtime in every function to support patching of functions and configuration globals
 
@@ -13,7 +14,7 @@ def cmd_setup(args):
     bambu._cmd_setup(args)
 from bambu_cli.utils import get_sequence_id
 
-def cmd_doctor(args):
+def cmd_doctor(args, ctx=None):
     """Health-check: auto-discover printer capabilities and verify configuration."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get, _display_path
@@ -22,8 +23,8 @@ def cmd_doctor(args):
     from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_CONFIG_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.protocols.mqtt import probe_cert_fingerprint
     from bambu_cli.protocols.ftps import get_ftp
-    from bambu_cli.printer import get_printer
 
+    ctx = ctx or RuntimeContext.from_globals(args)
     json_mode = bool(_namespace_get(args, "json", False))
 
     def emit_doctor_failure(failed_step, exit_code, error, extra=None):
@@ -69,30 +70,30 @@ def cmd_doctor(args):
         sys.exit(EXIT_CONFIG_ERROR)
 
     try:
-        fp = probe_cert_fingerprint(bambu.PRINTER_IP, 990, timeout=5)
+        fp = probe_cert_fingerprint(ctx.settings.printer_ip, 990, timeout=5)
     except Exception:
         fp = None
 
     def log_pin_hint():
-        if fp and not bambu._expected_fingerprint() and not bambu.INSECURE_TLS:
+        if fp and not bambu._expected_fingerprint() and not ctx.settings.insecure_tls:
             logger.info("      The printer uses a self-signed certificate. Pin it by adding to config.json:")
             logger.info(f'        "cert_fingerprint": "{fp}"')
             logger.info("      then re-run doctor.")
 
-    logger.info(f"   [2/3] Verifying MQTT connectivity to {bambu.PRINTER_IP}:{bambu.MQTT_PORT}...")
-    printer = get_printer()
+    logger.info(f"   [2/3] Verifying MQTT connectivity to {ctx.settings.printer_ip}:{ctx.settings.mqtt_port}...")
+    printer = ctx.printer()
     status = printer.status(timeout=5)
     if status:
         logger.info("   ✅ MQTT connection established. Printer identified.")
     else:
-        message = f"MQTT connection failed. Ensure printer at {bambu.PRINTER_IP} is on and access code is correct."
+        message = f"MQTT connection failed. Ensure printer at {ctx.settings.printer_ip} is on and access code is correct."
         logger.error(f"   ❌ {message}")
         log_pin_hint()
         extra = {"certificate_fingerprint": fp} if fp else None
         emit_doctor_failure("mqtt", EXIT_NETWORK_ERROR, message, extra=extra)
         sys.exit(EXIT_NETWORK_ERROR)
 
-    logger.info(f"   [3/3] Verifying FTPS connectivity to {bambu.PRINTER_IP}:990...")
+    logger.info(f"   [3/3] Verifying FTPS connectivity to {ctx.settings.printer_ip}:990...")
     try:
         with get_ftp(timeout=5):
             logger.info("   ✅ FTPS connection established.")
@@ -113,7 +114,7 @@ def cmd_doctor(args):
         else:
             logger.info('      Add "cert_fingerprint": "<above>" to config.json to pin this connection.')
 
-    model_info = bambu.MODEL_MAPPING.get(bambu.PRINTER_MODEL, bambu.MODEL_MAPPING["P1P"])
+    model_info = bambu.MODEL_MAPPING.get(ctx.settings.printer_model, bambu.MODEL_MAPPING["P1P"])
     firmware = status.get("sw_ver")
     modules = printer.get_version(timeout=5)
     if modules:
@@ -127,7 +128,7 @@ def cmd_doctor(args):
         "capabilities": {
             "ams": "ams" in status,
             "chamber_light": True,
-            "camera_snapshot": bambu.PRINTER_MODEL in ("P1P", "P1S"),
+            "camera_snapshot": ctx.settings.printer_model in ("P1P", "P1S"),
             "camera_snapshot_note": "snapshot uses the optional BambuP1Streamer container and is intended for P1P/P1S"
         }
     }
@@ -144,7 +145,7 @@ def cmd_doctor(args):
     logger.info(f"✅ All checks passed! Printer capabilities saved to {_display_path(cap_path)}")
     if json_mode:
         # Mask IP address inside doctor capabilities report unless --verbose is checked (A0530-SEC-16)
-        reported_ip = bambu.PRINTER_IP if bool(_namespace_get(args, "verbose", False)) else "<redacted>"
+        reported_ip = ctx.settings.printer_ip if bool(_namespace_get(args, "verbose", False)) else "<redacted>"
         emit_json({
             "command": "doctor",
             "ok": True,
@@ -155,12 +156,12 @@ def cmd_doctor(args):
             "capabilities": capabilities,
         })
 
-def cmd_light(args):
+def cmd_light(args, ctx=None):
     """Control chamber light."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
-    from bambu_cli.printer import get_printer
+    ctx = ctx or RuntimeContext.from_globals(args)
     action = args.action  # on or off
     val = "on" if action == "on" else "off"
     payload = json.dumps({
@@ -168,7 +169,7 @@ def cmd_light(args):
                    "led_node": "chamber_light", "led_mode": val,
                    "led_on_time": 500, "led_off_time": 500}
     })
-    printer = get_printer()
+    printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send light command."
         logger.error(message)
@@ -183,14 +184,14 @@ def cmd_light(args):
             "changed": True,
         })
 
-def cmd_pause(args):
+def cmd_pause(args, ctx=None):
     """Pause current print."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
-    from bambu_cli.printer import get_printer
+    ctx = ctx or RuntimeContext.from_globals(args)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "pause"}})
-    printer = get_printer()
+    printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send pause command."
         logger.error(message)
@@ -204,14 +205,14 @@ def cmd_pause(args):
             "paused": True,
         })
 
-def cmd_resume(args):
+def cmd_resume(args, ctx=None):
     """Resume paused print."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
-    from bambu_cli.printer import get_printer
+    ctx = ctx or RuntimeContext.from_globals(args)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "resume"}})
-    printer = get_printer()
+    printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send resume command."
         logger.error(message)
@@ -225,12 +226,12 @@ def cmd_resume(args):
             "resumed": True,
         })
 
-def cmd_stop(args):
+def cmd_stop(args, ctx=None):
     """Stop current print."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
-    from bambu_cli.printer import get_printer
+    ctx = ctx or RuntimeContext.from_globals(args)
     if not args.confirm:
         logger.warning("⚠️  This will STOP the current print. Add --confirm to proceed.")
         if bool(_namespace_get(args, "json", False)):
@@ -242,7 +243,7 @@ def cmd_stop(args):
             })
         sys.exit(EXIT_COMMAND_ERROR)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "stop"}})
-    printer = get_printer()
+    printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send stop command."
         logger.error(message)
@@ -256,7 +257,7 @@ def cmd_stop(args):
             "stopped": True,
         })
 
-def cmd_upload(args):
+def cmd_upload(args, ctx=None):
     """Upload a file to the printer via FTPS with binary retry/resume."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
@@ -264,6 +265,7 @@ def cmd_upload(args):
     from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
 
+    ctx = ctx or RuntimeContext.from_globals(args)
     filepath = bambu._expand_path(args.file)
     if filepath.startswith('-'):
         message = f"Invalid filepath: {bambu._path_for_message(filepath)}"
@@ -394,13 +396,14 @@ def cmd_upload(args):
         sys.exit(EXIT_NETWORK_ERROR)
 
 
-def cmd_files(args):
+def cmd_files(args, ctx=None):
     """List files on the printer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
+    ctx = ctx or RuntimeContext.from_globals(args)
     json_mode = bool(_namespace_get(args, "json", False))
     try:
         printer = get_printer()
@@ -431,13 +434,14 @@ def cmd_files(args):
         emit_json_error(args, "files", EXIT_NETWORK_ERROR, message, failed_step="ftps", files=[])
         sys.exit(EXIT_NETWORK_ERROR)
 
-def cmd_print(args):
+def cmd_print(args, ctx=None):
     """Start printing a file already on the printer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR
-    
+
+    ctx = ctx or RuntimeContext.from_globals(args)
     dry_run = getattr(args, 'dry_run', False)
     basename = str(args.file or "")
 
@@ -514,14 +518,15 @@ def cmd_download(args):
     from bambu_cli import bambu
     return bambu._cmd_download(args)
 
-def cmd_delete(args):
+def cmd_delete(args, ctx=None):
     """Delete a file from the printer via FTPS."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
-    
+
+    ctx = ctx or RuntimeContext.from_globals(args)
     filename = str(args.file or "")
     if bambu._safe_remote_name(filename) is None:
         message = f"Refusing to delete file with unsafe name: {bambu._name_for_message(filename)!r}"
@@ -559,10 +564,11 @@ def cmd_delete(args):
         emit_json_error(args, "delete", EXIT_NETWORK_ERROR, message, failed_step="ftps", file=filename, deleted=False)
         sys.exit(EXIT_NETWORK_ERROR)
 
-def cmd_snapshot(args):
+def cmd_snapshot(args, ctx=None):
     """Capture a camera snapshot using the RTSP Streamer Docker container."""
     from bambu_cli import bambu
-    bambu._cmd_snapshot(args)
+    ctx = ctx or RuntimeContext.from_globals(args)
+    bambu._cmd_snapshot(args, ctx=ctx)
 
 def cmd_preflight(args):
     """Check local install/config readiness without contacting printer."""
@@ -574,12 +580,12 @@ def cmd_job(args):
     from bambu_cli import bambu
     return bambu._cmd_job(args)
 
-def cmd_gcode(args):
+def cmd_gcode(args, ctx=None):
     """Send raw G-code to the printer via MQTT."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
-    from bambu_cli.printer import get_printer
+    ctx = ctx or RuntimeContext.from_globals(args)
     gcode = args.code
     payload = json.dumps({
         "print": {
@@ -588,7 +594,7 @@ def cmd_gcode(args):
             "param": gcode
         }
     })
-    printer = get_printer()
+    printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send G-code command."
         logger.error(message)
@@ -603,24 +609,26 @@ def cmd_gcode(args):
             "sent": True,
         })
 
-def cmd_status(args):
+def cmd_status(args, ctx=None):
     """Query and display the printer's current status."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
+    from bambu_cli.utils import emit_json
     from bambu_cli.constants import EXIT_NETWORK_ERROR
-    from bambu_cli.printer import get_printer
+    from bambu_cli.errors import PrinterConnectionError
     from bambu_cli.protocols.mqtt import monitor_status
+    ctx = ctx or RuntimeContext.from_globals(args)
     if bool(_namespace_get(args, "monitor", False)):
         monitor_status(args)
         return
 
-    printer = get_printer()
+    printer = ctx.printer()
     data = printer.status()
     if not data:
-        message = "Could not connect to printer."
-        logger.error(message)
-        emit_json_error(args, "status", EXIT_NETWORK_ERROR, message, failed_step="mqtt")
-        sys.exit(EXIT_NETWORK_ERROR)
+        raise PrinterConnectionError(
+            "Could not connect to printer.",
+            exit_code=EXIT_NETWORK_ERROR,
+            failed_step="mqtt",
+        )
 
     if args.json:
         payload = {

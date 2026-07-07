@@ -154,6 +154,8 @@ jobs:
         run: uvx ruff check bambu_cli
       - name: bandit (non-blocking)
         run: uvx bandit -c pyproject.toml -r bambu_cli -ll || true
+      - name: mypy (blocking, typed modules only — ratchet this list)
+        run: uvx mypy bambu_cli/context.py bambu_cli/constants.py
       - name: no test-awareness in production code (blocking)
         run: |
           if grep -rnE 'isinstance\([^)]*\bMock\b|["'"'"']unittest["'"'"'] in sys\.modules' bambu_cli/; then
