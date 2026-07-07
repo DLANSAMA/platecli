@@ -64,6 +64,11 @@ class TestBambuCmdSlice(unittest.TestCase):
     @patch('subprocess.Popen')
     @patch('os.path.exists')
     @patch('bambu_cli.slicer.logger')
+    # Pin the config globals: earlier test modules may leave platform-default
+    # paths (which contain "OrcaSlicer" on macOS/Windows) and flip the
+    # exists_side_effect branches below.
+    @patch('bambu_cli.bambu.PROFILES_DIR', '/tmp/mock_profiles')
+    @patch('bambu_cli.bambu.ORCA_SLICER', '/tmp/mock_orca')
     def test_cmd_slice_missing_machine_profile(self, mock_logger, mock_exists, mock_popen):
         from bambu_cli.bambu import cmd_slice
         args = MagicMock()
@@ -356,6 +361,9 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
     @patch('os.unlink')
     @patch('os.path.getsize', return_value=1024)
     @patch('os.path.exists')
+    # With os.path.exists mocked True, real makedirs('/tmp/out') skips parent
+    # creation and fails on Windows (WinError 3) unless the dir already exists.
+    @patch('os.makedirs', MagicMock())
     @patch('bambu_cli.slicer.logger')
     @patch('bambu_cli.bambu.PROFILES_DIR', '/tmp')
     @patch('bambu_cli.bambu.ORCA_SLICER', '/tmp/orca')
@@ -395,6 +403,7 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
         self.assertEqual(call_args[outfile_idx], "test_x2_sliced.3mf")
 
     @patch('os.path.exists')
+    @patch('os.makedirs', MagicMock())
     @patch('bambu_cli.bambu.logger')
     @patch('sys.exit')
     def test_cmd_slice_orca_slicer_not_found(self, mock_exit, mock_logger, mock_exists):
@@ -460,6 +469,7 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
     @patch('os.unlink')
     @patch('os.path.getsize', return_value=1024)
     @patch('os.path.exists')
+    @patch('os.makedirs', MagicMock())
     @patch('bambu_cli.slicer.logger')
     @patch('bambu_cli.bambu.PROFILES_DIR', '/tmp')
     @patch('bambu_cli.bambu.ORCA_SLICER', '/tmp/orca')
