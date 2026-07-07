@@ -68,15 +68,6 @@ def _print_next_command(args, basename):
 
 def generate_print_payload(basename, use_ams=False, ams_mapping=None, timelapse=False, bed_leveling=True, flow_cali=True):
     """Generate the JSON payload for the print command."""
-    from unittest.mock import Mock
-    if isinstance(use_ams, Mock):
-        use_ams = False
-    if isinstance(timelapse, Mock):
-        timelapse = False
-    if isinstance(bed_leveling, Mock):
-        bed_leveling = True
-    if isinstance(flow_cali, Mock):
-        flow_cali = True
     # Files are stored in /sdcard/model/ on the printer (referenced via the url field below).
     encoded_basename = quote(basename, safe="")
     print_cmd = {
@@ -174,11 +165,10 @@ def _predicted_url_remote_name(url, args):
 
 def _parse_print_options(args):
     """Validate print-only options and return the parsed AMS mapping."""
-    from unittest.mock import Mock
     raw_mapping = getattr(args, 'ams_mapping', None)
-    if not raw_mapping or isinstance(raw_mapping, Mock):
+    if not raw_mapping:
         return None, None
-    if not getattr(args, 'use_ams', False) or isinstance(getattr(args, 'use_ams', False), Mock):
+    if not getattr(args, 'use_ams', False):
         return None, "--ams-mapping requires --use-ams"
     try:
         clean_mapping = raw_mapping.strip('[]')
@@ -629,5 +619,5 @@ def _cmd_job(args):
         return printable_path
     finally:
         if is_temp_workdir and workdir and os.path.exists(workdir):
-            if "unittest" not in sys.modules and os.environ.get("BAMBU_TESTING") != "1":
+            if os.environ.get("BAMBU_KEEP_WORKDIR") != "1":
                 shutil.rmtree(workdir, ignore_errors=True)

@@ -1,6 +1,8 @@
 import contextlib
+import ftplib
 import logging
 import os
+import ssl
 import time
 from typing import Optional, Dict, Any
 
@@ -54,11 +56,11 @@ class BambuPrinter:
         finally:
             try:
                 client.quit()
-            except Exception:
+            except (*ftplib.all_errors, ssl.SSLError):
                 pass
             try:
                 client.close()
-            except Exception:
+            except (*ftplib.all_errors, ssl.SSLError):
                 pass
 
     def upload_file(self, local_path: str, remote_path: str, timeout: Optional[float] = None, progress_callback=None, on_resume=None) -> bool:
@@ -73,7 +75,7 @@ class BambuPrinter:
                     if attempt == 0:
                         try:
                             ftp.delete(remote_path)
-                        except Exception:
+                        except ftplib.all_errors:
                             pass
                     with open(local_path, 'rb') as f:
                         if uploaded_bytes > 0:
@@ -83,7 +85,16 @@ class BambuPrinter:
                             f.seek(uploaded_bytes)
                         ftp.storbinary(f'STOR {remote_path}', f, blocksize=1048576, rest=uploaded_bytes if uploaded_bytes > 0 else None, callback=progress_callback)
                     return True
-            except Exception as e:
+            except ftplib.error_perm as e:
+                # Permanent errors (530 bad access code, 550 permission denied)
+                # will not succeed on retry; fail fast with a clear message.
+                code = str(e)[:3]
+                if code == "530":
+                    logger.error(f"Upload failed: printer rejected login ({e}). Check your access code.")
+                else:
+                    logger.error(f"Upload failed: {e}")
+                return False
+            except (*ftplib.all_errors, ssl.SSLError) as e:
                 if attempt < max_retries:
                     logger.warning(f"⚠️ Upload attempt {attempt + 1} failed: {e}")
                     # Attempt to get remote size for resume
@@ -95,7 +106,7 @@ class BambuPrinter:
                                 logger.info(f"✅ Uploaded {remote_path} ({filesize // 1024}KB, verified remotely)")
                                 return True
                             uploaded_bytes = remote_size
-                    except Exception:
+                    except (*ftplib.all_errors, ssl.SSLError):
                         pass
                     logger.info("   Retrying in 5s...")
                     time.sleep(5)
@@ -112,7 +123,7 @@ class BambuPrinter:
                 with open(local_path, 'wb') as f:
                     ftp.retrbinary(f'RETR {remote_path}', f.write, blocksize=1048576)
                 return True
-        except Exception as e:
+        except (*ftplib.all_errors, ssl.SSLError) as e:
             logger.error(f"Download failed: {e}")
             return False
 
@@ -122,7 +133,7 @@ class BambuPrinter:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp:
                 ftp.delete(remote_path)
             return True
-        except Exception as e:
+        except (*ftplib.all_errors, ssl.SSLError) as e:
             logger.error(f"Delete failed: {e}")
             return False
 
@@ -131,7 +142,7 @@ class BambuPrinter:
         try:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp:
                 return ftp.nlst(remote_dir)
-        except Exception as e:
+        except (*ftplib.all_errors, ssl.SSLError) as e:
             logger.error(f"List files failed: {e}")
             return None
 

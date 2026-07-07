@@ -1,17 +1,14 @@
-import os
 import sys
 import json
 import socket
 import ssl
 from bambu_cli.utils import get_sequence_id, _resolve_ip
-import hashlib
 import logging
 import threading
 import time
 
 class LoggerProxy:
     def __getattr__(self, name):
-        import logging
         try:
             from bambu_cli import bambu
             return getattr(getattr(bambu, "logger", None) or logging.getLogger("bambu"), name)
@@ -35,7 +32,7 @@ def _require_mqtt():
             mqtt = paho_mqtt
         except ImportError:
             logger.error("Missing dependency: paho-mqtt. Install with: python -m pip install -r requirements.txt")
-            from bambu_cli.cli import EXIT_CONFIG_ERROR
+            from bambu_cli.constants import EXIT_CONFIG_ERROR
             sys.exit(EXIT_CONFIG_ERROR)
 
 
@@ -214,7 +211,7 @@ def send_command(printer, payload, timeout=None, retries=2):
             if attempt < retries:
                 logger.warning(f"MQTT command timeout on attempt {attempt + 1}. Retrying...")
                 time.sleep(2 ** attempt)
-        except Exception as e:
+        except (OSError, ssl.SSLError) as e:
             if attempt < retries:
                 logger.warning(f"MQTT command attempt {attempt + 1} failed: {e}. Retrying...")
                 time.sleep(2 ** attempt)
@@ -286,7 +283,7 @@ def get_status(printer, timeout=None, retries=2):
             if attempt < retries:
                 logger.warning(f"MQTT status timeout on attempt {attempt + 1}. Retrying...")
                 time.sleep(2 ** attempt)
-        except Exception as e:
+        except (OSError, ssl.SSLError) as e:
             if attempt < retries:
                 logger.warning(f"MQTT status attempt {attempt + 1} failed: {e}. Retrying...")
                 time.sleep(2 ** attempt)
@@ -320,7 +317,7 @@ def get_version(printer, timeout=5, retries=1):
         def on_message(client, userdata, msg):
             try:
                 data = json.loads(msg.payload.decode('utf-8'))
-            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            except (json.JSONDecodeError, UnicodeDecodeError):
                 return
             info = data.get("info")
             if isinstance(info, dict) and info.get("command") == "get_version" and "module" in info:
@@ -347,7 +344,7 @@ def get_version(printer, timeout=5, retries=1):
                     pass
             if attempt < retries:
                 time.sleep(2 ** attempt)
-        except Exception as e:
+        except (OSError, ssl.SSLError):
             if attempt < retries:
                 time.sleep(2 ** attempt)
 
@@ -474,7 +471,6 @@ def monitor_status(args):
         except:
             pass
 
-import tempfile
 import base64
 
 _TRUSTED_CERT_FILE = None
@@ -507,7 +503,7 @@ def execute_print_command(printer, payload, basename, dry_run=False):
     """Send the print payload via MQTT and monitor for errors."""
     from bambu_cli import bambu
     from bambu_cli.utils import record_error_detail
-    from bambu_cli.cli import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR, EXIT_TIMEOUT, EXIT_PRINTER_ERROR
+    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR, EXIT_TIMEOUT, EXIT_PRINTER_ERROR
     
     if dry_run:
         logger.info(f"🔍 Dry Run: Checking if {basename} exists on printer...")

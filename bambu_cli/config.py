@@ -1,8 +1,6 @@
 import os
 import sys
 import json
-import functools
-import logging
 
 from bambu_cli.logging_utils import logger
 
@@ -28,7 +26,8 @@ CONFIG_PATH = _default_config_path()
 def load_config(exit_on_fail=True):
     """Load printer config from the platform-native config path."""
     from bambu_cli import bambu
-    from bambu_cli.cli import _display_path, _exception_for_message, EXIT_CONFIG_ERROR
+    from bambu_cli.cli import _display_path, _exception_for_message
+    from bambu_cli.constants import EXIT_CONFIG_ERROR
     config_path = getattr(bambu, "CONFIG_PATH", CONFIG_PATH)
     if not os.path.exists(config_path):
         if not exit_on_fail:
@@ -64,7 +63,7 @@ def load_config(exit_on_fail=True):
                 if not exit_on_fail:
                     return None
                 logger.error(f"❌ Failed to enforce secure permissions on config file: {e}")
-                from bambu_cli.cli import EXIT_CONFIG_ERROR
+                from bambu_cli.constants import EXIT_CONFIG_ERROR
                 sys.exit(EXIT_CONFIG_ERROR)
         with open(config_path, encoding="utf-8") as f:
             cfg = json.load(f)
@@ -179,10 +178,10 @@ def apply_config(cfg):
     bambu.CAMERA_STREAM_URL = cfg.get("camera_stream_url", f"http://localhost:{host_port}/api/frame.jpeg?src=p1s")
 
 
-@functools.lru_cache(maxsize=None)
 def load_access_code():
     from bambu_cli import bambu
-    from bambu_cli.cli import _expand_path, _display_path, _exception_for_message, EXIT_CONFIG_ERROR
+    from bambu_cli.cli import _expand_path, _display_path, _exception_for_message
+    from bambu_cli.constants import EXIT_CONFIG_ERROR
     if "access_code" in bambu._cfg:
         access_code = str(bambu._cfg["access_code"]).strip()
         problem = _access_code_value_problem(access_code)
@@ -217,7 +216,6 @@ def _access_code_value_problem(value):
     return None
 
 
-@functools.lru_cache(maxsize=None)
 def load_username():
     """Return the MQTT username from config, defaulting to 'bblp'."""
     from bambu_cli import bambu

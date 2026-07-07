@@ -87,7 +87,7 @@ def _get_safe_connection(host, port, timeout, source_address):
                     _dns_cache.clear()
                 _dns_cache[cache_key] = (addr_info, now)
         except socket.gaierror as e:
-            raise urllib.error.URLError(f"DNS resolution failed for {host}: {e}")
+            raise urllib.error.URLError(f"DNS resolution failed for {host}: {e}") from e
 
     for res in addr_info:
         ip = res[4][0]
@@ -1038,7 +1038,7 @@ def _cmd_download(args):
                             transient=True
                         )
                         progress.start()
-                        task_id = progress.add_task(f"Downloading", total=total_size)
+                        task_id = progress.add_task("Downloading", total=total_size)
                 except ImportError:
                     pass
 
@@ -1046,8 +1046,7 @@ def _cmd_download(args):
                     with open(partial_path, 'wb') as f:
                         while True:
                             chunk = resp.read(chunk_size)
-                            from unittest.mock import Mock
-                            if not chunk or isinstance(chunk, Mock):
+                            if not chunk:
                                 break
                             f.write(chunk)
                             downloaded += len(chunk)

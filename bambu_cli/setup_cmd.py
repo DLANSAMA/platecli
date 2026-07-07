@@ -516,7 +516,7 @@ def _cmd_setup(args):
                        f"({selected['ip']}) belongs to your actual printer to protect your access code!")
         logger.info(f"\nConfiguring {selected['name']}...")
     else:
-        logger.info(f"\nConfiguring manual printer...")
+        logger.info("\nConfiguring manual printer...")
     access_code = _prompt_secret("Enter Access Code (found on printer screen): ", args)
 
     # Guided prompt for model & nozzle

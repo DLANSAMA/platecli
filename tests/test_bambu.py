@@ -296,7 +296,7 @@ class TestSendCommand(unittest.TestCase):
         mock_client = MagicMock()
         mock_create.return_value = mock_client
 
-        mock_client.connect.side_effect = Exception("Connection error")
+        mock_client.connect.side_effect = OSError("Connection error")
 
         result = send_command(_test_printer(), '{"test": "payload"}')
 
@@ -545,7 +545,7 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         args.file = "test.gcode"
         args.dry_run = True
 
-        mock_get_ftp = MagicMock(side_effect=Exception("FTP Error"))
+        mock_get_ftp = MagicMock(side_effect=OSError("FTP Error"))
         printer = _test_printer()
         printer.get_ftp_client = mock_get_ftp
         mock_get_printer.return_value = printer
@@ -571,7 +571,7 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         args.dry_run = False
 
         mock_ftp1 = MagicMock()
-        mock_ftp1.storbinary.side_effect = Exception("Upload interrupted")
+        mock_ftp1.storbinary.side_effect = OSError("Upload interrupted")
         mock_ftp1.size.return_value = 1024
 
         mock_ftp2 = MagicMock()
@@ -607,8 +607,8 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         args.dry_run = False
 
         mock_ftp = MagicMock()
-        mock_ftp.storbinary.side_effect = Exception("Upload always fails")
-        mock_ftp.size.side_effect = Exception("Can't get size")
+        mock_ftp.storbinary.side_effect = OSError("Upload always fails")
+        mock_ftp.size.side_effect = OSError("Can't get size")
 
         mock_get_ftp = MagicMock()
         mock_get_ftp.return_value.__enter__.return_value = mock_ftp
@@ -625,9 +625,10 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
 
 class TestBambuCmdLight(unittest.TestCase):
 
+    @patch('bambu_cli.commands.get_sequence_id', return_value="0")
     @patch('bambu_cli.bambu.send_command')
     @patch('bambu_cli.bambu.logger')
-    def test_cmd_light_on(self, mock_logger, mock_send_command):
+    def test_cmd_light_on(self, mock_logger, mock_send_command, mock_seq):
         args = MagicMock()
         args.action = "on"
 
@@ -643,9 +644,10 @@ class TestBambuCmdLight(unittest.TestCase):
         mock_send_command.assert_called_once_with(ANY, expected_payload, timeout=None, retries=2)
         mock_logger.info.assert_called_once_with("💡 Light turned on")
 
+    @patch('bambu_cli.commands.get_sequence_id', return_value="0")
     @patch('bambu_cli.bambu.send_command')
     @patch('bambu_cli.bambu.logger')
-    def test_cmd_light_off(self, mock_logger, mock_send_command):
+    def test_cmd_light_off(self, mock_logger, mock_send_command, mock_seq):
         args = MagicMock()
         args.action = "off"
 
@@ -665,9 +667,10 @@ class TestBambuCmdLight(unittest.TestCase):
 
 class TestBambuCmdResume(unittest.TestCase):
 
+    @patch('bambu_cli.commands.get_sequence_id', return_value="0")
     @patch('bambu_cli.bambu.send_command')
     @patch('bambu_cli.bambu.logger')
-    def test_cmd_resume(self, mock_logger, mock_send_command):
+    def test_cmd_resume(self, mock_logger, mock_send_command, mock_seq):
         from bambu_cli.bambu import cmd_resume
         args = MagicMock()
 
@@ -679,9 +682,10 @@ class TestBambuCmdResume(unittest.TestCase):
 
 class TestBambuCmdPause(unittest.TestCase):
 
+    @patch('bambu_cli.commands.get_sequence_id', return_value="0")
     @patch('bambu_cli.bambu.send_command')
     @patch('bambu_cli.bambu.logger')
-    def test_cmd_pause(self, mock_logger, mock_send_command):
+    def test_cmd_pause(self, mock_logger, mock_send_command, mock_seq):
         from bambu_cli.bambu import cmd_pause
         args = MagicMock()
 
@@ -782,7 +786,7 @@ class TestBambuCmdFiles(unittest.TestCase):
         mock_ftp = MagicMock()
         mock_get_ftp = MagicMock()
         mock_get_ftp.return_value.__enter__.return_value = mock_ftp
-        mock_ftp.nlst.side_effect = Exception("FTP Error")
+        mock_ftp.nlst.side_effect = OSError("FTP Error")
         self._printer_with_ftp(mock_get_printer, mock_get_ftp)
         mock_exit.side_effect = SystemExit(2)
 
@@ -800,7 +804,7 @@ class TestBambuCmdFiles(unittest.TestCase):
         from bambu_cli.bambu import cmd_files
         args = MagicMock()
         args.json = False
-        mock_get_ftp = MagicMock(side_effect=Exception("Connection Failed"))
+        mock_get_ftp = MagicMock(side_effect=OSError("Connection Failed"))
         self._printer_with_ftp(mock_get_printer, mock_get_ftp)
         mock_exit.side_effect = SystemExit(2)
 
@@ -862,7 +866,7 @@ class TestBambuCmdDelete(unittest.TestCase):
         mock_ftp = MagicMock()
         mock_get_ftp = MagicMock()
         mock_get_ftp.return_value.__enter__.return_value = mock_ftp
-        mock_ftp.delete.side_effect = Exception("Delete Error")
+        mock_ftp.delete.side_effect = OSError("Delete Error")
         printer = _test_printer()
         printer.get_ftp_client = mock_get_ftp
         mock_get_printer.return_value = printer
@@ -908,7 +912,7 @@ class TestGetFtp(unittest.TestCase):
         # Setup mock to raise an exception on connect
         mock_ftp_instance = MagicMock()
         mock_implicit_ftps.return_value = mock_ftp_instance
-        mock_ftp_instance.connect.side_effect = Exception("Connection Refused")
+        mock_ftp_instance.connect.side_effect = OSError("Connection Refused")
         printer = _test_printer(ip='192.168.1.100', access_code='mock_access_code')
 
         # Call the function and assert it raises
@@ -1584,11 +1588,17 @@ class TestBambuCmdDownload(unittest.TestCase):
         self.mock_exists = self.exists_patcher.start()
         self.getsize_patcher = patch('os.path.getsize', return_value=1024)
         self.mock_getsize = self.getsize_patcher.start()
+        # These tests mock the filesystem, so collision-avoidance (which
+        # creates real placeholder files) must be a pass-through.
+        self.noncolliding_patcher = patch(
+            'bambu_cli.download._noncolliding_path', side_effect=lambda p: p)
+        self.noncolliding_patcher.start()
 
     def tearDown(self):
         self.safe_opener_patcher.stop()
         self.exists_patcher.stop()
         self.getsize_patcher.stop()
+        self.noncolliding_patcher.stop()
 
 
     @patch('bambu_cli.download.resolve_printables_url')
@@ -1904,8 +1914,9 @@ class TestBambuCmdGcode(unittest.TestCase):
 
         self.assertEqual(cm.exception.code, 2)
 
+    @patch('bambu_cli.commands.get_sequence_id', return_value="0")
     @patch('bambu_cli.bambu.send_command')
-    def test_cmd_gcode(self, mock_send_command):
+    def test_cmd_gcode(self, mock_send_command, mock_seq):
         from bambu_cli.bambu import cmd_gcode
 
         args = MagicMock()
@@ -2063,7 +2074,7 @@ class TestBambuGetStatus(unittest.TestCase):
         mock_create_mqtt.return_value = mock_client
 
         # Mock connect to raise an exception
-        mock_client.connect.side_effect = Exception("Connection error")
+        mock_client.connect.side_effect = OSError("Connection error")
 
         result = get_status(_test_printer(), timeout=0.0001)
 
@@ -2111,7 +2122,7 @@ class TestBambuGetStatus(unittest.TestCase):
 
         mock_client = MagicMock()
         mock_create_mqtt.return_value = mock_client
-        mock_client.connect.side_effect = Exception("Network error")
+        mock_client.connect.side_effect = OSError("Network error")
 
         result = get_status(_test_printer(), timeout=1)
 
@@ -2166,7 +2177,7 @@ class TestBambuCmdPrint(unittest.TestCase):
     def test_execute_print_command_dry_run_exception(self, mock_exit, mock_logger, mock_get_status):
         from bambu_cli.bambu import execute_print_command
         printer = _test_printer()
-        printer.get_ftp_client = MagicMock(side_effect=Exception("FTP Error"))
+        printer.get_ftp_client = MagicMock(side_effect=OSError("FTP Error"))
 
         mock_exit.side_effect = SystemExit(2)
         with self.assertRaises(SystemExit) as cm:
@@ -2285,7 +2296,7 @@ class TestBambuCmdPrint(unittest.TestCase):
 
         mock_client = MagicMock()
         mock_create_mqtt.return_value = mock_client
-        mock_client.connect.side_effect = Exception("Connection refused")
+        mock_client.connect.side_effect = OSError("Connection refused")
         mock_exit.side_effect = SystemExit(2)
 
         payload = '{"test": "payload"}'
@@ -2306,6 +2317,7 @@ class TestBambuCmdPrint(unittest.TestCase):
         args.confirm = False
         args.file = "test.gcode"
         args.dry_run = False
+        args.ams_mapping = None
 
         cmd_print(args)
 
@@ -2323,6 +2335,7 @@ class TestBambuCmdPrint(unittest.TestCase):
         args.confirm = True
         args.file = "test.gcode"
         args.dry_run = False
+        args.ams_mapping = None
 
         mock_generate.return_value = "test_payload"
 
@@ -2520,6 +2533,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
              patch('os.unlink'), \
              patch('time.sleep'), \
              patch('os.path.getsize', return_value=2048), \
+             patch('bambu_cli.camera._write_snapshot_atomic'), \
              patch('builtins.open', new_callable=mock_open):
             cmd_snapshot(args)
 
@@ -2575,7 +2589,7 @@ class TestBambuDoctor(unittest.TestCase):
         mock_load.return_value = {"printer_ip": "1.2.3.4"}
         mock_get_status.return_value = {"hw_ver": "P1P"}
 
-        mock_get_ftp.side_effect = Exception("FTPS Fail")
+        mock_get_ftp.side_effect = OSError("FTPS Fail")
 
         mock_exit.side_effect = SystemExit(2)
         with self.assertRaises(SystemExit) as cm:
@@ -2633,7 +2647,7 @@ class TestBambuUploadRetry(unittest.TestCase):
 
         mock_ftp = MagicMock()
         # Fail once, then succeed
-        mock_ftp.storbinary.side_effect = [Exception("Timeout"), None]
+        mock_ftp.storbinary.side_effect = [OSError("Timeout"), None]
         mock_ftp.size.return_value = 0
         mock_get_ftp = MagicMock()
         mock_get_ftp.return_value.__enter__.return_value = mock_ftp
@@ -2656,6 +2670,11 @@ class TestBambuDryRun(unittest.TestCase):
         args.file = "test.3mf"
         args.confirm = False
         args.dry_run = True
+        args.ams_mapping = None
+        args.use_ams = False
+        args.timelapse = False
+        args.skip_bed_leveling = False
+        args.skip_flow_cali = False
 
         mock_ftp = MagicMock()
         mock_ftp.nlst.return_value = ["test.3mf"]
@@ -2729,8 +2748,13 @@ class TestBambuSecurity(unittest.TestCase):
         args.output = "/tmp"
         args.name = None
 
-        with patch('bambu_cli.download.build_safe_opener'), \
+        mock_resp = MagicMock()
+        mock_resp.read.side_effect = [b"data", b""]
+        mock_opener = MagicMock()
+        mock_opener.open.return_value.__enter__.return_value = mock_resp
+        with patch('bambu_cli.download.build_safe_opener', return_value=mock_opener), \
              patch('builtins.open', mock_open()), \
+             patch('bambu_cli.download._noncolliding_path', side_effect=lambda p: p), \
              patch('os.path.getsize', return_value=1024):
             cmd_download(args)
 

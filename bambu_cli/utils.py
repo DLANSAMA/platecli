@@ -2,8 +2,7 @@ import os
 import json
 
 from .constants import (
-    EXIT_SUCCESS, EXIT_CONFIG_ERROR, EXIT_NETWORK_ERROR, EXIT_FILE_ERROR,
-    EXIT_PRINTER_ERROR, EXIT_COMMAND_ERROR, EXIT_TIMEOUT,
+    EXIT_FILE_ERROR,
 )
 
 def _secure_makedirs(path, exist_ok=True):
@@ -175,9 +174,6 @@ def _resolve_ip(host, timeout=5.0):
 _sequence_counter = 0
 
 def get_sequence_id():
-    import sys
-    if 'pytest' in sys.modules or 'unittest' in sys.modules:
-        return "0"
     global _sequence_counter
     _sequence_counter += 1
     return str(_sequence_counter)
