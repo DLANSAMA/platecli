@@ -48,7 +48,7 @@ For programmatic checks, `bambu-cli --json --version` emits JSON version details
 | Flag | Description |
 |------|-------------|
 | `--json` | Emit JSON for commands that support it; may appear before the subcommand |
-| `--max-download-mb` | Cap URL download and ZIP extraction size (default 2048 MB) |
+| `--max-download-mb` | Cap URL download and ZIP extraction size (default 2048 MB); accepted by `job`, `send`, and `download` |
 
 ### Slicing & AMS
 
@@ -66,7 +66,10 @@ For programmatic checks, `bambu-cli --json --version` emits JSON version details
 |-----|----------|---------|-------------|
 | `printer_ip` | ✅ | — | Printer's LAN IP address |
 | `serial` | ✅ | — | Printer serial number |
-| `access_code_file` | ✅ | — | Path to file containing access code |
+| `access_code_file` | ✅* | — | Path to file containing access code (recommended) |
+| `access_code` | ✅* | — | Printer access code inline in config |
+
+*Either `access_code_file` or `access_code` is required. See the packaged [bambu_cli/README.md](bambu_cli/README.md) for the full key reference (`cert_fingerprint`, `orca_slicer`, `profiles_dir`, etc.).
 
 ## License
 

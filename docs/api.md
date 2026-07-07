@@ -7,7 +7,9 @@ The `bambu-cli` provides structured JSON output for programmatic integration (e.
 Pass the `--json` global flag to any command to receive machine-readable JSON on standard output (`stdout`). Log messages, warnings, and simulated outputs will continue to be emitted to standard error (`stderr`), ensuring that you can always safely pipe `stdout` to a JSON parser like `jq` or an agent context window.
 
 ```bash
-python3 bambu.py status --json
+bambu-cli status --json
+# or without installing:
+python3 scripts/bambu.py status --json
 ```
 
 ## Standard JSON Schema

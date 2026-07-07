@@ -18,7 +18,7 @@ Fully local 3D printing pipeline for Bambu Lab printers. Runs on **Linux, macOS,
 
 ## Prerequisites
 
-- **Python 3.8+** — On Windows use `python` or `py`; on Linux/macOS use `python3`
+- **Python 3.9+** — On Windows use `python` or `py`; on Linux/macOS use `python3`
 - **Python packages** — `paho-mqtt` for printer control, `zeroconf` for auto-discovery
 - **OrcaSlicer** — For slicing STL files (see install steps below)
 - **xvfb** — For headless slicing on Linux only: `sudo apt install xvfb`
@@ -37,18 +37,27 @@ Copy the `bambu-cli` folder into your workspace:
 ├── pyproject.toml    # Optional installed `bambu-cli` command
 ├── requirements.txt  # Runtime Python dependencies
 ├── bambu_cli/
-│   └── bambu.py      # Runtime package used by installed command
+│   ├── bambu.py      # Legacy core module used by installed command
+│   ├── cli.py        # Argument parsing and command dispatch
+│   ├── commands.py   # Modular subcommand implementations
+│   ├── config.py     # Config loading and platform path detection
+│   ├── printer.py    # BambuPrinter class (FTPS + MQTT client)
+│   ├── slicer.py     # OrcaSlicer integration
+│   └── protocols/    # FTPS and MQTT protocol helpers
 ├── scripts/
 │   └── bambu.py      # Compatibility wrapper for direct script usage
 └── tests/
     ├── test_bambu.py             # Unit tests
+    ├── test_cli.py               # CLI parsing/dispatch unit tests
+    ├── test_bambu_cli_regressions.py # Regression coverage
+    ├── test_agent_cli_smoke.py   # Pytest wrapper for the agent CLI smoke
     ├── agent_cli_smoke.py        # Installed CLI / agent workflow smoke
     ├── ci_workflow_smoke.py      # CI command coverage guard
-    ├── dependency_resolution_smoke.py # Python 3.8 dependency resolver guard
+    ├── dependency_resolution_smoke.py # Oldest-supported-Python dependency resolver guard
     ├── live_printer_smoke.py     # Opt-in real printer validation
     ├── package_contents_smoke.py # sdist/wheel content guard
     ├── privacy_smoke.py          # Personal-info and secret guard
-    ├── python_compat_smoke.py    # Python 3.8 syntax guard
+    ├── python_compat_smoke.py    # Python 3.9 syntax guard
     └── release_readiness_smoke.py # Objective-level release guard
 ```
 
@@ -498,7 +507,7 @@ Before shipping changes, run the full local release stack from the repository ro
 On Windows, replace `python3` with `python` or `py` in the commands below.
 
 ```bash
-python3 -m py_compile bambu_cli/__init__.py bambu_cli/bambu.py scripts/bambu.py tests/test_bambu.py tests/agent_cli_smoke.py tests/ci_workflow_smoke.py tests/dependency_resolution_smoke.py tests/live_printer_smoke.py tests/package_contents_smoke.py tests/privacy_smoke.py tests/python_compat_smoke.py tests/release_readiness_smoke.py scripts/__init__.py
+python3 -m py_compile bambu_cli/__init__.py bambu_cli/bambu.py bambu_cli/cli.py bambu_cli/config.py bambu_cli/slicer.py bambu_cli/commands.py bambu_cli/printer.py bambu_cli/protocols/ftps.py bambu_cli/protocols/mqtt.py scripts/bambu.py tests/test_bambu.py tests/agent_cli_smoke.py tests/ci_workflow_smoke.py tests/dependency_resolution_smoke.py tests/live_printer_smoke.py tests/package_contents_smoke.py tests/privacy_smoke.py tests/python_compat_smoke.py tests/release_readiness_smoke.py scripts/__init__.py
 python3 -W error::ResourceWarning -m unittest tests.test_bambu
 python3 tests/agent_cli_smoke.py
 python3 tests/privacy_smoke.py

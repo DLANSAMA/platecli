@@ -409,7 +409,7 @@ Before calling the skill shippable, run the full local release stack from the re
 On Windows, replace `python3` with `python` or `py` in the commands below.
 
 ```bash
-python3 -m py_compile bambu_cli/__init__.py bambu_cli/bambu.py scripts/bambu.py tests/test_bambu.py tests/agent_cli_smoke.py tests/ci_workflow_smoke.py tests/dependency_resolution_smoke.py tests/live_printer_smoke.py tests/package_contents_smoke.py tests/privacy_smoke.py tests/python_compat_smoke.py tests/release_readiness_smoke.py scripts/__init__.py
+python3 -m py_compile bambu_cli/__init__.py bambu_cli/bambu.py bambu_cli/cli.py bambu_cli/config.py bambu_cli/slicer.py bambu_cli/commands.py bambu_cli/printer.py bambu_cli/protocols/ftps.py bambu_cli/protocols/mqtt.py scripts/bambu.py tests/test_bambu.py tests/agent_cli_smoke.py tests/ci_workflow_smoke.py tests/dependency_resolution_smoke.py tests/live_printer_smoke.py tests/package_contents_smoke.py tests/privacy_smoke.py tests/python_compat_smoke.py tests/release_readiness_smoke.py scripts/__init__.py
 python3 -W error::ResourceWarning -m unittest tests.test_bambu
 python3 tests/agent_cli_smoke.py
 python3 tests/privacy_smoke.py
