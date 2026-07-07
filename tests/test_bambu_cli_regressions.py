@@ -260,3 +260,68 @@ def test_d_snapshot_uses_direct_grab_not_docker():
             joined = " ".join(map(str, cmd)) if isinstance(cmd, (list, tuple)) else str(cmd)
             assert "docker" not in joined.lower(), f"snapshot must not call docker, saw: {cmd!r}"
         assert mock_run.call_count == 0, "direct grab path must not shell out at all"
+
+
+# ---------------------------------------------------------------------------
+# Download hardening regressions (SSRF + size limits)
+# ---------------------------------------------------------------------------
+
+def test_get_safe_connection_blocks_private_ip():
+    """DNS resolving to a private address must be refused (SSRF guard)."""
+    import socket
+    import urllib.error
+    from bambu_cli import download
+
+    addr_info = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.5", 80))]
+    with patch.object(download.socket, "getaddrinfo", return_value=addr_info), \
+         patch.object(bambu, "ALLOW_PRIVATE_IPS", False):
+        download._dns_cache.clear()
+        with pytest.raises(urllib.error.URLError):
+            download._get_safe_connection("evil.example.com", 80, 5, None)
+        download._dns_cache.clear()
+
+
+def test_safe_opener_has_no_default_http_handlers():
+    """Every hop (including redirects) must connect via the Safe* handlers, and
+    environment proxies must be disabled so validation cannot be bypassed."""
+    import urllib.request
+    from bambu_cli import download
+
+    opener = download.build_safe_opener()
+    handler_types = [type(h) for h in opener.handlers]
+    assert download.SafeHTTPHandler in handler_types
+    assert download.SafeHTTPSHandler in handler_types
+    # The stock handlers would bypass IP validation entirely.
+    assert urllib.request.HTTPHandler not in handler_types
+    assert urllib.request.HTTPSHandler not in handler_types
+    # ProxyHandler({}) registers no *_open methods, so no proxy handler is
+    # present at all — environment proxies must never route these requests.
+    proxy_handlers = [h for h in opener.handlers if isinstance(h, urllib.request.ProxyHandler)]
+    for handler in proxy_handlers:
+        assert not handler.proxies
+
+
+def test_download_enforces_size_limit_mid_stream(tmp_path):
+    """A response with no Content-Length must still be cut off at the limit."""
+    from bambu_cli import download
+    from bambu_cli.constants import EXIT_FILE_ERROR
+
+    url = "https://example.com/model.stl"
+    mock_resp = MagicMock()
+    mock_resp.read.side_effect = lambda n: b"x" * n  # endless stream
+    mock_resp.getheader.return_value = None          # no Content-Length
+    mock_resp.geturl.return_value = url
+    mock_opener = MagicMock()
+    mock_opener.open.return_value.__enter__.return_value = mock_resp
+
+    args = types.SimpleNamespace(
+        url=url, output=str(tmp_path), name=None, max_download_mb=1, json=False,
+        progress=False)
+
+    with patch.object(download, "build_safe_opener", return_value=mock_opener):
+        with pytest.raises(SystemExit) as excinfo:
+            download._cmd_download(args)
+
+    assert excinfo.value.code == EXIT_FILE_ERROR
+    leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
+    assert not leftovers, f"partial download not cleaned up: {leftovers}"
