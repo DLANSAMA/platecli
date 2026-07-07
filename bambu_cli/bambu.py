@@ -33,7 +33,6 @@ private helper is re-exported here so ``from bambu_cli import bambu`` remains
 a stable facade for tests and scripts, and so runtime state can be patched in
 one place (``bambu.SIMULATION_MODE``, ``bambu.PRINTER_IP``, ...).
 """
-import atexit
 import logging
 import sys
 
@@ -250,10 +249,6 @@ try:
     load_config(exit_on_fail=False)
 except Exception:
     pass
-
-connection_manager = ConnectionManager()
-atexit.register(connection_manager.close_all)
-
 
 class DynamicCmds(dict):
     """Resolve command handlers through this module so tests can patch cmd_*."""

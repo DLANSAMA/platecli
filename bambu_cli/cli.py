@@ -7,15 +7,8 @@ from urllib.parse import urlparse, urlunparse
 import bambu_cli.utils as utils
 from .utils import emit_json, emit_json_error
 from .constants import (
-    EXIT_SUCCESS, EXIT_CONFIG_ERROR, EXIT_NETWORK_ERROR, EXIT_FILE_ERROR,
-    EXIT_PRINTER_ERROR, EXIT_COMMAND_ERROR, EXIT_TIMEOUT,
-    DEFAULT_MAX_DOWNLOAD_MB,
-    BED_PLATE_TYPES, SLICEABLE_EXTENSIONS, PRINT_READY_EXTENSIONS,
-    DOWNLOADABLE_EXTENSIONS, ARCHIVE_DOWNLOAD_EXTENSIONS,
-    DOWNLOAD_LINK_EXTENSION_PRIORITY, KNOWN_UNSUPPORTED_DOWNLOAD_EXTENSIONS,
-    KNOWN_UNSUPPORTED_CONTENT_TYPES, WINDOWS_RESERVED_FILENAMES,
-    MAX_DOWNLOAD_FILENAME_LENGTH, DOWNLOAD_CANDIDATE_EXTENSIONS,
-    PRINTER_CONFIG_COMMANDS, LOCAL_COMMANDS, PRINTER_NETWORK_COMMANDS,
+    EXIT_SUCCESS, EXIT_CONFIG_ERROR, EXIT_COMMAND_ERROR, DEFAULT_MAX_DOWNLOAD_MB,
+    PRINTER_NETWORK_COMMANDS,
 )
 
 
@@ -267,7 +260,7 @@ def build_parser():
     p_upload.add_argument("file", help="Path to .3mf or .gcode file")
     p_upload.add_argument("--dry-run", action="store_true", help="Validate connectivity without uploading")
 
-    p_files = sub.add_parser("files", parents=[get_global_parser()], help="List files on printer")
+    sub.add_parser("files", parents=[get_global_parser()], help="List files on printer")
 
     p_print = sub.add_parser("print", parents=[get_global_parser()], help="Start printing a file on printer")
     p_print.add_argument("file", help="Filename on printer (e.g. model.3mf)")
@@ -373,9 +366,8 @@ def _json_setup_should_be_noninteractive(args):
     )
 
 def _setup_args_provided(args):
-    from unittest.mock import Mock
     return any(
-        getattr(args, attr, None) is not None and not isinstance(getattr(args, attr, None), Mock)
+        _namespace_get(args, attr) is not None
         for attr in ("printer_ip", "serial", "access_code", "access_code_env", "access_code_file", "model", "nozzle")
     )
 

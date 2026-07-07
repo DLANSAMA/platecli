@@ -8,7 +8,8 @@ an installed command.
 """
 import json
 import os
-os.environ["BAMBU_TESTING"] = "1"
+# Keep job/send temp workdirs so tests can inspect extracted/sliced outputs.
+os.environ["BAMBU_KEEP_WORKDIR"] = "1"
 import pathlib
 import re
 import shlex

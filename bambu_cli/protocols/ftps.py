@@ -1,16 +1,14 @@
 import tempfile
 import os
-import sys
 import ftplib
 import socket
 import ssl
 import hashlib
-import logging
 import threading
 import atexit
 
 from bambu_cli.utils import _resolve_ip
-from bambu_cli.logging_utils import logger, mockable
+from bambu_cli.logging_utils import mockable
 
 _SIM_FTP_FILES = {"simulated_file.3mf": 1000}
 
@@ -48,6 +46,12 @@ class _SimFtp:
 
     def delete(self, path):
         _SIM_FTP_FILES.pop(os.path.basename(path), None)
+
+    def quit(self):
+        pass
+
+    def close(self):
+        pass
 
 
 def _verify_cert_fingerprint(der_cert, host):
@@ -139,9 +143,6 @@ def _download_partial_path(outpath):
 
 
 def _noncolliding_path(path):
-    import sys
-    if 'pytest' in sys.modules or 'unittest' in sys.modules:
-        return path
     from bambu_cli.cli import _path_for_message
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -209,7 +210,7 @@ class ConnectionManager:
                 with self._ftp_usage_lock:
                     client.voidcmd("NOOP")
                 return PooledFTPWrapper(client, self)
-            except Exception:
+            except (*ftplib.all_errors, ssl.SSLError):
                 with self._lock:
                     if self._ftp_client is client:
                         try:

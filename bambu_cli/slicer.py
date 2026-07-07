@@ -9,8 +9,6 @@ GMSH_MESH_SCALE = "0.5"
 import subprocess
 import platform
 import shutil
-import time
-import logging
 
 from bambu_cli.logging_utils import logger
 
@@ -57,7 +55,6 @@ def _directory_input_message(path):
 
 def _validate_slice_options(args):
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
     copies = getattr(args, 'copies', 1)
     if isinstance(copies, int) and copies < 1:
         return f"--copies must be a positive integer (got {copies})"
@@ -86,7 +83,7 @@ def _convert_step_to_stl(filepath):
     tmpdir = tempfile.mkdtemp(prefix="bambu_step_")
     stl_path = os.path.join(tmpdir, f"{stem}.stl")
     
-    logger.info(f"🔄 Converting STEP → STL (OrcaSlicer CLI requires STL)...")
+    logger.info("🔄 Converting STEP → STL (OrcaSlicer CLI requires STL)...")
     try:
         cmd_args = ["gmsh", filepath, "-3", "-format", "stl", "-o", stl_path, "-clscale", GMSH_MESH_SCALE]
         if sys.platform != "win32" and shutil.which("nice"):
@@ -114,7 +111,7 @@ def _convert_step_to_stl(filepath):
             return None, False
 
     except FileNotFoundError:
-        logger.error(f"STEP conversion failed. Please install gmsh for your platform.")
+        logger.error("STEP conversion failed. Please install gmsh for your platform.")
         try:
             os.unlink(stl_path)
         except OSError:
@@ -225,9 +222,6 @@ def _discover_process_profile(quality_arg, quality_map, model_code="P1P", compat
 
 def _create_temp_profiles(process, filament, args):
     """Create temporary process and filament profiles with overrides."""
-    from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
-    from bambu_cli import bambu
     infill = getattr(args, 'infill', 15)
     pattern = getattr(args, 'pattern', '3dhoneycomb')
     supports = getattr(args, 'supports', False)
@@ -300,7 +294,7 @@ def _create_temp_profiles(process, filament, args):
         fil_data['nozzle_temperature_initial_layer'] = nozzle_temp_str_list
 
         bed_temp_str_list = [str(bed_temp)]
-        from bambu_cli.cli import BED_PLATE_TYPES
+        from bambu_cli.constants import BED_PLATE_TYPES
         for plate in BED_PLATE_TYPES:
             fil_data[plate] = bed_temp_str_list
             fil_data[f'{plate}_initial_layer'] = bed_temp_str_list
@@ -325,7 +319,7 @@ def cmd_slice(args):
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get, _exit_code_from_system_exit
     from bambu_cli.utils import emit_json, emit_json_error
-    from bambu_cli.cli import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_TIMEOUT
+    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_TIMEOUT
 
     filepath = bambu._expand_path(args.file)
     source_filepath = filepath

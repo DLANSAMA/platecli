@@ -1,7 +1,6 @@
 import os
 import sys
 import json
-import time
 import tempfile
 
 from bambu_cli.logging_utils import logger
@@ -20,7 +19,7 @@ def cmd_doctor(args):
     from bambu_cli.cli import _namespace_get, _display_path
     from bambu_cli.utils import emit_json
     from bambu_cli.cli import _path_for_message, _exception_for_message
-    from bambu_cli.cli import EXIT_FILE_ERROR, EXIT_CONFIG_ERROR, EXIT_NETWORK_ERROR
+    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_CONFIG_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.protocols.mqtt import probe_cert_fingerprint
     from bambu_cli.protocols.ftps import get_ftp
     from bambu_cli.printer import get_printer
@@ -62,7 +61,7 @@ def cmd_doctor(args):
 
     logger.info(f"   [1/3] Checking config at {_display_path(bambu.CONFIG_PATH)}...")
     try:
-        cfg = bambu.load_config()
+        bambu.load_config()
         logger.info("   ✅ Config loaded successfully.")
     except SystemExit:
         logger.error("   ❌ Config check failed.")
@@ -95,7 +94,7 @@ def cmd_doctor(args):
 
     logger.info(f"   [3/3] Verifying FTPS connectivity to {bambu.PRINTER_IP}:990...")
     try:
-        with get_ftp(timeout=5) as ftp:
+        with get_ftp(timeout=5):
             logger.info("   ✅ FTPS connection established.")
     except Exception as e:
         message = f"FTPS connection failed: {e}"
@@ -159,7 +158,8 @@ def cmd_doctor(args):
 def cmd_light(args):
     """Control chamber light."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error, EXIT_NETWORK_ERROR, get_sequence_id
+    from bambu_cli.utils import emit_json, emit_json_error
+    from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
     action = args.action  # on or off
     val = "on" if action == "on" else "off"
@@ -186,7 +186,8 @@ def cmd_light(args):
 def cmd_pause(args):
     """Pause current print."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error, EXIT_NETWORK_ERROR, get_sequence_id
+    from bambu_cli.utils import emit_json, emit_json_error
+    from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "pause"}})
     printer = get_printer()
@@ -206,7 +207,8 @@ def cmd_pause(args):
 def cmd_resume(args):
     """Resume paused print."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error, EXIT_NETWORK_ERROR, get_sequence_id
+    from bambu_cli.utils import emit_json, emit_json_error
+    from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "resume"}})
     printer = get_printer()
@@ -226,7 +228,8 @@ def cmd_resume(args):
 def cmd_stop(args):
     """Stop current print."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error, EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR, get_sequence_id
+    from bambu_cli.utils import emit_json, emit_json_error
+    from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
     if not args.confirm:
         logger.warning("⚠️  This will STOP the current print. Add --confirm to proceed.")
@@ -258,7 +261,7 @@ def cmd_upload(args):
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
-    from bambu_cli.cli import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
+    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
 
     filepath = bambu._expand_path(args.file)
@@ -395,7 +398,8 @@ def cmd_files(args):
     """List files on the printer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error, EXIT_NETWORK_ERROR
+    from bambu_cli.utils import emit_json, emit_json_error
+    from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
     json_mode = bool(_namespace_get(args, "json", False))
     try:
@@ -432,7 +436,7 @@ def cmd_print(args):
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
-    from bambu_cli.cli import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR
+    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR
     
     dry_run = getattr(args, 'dry_run', False)
     basename = str(args.file or "")
@@ -515,7 +519,7 @@ def cmd_delete(args):
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
     from bambu_cli.utils import emit_json, emit_json_error
-    from bambu_cli.cli import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
+    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
     
     filename = str(args.file or "")
@@ -573,7 +577,8 @@ def cmd_job(args):
 def cmd_gcode(args):
     """Send raw G-code to the printer via MQTT."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error, EXIT_NETWORK_ERROR, get_sequence_id
+    from bambu_cli.utils import emit_json, emit_json_error
+    from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
     gcode = args.code
     payload = json.dumps({
@@ -601,7 +606,8 @@ def cmd_gcode(args):
 def cmd_status(args):
     """Query and display the printer's current status."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error, EXIT_NETWORK_ERROR
+    from bambu_cli.utils import emit_json, emit_json_error
+    from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
     from bambu_cli.protocols.mqtt import monitor_status
     if bool(_namespace_get(args, "monitor", False)):
@@ -642,7 +648,7 @@ def cmd_status(args):
     fan = data.get("cooling_fan_speed", "?")
     wifi = str(data.get("wifi_signal", "?")).replace("dBm", "")
 
-    logger.info(f"🖨️  Bambu Printer Status")
+    logger.info("🖨️  Bambu Printer Status")
     logger.info(f"   State: {state}")
     if state == "RUNNING":
         hrs, mins = divmod(remaining, 60)

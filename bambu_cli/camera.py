@@ -226,11 +226,7 @@ def _cmd_snapshot(args):
         # Use standard urlopen for localhost streamer to bypass SSRF protections
         with urllib.request.urlopen(req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
             data = resp.read()
-            if "unittest" in sys.modules or os.environ.get("BAMBU_TESTING") == "1":
-                with open(outpath, 'wb') as f:
-                    f.write(data)
-            else:
-                _write_snapshot_atomic(outpath, data)
+            _write_snapshot_atomic(outpath, data)
         size = os.path.getsize(outpath)
         logger.info(f"✅ Snapshot saved: {_path_for_message(outpath)} ({size // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
