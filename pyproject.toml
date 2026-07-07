@@ -3,7 +3,7 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bambu-cli"
+name = "bambu-local-cli"
 version = "0.1.0"
 description = "Unofficial local Bambu Lab printer control for agents and humans (not affiliated with Bambu Lab)"
 readme = "README.md"
@@ -44,15 +44,13 @@ test = [
 Homepage = "https://github.com/DLANSAMA/bambu-cli"
 Repository = "https://github.com/DLANSAMA/bambu-cli"
 Issues = "https://github.com/DLANSAMA/bambu-cli/issues"
+Changelog = "https://github.com/DLANSAMA/bambu-cli/blob/main/CHANGELOG.md"
 
 [project.scripts]
 bambu-cli = "bambu_cli.bambu:main"
 
 [tool.setuptools]
 packages = ["bambu_cli", "bambu_cli.protocols"]
-
-[tool.setuptools.package-data]
-"bambu_cli" = ["README.md", "AGENTS.md", "requirements.txt"]
 
 [tool.ruff]
 target-version = "py39"

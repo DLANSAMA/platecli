@@ -131,7 +131,7 @@ jobs:
           BAMBU_CLI: bambu-cli
         run: |
           python -m pip wheel . -w wheelhouse
-          python -m pip install --force-reinstall --no-deps --no-index --find-links wheelhouse bambu-cli
+          python -m pip install --force-reinstall --no-deps --no-index --find-links wheelhouse bambu-local-cli
           bambu-cli --help
           python tests/agent_cli_smoke.py
 

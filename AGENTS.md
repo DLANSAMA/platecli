@@ -41,11 +41,6 @@ test-awareness branches in production code).
 Agents may place `--json` before or after the subcommand; `bambu-cli --json --version` emits machine-readable version details. Slicing accepts meshes in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. AMS slot mappings are zero-or-positive integers.
 
 ## Packaging
-In pyproject.toml:
-```toml
-[tool.setuptools]
-packages = ["bambu_cli", "bambu_cli.protocols"]
-
-[tool.setuptools.package-data]
-"bambu_cli" = ["README.md", "AGENTS.md", "requirements.txt"]
-```
+Published on PyPI as `bambu-local-cli`; the installed command is `bambu-cli`.
+Wheels contain runtime code only — do not add docs or requirements files to
+package-data (tests/package_contents_smoke.py enforces this).

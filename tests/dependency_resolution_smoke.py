@@ -84,7 +84,7 @@ def check_with_uv():
             PYTHON_FLOOR,
             "--universal",
             "--no-emit-package",
-            "bambu-cli",
+            "bambu-local-cli",
             "--no-header",
             "--no-annotate",
             "--output-file",

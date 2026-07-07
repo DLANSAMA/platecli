@@ -21,9 +21,6 @@ REQUIRED_SDIST_FILES = {
     "bambu_cli/commands.py",
     "bambu_cli/protocols/ftps.py",
     "bambu_cli/protocols/mqtt.py",
-    "bambu_cli/README.md",
-    "bambu_cli/AGENTS.md",
-    "bambu_cli/requirements.txt",
     "scripts/__init__.py",
     "scripts/bambu.py",
     "tests/agent_cli_smoke.py",
@@ -46,9 +43,6 @@ REQUIRED_WHEEL_FILES = {
     "bambu_cli/commands.py",
     "bambu_cli/protocols/ftps.py",
     "bambu_cli/protocols/mqtt.py",
-    "bambu_cli/README.md",
-    "bambu_cli/AGENTS.md",
-    "bambu_cli/requirements.txt",
 }
 
 FORBIDDEN_WHEEL_FILES = {
@@ -56,7 +50,8 @@ FORBIDDEN_WHEEL_FILES = {
     "scripts/bambu.py",
 }
 
-REQUIRED_WHEEL_DATA_SUFFIXES = {
+# Non-runtime files must not ship in the wheel (they bloat user installs).
+FORBIDDEN_WHEEL_DATA_SUFFIXES = {
     "bambu_cli/README.md",
     "bambu_cli/AGENTS.md",
     "bambu_cli/requirements.txt",
@@ -257,7 +252,7 @@ def _check_license_text(label, text):
 
 
 def check_sdist(dist_dir):
-    tarballs = sorted(dist_dir.glob("bambu_cli-*.tar.gz"))
+    tarballs = sorted(dist_dir.glob("bambu_local_cli-*.tar.gz"))
     if not tarballs:
         raise SystemExit(f"No source distribution found in {dist_dir}")
     archive_path = tarballs[-1]
@@ -282,7 +277,7 @@ def check_sdist(dist_dir):
 
 
 def check_wheel(dist_dir):
-    wheels = sorted(dist_dir.glob("bambu_cli-*.whl"))
+    wheels = sorted(dist_dir.glob("bambu_local_cli-*.whl"))
     if not wheels:
         raise SystemExit(f"No wheel found in {dist_dir}")
     try:
@@ -328,12 +323,12 @@ def check_wheel(dist_dir):
     forbidden = sorted(FORBIDDEN_WHEEL_FILES & names)
     if forbidden:
         raise SystemExit(f"wheel contains source-only compatibility files: {forbidden}")
-    missing_data = sorted(
-        suffix for suffix in REQUIRED_WHEEL_DATA_SUFFIXES
-        if not any(name.endswith(suffix) for name in names)
+    forbidden_data = sorted(
+        suffix for suffix in FORBIDDEN_WHEEL_DATA_SUFFIXES
+        if any(name.endswith(suffix) for name in names)
     )
-    if missing_data:
-        raise SystemExit(f"wheel missing agent-facing data files: {missing_data}")
+    if forbidden_data:
+        raise SystemExit(f"wheel contains non-runtime data files: {forbidden_data}")
     missing_metadata = sorted(snippet for snippet in expected_metadata_snippets() if snippet not in metadata)
     if missing_metadata:
         raise SystemExit(f"wheel metadata missing required snippets: {missing_metadata}")

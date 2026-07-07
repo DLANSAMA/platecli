@@ -1,5 +1,5 @@
 """Contract regression tests for every `--json` payload the CLI documents in
-docs/api.md / bambu_cli/AGENTS.md as its agent-facing API surface.
+docs/api.md / AGENTS.md as its agent-facing API surface.
 
 These are SHAPE-locking regression tests, not spec tests: where docs/api.md
 disagrees with the actual current CLI output, we assert the actual output
