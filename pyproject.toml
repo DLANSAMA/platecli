@@ -58,9 +58,9 @@ line-length = 120
 extend-exclude = ["docs", "scripts"]
 
 [tool.ruff.lint]
-# Start conservative: correctness-focused rules only. Style rules can be
-# enabled once the codebase is formatted.
-select = ["E9", "F", "B", "PLE"]
+select = ["E9", "F", "B", "PLE", "I", "UP", "SIM"]
+# SIM105: try/except-pass is fine; contextlib.suppress adds imports and overhead.
+ignore = ["SIM105"]
 
 [tool.ruff.lint.per-file-ignores]
 # MQTT callbacks close over per-iteration loop variables deliberately; each

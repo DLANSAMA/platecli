@@ -12,9 +12,8 @@ import time
 import urllib.error
 import urllib.request
 
-from bambu_cli.logging_utils import logger
 from bambu_cli.cli import _redact_url_credentials
-
+from bambu_cli.logging_utils import logger
 
 _dns_cache = {}
 _dns_cache_lock = threading.Lock()

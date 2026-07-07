@@ -13,13 +13,22 @@ import zipfile
 from html.parser import HTMLParser
 from urllib.parse import unquote, urljoin, urlparse
 
+from bambu_cli.cli import (
+    _exception_for_message,
+    _exit_code_from_system_exit,
+    _expand_path,
+    _looks_like_schemeless_credential_url,
+    _namespace_get,
+    _path_for_message,
+    _redact_url_credentials,
+)
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DEFAULT_MAX_DOWNLOAD_MB,
-    DOWNLOADABLE_EXTENSIONS,
     DOWNLOAD_CANDIDATE_EXTENSIONS,
     DOWNLOAD_LINK_EXTENSION_PRIORITY,
     DOWNLOAD_TIMEOUT,
+    DOWNLOADABLE_EXTENSIONS,
     EXIT_COMMAND_ERROR,
     EXIT_FILE_ERROR,
     EXIT_NETWORK_ERROR,
@@ -31,25 +40,7 @@ from bambu_cli.constants import (
     WINDOWS_RESERVED_FILENAMES,
 )
 from bambu_cli.logging_utils import logger
-from bambu_cli.utils import (
-    emit_json_error,
-    _ensure_output_dir,
-    _record_download_success,
-)
-from bambu_cli.cli import (
-    _exception_for_message,
-    _exit_code_from_system_exit,
-    _expand_path,
-    _looks_like_schemeless_credential_url,
-    _namespace_get,
-    _path_for_message,
-    _redact_url_credentials,
-)
-from bambu_cli.protocols.ftps import (
-    _download_partial_path,
-    _noncolliding_path,
-    _remove_partial_file,
-)
+
 # MAX_DOWNLOAD_REDIRECT_HOPS, _dns_cache, _get_safe_connection, and the Safe*
 # handler classes below are not used directly in this module; they are
 # re-exported so existing tests that patch/inspect them via
@@ -68,6 +59,16 @@ from bambu_cli.netsafety import (  # noqa: F401
 from bambu_cli.printables import (
     _is_printables_model_url,
     resolve_printables_url,
+)
+from bambu_cli.protocols.ftps import (
+    _download_partial_path,
+    _noncolliding_path,
+    _remove_partial_file,
+)
+from bambu_cli.utils import (
+    _ensure_output_dir,
+    _record_download_success,
+    emit_json_error,
 )
 
 
@@ -620,7 +621,7 @@ def _cmd_download(args):
         for _html_resolution_attempt in range(3):
             archive_download = _is_archive_download(url, stl_name)
             if archive_download:
-                archive_temp = tempfile.NamedTemporaryFile(
+                archive_temp = tempfile.NamedTemporaryFile(  # noqa: SIM115 — closed immediately; only the name is used
                     prefix=".bambu-download-", suffix=".zip", dir=outdir, delete=False)
                 outpath = archive_temp.name
                 archive_temp.close()
@@ -665,7 +666,7 @@ def _cmd_download(args):
                 if archive_download and not filename.startswith(".bambu-download-"):
                     if partial_path and partial_path != outpath:
                         _remove_partial_file(partial_path)
-                    archive_temp = tempfile.NamedTemporaryFile(
+                    archive_temp = tempfile.NamedTemporaryFile(  # noqa: SIM115 — closed immediately; only the name is used
                         prefix=".bambu-download-", suffix=".zip", dir=outdir, delete=False)
                     outpath = archive_temp.name
                     archive_temp.close()
@@ -715,7 +716,7 @@ def _cmd_download(args):
                             _remove_partial_file(partial_path)
                         if outpath and filename.startswith(".bambu-download-"):
                             _remove_partial_file(outpath)
-                        archive_temp = tempfile.NamedTemporaryFile(
+                        archive_temp = tempfile.NamedTemporaryFile(  # noqa: SIM115 — closed immediately; only the name is used
                             prefix=".bambu-download-", suffix=".zip", dir=outdir, delete=False)
                         outpath = archive_temp.name
                         archive_temp.close()
@@ -767,7 +768,14 @@ def _cmd_download(args):
                 task_id = None
                 try:
                     if not getattr(args, "json", False) and getattr(args, "progress", True):
-                        from rich.progress import Progress, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+                        from rich.progress import (
+                            BarColumn,
+                            DownloadColumn,
+                            Progress,
+                            TextColumn,
+                            TimeRemainingColumn,
+                            TransferSpeedColumn,
+                        )
                         progress = Progress(
                             TextColumn("[bold blue]{task.description}", justify="right"),
                             BarColumn(bar_width=None),

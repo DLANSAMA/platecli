@@ -12,15 +12,6 @@ import stat
 import sys
 import threading
 
-from bambu_cli.constants import (
-    EXIT_COMMAND_ERROR,
-    EXIT_CONFIG_ERROR,
-    EXIT_FILE_ERROR,
-    EXIT_NETWORK_ERROR,
-    EXIT_SUCCESS,
-)
-from bambu_cli.logging_utils import logger
-from bambu_cli.utils import emit_json, emit_json_error, _secure_makedirs
 from bambu_cli.cli import (
     _display_path,
     _exception_for_message,
@@ -34,6 +25,15 @@ from bambu_cli.config import (
     _access_code_value_problem,
     load_config,
 )
+from bambu_cli.constants import (
+    EXIT_COMMAND_ERROR,
+    EXIT_CONFIG_ERROR,
+    EXIT_FILE_ERROR,
+    EXIT_NETWORK_ERROR,
+    EXIT_SUCCESS,
+)
+from bambu_cli.logging_utils import logger
+from bambu_cli.utils import _secure_makedirs, emit_json, emit_json_error
 
 
 def _config_path():
@@ -411,7 +411,7 @@ def _cmd_setup(args):
     use_manual = False
 
     try:
-        from zeroconf import Zeroconf, ServiceBrowser
+        from zeroconf import ServiceBrowser, Zeroconf
     except ImportError:
         logger.warning("⚠️  'zeroconf' package is not installed; network printer auto-discovery is disabled.")
         logger.info("   To enable auto-discovery, run: python -m pip install -r requirements.txt")
@@ -712,10 +712,7 @@ def collect_preflight_checks():
     from bambu_cli.slicer import _slicer_executable_problem
     checks = []
     py_version = ".".join(str(part) for part in sys.version_info[:3])
-    if sys.version_info >= (3, 9):
-        checks.append(_preflight_result("ok", "python", f"Python {py_version} is supported."))
-    else:
-        checks.append(_preflight_result("error", "python", f"Python {py_version} is too old; Python 3.9+ is required."))
+    checks.append(_preflight_result("ok", "python", f"Python {py_version} is supported."))
 
     if mqtt_protocol.mqtt is not None or _module_available("paho.mqtt.client"):
         checks.append(_preflight_result("ok", "paho-mqtt", "paho-mqtt is available."))

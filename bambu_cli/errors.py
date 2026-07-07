@@ -10,7 +10,7 @@ This module only introduces the mechanism; existing code is not yet
 converted to raise these exceptions.
 """
 
-from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_COMMAND_ERROR
+from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR
 
 __all__ = [
     "BambuError",

@@ -13,10 +13,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 
-def _normalize_fingerprint(fp: Optional[str]) -> Optional[str]:
+def _normalize_fingerprint(fp: str | None) -> str | None:
     """Normalize a pinned SHA-256 fingerprint (lowercase, separator-free).
 
     Mirrors ``bambu_cli.config._expected_fingerprint``.
@@ -38,7 +38,7 @@ class Settings:
     serial: str = "UNKNOWN"
     mqtt_port: int = 8883
     insecure_tls: bool = False
-    cert_fingerprint: Optional[str] = None
+    cert_fingerprint: str | None = None
     orca_slicer: str = ""
     profiles_dir: str = ""
     printer_model: str = "P1P"
@@ -50,7 +50,7 @@ class Settings:
     allow_private_ips: bool = False
 
     @classmethod
-    def from_config(cls, cfg: Dict[str, Any]) -> "Settings":
+    def from_config(cls, cfg: dict[str, Any]) -> Settings:
         """Build a Settings from a config dict, using the same key names and
         parsing that ``bambu_cli.config.apply_config`` uses.
         """
@@ -96,7 +96,7 @@ class Settings:
         )
 
     @classmethod
-    def from_globals(cls) -> "Settings":
+    def from_globals(cls) -> Settings:
         """Snapshot the current ``bambu.<NAME>`` module globals."""
         from bambu_cli import bambu
 
@@ -129,8 +129,8 @@ class RuntimeContext:
     settings: Settings = field(default_factory=Settings)
     simulation: bool = False
     json_mode: bool = False
-    config_path: Optional[Path] = None
-    last_error: Optional[dict] = None
+    config_path: Path | None = None
+    last_error: dict | None = None
     _printer: Any = field(default=None, repr=False, compare=False)
 
     def printer(self):
@@ -142,8 +142,8 @@ class RuntimeContext:
         if self._printer is not None:
             return self._printer
 
-        from bambu_cli.printer import BambuPrinter
         from bambu_cli import bambu
+        from bambu_cli.printer import BambuPrinter
 
         access_code = "" if self.simulation else bambu.load_access_code()
         self._printer = BambuPrinter(
@@ -157,7 +157,7 @@ class RuntimeContext:
         return self._printer
 
     @classmethod
-    def from_globals(cls, args=None) -> "RuntimeContext":
+    def from_globals(cls, args=None) -> RuntimeContext:
         """Snapshot the current globals into a RuntimeContext."""
         from bambu_cli import bambu
 
@@ -174,7 +174,7 @@ class RuntimeContext:
         )
 
 
-_current: Optional[RuntimeContext] = None
+_current: RuntimeContext | None = None
 
 
 def get_current() -> RuntimeContext:

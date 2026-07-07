@@ -1,14 +1,14 @@
-import tempfile
-import os
+import atexit
 import ftplib
+import hashlib
+import os
 import socket
 import ssl
-import hashlib
+import tempfile
 import threading
-import atexit
 
-from bambu_cli.utils import _resolve_ip
 from bambu_cli.logging_utils import mockable
+from bambu_cli.utils import _resolve_ip
 
 _SIM_FTP_FILES = {"simulated_file.3mf": 1000}
 
@@ -110,23 +110,22 @@ class ImplicitFTPS(ftplib.FTP_TLS):
     def ntransfercmd(self, cmd, rest=None):
         conn, size = ftplib.FTP.ntransfercmd(self, cmd, rest)
         secure = getattr(self, "_secure_data", False) or getattr(self, "_prot_p", False)
-        if secure:
-            if isinstance(self.sock, ssl.SSLSocket):
-                session = self.sock.session
-                conn = self.sock.context.wrap_socket(conn,
-                                                     server_hostname=self.host,
-                                                     session=session)
-                pin = getattr(self, 'printer', None) and self.printer.cert_fingerprint
-                if pin:
-                    actual = hashlib.sha256(conn.getpeercert(binary_form=True)).hexdigest().lower()
-                    if actual != pin.lower():
-                        raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {pin.lower()}, got {actual}")
-                # Bambu firmware never answers the TLS close-notify on the data
-                # channel, so ftplib's storbinary/retrbinary hang in
-                # conn.unwrap() until the socket times out (and then treat the
-                # completed transfer as failed). Skip the shutdown handshake;
-                # the control-channel 226 already confirms the transfer.
-                conn.unwrap = lambda: conn
+        if secure and isinstance(self.sock, ssl.SSLSocket):
+            session = self.sock.session
+            conn = self.sock.context.wrap_socket(conn,
+                                                 server_hostname=self.host,
+                                                 session=session)
+            pin = getattr(self, 'printer', None) and self.printer.cert_fingerprint
+            if pin:
+                actual = hashlib.sha256(conn.getpeercert(binary_form=True)).hexdigest().lower()
+                if actual != pin.lower():
+                    raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {pin.lower()}, got {actual}")
+            # Bambu firmware never answers the TLS close-notify on the data
+            # channel, so ftplib's storbinary/retrbinary hang in
+            # conn.unwrap() until the socket times out (and then treat the
+            # completed transfer as failed). Skip the shutdown handshake;
+            # the control-channel 226 already confirms the transfer.
+            conn.unwrap = lambda: conn
         return conn, size
 
 

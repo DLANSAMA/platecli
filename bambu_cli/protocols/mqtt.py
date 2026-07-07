@@ -1,11 +1,13 @@
-import sys
 import json
+import logging
 import socket
 import ssl
-from bambu_cli.utils import get_sequence_id, _resolve_ip
-import logging
+import sys
 import threading
 import time
+
+from bambu_cli.utils import _resolve_ip, get_sequence_id
+
 
 class LoggerProxy:
     def __getattr__(self, name):
@@ -86,9 +88,8 @@ def probe_cert_fingerprint(host, port=990, timeout=5):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    with socket.create_connection((host, port), timeout) as raw:
-        with ctx.wrap_socket(raw, server_hostname=host) as tls:
-            return fingerprint_sha256(tls.getpeercert(binary_form=True))
+    with socket.create_connection((host, port), timeout) as raw, ctx.wrap_socket(raw, server_hostname=host) as tls:
+        return fingerprint_sha256(tls.getpeercert(binary_form=True))
 
 
 
@@ -260,7 +261,7 @@ def get_status(printer, timeout=None, retries=2):
                     result["data"] = data["print"]
                     status_received.set()
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                from bambu_cli import bambu; bambu.logger.debug(f"MQTT decode error: {e}")
+                logger.debug(f"MQTT decode error: {e}")
 
         client.on_connect = on_connect
         client.on_message = on_message
@@ -355,8 +356,8 @@ def get_version(printer, timeout=5, retries=1):
 def monitor_status(args):
     """Subscribe to the printer's report topic and log updates until a terminal state is reached."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json
     from bambu_cli.printer import get_printer
+    from bambu_cli.utils import emit_json
     printer = get_printer()
     logger.info("📡 Starting status monitor loop. Press Ctrl+C to stop.")
     if printer.simulation_mode:
@@ -410,7 +411,7 @@ def monitor_status(args):
                         userdata['progress'] = None
                     if 'progress' not in userdata:
                         try:
-                            from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn
+                            from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
                             progress = Progress(
                                 TextColumn("[bold blue]Print Status"),
                                 BarColumn(),
@@ -445,7 +446,7 @@ def monitor_status(args):
                         })
                     received_terminal.set()
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
-            from bambu_cli import bambu; bambu.logger.debug(f"MQTT decode error: {e}")
+            logger.debug(f"MQTT decode error: {e}")
         except Exception as e:
             logger.warning(f"MQTT message handling error: {e}")
 
@@ -481,19 +482,18 @@ def _get_and_verify_cert_pem(host, port, expected_fingerprint, timeout=5):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    with socket.create_connection((host, port), timeout) as raw:
-        with ctx.wrap_socket(raw, server_hostname=host) as tls:
-            der = tls.getpeercert(binary_form=True)
-            from bambu_cli.config import fingerprint_sha256
-            actual = fingerprint_sha256(der)
-            if actual.lower() != expected_fingerprint.lower():
-                raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {expected_fingerprint}, got {actual}")
-            pem = "-----BEGIN CERTIFICATE-----\n"
-            b64 = base64.b64encode(der).decode('ascii')
-            for i in range(0, len(b64), 64):
-                pem += b64[i:i+64] + "\n"
-            pem += "-----END CERTIFICATE-----\n"
-            return pem
+    with socket.create_connection((host, port), timeout) as raw, ctx.wrap_socket(raw, server_hostname=host) as tls:
+        der = tls.getpeercert(binary_form=True)
+        from bambu_cli.config import fingerprint_sha256
+        actual = fingerprint_sha256(der)
+        if actual.lower() != expected_fingerprint.lower():
+            raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {expected_fingerprint}, got {actual}")
+        pem = "-----BEGIN CERTIFICATE-----\n"
+        b64 = base64.b64encode(der).decode('ascii')
+        for i in range(0, len(b64), 64):
+            pem += b64[i:i+64] + "\n"
+        pem += "-----END CERTIFICATE-----\n"
+        return pem
 
 
 
@@ -502,8 +502,8 @@ def _get_and_verify_cert_pem(host, port, expected_fingerprint, timeout=5):
 def execute_print_command(printer, payload, basename, dry_run=False):
     """Send the print payload via MQTT and monitor for errors."""
     from bambu_cli import bambu
+    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR, EXIT_PRINTER_ERROR, EXIT_TIMEOUT
     from bambu_cli.utils import record_error_detail
-    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR, EXIT_TIMEOUT, EXIT_PRINTER_ERROR
     
     if dry_run:
         logger.info(f"🔍 Dry Run: Checking if {basename} exists on printer...")
@@ -568,7 +568,7 @@ def execute_print_command(printer, payload, basename, dry_run=False):
                 if p.get("command") == "project_file":
                     command_accepted.set()
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
-            from bambu_cli import bambu; bambu.logger.debug(f"MQTT decode error: {e}")
+            logger.debug(f"MQTT decode error: {e}")
         except Exception as e:
             logger.warning(f"MQTT message handling error: {e}")
 

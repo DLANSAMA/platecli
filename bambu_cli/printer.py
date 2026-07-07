@@ -5,10 +5,10 @@ import os
 import random
 import ssl
 import time
-from typing import Optional, Dict, Any
+from typing import Any, Optional
 
-from bambu_cli.protocols import mqtt as mqtt_protocol
 from bambu_cli.protocols import ftps as ftps_protocol
+from bambu_cli.protocols import mqtt as mqtt_protocol
 
 logger = logging.getLogger("bambu.printer")
 
@@ -41,7 +41,7 @@ class BambuPrinter:
         """Send a JSON command payload via MQTT."""
         return mqtt_protocol.send_command(self, payload, timeout=timeout, retries=retries)
 
-    def status(self, timeout: Optional[float] = None, retries: int = 2) -> Optional[Dict[str, Any]]:
+    def status(self, timeout: Optional[float] = None, retries: int = 2) -> Optional[dict[str, Any]]:
         """Get the printer status via MQTT."""
         return mqtt_protocol.get_status(self, timeout=timeout, retries=retries)
 

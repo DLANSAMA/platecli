@@ -1,8 +1,9 @@
+import json
 import os
 import sys
-import json
 
 from bambu_cli.logging_utils import logger
+
 
 def _default_config_path():
     """Return the platform-native default config path, preferring an existing
@@ -205,7 +206,7 @@ def _warn_inline_access_code_once():
 
 def load_access_code():
     from bambu_cli import bambu
-    from bambu_cli.cli import _expand_path, _display_path, _exception_for_message
+    from bambu_cli.cli import _display_path, _exception_for_message, _expand_path
     from bambu_cli.constants import EXIT_CONFIG_ERROR
     if "access_code" in bambu._cfg:
         if not bambu._cfg.get("access_code_file"):

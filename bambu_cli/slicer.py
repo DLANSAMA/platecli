@@ -1,16 +1,17 @@
-import os
-import sys
 import json
+import os
 import re
+import sys
 import tempfile
 
 GMSH_MESH_SCALE = "0.5"
 
-import subprocess
 import platform
 import shutil
+import subprocess
 
 from bambu_cli.logging_utils import logger
+
 
 def _normalize_wall_type(wall_type):
     """Accept the old 'archaic' spelling as an alias for Orca's classic walls."""
@@ -35,10 +36,7 @@ def _sliced_output_path(filepath, output_dir=None, copies=1):
     from bambu_cli import bambu
     basename = os.path.splitext(bambu._portable_basename(filepath))[0]
     outdir = output_dir or os.path.dirname(os.path.abspath(filepath))
-    if copies > 1:
-        outfile = f"{basename}_x{copies}_sliced.3mf"
-    else:
-        outfile = f"{basename}_sliced.3mf"
+    outfile = f"{basename}_x{copies}_sliced.3mf" if copies > 1 else f"{basename}_sliced.3mf"
     return os.path.join(outdir, outfile)
 
 def _is_directory_input(path):
@@ -244,10 +242,8 @@ def _create_temp_profiles(process, filament, args):
 
     created = []
     try:
-        tmp_process = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, prefix='proc_', encoding='utf-8')
+        tmp_process = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, prefix='proc_', encoding='utf-8')  # noqa: SIM115 — handle outlives block; cleaned up by caller
         created.append(tmp_process)
-        import sys
-        print(f"[debug] open={open} process={process}", file=sys.stderr)
         with open(process, encoding='utf-8') as f:
             proc_data = json.load(f)
         proc_data['sparse_infill_density'] = f"{infill}%"
@@ -286,7 +282,7 @@ def _create_temp_profiles(process, filament, args):
         tmp_process.close()
 
         # Copy filament profile and merge overrides
-        tmp_filament = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, prefix='fil_', encoding='utf-8')
+        tmp_filament = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, prefix='fil_', encoding='utf-8')  # noqa: SIM115 — handle outlives block; cleaned up by caller
         created.append(tmp_filament)
         with open(filament, encoding='utf-8') as f:
             fil_data = json.load(f)
@@ -319,10 +315,10 @@ def _create_temp_profiles(process, filament, args):
 def cmd_slice(args):
     """Slice an STL/STEP file into a printable .3mf using OrcaSlicer."""
     from bambu_cli import bambu
-    from bambu_cli.cli import _namespace_get, _exit_code_from_system_exit
+    from bambu_cli.cli import _exit_code_from_system_exit, _namespace_get
+    from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_TIMEOUT
     from bambu_cli.context import Settings
     from bambu_cli.utils import emit_json, emit_json_error
-    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_TIMEOUT
 
     settings = Settings.from_globals()
     filepath = bambu._expand_path(args.file)
@@ -550,7 +546,7 @@ def cmd_slice(args):
             task_id = None
             try:
                 if not getattr(args, "json", False):
-                    from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn
+                    from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
                     progress = Progress(
                         TextColumn("[bold blue]{task.description}", justify="right"),
                         BarColumn(bar_width=None),

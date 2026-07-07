@@ -1,10 +1,10 @@
+import json
 import os
 import sys
-import json
 import tempfile
 
-from bambu_cli.logging_utils import logger
 from bambu_cli.context import RuntimeContext
+from bambu_cli.logging_utils import logger
 
 # We dynamically import bambu at runtime in every function to support patching of functions and configuration globals
 
@@ -14,15 +14,15 @@ def cmd_setup(args):
     bambu._cmd_setup(args)
 from bambu_cli.utils import get_sequence_id
 
+
 def cmd_doctor(args, ctx=None):
     """Health-check: auto-discover printer capabilities and verify configuration."""
     from bambu_cli import bambu
-    from bambu_cli.cli import _namespace_get, _display_path
-    from bambu_cli.utils import emit_json
-    from bambu_cli.cli import _path_for_message, _exception_for_message
-    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_CONFIG_ERROR, EXIT_NETWORK_ERROR
-    from bambu_cli.protocols.mqtt import probe_cert_fingerprint
+    from bambu_cli.cli import _display_path, _exception_for_message, _namespace_get, _path_for_message
+    from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.protocols.ftps import get_ftp
+    from bambu_cli.protocols.mqtt import probe_cert_fingerprint
+    from bambu_cli.utils import emit_json
 
     ctx = ctx or RuntimeContext.from_globals(args)
     json_mode = bool(_namespace_get(args, "json", False))
@@ -159,8 +159,8 @@ def cmd_doctor(args, ctx=None):
 def cmd_light(args, ctx=None):
     """Control chamber light."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
+    from bambu_cli.utils import emit_json, emit_json_error
     ctx = ctx or RuntimeContext.from_globals(args)
     action = args.action  # on or off
     val = "on" if action == "on" else "off"
@@ -187,8 +187,8 @@ def cmd_light(args, ctx=None):
 def cmd_pause(args, ctx=None):
     """Pause current print."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
+    from bambu_cli.utils import emit_json, emit_json_error
     ctx = ctx or RuntimeContext.from_globals(args)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "pause"}})
     printer = ctx.printer()
@@ -208,8 +208,8 @@ def cmd_pause(args, ctx=None):
 def cmd_resume(args, ctx=None):
     """Resume paused print."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
+    from bambu_cli.utils import emit_json, emit_json_error
     ctx = ctx or RuntimeContext.from_globals(args)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "resume"}})
     printer = ctx.printer()
@@ -229,8 +229,8 @@ def cmd_resume(args, ctx=None):
 def cmd_stop(args, ctx=None):
     """Stop current print."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
+    from bambu_cli.utils import emit_json, emit_json_error
     ctx = ctx or RuntimeContext.from_globals(args)
     if not args.confirm:
         logger.warning("⚠️  This will STOP the current print. Add --confirm to proceed.")
@@ -261,9 +261,9 @@ def cmd_upload(args, ctx=None):
     """Upload a file to the printer via FTPS with binary retry/resume."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
+    from bambu_cli.utils import emit_json, emit_json_error
 
     ctx = ctx or RuntimeContext.from_globals(args)
     filepath = bambu._expand_path(args.file)
@@ -342,7 +342,7 @@ def cmd_upload(args, ctx=None):
     upload_callback = None
     try:
         if not getattr(args, "json", False) and getattr(args, "progress", True) and sys.stdout.isatty():
-            from rich.progress import Progress, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+            from rich.progress import DownloadColumn, Progress, TimeRemainingColumn, TransferSpeedColumn
             progress = Progress(
                 "[progress.description]{task.description}",
                 "[progress.percentage]{task.percentage:>3.0f}%",
@@ -400,9 +400,9 @@ def cmd_files(args, ctx=None):
     """List files on the printer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
+    from bambu_cli.utils import emit_json, emit_json_error
     ctx = ctx or RuntimeContext.from_globals(args)
     json_mode = bool(_namespace_get(args, "json", False))
     try:
@@ -438,8 +438,8 @@ def cmd_print(args, ctx=None):
     """Start printing a file already on the printer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
+    from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
     from bambu_cli.utils import emit_json, emit_json_error
-    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR
 
     ctx = ctx or RuntimeContext.from_globals(args)
     dry_run = getattr(args, 'dry_run', False)
@@ -522,9 +522,9 @@ def cmd_delete(args, ctx=None):
     """Delete a file from the printer via FTPS."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
-    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
+    from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
+    from bambu_cli.utils import emit_json, emit_json_error
 
     ctx = ctx or RuntimeContext.from_globals(args)
     filename = str(args.file or "")
@@ -583,8 +583,8 @@ def cmd_job(args):
 def cmd_gcode(args, ctx=None):
     """Send raw G-code to the printer via MQTT."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json, emit_json_error
     from bambu_cli.constants import EXIT_NETWORK_ERROR
+    from bambu_cli.utils import emit_json, emit_json_error
     ctx = ctx or RuntimeContext.from_globals(args)
     gcode = args.code
     payload = json.dumps({
@@ -612,10 +612,10 @@ def cmd_gcode(args, ctx=None):
 def cmd_status(args, ctx=None):
     """Query and display the printer's current status."""
     from bambu_cli.cli import _namespace_get
-    from bambu_cli.utils import emit_json
     from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.errors import PrinterConnectionError
     from bambu_cli.protocols.mqtt import monitor_status
+    from bambu_cli.utils import emit_json
     ctx = ctx or RuntimeContext.from_globals(args)
     if bool(_namespace_get(args, "monitor", False)):
         monitor_status(args)

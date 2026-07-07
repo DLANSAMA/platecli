@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from bambu_cli.constants import DEFAULT_NETWORK_TIMEOUT
 from bambu_cli.logging_utils import logger
-from bambu_cli.netsafety import build_safe_opener, _default_user_agent
+from bambu_cli.netsafety import _default_user_agent, build_safe_opener
 
 
 def _is_printables_model_url(value):
@@ -89,10 +89,7 @@ def _get_printables_file_info(model_id, gql_headers, opener):
     elif threemfs:
         logger.warning("   ⚠️  No STL/STEP files — falling back to 3MF (cannot re-slice with custom settings)")
         file_to_use = max(threemfs, key=lambda x: x.get('fileSize', 0))
-        if file_to_use in gcodes_raw:
-            file_type = "gcode"
-        else:
-            file_type = "stl"
+        file_type = "gcode" if file_to_use in gcodes_raw else "stl"
         logger.info(f"   → Using 3MF: {file_to_use['name']} ({file_to_use.get('fileSize', 0) // 1024}KB)")
     else:
         logger.error("No STL, STEP, or 3MF files found for this model")

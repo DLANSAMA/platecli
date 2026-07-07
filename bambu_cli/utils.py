@@ -1,9 +1,10 @@
-import os
 import json
+import os
 
 from .constants import (
     EXIT_FILE_ERROR,
 )
+
 
 def _secure_makedirs(path, exist_ok=True):
     os.makedirs(path, mode=0o700, exist_ok=exist_ok)
@@ -12,11 +13,12 @@ def _secure_makedirs(path, exist_ok=True):
 def _ensure_output_dir(path):
     """Create an output directory before expensive work starts."""
     import sys
+
     from bambu_cli.logging_utils import logger
     try:
         _secure_makedirs(path, exist_ok=True)
     except OSError as e:
-        from bambu_cli.cli import _path_for_message, _exception_for_message
+        from bambu_cli.cli import _exception_for_message, _path_for_message
         logger.error(f"Could not create output directory {_path_for_message(path)}: {_exception_for_message(e)}")
         sys.exit(EXIT_FILE_ERROR)
 
@@ -148,6 +150,7 @@ def _record_download_success(args, payload):
 
 import socket
 import threading
+
 
 def _resolve_ip(host, timeout=5.0):
     """Resolve a hostname to an IP address (supporting IPv4 and IPv6) exactly once.

@@ -1,20 +1,25 @@
-import sys
-import os
 import argparse
 import logging
+import os
 import socket
+import sys
 from urllib.parse import urlparse, urlunparse
-import bambu_cli.utils as utils
-from .utils import emit_json, emit_json_error
-from .constants import (
-    EXIT_SUCCESS, EXIT_CONFIG_ERROR, EXIT_COMMAND_ERROR, DEFAULT_MAX_DOWNLOAD_MB,
-    PRINTER_NETWORK_COMMANDS,
-)
-from .errors import BambuError
 
+import bambu_cli.utils as utils
 
 # Logging
 from bambu_cli.logging_utils import logger, mockable
+
+from .constants import (
+    DEFAULT_MAX_DOWNLOAD_MB,
+    EXIT_COMMAND_ERROR,
+    EXIT_CONFIG_ERROR,
+    EXIT_SUCCESS,
+    PRINTER_NETWORK_COMMANDS,
+)
+from .errors import BambuError
+from .utils import emit_json, emit_json_error
+
 
 @mockable
 def setup_logging(verbose=False, json_mode=False):
@@ -22,8 +27,8 @@ def setup_logging(verbose=False, json_mode=False):
     sys_module = sys
 
     try:
-        from rich.logging import RichHandler
         from rich.console import Console
+        from rich.logging import RichHandler
         from rich.traceback import install
         install(show_locals=False)
         console = Console(stderr=True)
@@ -354,9 +359,7 @@ def _requires_printer_dns_check(args):
         return False
     if args.cmd not in PRINTER_NETWORK_COMMANDS:
         return False
-    if args.cmd in ("job", "send") and bool(getattr(args, "dry_run", False)):
-        return False
-    return True
+    return not (args.cmd in ("job", "send") and bool(getattr(args, "dry_run", False)))
 
 
 def _json_setup_should_be_noninteractive(args):

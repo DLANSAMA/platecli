@@ -13,15 +13,6 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
-from bambu_cli.constants import (
-    DEFAULT_NETWORK_TIMEOUT,
-    EXIT_COMMAND_ERROR,
-    EXIT_CONFIG_ERROR,
-    EXIT_FILE_ERROR,
-    EXIT_NETWORK_ERROR,
-)
-from bambu_cli.logging_utils import logger
-from bambu_cli.utils import emit_json, emit_json_error, _ensure_parent_dir
 from bambu_cli.cli import (
     _exception_for_message,
     _exit_code_from_system_exit,
@@ -29,7 +20,16 @@ from bambu_cli.cli import (
     _namespace_get,
     _path_for_message,
 )
+from bambu_cli.constants import (
+    DEFAULT_NETWORK_TIMEOUT,
+    EXIT_COMMAND_ERROR,
+    EXIT_CONFIG_ERROR,
+    EXIT_FILE_ERROR,
+    EXIT_NETWORK_ERROR,
+)
 from bambu_cli.context import RuntimeContext
+from bambu_cli.logging_utils import logger
+from bambu_cli.utils import _ensure_parent_dir, emit_json, emit_json_error
 
 
 def _grab_camera_frame_direct(printer, timeout=12):

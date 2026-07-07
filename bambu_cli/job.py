@@ -11,6 +11,15 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 from urllib.parse import quote, urlparse
 
+from bambu_cli import utils
+from bambu_cli.cli import (
+    _exception_for_message,
+    _exit_code_from_system_exit,
+    _expand_path,
+    _namespace_get,
+    _path_for_message,
+    _redact_url_credentials,
+)
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DEFAULT_MAX_DOWNLOAD_MB,
@@ -19,17 +28,6 @@ from bambu_cli.constants import (
     EXIT_FILE_ERROR,
     PRINT_READY_EXTENSIONS,
     SLICEABLE_EXTENSIONS,
-)
-from bambu_cli.logging_utils import logger
-from bambu_cli import utils
-from bambu_cli.utils import emit_json, _ensure_output_dir
-from bambu_cli.cli import (
-    _exception_for_message,
-    _exit_code_from_system_exit,
-    _expand_path,
-    _namespace_get,
-    _path_for_message,
-    _redact_url_credentials,
 )
 from bambu_cli.download import (
     _archive_member_too_large_message,
@@ -50,6 +48,8 @@ from bambu_cli.download import (
     _unsupported_download_message,
     _validate_http_url_or_exit,
 )
+from bambu_cli.logging_utils import logger
+from bambu_cli.utils import _ensure_output_dir, emit_json
 
 
 def _default_download():
@@ -334,7 +334,7 @@ def _run_job(ctx, args, steps=None):
     """Agent-friendly one-shot workflow: URL/local file -> slice if needed -> upload -> optional print."""
     if steps is None:
         steps = JobSteps()
-    from bambu_cli.slicer import _is_directory_input, _directory_input_message, _validate_slice_options
+    from bambu_cli.slicer import _directory_input_message, _is_directory_input, _validate_slice_options
     source_arg = args.source
     source = _normalize_url_input(source_arg)
     reported_source = _redact_url_credentials(source_arg)
@@ -463,11 +463,10 @@ def _run_job(ctx, args, steps=None):
                 raise
             source_path = download_path
             summary["downloaded_path"] = download_path
-            if isinstance(utils._LAST_DOWNLOAD_PAYLOAD, dict):
-                if utils._LAST_DOWNLOAD_PAYLOAD.get("archive_entry"):
-                    summary["would_extract"] = True
-                    summary["extracted_path"] = utils._LAST_DOWNLOAD_PAYLOAD.get("path")
-                    summary["archive_entry"] = utils._LAST_DOWNLOAD_PAYLOAD.get("archive_entry")
+            if isinstance(utils._LAST_DOWNLOAD_PAYLOAD, dict) and utils._LAST_DOWNLOAD_PAYLOAD.get("archive_entry"):
+                summary["would_extract"] = True
+                summary["extracted_path"] = utils._LAST_DOWNLOAD_PAYLOAD.get("path")
+                summary["archive_entry"] = utils._LAST_DOWNLOAD_PAYLOAD.get("archive_entry")
             workdir = workdir or os.path.dirname(os.path.abspath(source_path))
         else:
             source_path = _expand_path(source)
@@ -686,6 +685,5 @@ def _run_job(ctx, args, steps=None):
             emit_json(summary)
         return printable_path
     finally:
-        if is_temp_workdir and workdir and os.path.exists(workdir):
-            if os.environ.get("BAMBU_KEEP_WORKDIR") != "1":
-                shutil.rmtree(workdir, ignore_errors=True)
+        if is_temp_workdir and workdir and os.path.exists(workdir) and os.environ.get("BAMBU_KEEP_WORKDIR") != "1":
+            shutil.rmtree(workdir, ignore_errors=True)
