@@ -33,6 +33,15 @@ private helper is reachable through this module via a lazy ``__getattr__``
 forwarder, so ``from bambu_cli import bambu`` remains a stable facade for
 tests and scripts, and so runtime state can be patched in one place
 (``bambu.SIMULATION_MODE``, ``bambu.PRINTER_IP``, ...).
+
+READ-ONLY COMPAT SURFACE: this facade is frozen. Do not add new names to
+``_FACADE_MODULES`` or introduce new module-level helpers/re-exports here —
+new code should call ``get_printer()`` (or the equivalent focused module,
+e.g. ``bambu_cli.slicer``, ``bambu_cli.context``) directly instead of going
+through ``bambu.<name>``. The existing runtime-state globals
+(``SIMULATION_MODE``, ``PRINTER_IP``, ...) and the ``__getattr__``
+forwarding mechanism stay as-is — tests and scripts depend on every
+existing name continuing to resolve through this module.
 """
 
 import importlib

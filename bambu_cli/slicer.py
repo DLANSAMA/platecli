@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import argparse
+import io
 import json
 import os
 import re
@@ -9,18 +13,19 @@ GMSH_MESH_SCALE = "0.5"
 import platform
 import shutil
 import subprocess
+from typing import IO, Any
 
 from bambu_cli.logging_utils import logger
 
 
-def _normalize_wall_type(wall_type):
+def _normalize_wall_type(wall_type: str | None) -> str | None:
     """Accept the old 'archaic' spelling as an alias for Orca's classic walls."""
     if wall_type == "archaic":
         return "classic"
     return wall_type
 
 
-def _slicer_executable_problem(path):
+def _slicer_executable_problem(path: str | None) -> str | None:
     """Return a human-readable OrcaSlicer path problem, or None when usable."""
     from bambu_cli import bambu
 
@@ -37,7 +42,7 @@ def _slicer_executable_problem(path):
     return None
 
 
-def _sliced_output_path(filepath, output_dir=None, copies=1):
+def _sliced_output_path(filepath: str, output_dir: str | None = None, copies: int = 1) -> str:
     from bambu_cli import bambu
 
     basename = os.path.splitext(bambu._portable_basename(filepath))[0]
@@ -46,7 +51,7 @@ def _sliced_output_path(filepath, output_dir=None, copies=1):
     return os.path.join(outdir, outfile)
 
 
-def _is_directory_input(path):
+def _is_directory_input(path: str) -> bool:
     """Return True for real directory inputs without trusting broad test mocks."""
     import stat
 
@@ -56,13 +61,13 @@ def _is_directory_input(path):
         return False
 
 
-def _directory_input_message(path):
+def _directory_input_message(path: str) -> str:
     from bambu_cli import bambu
 
     return f"Path is a directory, not a file: {bambu._path_for_message(path)}"
 
 
-def _validate_slice_options(args):
+def _validate_slice_options(args: argparse.Namespace) -> str | None:
     from bambu_cli.cli import _namespace_get
 
     copies = getattr(args, "copies", 1)
@@ -77,7 +82,7 @@ def _validate_slice_options(args):
     return None
 
 
-def _safe_temp_prefix(value, fallback="tmp", max_length=48):
+def _safe_temp_prefix(value: Any, fallback: str = "tmp", max_length: int = 48) -> str:
     """Return a filesystem-safe, bounded tempfile prefix ending in '_'."""
     prefix = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", str(value or "")).strip(" .")
     if not prefix:
@@ -85,7 +90,7 @@ def _safe_temp_prefix(value, fallback="tmp", max_length=48):
     return f"{prefix[:max_length]}_"
 
 
-def _convert_step_to_stl(filepath):
+def _convert_step_to_stl(filepath: str) -> tuple[str | None, bool]:
     """Convert STEP to STL using gmsh."""
     from bambu_cli import bambu
 
@@ -170,7 +175,7 @@ def _convert_step_to_stl(filepath):
     return stl_path, True
 
 
-def _process_profile_compatible(path, compatible_printer):
+def _process_profile_compatible(path: str, compatible_printer: str | None) -> bool:
     if not compatible_printer:
         return False
     try:
@@ -184,7 +189,13 @@ def _process_profile_compatible(path, compatible_printer):
     return compatible_printer in compatible
 
 
-def _discover_process_profile(quality_arg, quality_map, model_code="P1P", compatible_printer=None, profiles_dir=None):
+def _discover_process_profile(
+    quality_arg: str,
+    quality_map: dict[str, str],
+    model_code: str = "P1P",
+    compatible_printer: str | None = None,
+    profiles_dir: str | None = None,
+) -> str | None:
     """Discover a matching process profile."""
     if profiles_dir is None:
         from bambu_cli.context import Settings
@@ -248,7 +259,7 @@ def _discover_process_profile(quality_arg, quality_map, model_code="P1P", compat
     return None
 
 
-def _create_temp_profiles(process, filament, args):
+def _create_temp_profiles(process: str, filament: str, args: argparse.Namespace) -> tuple[IO[str], IO[str]]:
     """Create temporary process and filament profiles with overrides."""
     infill = getattr(args, "infill", 15)
     pattern = getattr(args, "pattern", "3dhoneycomb")
@@ -268,7 +279,7 @@ def _create_temp_profiles(process, filament, args):
     accel_travel = getattr(args, "accel_travel", None)
     accel_first_layer = getattr(args, "accel_first_layer", None)
 
-    created = []
+    created: list[IO[str]] = []
     try:
         tmp_process = tempfile.NamedTemporaryFile(  # noqa: SIM115 — handle outlives block; cleaned up by caller
             mode="w", suffix=".json", delete=False, prefix="proc_", encoding="utf-8"
@@ -346,7 +357,7 @@ def _create_temp_profiles(process, filament, args):
     return tmp_process, tmp_filament
 
 
-def cmd_slice(args):
+def cmd_slice(args: argparse.Namespace) -> str:
     """Slice an STL/STEP file into a printable .3mf using OrcaSlicer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _exit_code_from_system_exit, _namespace_get
@@ -503,14 +514,14 @@ def cmd_slice(args):
 
         if not os.path.exists(process):
             compatible_printer = f"{full_model_name} {settings.nozzle_size} nozzle"
-            process = _discover_process_profile(
+            discovered_process = _discover_process_profile(
                 args.quality,
                 quality_map,
                 model_code=model_code,
                 compatible_printer=compatible_printer,
                 profiles_dir=settings.profiles_dir,
             )
-            if not process:
+            if not discovered_process:
                 emit_json_error(
                     args,
                     "slice",
@@ -520,6 +531,7 @@ def cmd_slice(args):
                     file=filepath,
                 )
                 sys.exit(EXIT_CONFIG_ERROR)
+            process = discovered_process
 
         for path, name in [(machine, "machine"), (filament, "filament")]:
             if not os.path.exists(path):
@@ -617,7 +629,7 @@ def cmd_slice(args):
         try:
             # Interactive visual feedback logging (A0530-UI-05)
             logger.info("   Running OrcaSlicer background worker...")
-            process = subprocess.Popen(
+            proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -650,9 +662,9 @@ def cmd_slice(args):
             import threading
             import time
 
-            chunk_queue = queue.Queue()
+            chunk_queue: queue.Queue[tuple[str, str]] = queue.Queue()
 
-            def _pump(stream, name):
+            def _pump(stream: io.BufferedReader, name: str) -> None:
                 while True:
                     chunk = stream.read1(4096)
                     if not chunk:
@@ -660,13 +672,13 @@ def cmd_slice(args):
                     chunk_queue.put((name, chunk.decode("utf-8", errors="replace")))
 
             readers = [
-                threading.Thread(target=_pump, args=(process.stdout, "stdout"), daemon=True),
-                threading.Thread(target=_pump, args=(process.stderr, "stderr"), daemon=True),
+                threading.Thread(target=_pump, args=(proc.stdout, "stdout"), daemon=True),
+                threading.Thread(target=_pump, args=(proc.stderr, "stderr"), daemon=True),
             ]
             for t in readers:
                 t.start()
 
-            def _handle_stdout_line(line_str):
+            def _handle_stdout_line(line_str: str) -> None:
                 pct_match = re.search(r"(\d+)%", line_str)
                 if progress and task_id is not None and pct_match:
                     progress.update(task_id, completed=int(pct_match.group(1)))
@@ -677,7 +689,7 @@ def cmd_slice(args):
 
             stdout_carry = ""
 
-            def _consume(name, text):
+            def _consume(name: str, text: str) -> None:
                 nonlocal stdout_carry
                 if name == "stderr":
                     stderr_lines.append(text)
@@ -701,7 +713,7 @@ def cmd_slice(args):
                         pass
                     if time.monotonic() - start_time > slicer_timeout:
                         raise subprocess.TimeoutExpired(cmd, slicer_timeout)
-                    if process.poll() is not None:
+                    if proc.poll() is not None:
                         alive = False
                         for t in readers:
                             t.join(timeout=2)
@@ -718,22 +730,23 @@ def cmd_slice(args):
                 if stdout_carry.strip():
                     _handle_stdout_line(stdout_carry.strip())
             except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+                proc.kill()
+                proc.wait()
                 raise
             finally:
                 if progress:
                     progress.stop()
-                for stream in (process.stdout, process.stderr):
+                for stream in (proc.stdout, proc.stderr):
                     try:
-                        stream.close()
+                        if stream is not None:
+                            stream.close()
                     except Exception:
                         pass
 
-            process.wait()
+            proc.wait()
             result = subprocess.CompletedProcess(
                 cmd,
-                returncode=process.returncode,
+                returncode=proc.returncode,
                 stdout="".join(stdout_lines),
                 stderr="".join(stderr_lines),
             )
