@@ -49,6 +49,17 @@ bambu-cli config show       # print config path + contents (access code redacted
 bambu-cli config validate   # check config values without contacting the printer
 ```
 
+### OrcaSlicer
+
+Slicing shells out to OrcaSlicer, so `bambu-cli` needs to know where its binary
+and bundled `profiles/BBL` directory live. Setup auto-detects the usual install
+locations per platform — the macOS app bundle, the Windows `Program Files`
+install, and on Linux a `$PATH` binary (`orca-slicer`), a Flatpak export, or an
+AppImage under `~/Applications` or `~/tools`. If detection misses your install,
+set `orca_slicer` and `profiles_dir` in `config.json`; when a configured path is
+wrong, `config validate` (and slicing) will point you at a working OrcaSlicer it
+found instead of failing with a generic error.
+
 ## Usage
 
 ```bash

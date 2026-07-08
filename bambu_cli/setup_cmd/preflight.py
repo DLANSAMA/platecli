@@ -161,11 +161,18 @@ def collect_preflight_checks():
 
     settings = current_settings()
     cfg_for_paths = cfg or current_config() or {}
+    from bambu_cli.config import detect_orca_slicer, detect_profiles_dir
+
     orca_path = _expand_path(cfg_for_paths.get("orca_slicer", settings.orca_slicer))
     orca_problem = _slicer_executable_problem(orca_path)
     if not orca_problem:
         checks.append(_preflight_result("ok", "orca-slicer", f"OrcaSlicer found at {_display_path(orca_path)}."))
     else:
+        detected = detect_orca_slicer()
+        if detected and detected != orca_path:
+            orca_problem += (
+                f' Detected an OrcaSlicer at {_display_path(detected)} — set "orca_slicer" to this in config.json.'
+            )
         checks.append(_preflight_result("error", "orca-slicer", orca_problem))
 
     profiles_dir = _expand_path(cfg_for_paths.get("profiles_dir", settings.profiles_dir))
@@ -174,11 +181,13 @@ def collect_preflight_checks():
             _preflight_result("ok", "profiles-dir", f"OrcaSlicer profiles found at {_display_path(profiles_dir)}.")
         )
     else:
-        checks.append(
-            _preflight_result(
-                "error", "profiles-dir", f"OrcaSlicer BBL profiles not found at {_display_path(profiles_dir)}."
+        message = f"OrcaSlicer BBL profiles not found at {_display_path(profiles_dir)}."
+        detected_profiles = detect_profiles_dir()
+        if detected_profiles and detected_profiles != profiles_dir:
+            message += (
+                f' Detected profiles at {_display_path(detected_profiles)} — set "profiles_dir" to this in config.json.'
             )
-        )
+        checks.append(_preflight_result("error", "profiles-dir", message))
 
     if shutil.which("gmsh"):
         checks.append(_preflight_result("ok", "gmsh", "gmsh is available for STEP/STP conversion."))

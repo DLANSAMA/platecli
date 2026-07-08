@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import sys
 
 from bambu_cli.logging_utils import logger
@@ -106,15 +107,13 @@ def _first_existing_path(candidates):
     return expanded[0]
 
 
-def _default_orca_path():
-    """Return the platform-native default OrcaSlicer binary path."""
+def _orca_binary_candidates():
+    """Likely OrcaSlicer binary locations for the current platform, best-first."""
     if sys.platform == "darwin":
-        return _first_existing_path(
-            [
-                "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
-                "~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
-            ]
-        )
+        return [
+            "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
+            "~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
+        ]
     if sys.platform == "win32":
         candidates = [
             os.path.join(os.environ.get("PROGRAMFILES", r"C:\Program Files"), "OrcaSlicer", "OrcaSlicer.exe"),
@@ -128,24 +127,30 @@ def _default_orca_path():
         program_files_x86 = os.environ.get("PROGRAMFILES(X86)")
         if program_files_x86:
             candidates.append(os.path.join(program_files_x86, "OrcaSlicer", "OrcaSlicer.exe"))
-        return _first_existing_path(candidates)
-    return _first_existing_path(
-        [
-            "~/tools/OrcaSlicer.AppImage",
-            os.path.join(_SCRIPT_DIR, "..", "tools", "OrcaSlicer.AppImage"),
-        ]
-    )
+        return candidates
+    # Linux: anything already on PATH (distro package or Flatpak-exported wrapper)
+    # first, then common package / Flatpak / AppImage install spots.
+    candidates = [shutil.which(name) for name in ("orca-slicer", "OrcaSlicer", "orcaslicer")]
+    candidates += [
+        "/usr/bin/orca-slicer",
+        "/usr/local/bin/orca-slicer",
+        "/opt/OrcaSlicer/orca-slicer",
+        "/var/lib/flatpak/exports/bin/io.github.softfever.OrcaSlicer",
+        "~/.local/share/flatpak/exports/bin/io.github.softfever.OrcaSlicer",
+        "~/Applications/OrcaSlicer.AppImage",
+        "~/tools/OrcaSlicer.AppImage",
+        os.path.join(_SCRIPT_DIR, "..", "tools", "OrcaSlicer.AppImage"),
+    ]
+    return candidates
 
 
-def _default_profiles_path():
-    """Return the platform-native default OrcaSlicer profiles directory."""
+def _profiles_dir_candidates():
+    """Likely OrcaSlicer BBL profile-directory locations, best-first."""
     if sys.platform == "darwin":
-        return _first_existing_path(
-            [
-                "/Applications/OrcaSlicer.app/Contents/Resources/profiles/BBL",
-                "~/Applications/OrcaSlicer.app/Contents/Resources/profiles/BBL",
-            ]
-        )
+        return [
+            "/Applications/OrcaSlicer.app/Contents/Resources/profiles/BBL",
+            "~/Applications/OrcaSlicer.app/Contents/Resources/profiles/BBL",
+        ]
     if sys.platform == "win32":
         candidates = [
             os.path.join(
@@ -163,13 +168,47 @@ def _default_profiles_path():
         program_files_x86 = os.environ.get("PROGRAMFILES(X86)")
         if program_files_x86:
             candidates.append(os.path.join(program_files_x86, "OrcaSlicer", "resources", "profiles", "BBL"))
-        return _first_existing_path(candidates)
-    return _first_existing_path(
-        [
-            "~/tools/squashfs-root/resources/profiles/BBL",
-            os.path.join(_SCRIPT_DIR, "..", "tools", "squashfs-root", "resources", "profiles", "BBL"),
-        ]
-    )
+        return candidates
+    return [
+        "/usr/share/OrcaSlicer/resources/profiles/BBL",
+        "/opt/OrcaSlicer/resources/profiles/BBL",
+        "~/tools/squashfs-root/resources/profiles/BBL",
+        os.path.join(_SCRIPT_DIR, "..", "tools", "squashfs-root", "resources", "profiles", "BBL"),
+    ]
+
+
+def _default_orca_path():
+    """Return the platform-native default OrcaSlicer binary path."""
+    return _first_existing_path(_orca_binary_candidates())
+
+
+def _default_profiles_path():
+    """Return the platform-native default OrcaSlicer profiles directory."""
+    return _first_existing_path(_profiles_dir_candidates())
+
+
+def detect_orca_slicer():
+    """Return the first OrcaSlicer binary that actually exists, or None.
+
+    Unlike :func:`_default_orca_path` this never falls back to a non-existent
+    first candidate, so a truthy result is a real, actionable path to suggest.
+    """
+    from bambu_cli.cli import _expand_path
+
+    for path in _orca_binary_candidates():
+        if path and os.path.exists(_expand_path(path)):
+            return _expand_path(path)
+    return None
+
+
+def detect_profiles_dir():
+    """Return the first OrcaSlicer BBL profiles directory that exists, or None."""
+    from bambu_cli.cli import _expand_path
+
+    for path in _profiles_dir_candidates():
+        if path and os.path.isdir(_expand_path(path)):
+            return _expand_path(path)
+    return None
 
 
 _DEFAULT_ORCA = _default_orca_path()

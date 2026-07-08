@@ -792,9 +792,18 @@ def cmd_slice(args: argparse.Namespace) -> str:
 
         slicer_problem = _slicer_executable_problem(settings.orca_slicer)
         if slicer_problem:
+            from bambu_cli.config import detect_orca_slicer
+
             message = slicer_problem
             logger.error(message)
-            logger.info("Please update 'orca_slicer' in your config.json or place it in the tools/ directory.")
+            detected_orca = detect_orca_slicer()
+            if detected_orca and detected_orca != settings.orca_slicer:
+                logger.info(
+                    f"Detected OrcaSlicer at {bambu._display_path(detected_orca)} — "
+                    'set "orca_slicer" to this in config.json.'
+                )
+            else:
+                logger.info("Please update 'orca_slicer' in your config.json or place it in the tools/ directory.")
             emit_json_error(
                 args,
                 "slice",
@@ -803,6 +812,7 @@ def cmd_slice(args: argparse.Namespace) -> str:
                 failed_step="slicer",
                 file=filepath,
                 orca_slicer=settings.orca_slicer,
+                detected_orca_slicer=detected_orca,
             )
             sys.exit(EXIT_CONFIG_ERROR)
 
