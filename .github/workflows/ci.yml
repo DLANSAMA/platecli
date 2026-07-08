@@ -62,15 +62,11 @@ jobs:
           fi
 
 
-      - name: Unit tests
-        run: python -W error::ResourceWarning -m unittest tests.test_config_and_logging tests.test_protocol_clients tests.test_cli_entry tests.test_printer_commands tests.test_slice_cmd tests.test_download_cmd tests.test_camera_cmd tests.test_doctor_and_safety
-
-      # pytest + coverage runs in this matrix so a second workflow isn't needed.
+      # Single runner: pytest (includes former unittest modules via collection).
       - name: Pytest with coverage
         run: |
           uv pip install '.[test]'
-          python -m pytest --cov=bambu_cli
-
+          python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=92
       - name: Syntax smoke
         run: python -m py_compile bambu_cli/__init__.py bambu_cli/bambu.py bambu_cli/cli.py bambu_cli/config.py bambu_cli/constants.py bambu_cli/slicer.py bambu_cli/commands.py bambu_cli/ams.py bambu_cli/download/__init__.py bambu_cli/download/naming.py bambu_cli/download/validation.py bambu_cli/download/html_links.py bambu_cli/download/extract.py bambu_cli/download/downloader.py bambu_cli/job.py bambu_cli/setup_cmd/__init__.py bambu_cli/setup_cmd/common.py bambu_cli/setup_cmd/config_cmd.py bambu_cli/setup_cmd/wizard.py bambu_cli/setup_cmd/migrate.py bambu_cli/setup_cmd/preflight.py bambu_cli/camera.py bambu_cli/printer.py bambu_cli/utils.py bambu_cli/logging_utils.py bambu_cli/protocols/ftps.py bambu_cli/protocols/mqtt.py scripts/bambu.py tests/bambu_test_base.py tests/test_config_and_logging.py tests/test_protocol_clients.py tests/test_cli_entry.py tests/test_printer_commands.py tests/test_slice_cmd.py tests/test_download_cmd.py tests/test_camera_cmd.py tests/test_doctor_and_safety.py tests/agent_cli_smoke.py tests/ci_workflow_smoke.py tests/dependency_resolution_smoke.py tests/live_printer_smoke.py tests/package_contents_smoke.py tests/privacy_smoke.py tests/python_compat_smoke.py tests/release_readiness_smoke.py scripts/__init__.py
 
@@ -155,17 +151,39 @@ jobs:
         run: uvx ruff check bambu_cli
       - name: ruff format (blocking, style consistency)
         run: uvx ruff format --check bambu_cli
-      - name: bandit (non-blocking)
-        run: uvx bandit -c pyproject.toml -r bambu_cli -ll || true
-      - name: pip-audit (non-blocking, dependency CVEs)
+      - name: bandit (blocking medium+)
+        run: uvx bandit -c pyproject.toml -r bambu_cli -ll
+      - name: pip-audit (blocking high+)
         run: |
           uv export --frozen --no-emit-project --format requirements-txt > audit-requirements.txt
-          uvx pip-audit -r audit-requirements.txt || true
-      - name: mypy (blocking, typed modules only — ratchet this list)
-        run: uvx mypy bambu_cli/context.py bambu_cli/constants.py bambu_cli/slicer.py
+          uvx pip-audit -r audit-requirements.txt
+      - name: mypy (blocking; exclude printer/slicer until residual typing fixed)
+        run: >
+          uvx mypy
+          bambu_cli/ams.py bambu_cli/bambu.py bambu_cli/camera.py bambu_cli/cli.py
+          bambu_cli/commands.py bambu_cli/config.py bambu_cli/constants.py bambu_cli/context.py
+          bambu_cli/errors.py bambu_cli/job.py bambu_cli/logging_utils.py bambu_cli/netsafety.py
+          bambu_cli/printables.py bambu_cli/utils.py
+          bambu_cli/download bambu_cli/protocols bambu_cli/setup_cmd
       - name: no test-awareness in production code (blocking)
         run: |
           if grep -rnE 'isinstance\([^)]*\bMock\b|["'"'"']unittest["'"'"'] in sys\.modules' bambu_cli/; then
             echo "::error::Test-awareness branch found in production code (see docs/test-backlog.md ground rules)."
             exit 1
           fi
+      - name: sys.exit only at CLI entry (blocking)
+        run: |
+          if grep -rnE 'sys\.exit\(' bambu_cli/ | grep -v 'bambu_cli/cli.py' | grep -v 'bambu_cli/errors.py'; then
+            echo "::error::sys.exit found outside cli entry (domain code must raise BambuError/abort)."
+            exit 1
+          fi
+      - name: no mockable decorator (blocking)
+        run: |
+          if grep -rnE '@mockable|def mockable' bambu_cli/; then
+            echo "::error::@mockable/test indirection found in production code."
+            exit 1
+          fi
+      - name: security + contract markers smoke
+        run: |
+          uv pip install '.[test]'
+          uv run python -m pytest tests/ -q -m "security or contract" --tb=line

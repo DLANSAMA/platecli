@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Typed runtime context for command handlers.
 
 ``Settings.from_config`` is the canonical config parse: ``apply_config``
@@ -7,7 +9,6 @@ source of truth. Handlers read it through ``current_settings()`` /
 module globals anymore — add fields to ``Settings`` here instead.
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -92,6 +93,8 @@ class Settings:
             camera_container_name=cfg.get("camera_container_name", "bambu_camera"),
             camera_port=camera_port,
             camera_stream_url=camera_stream_url,
+            # Always false from config: private-IP downloads are a per-invocation
+            # CLI override only (``--allow-private-ips``), never a sticky config key.
             allow_private_ips=False,
         )
 

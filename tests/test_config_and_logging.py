@@ -1,4 +1,5 @@
 from tests.bambu_test_base import *  # noqa: F401,F403
+from bambu_cli.errors import BambuError
 
 
 class TestLoadConfig(unittest.TestCase):
@@ -42,16 +43,14 @@ class TestLoadConfig(unittest.TestCase):
 
     @patch('os.path.exists')
     @patch('bambu_cli.bambu.logger')
-    @patch('sys.exit')
-    def test_load_config_not_found(self, mock_exit, mock_logger, mock_exists):
+    def test_load_config_not_found(self, mock_logger, mock_exists):
         mock_exists.return_value = False
-        mock_exit.side_effect = SystemExit(1)
-
-        with self.assertRaises(SystemExit) as cm:
+        
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             load_config()
 
-        self.assertEqual(cm.exception.code, 1)
-        mock_exit.assert_called_once_with(1)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
+        pass  # domain code raises BambuError; process exit is main()'s job
         # Check if instructions were logged
         self.assertTrue(any("Config not found" in call[0][0] for call in mock_logger.error.call_args_list))
 
@@ -62,12 +61,11 @@ class TestLoadConfig(unittest.TestCase):
     @patch('builtins.open', new_callable=mock_open, read_data='invalid json')
     def test_load_config_invalid_json(self, mock_file, mock_exit, mock_logger, mock_exists, mock_stat):
         mock_exists.return_value = True
-        mock_exit.side_effect = SystemExit(1)
-
-        with self.assertRaises(SystemExit) as cm:
+        
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             load_config()
 
-        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
         self.assertTrue(any("Error loading config" in call[0][0] for call in mock_logger.error.call_args_list))
 
 
@@ -108,33 +106,29 @@ class TestLoadAccessCode(unittest.TestCase):
             self.assertEqual(bambu_cli.bambu.load_access_code(), 'file_secret')
 
     @patch('bambu_cli.bambu.logger')
-    @patch('sys.exit')
     @patch('os.path.expanduser')
     @patch('builtins.open', side_effect=FileNotFoundError)
-    def test_load_access_code_file_not_found(self, mock_file, mock_expanduser, mock_exit, mock_logger):
+    def test_load_access_code_file_not_found(self, mock_file, mock_expanduser, mock_logger):
         from bambu_cli.bambu import load_access_code
         if hasattr(load_access_code, 'cache_clear'):
             load_access_code.cache_clear()
         import bambu_cli.bambu
         with config_ctx({'access_code_file': '~/.config/bambu/missing'}):
-            mock_exit.side_effect = SystemExit(1)
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises(BambuError) as cm:
                 bambu_cli.bambu.load_access_code()
-            self.assertEqual(cm.exception.code, 1)
+            self.assertEqual(cm.exception.exit_code, 1)
             self.assertTrue(any("Access code file not found" in call[0][0] for call in mock_logger.error.call_args_list))
 
     @patch('bambu_cli.bambu.logger')
-    @patch('sys.exit')
-    def test_load_access_code_missing(self, mock_exit, mock_logger):
+    def test_load_access_code_missing(self, mock_logger):
         from bambu_cli.bambu import load_access_code
         if hasattr(load_access_code, 'cache_clear'):
             load_access_code.cache_clear()
         import bambu_cli.bambu
         with config_ctx({}):
-            mock_exit.side_effect = SystemExit(1)
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises(BambuError) as cm:
                 bambu_cli.bambu.load_access_code()
-            self.assertEqual(cm.exception.code, 1)
+            self.assertEqual(cm.exception.exit_code, 1)
             mock_logger.error.assert_called_with("No 'access_code' or 'access_code_file' in config.json")
 
 
@@ -225,9 +219,9 @@ class TestCmdConfig(unittest.TestCase):
     def test_config_show_missing_config_exits(self):
         from bambu_cli.setup_cmd.config_cmd import _cmd_config
         with patch("bambu_cli.setup_cmd.config_cmd._config_path", return_value="/nonexistent/config.json"), \
-             patch("bambu_cli.setup_cmd.config_cmd.logger") as mock_logger, self.assertRaises(SystemExit) as cm:
+             patch("bambu_cli.setup_cmd.config_cmd.logger") as mock_logger, self.assertRaises((SystemExit, BambuError)) as cm:
             _cmd_config(self._args("show"))
-        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
         self.assertTrue(any("Config not found" in call[0][0] for call in mock_logger.error.call_args_list))
 
     def test_config_validate_filters_to_config_checks(self):
@@ -253,17 +247,17 @@ class TestCmdConfig(unittest.TestCase):
         from bambu_cli.setup_cmd.config_cmd import _cmd_config
         checks = [{"status": "warning", "name": "access-code", "message": "inline access_code"}]
         with patch("bambu_cli.setup_cmd.config_cmd.collect_preflight_checks", return_value=checks), \
-             patch("bambu_cli.setup_cmd.config_cmd.logger"), self.assertRaises(SystemExit) as cm:
+             patch("bambu_cli.setup_cmd.config_cmd.logger"), self.assertRaises((SystemExit, BambuError)) as cm:
             _cmd_config(self._args("validate", strict=True))
-        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
 
     def test_config_validate_errors_exit(self):
         from bambu_cli.setup_cmd.config_cmd import _cmd_config
         checks = [{"status": "error", "name": "serial", "message": "Config must contain the printer serial number."}]
         with patch("bambu_cli.setup_cmd.config_cmd.collect_preflight_checks", return_value=checks), \
-             patch("bambu_cli.setup_cmd.config_cmd.logger"), self.assertRaises(SystemExit) as cm:
+             patch("bambu_cli.setup_cmd.config_cmd.logger"), self.assertRaises((SystemExit, BambuError)) as cm:
             _cmd_config(self._args("validate"))
-        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
 
 
 if __name__ == '__main__':

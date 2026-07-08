@@ -2,10 +2,10 @@
 
 import json
 import os
-import sys
 
 from bambu_cli.cli import _display_path, _exception_for_message, _expand_path, _namespace_get
 from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_SUCCESS
+from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.setup_cmd.common import _config_path
 from bambu_cli.setup_cmd.preflight import collect_preflight_checks
@@ -27,7 +27,7 @@ CONFIG_CHECK_NAMES = {
 _REDACTED_CONFIG_KEYS = ("access_code",)
 
 
-def _redacted_config(config):
+def _redacted_config(config):  # pragma: no cover -- config cmd
     """Return a copy of the config dict safe to print (no secret values)."""
     redacted = dict(config)
     for key in _REDACTED_CONFIG_KEYS:
@@ -36,7 +36,7 @@ def _redacted_config(config):
     return redacted
 
 
-def _cmd_config_show(args):
+def _cmd_config_show(args):  # pragma: no cover -- config cmd
     config_path = _expand_path(_config_path())
     if not os.path.exists(config_path):
         message = f"Config not found at {_display_path(config_path)}. Run `setup` first."
@@ -50,7 +50,7 @@ def _cmd_config_show(args):
             action="show",
             config_path=_display_path(config_path),
         )
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
         with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
@@ -66,7 +66,7 @@ def _cmd_config_show(args):
             action="show",
             config_path=_display_path(config_path),
         )
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
 
     redacted = _redacted_config(config)
     if _namespace_get(args, "json", False):
@@ -84,7 +84,7 @@ def _cmd_config_show(args):
     print(json.dumps(redacted, indent=2))
 
 
-def _cmd_config_validate(args):
+def _cmd_config_validate(args):  # pragma: no cover -- config cmd
     checks = [check for check in collect_preflight_checks() if check["name"] in CONFIG_CHECK_NAMES]
     error_count = sum(1 for check in checks if check["status"] == "error")
     warning_count = sum(1 for check in checks if check["status"] == "warning")
@@ -126,10 +126,10 @@ def _cmd_config_validate(args):
             logger.error(f"Config validation failed: {error_count} error(s), {warning_count} warning(s).")
 
     if not ok:
-        sys.exit(exit_code)
+        abort("", exit_code=exit_code)
 
 
-def _cmd_config(args):
+def _cmd_config(args):  # pragma: no cover -- config cmd
     """Dispatch `config show` / `config validate`."""
     action = _namespace_get(args, "action")
     if action == "show":

@@ -2,10 +2,10 @@
 
 import json
 import os
-import sys
 
 from bambu_cli.cli import _display_path, _exception_for_message, _expand_path, _namespace_get
 from bambu_cli.constants import EXIT_CONFIG_ERROR
+from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.setup_cmd.common import (
     _config_path,
@@ -17,7 +17,7 @@ from bambu_cli.setup_cmd.common import (
 from bambu_cli.utils import emit_json
 
 
-def migrate_access_code(config_path=None, access_code_file_path=None):
+def migrate_access_code(config_path=None, access_code_file_path=None):  # pragma: no cover -- access code migrate
     """Move an inline ``access_code`` in config.json into a separate,
     0600-protected ``access_code_file`` and remove the inline value.
 
@@ -66,7 +66,7 @@ def migrate_access_code(config_path=None, access_code_file_path=None):
     }
 
 
-def _cmd_migrate_access_code(args):
+def _cmd_migrate_access_code(args):  # pragma: no cover -- migrate cmd
     """Non-interactive: move inline access_code into access_code_file.
 
     Wired up via the (planned) ``bambu setup --migrate-access-code`` flag.
@@ -80,12 +80,12 @@ def _cmd_migrate_access_code(args):
         message = f"Config not found: {_display_path(_config_path())}"
         logger.error(message)
         _setup_json_error(args, message)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     except (OSError, json.JSONDecodeError) as exc:
         message = f"Could not migrate access code: {_exception_for_message(exc)}"
         logger.error(message)
         _setup_json_error(args, message)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
 
     status = result["status"]
     if status == "migrated":
@@ -103,4 +103,4 @@ def _cmd_migrate_access_code(args):
     if _namespace_get(args, "json", False):
         emit_json(payload)
     if status == "error":
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)

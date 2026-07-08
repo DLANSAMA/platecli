@@ -13,7 +13,7 @@ REQUIRED_SNIPPETS = {
     "windows runner": "windows-latest",
     "oldest supported python": '"3.9"',
     "current smoke python": '"3.14"',
-    "unit tests": "python -W error::ResourceWarning -m unittest tests.test_config_and_logging tests.test_protocol_clients tests.test_cli_entry tests.test_printer_commands tests.test_slice_cmd tests.test_download_cmd tests.test_camera_cmd tests.test_doctor_and_safety",
+    "unit tests": "python -W error::ResourceWarning -m pytest tests/ -m \"not live\" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=92",
     "runtime package syntax": "bambu_cli/bambu.py",
     "release readiness smoke": "python tests/release_readiness_smoke.py",
     "python compatibility smoke": "python tests/python_compat_smoke.py",

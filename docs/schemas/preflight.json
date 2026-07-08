@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/preflight.json",
+  "title": "bambu-cli preflight result envelope",
+  "type": "object",
+  "required": ["status", "command", "checks"],
+  "properties": {
+    "status": {"type": "string"},
+    "command": {"const": "preflight"},
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["status", "name", "message"],
+        "properties": {
+          "status": {"type": "string"},
+          "name": {"type": "string"},
+          "message": {"type": "string"},
+          "detail": {"type": "object"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

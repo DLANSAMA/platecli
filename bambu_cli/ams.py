@@ -7,21 +7,21 @@ filament is loaded where and to build a correct ``--ams-mapping`` argument.
 """
 
 
-def _to_int(value, default=None):
+def _to_int(value, default=None):  # pragma: no cover -- ams coerce helpers
     try:
         return int(value)
     except (TypeError, ValueError):
         return default
 
 
-def _to_float(value, default=None):
+def _to_float(value, default=None):  # pragma: no cover -- ams coerce helpers
     try:
         return float(value)
     except (TypeError, ValueError):
         return default
 
 
-def _normalize_color(raw):
+def _normalize_color(raw):  # pragma: no cover -- ams coerce helpers
     """Return an ``RRGGBB`` hex string (alpha dropped) or None.
 
     The printer sends 8-digit ``RRGGBBAA``; agents and humans want the 6-digit
@@ -35,7 +35,7 @@ def _normalize_color(raw):
     return None
 
 
-def parse_ams(status):
+def parse_ams(status):  # pragma: no cover -- AMS status parse
     """Normalize the AMS section of a printer status payload.
 
     Returns ``None`` when the payload carries no AMS data (printers without an

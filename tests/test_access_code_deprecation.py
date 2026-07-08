@@ -16,6 +16,7 @@ import bambu_cli.config as config
 import bambu_cli.setup_cmd as setup_cmd
 from bambu_cli import bambu
 from tests.bambu_test_base import config_ctx
+from bambu_cli.errors import BambuError
 
 
 class ResetWarnFlagMixin:
@@ -60,7 +61,7 @@ class TestInlineAccessCodeWarning(ResetWarnFlagMixin, unittest.TestCase):
         # Simulation / no-config: empty config, neither key present -> error path,
         # not the deprecation warning.
         with config_ctx({}):
-            with self.assertRaises(SystemExit):
+            with self.assertRaises((SystemExit, BambuError)):
                 with patch.object(config.logger, "warning") as mock_warn:
                     config.load_access_code()
         mock_warn.assert_not_called()

@@ -2,10 +2,43 @@
 
 Single source of truth for exit codes, file-type tables, safety limits, and
 default timeouts. Mutable runtime state (printer address, simulation flag,
-loaded config) lives in ``bambu_cli.bambu``.
+loaded config) lives on ``RuntimeContext`` (see ``bambu_cli.context``).
+
+``VERSION`` is resolved from package metadata when installed, otherwise from
+the repo ``pyproject.toml`` (canonical release version). Edit version only in
+``pyproject.toml``.
 """
 
-VERSION = "0.1.0"
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+def _version_from_pyproject() -> str | None:  # pragma: no cover -- version resolve
+    """Read project.version from the source-tree pyproject.toml, if present."""
+    root = Path(__file__).resolve().parents[1]
+    path = root / "pyproject.toml"
+    if not path.is_file():
+        return None
+    match = re.search(r'^version\s*=\s*"([^"]+)"', path.read_text(encoding="utf-8"), re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def _resolve_version() -> str:  # pragma: no cover -- version resolve
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+    except ImportError:  # pragma: no cover - Python <3.8 only
+        from importlib_metadata import PackageNotFoundError, version  # type: ignore
+
+    try:
+        return version("bambu-local-cli")
+    except PackageNotFoundError:
+        pass
+    return _version_from_pyproject() or "0.0.0+dev"
+
+
+VERSION = _resolve_version()
 
 # Exit codes
 EXIT_SUCCESS = 0

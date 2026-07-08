@@ -35,6 +35,7 @@ sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 from bambu_cli import bambu  # noqa: E402
 from bambu_cli import slicer  # noqa: E402
 from bambu_cli.protocols import ftps  # noqa: E402
+from bambu_cli.errors import BambuError
 
 
 def _slice_args(tmpdir, infile):
@@ -162,10 +163,10 @@ def test_a_real_error_still_fails():
              patch.object(slicer, "_validate_slice_options", return_value=None), \
              patch.object(slicer.os.path, "exists", side_effect=exists_side_effect), \
              settings_ctx(orca_slicer="/usr/bin/true", profiles_dir=tmpdir):
-            with pytest.raises(SystemExit) as excinfo:
+            with pytest.raises((SystemExit, BambuError)) as excinfo:
                 slicer.cmd_slice(args)
 
-        code = excinfo.value.code
+        code = getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None))
         assert code not in (0, None), f"real slice error must exit non-zero, got {code!r}"
 
 
@@ -317,10 +318,10 @@ def test_download_enforces_size_limit_mid_stream(tmp_path):
         progress=False)
 
     with patch.object(download, "build_safe_opener", return_value=mock_opener):
-        with pytest.raises(SystemExit) as excinfo:
+        with pytest.raises((SystemExit, BambuError)) as excinfo:
             download._cmd_download(args)
 
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
 

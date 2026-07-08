@@ -1,89 +1,39 @@
 # Test backlog
 
-Prioritized testing gaps after the 2026-07 modular refactor (`bambu.py` split
-into the `download/` and `setup_cmd/` packages, `job.py`, `camera.py`, `constants.py`).
-All 288 existing tests pass; coverage below is from `pytest --cov=bambu_cli`.
+**Planning owner:** [quality-roadmap.md](quality-roadmap.md) (A+ scoreboard, phases, test IDs T0–T6).
+
+This file is a short **remaining-gaps** list. Refresh after each phase.
+
+## Snapshot (2026-07-08, A+ gates)
+
+- **500+ tests** (non-live); single runner: `pytest`.
+- **≥98%** measured line coverage (`pytest --cov=bambu_cli`, residual policy in roadmap).
+- CI: `--cov-fail-under=92`, blocking bandit/pip-audit/mypy/purity greps, security+contract marker job.
+- Module floors (measured under residual policy): mqtt/ftps/netsafety/download/camera/setup/slicer/job all at or above A+ targets.
 
 ## Ground rules for new tests
 
-- Run everything with `uv run --extra test python -m pytest` plus
-  `python3 -W error::ResourceWarning -m unittest tests.test_config_and_logging tests.test_protocol_clients tests.test_cli_entry tests.test_printer_commands tests.test_slice_cmd tests.test_download_cmd tests.test_camera_cmd tests.test_doctor_and_safety`.
-- Never touch a real printer or the network. Use `--sim` for CLI-level tests
-  (see `tests/agent_cli_smoke.py`) or mock at module seams.
-- Patch targets: patch functions **in the module that calls them**, e.g.
-  `bambu_cli.download.build_safe_opener`, `bambu_cli.download.resolve_printables_url`.
-  Runtime state (`PRINTER_IP`, `SIMULATION_MODE`, `ORCA_SLICER`, `CONFIG_PATH`,
-  `_cfg`) is patched on `bambu_cli.bambu` — all modules read it from there.
-  `logger` is also patchable as `bambu_cli.bambu.logger` (LoggerProxy).
-- JSON contracts are load-bearing for agents: assert full payload shapes
-  (`status`, `command`, `failed_step`, `exit_code`, `next_command`), not just
-  exit codes. `docs/api.md` and `bambu_cli/AGENTS.md` describe the contracts.
-- Don't add new `isinstance(x, Mock)` or `"unittest" in sys.modules` branches
-  to production code; if a test needs one, restructure the test instead.
+- Run: `uv run python -m pytest tests/ -q -m "not live"` (and the CI smoke scripts listed in `.github/workflows/ci.yml`).
+- Never touch a real printer or the network. Use `--sim` for CLI-level tests or mock at module seams.
+- Patch functions **in the module that calls them** (e.g. `bambu_cli.download.build_safe_opener`).
+- Runtime config: `RuntimeContext` / `settings_ctx` / `config_ctx` — not module globals.
+- JSON contracts: assert full payload shapes (`status`, `command`, `failed_step`, `exit_code`, `next_command`); schemas live in `docs/schemas/`.
+- Don't add `isinstance(..., Mock)` / `"unittest" in sys.modules` branches to production code.
+- Don't reintroduce `@mockable`. Domain code raises `BambuError`/`abort`; `sys.exit` only in `cli.py`.
 
-## Priorities
+## Remaining stretch (post-A+ gates)
 
-### P1 — `job.py` (12% coverage)
-The `job`/`send` orchestrator is the primary agent entry point and the least
-covered module. Mock `bambu.cmd_download/cmd_slice/cmd_upload/cmd_print` and
-cover:
-- Delegated-step failure payloads: `download_error`/`slice_error`/
-  `upload_error`/`print_error` detail objects now flow through
-  `bambu_cli.utils._LAST_ERROR_PAYLOAD` (this was broken before the refactor —
-  regression-test it explicitly).
-- `next_command` payloads for `uploaded`, `uploaded_not_printed`, and the
-  print-failure `["status", "--json"]` + `recovery_hint` path.
-- Dry-run matrix: direct URL (.stl/.zip/.3mf), local model, local ZIP, local
-  printer-ready file — assert `would_*` flags, `remote_name`, and
-  `would_create_output_dir`.
-- ZIP paths: bad zip, no supported member, oversized member, unsafe member
-  filename, `archive_entry` propagation into the summary.
-- `--output` handling: created when needed, ignored for printer-ready local
-  files, invalid/`-`-prefixed values, temp workdir cleanup.
+| Gap | Notes |
+|-----|-------|
+| mypy on `printer.py` / `slicer.py` | Exception-group / optional-type residuals |
+| Hermetic fake Orca binary in CI | Slicer process paths still `# pragma: no cover` |
+| Per-module cov-fail-under | Optional; total 92% + residual policy is the gate |
+| Live printer scheduled lab | Optional A+ stretch |
+| 1.0 release tag | Support matrix + stability promise publish |
 
-### P2 — `setup_cmd/` (35% at time of writing, pre-split)
-- Non-interactive setup: each missing-value/placeholder/conflicting-flag
-  error payload; `--access-code-env`; existing vs new `--access-code-file`;
-  directory and config-path-collision rejections.
-- `collect_preflight_checks` / `_cmd_preflight`: ok/warning/error matrices,
-  `--strict`, file-permission warnings (chmod a tmp file to 0644).
-- `_parse_mdns_printer_identity` and `_service_info_address` edge cases.
-- Guided setup: headless-stdin rejection, manual fallback when zeroconf is
-  missing (patch the import), multi-printer selection bounds.
+## Priority if coverage regresses
 
-### P3 — `download/` (49% at time of writing, pre-split)
-Existing tests cover the happy paths and SSRF basics. Missing:
-- Redirect handling: redirected URL revalidation, unsupported redirected
-  extension, filename recomputation after redirect.
-- HTML resolution loop: 3-attempt exhaustion, filename-hint attributes,
-  candidate priority (STL beats 3MF beats ZIP), dedup.
-- Content-Disposition: RFC 2231 `filename*`, archive-vs-model switching,
-  interaction with `--name`.
-- Size limits: Content-Length rejection vs mid-stream limit, short reads,
-  empty files, partial-file cleanup on each error path.
-- `_get_safe_connection`: DNS cache TTL expiry/eviction, IPv6-mapped IPv4
-  blocking, all-IPs-unreachable cache invalidation (patch
-  `bambu_cli.download.socket`).
-
-### P4 — `camera.py` (68%)
-- `_grab_camera_frame_direct`: fingerprint match/mismatch/missing-pin paths
-  (fake TLS socket), frame-scan loop bounds, oversized-frame skip.
-- Docker fallback: container-name/image/port taken from config
-  (`camera_container_name` regression-tested — it broke once), access-code
-  redaction in error output, localhost-only streamer URL enforcement.
-  Patch `bambu_cli.camera.subprocess` / `bambu_cli.camera.shutil`.
-
-### P5 — protocols (`mqtt.py` 54%, `ftps.py` 58%)
-- MQTT: retry/timeout paths in `send_command`/`get_status`, cert-pin
-  verification failures, `_SimMqttClient` behavior.
-- FTPS: resume/retry in upload, `_noncolliding_path` collisions,
-  ConnectionManager reuse/close-all.
-
-## Known debt (do NOT "fix" silently while adding tests)
-
-- Production code contains test-awareness (`isinstance(x, Mock)`,
-  `"unittest" in sys.modules`, `BAMBU_TESTING`). Removing it is a separate,
-  deliberate task; new tests should not depend on adding more of it.
-- `bambu.py` is a compatibility facade with wildcard re-exports; new code
-  should import from the concrete modules, and new re-exports are only added
-  when something must be patchable via `bambu.<name>`.
+1. Transport residual (mqtt/ftps pin, pool recovery) — `tests/test_tls_pinning.py`
+2. Netsafety redirect / handlers — `tests/test_netsafety.py`, residual A+ tests
+3. Schema contracts — `tests/contracts/`, `docs/schemas/`
+4. Setup wizard/preflight/migrate — guided + noninteractive tests

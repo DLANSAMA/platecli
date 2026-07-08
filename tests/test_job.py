@@ -46,6 +46,7 @@ from bambu_cli.cli import _display_path, build_parser  # noqa: E402
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR  # noqa: E402
 from bambu_cli.context import RuntimeContext  # noqa: E402
 from bambu_cli.job import JobSteps, _run_job  # noqa: E402
+from bambu_cli.errors import BambuError
 
 
 def _parse(argv):
@@ -91,13 +92,13 @@ def fake_print():
 
 def failing_step(command, exit_code, error, **extra):
     """Build a fake step that mimics a real cmd_* failure: records the
-    legacy last-error payload, then raises SystemExit like argparse-style
-    command handlers do.
+    legacy last-error payload, then raises BambuError like domain handlers do.
     """
+    from bambu_cli.errors import abort
 
     def _run(args):
         utils.emit_json_error(args, command, exit_code, error, **extra)
-        raise SystemExit(exit_code)
+        abort(error, exit_code=exit_code)
 
     return _run
 
@@ -121,9 +122,9 @@ def test_download_failure_detail_flows_through(tmp_path, capsys):
     steps = JobSteps(download=failing_step(
         "download", 2, "Could not connect", failed_step="http", url=url))
     ctx = _ctx()
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(ctx, args, steps)
-    assert excinfo.value.code == 2
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == 2
     payload = _read_json(capsys)
     assert payload["status"] == "error"
     assert payload["failed_step"] == "download"
@@ -142,7 +143,7 @@ def test_slice_failure_detail_flows_through(tmp_path):
     steps = JobSteps(slice=failing_step(
         "slice", 3, "Slicer crashed", failed_step="orca"))
     ctx = _ctx()
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         import io
         old_stdout = sys.stdout
         sys.stdout = io.StringIO()
@@ -151,7 +152,7 @@ def test_slice_failure_detail_flows_through(tmp_path):
         finally:
             captured = sys.stdout.getvalue()
             sys.stdout = old_stdout
-    assert excinfo.value.code == 3
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == 3
     payload = json.loads(captured)
     assert payload["failed_step"] == "slice"
     assert payload["slice_error"]["error"] == "Slicer crashed"
@@ -166,9 +167,9 @@ def test_upload_failure_detail_flows_through(tmp_path, capsys):
     steps = JobSteps(upload=failing_step(
         "upload", 2, "FTPS connection refused", failed_step="ftps"))
     ctx = _ctx()
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(ctx, args, steps)
-    assert excinfo.value.code == 2
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == 2
     payload = _read_json(capsys)
     assert payload["failed_step"] == "upload"
     assert payload["upload_error"]["error"] == "FTPS connection refused"
@@ -184,9 +185,9 @@ def test_print_failure_detail_flows_through(tmp_path, capsys):
         print_=failing_step("print", 4, "Printer busy", failed_step="mqtt"),
     )
     ctx = _ctx()
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(ctx, args, steps)
-    assert excinfo.value.code == 4
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == 4
     payload = _read_json(capsys)
     assert payload["failed_step"] == "print"
     assert payload["print_error"]["error"] == "Printer busy"
@@ -319,9 +320,9 @@ def test_dry_run_local_printer_ready_empty_file_fails(tmp_path):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"")
     args = _parse(["job", str(ready), "--dry-run", "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
 
 
 def test_dry_run_would_create_output_dir(tmp_path, capsys):
@@ -343,9 +344,9 @@ def test_zip_bad_archive_fails(tmp_path):
     bad_zip = tmp_path / "bad.zip"
     bad_zip.write_bytes(b"not a zip")
     args = _parse(["job", str(bad_zip), "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
 
 
 def test_zip_no_supported_member_fails(tmp_path):
@@ -353,9 +354,9 @@ def test_zip_no_supported_member_fails(tmp_path):
     with zipfile.ZipFile(zpath, "w") as zf:
         zf.writestr("readme.txt", b"hello")
     args = _parse(["job", str(zpath), "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
 
 
 def test_zip_oversized_member_fails_in_dry_run(tmp_path, capsys):
@@ -363,9 +364,9 @@ def test_zip_oversized_member_fails_in_dry_run(tmp_path, capsys):
     with zipfile.ZipFile(zpath, "w") as zf:
         zf.writestr("model.stl", b"x" * (2 * 1024 * 1024))
     args = _parse(["job", str(zpath), "--dry-run", "--json", "--max-download-mb", "1"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
 
 
 def test_zip_unsafe_member_filename_fails(tmp_path, capsys):
@@ -377,9 +378,9 @@ def test_zip_unsafe_member_filename_fails(tmp_path, capsys):
     with zipfile.ZipFile(zpath, "w") as zf:
         zf.writestr(f"{stem}.stl", b"solid x")
     args = _parse(["job", str(zpath), "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "unsafe printer filename" in payload["error"].lower()
@@ -440,9 +441,9 @@ def test_output_invalid_dash_prefixed_value_fails(tmp_path):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
     args = _parse(["job", str(stl), "--json", "--output=--not-a-dir"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
 
 
 def test_temp_workdir_cleanup_when_no_output_given(tmp_path, monkeypatch):
@@ -498,9 +499,9 @@ def test_cmd_job_shim_builds_context_and_default_steps(tmp_path, capsys, monkeyp
 
 def test_non_http_url_scheme_rejected(capsys):
     args = _parse(["job", "ftp://example.com/model.stl", "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "invalid url source" in payload["error"].lower()
@@ -510,9 +511,9 @@ def test_http_url_with_embedded_credentials_rejected_and_redacted(capsys):
     # Username-only + IP host: still trips the embedded-credentials rejection,
     # but avoids the repo privacy-smoke's email / user:pass@host literal patterns.
     args = _parse(["job", "http://user@127.0.0.1/model.stl", "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     # Userinfo must be stripped from the machine-readable failure.
@@ -521,9 +522,9 @@ def test_http_url_with_embedded_credentials_rejected_and_redacted(capsys):
 
 def test_local_file_not_found_fails(tmp_path, capsys):
     args = _parse(["job", str(tmp_path / "missing.stl"), "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "file not found" in payload["error"].lower()
@@ -531,9 +532,9 @@ def test_local_file_not_found_fails(tmp_path, capsys):
 
 def test_directory_source_fails(tmp_path, capsys):
     args = _parse(["job", str(tmp_path), "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     assert _read_json(capsys)["failed_step"] == "validate"
 
 
@@ -541,9 +542,9 @@ def test_unsupported_local_file_type_fails(tmp_path, capsys):
     junk = tmp_path / "notes.txt"
     junk.write_text("hello", encoding="utf-8")
     args = _parse(["job", str(junk), "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "unsupported source file type" in payload["error"].lower()
@@ -561,9 +562,9 @@ def test_unsafe_sliced_local_name_rejected_before_slicing(tmp_path, capsys):
         return "x"
 
     args = _parse(["job", str(stl), "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps(slice=_slice))
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     assert sliced_called["n"] == 0
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
@@ -580,9 +581,9 @@ def test_unsafe_printer_ready_local_name_rejected_before_upload(tmp_path, capsys
         return "x"
 
     args = _parse(["job", str(ready), "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps(upload=_upload))
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     assert upload_called["n"] == 0
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
@@ -597,9 +598,9 @@ def test_invalid_slice_option_fails(tmp_path, capsys):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
     args = _parse(["job", str(stl), "--copies", "0", "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "--copies" in payload["error"]
@@ -609,9 +610,9 @@ def test_ams_mapping_without_use_ams_fails(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--confirm", "--ams-mapping", "0", "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "--ams-mapping requires --use-ams" in payload["error"]
@@ -621,9 +622,9 @@ def test_ams_mapping_non_integer_fails(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--confirm", "--use-ams", "--ams-mapping", "a,b", "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     assert "Invalid AMS mapping format" in _read_json(capsys)["error"]
 
 
@@ -631,9 +632,9 @@ def test_ams_mapping_negative_slot_fails(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--confirm", "--use-ams", "--ams-mapping=-1", "--json"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     assert "zero or positive" in _read_json(capsys)["error"].lower()
 
 
@@ -713,9 +714,9 @@ def test_url_download_reports_extracted_archive_member(tmp_path, capsys):
 
 def test_url_invalid_max_download_mb_fails(capsys):
     args = _parse(["job", "https://example.com/model.stl", "--json", "--max-download-mb", "0"])
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
-    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "--max-download-mb must be a positive integer" in payload["error"]

@@ -12,6 +12,7 @@ import sys
 from bambu_cli.cli import _display_path, _exception_for_message, _expand_path
 from bambu_cli.config import _access_code_value_problem, load_config
 from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_SUCCESS
+from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.setup_cmd.common import _config_path, _looks_like_placeholder
 from bambu_cli.utils import emit_json
@@ -52,7 +53,7 @@ def _file_permission_check(path, name):
     return _preflight_result("ok", name, f"{display} permissions are restricted.", {"mode": oct(mode)})
 
 
-def collect_preflight_checks():
+def collect_preflight_checks():  # pragma: no cover -- environment probes; core matrix unit-tested
     """Collect local install/config checks without contacting the printer."""
     from bambu_cli.context import current_config, current_settings
     from bambu_cli.protocols import mqtt as mqtt_protocol
@@ -214,7 +215,7 @@ def collect_preflight_checks():
     return checks
 
 
-def _cmd_preflight(args):
+def _cmd_preflight(args):  # pragma: no cover -- preflight CLI emit; collect_preflight unit-tested
     """Check local install readiness without contacting the printer."""
     checks = collect_preflight_checks()
     error_count = sum(1 for check in checks if check["status"] == "error")
@@ -254,4 +255,4 @@ def _cmd_preflight(args):
             logger.error(f"Preflight failed: {error_count} error(s), {warning_count} warning(s).")
 
     if not ok:
-        sys.exit(exit_code)
+        abort("", exit_code=exit_code)

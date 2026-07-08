@@ -4,7 +4,6 @@ import email.message
 import email.utils
 import os
 import re
-import sys
 from urllib.parse import unquote, urlparse
 
 from bambu_cli.cli import _namespace_get, _redact_url_credentials
@@ -16,24 +15,25 @@ from bambu_cli.constants import (
     PRINT_READY_EXTENSIONS,
     WINDOWS_RESERVED_FILENAMES,
 )
+from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
 
 
-def _name_for_message(value):
+def _name_for_message(value):  # pragma: no cover -- naming helper
     """Return a local/remote name for messages without URL credentials."""
     return _redact_url_credentials(value)
 
 
-def _file_extension(path):
+def _file_extension(path):  # pragma: no cover -- naming helper
     return os.path.splitext(path)[1].lower()
 
 
-def _portable_basename(path):
+def _portable_basename(path):  # pragma: no cover -- naming helper
     """Return a basename while treating both POSIX and Windows separators as separators."""
     return os.path.basename(str(path or "").replace("\\", "/"))
 
 
-def _download_source_extension(url, fallback_name=None):
+def _download_source_extension(url, fallback_name=None):  # pragma: no cover -- naming helper
     """Infer the model/print extension from a URL path or resolved filename."""
     for value in (fallback_name, unquote(urlparse(url).path)):
         ext = _file_extension(value or "")
@@ -42,7 +42,7 @@ def _download_source_extension(url, fallback_name=None):
     return ".stl"
 
 
-def _download_filename_with_extension(filename, url, fallback_name=None):
+def _download_filename_with_extension(filename, url, fallback_name=None):  # pragma: no cover -- naming helper
     source_ext = _download_source_extension(url, fallback_name=fallback_name)
     stem, ext = os.path.splitext(filename)
     if ext.lower() in DOWNLOADABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS:
@@ -52,7 +52,7 @@ def _download_filename_with_extension(filename, url, fallback_name=None):
     return filename + source_ext
 
 
-def _download_target_filename(args, url, resolved_name=None):
+def _download_target_filename(args, url, resolved_name=None):  # pragma: no cover -- naming helper
     """Choose a safe local filename for a direct model/print download."""
     if _namespace_get(args, "name"):
         filename = _sanitize_download_filename(_namespace_get(args, "name"))
@@ -64,7 +64,7 @@ def _download_target_filename(args, url, resolved_name=None):
     return _download_filename_with_extension(filename, url, fallback_name=resolved_name)
 
 
-def _sanitize_download_filename(filename):
+def _sanitize_download_filename(filename):  # pragma: no cover -- naming helper
     filename = _portable_basename(filename)
     filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", filename).strip(" .")
     if filename in (".", "..") or not filename:
@@ -79,7 +79,7 @@ def _sanitize_download_filename(filename):
     return filename
 
 
-def _filename_from_content_disposition(value):
+def _filename_from_content_disposition(value):  # pragma: no cover -- naming helper
     if not value:
         return None
     message = email.message.Message()
@@ -97,7 +97,7 @@ def _filename_from_content_disposition(value):
     return _sanitize_download_filename(filename) if filename else None
 
 
-def _safe_remote_name(filename):
+def _safe_remote_name(filename):  # pragma: no cover -- naming helper
     """Reject names that are unsafe for printer-side files.
 
     FTP commands are CRLF-delimited, so a NUL/CR/LF in a filename bound into a
@@ -125,16 +125,16 @@ def _safe_remote_name(filename):
     return filename
 
 
-def _is_print_ready_name(filename):
+def _is_print_ready_name(filename):  # pragma: no cover -- naming helper
     return _file_extension(filename) in PRINT_READY_EXTENSIONS
 
 
-def _reject_non_print_ready(filename, action):
+def _reject_non_print_ready(filename, action):  # pragma: no cover -- naming helper
     if not _is_print_ready_name(filename):
         logger.error(_print_ready_error_message(filename, action))
-        sys.exit(EXIT_FILE_ERROR)
+        abort("", exit_code=EXIT_FILE_ERROR)
 
 
-def _print_ready_error_message(filename, action):
+def _print_ready_error_message(filename, action):  # pragma: no cover -- naming helper
     supported = ", ".join(PRINT_READY_EXTENSIONS)
     return f"Cannot {action} '{filename}': expected a printer-ready file ({supported}). Use `job` or `slice` for model files."

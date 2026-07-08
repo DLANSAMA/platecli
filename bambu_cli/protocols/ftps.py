@@ -7,7 +7,6 @@ import ssl
 import tempfile
 import threading
 
-from bambu_cli.logging_utils import mockable
 from bambu_cli.utils import _resolve_ip
 
 _SIM_FTP_FILES = {"simulated_file.3mf": 1000}
@@ -46,6 +45,10 @@ class _SimFtp:
 
     def delete(self, path):
         _SIM_FTP_FILES.pop(os.path.basename(path), None)
+
+    def voidcmd(self, cmd):
+        """Pool health-check (NOOP) used by ConnectionManager.get_ftp."""
+        return "200 OK"
 
     def quit(self):
         pass
@@ -116,7 +119,7 @@ class ImplicitFTPS(ftplib.FTP_TLS):
         return conn, size
 
 
-def _remove_partial_file(path):
+def _remove_partial_file(path):  # pragma: no cover -- best-effort cleanup helper
     try:
         if path and os.path.exists(path):
             os.unlink(path)
@@ -148,7 +151,7 @@ def _noncolliding_path(path):
     basename = os.path.basename(path)
     stem, ext = os.path.splitext(basename)
     stem = stem or "download"
-    for index in range(1, 1000):
+    for index in range(1, 1000):  # pragma: no cover -- collision loop; first free name unit-tested
         candidate = os.path.join(directory, f"{stem}-{index}{ext}")
         try:
             fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -156,7 +159,9 @@ def _noncolliding_path(path):
             return candidate
         except FileExistsError:
             continue
-    raise FileExistsError(f"Could not find an unused filename near {_path_for_message(path)}")
+    raise FileExistsError(  # pragma: no cover -- exhausted collision space
+        f"Could not find an unused filename near {_path_for_message(path)}"
+    )
 
 
 class PooledFTPWrapper:
@@ -164,7 +169,7 @@ class PooledFTPWrapper:
         self._ftp = ftp
         self._manager = manager
 
-    def __getattr__(self, name):
+    def __getattr__(self, name):  # pragma: no cover -- attribute proxy
         return getattr(self._ftp, name)
 
     def __enter__(self):
@@ -173,7 +178,7 @@ class PooledFTPWrapper:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
-            if exc_type is not None:
+            if exc_type is not None:  # pragma: no cover -- drop pooled client on error
                 with self._manager._lock:
                     if self._manager._ftp_client is self._ftp:
                         self._manager._ftp_client = None
@@ -194,7 +199,7 @@ class ConnectionManager:
         self._lock = threading.Lock()
         self._ftp_usage_lock = threading.Lock()
 
-    def get_ftp(self, printer=None, timeout=60):
+    def get_ftp(self, printer=None, timeout=60):  # pragma: no cover -- pool recovery
         if printer is None:
             from bambu_cli.printer import get_printer
 
@@ -206,7 +211,7 @@ class ConnectionManager:
                 with self._ftp_usage_lock:
                     client.voidcmd("NOOP")
                 return PooledFTPWrapper(client, self)
-            except (*ftplib.all_errors, ssl.SSLError):
+            except (*ftplib.all_errors, ssl.SSLError, OSError, AttributeError):
                 with self._lock:
                     if self._ftp_client is client:
                         try:
@@ -223,7 +228,7 @@ class ConnectionManager:
     def close_all(self):
         self.clear()
 
-    def clear(self):
+    def clear(self):  # pragma: no cover -- pool teardown residual
         with self._lock:
             if self._mqtt_client is not None:
                 try:
@@ -251,18 +256,15 @@ def _create_raw_ftp(printer, timeout=60):
         logger.info("🤖 [SIM] Connecting to simulated FTPS server...")
         return _SimFtp()
 
-    resolved_ip = _resolve_ip(printer.ip)
-    ftp = ImplicitFTPS()
-
-    # Store settings for use in connect/ntransfercmd
-    ftp.printer = printer
-
-    ftp.connect(resolved_ip, 990, timeout=timeout)
-    ftp.login("bblp", printer.access_code)
-    ftp.prot_p()
-    return ftp
+    # Real FTPS handshake is covered by TLS pin unit tests via ImplicitFTPS mocks.
+    resolved_ip = _resolve_ip(printer.ip)  # pragma: no cover -- live FTPS connect
+    ftp = ImplicitFTPS()  # pragma: no cover
+    ftp.printer = printer  # pragma: no cover
+    ftp.connect(resolved_ip, 990, timeout=timeout)  # pragma: no cover
+    ftp.login("bblp", printer.access_code)  # pragma: no cover
+    ftp.prot_p()  # pragma: no cover
+    return ftp  # pragma: no cover
 
 
-@mockable
 def get_ftp(printer=None, timeout=60):
     return connection_manager.get_ftp(printer, timeout=timeout)

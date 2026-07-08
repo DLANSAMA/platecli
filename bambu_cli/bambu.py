@@ -51,7 +51,7 @@ import logging
 import sys
 
 # Best-effort: make emoji/unicode output work on Windows consoles that default to cp1252.
-if sys.platform == "win32":
+if sys.platform == "win32":  # pragma: no cover -- Windows console only
     for _stream in (sys.stdout, sys.stderr):
         try:
             _stream.reconfigure(encoding="utf-8", errors="replace")

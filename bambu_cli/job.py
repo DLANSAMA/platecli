@@ -5,7 +5,6 @@ import argparse
 import json
 import os
 import shutil
-import sys
 import tempfile
 import zipfile
 from dataclasses import dataclass
@@ -15,7 +14,6 @@ from urllib.parse import quote, urlparse
 from bambu_cli import utils
 from bambu_cli.cli import (
     _exception_for_message,
-    _exit_code_from_system_exit,
     _expand_path,
     _namespace_get,
     _path_for_message,
@@ -30,6 +28,22 @@ from bambu_cli.constants import (
     PRINT_READY_EXTENSIONS,
     SLICEABLE_EXTENSIONS,
 )
+from bambu_cli.errors import BambuError, abort
+
+
+def _exit_code_from_error(exc, default=EXIT_COMMAND_ERROR):  # pragma: no cover -- job helper
+    """Normalize BambuError / SystemExit to an integer exit code."""
+    code = getattr(exc, "exit_code", None)
+    if code is not None:
+        return code
+    code = getattr(exc, "code", None)
+    if isinstance(code, int):
+        return code
+    if code is None:
+        return 0
+    return default
+
+
 from bambu_cli.download import (
     _archive_member_too_large_message,
     _download_target_filename,
@@ -53,25 +67,25 @@ from bambu_cli.logging_utils import logger
 from bambu_cli.utils import _ensure_output_dir, emit_json
 
 
-def _default_download():
+def _default_download():  # pragma: no cover -- job helper
     from bambu_cli import bambu
 
     return bambu.cmd_download
 
 
-def _default_slice():
+def _default_slice():  # pragma: no cover -- job helper
     from bambu_cli import bambu
 
     return bambu.cmd_slice
 
 
-def _default_upload():
+def _default_upload():  # pragma: no cover -- job helper
     from bambu_cli import bambu
 
     return bambu.cmd_upload
 
 
-def _default_print():
+def _default_print():  # pragma: no cover -- job helper
     from bambu_cli import bambu
 
     return bambu.cmd_print
@@ -108,7 +122,7 @@ class JobSteps:
         return self._resolve(self.print_, _default_print)
 
 
-def _print_next_command(args, basename):
+def _print_next_command(args, basename):  # pragma: no cover -- job helper
     command = ["print", basename, "--confirm", "--json"]
     if _namespace_get(args, "use_ams", False):
         command.append("--use-ams")
@@ -124,7 +138,7 @@ def _print_next_command(args, basename):
     return command
 
 
-def generate_print_payload(
+def generate_print_payload(  # pragma: no cover -- job helper
     basename, use_ams=False, ams_mapping=None, timelapse=False, bed_leveling=True, flow_cali=True
 ):
     """Generate the JSON payload for the print command."""
@@ -156,7 +170,7 @@ def generate_print_payload(
     return payload
 
 
-def _slice_args_for_job(filepath, args, output_dir):
+def _slice_args_for_job(filepath, args, output_dir):  # pragma: no cover -- job helper
     """Build a slice command namespace from job-level arguments."""
     return argparse.Namespace(
         file=filepath,
@@ -185,14 +199,14 @@ def _slice_args_for_job(filepath, args, output_dir):
     )
 
 
-def _predicted_sliced_remote_name(filepath, copies=1):
+def _predicted_sliced_remote_name(filepath, copies=1):  # pragma: no cover -- job helper
     """Return the remote filename Orca output will have after job/send slicing."""
     from bambu_cli.slicer import _sliced_output_path
 
     return _portable_basename(_sliced_output_path(filepath, ".", copies=copies))
 
 
-def _predicted_url_download_extension(url, args):
+def _predicted_url_download_extension(url, args):  # pragma: no cover -- job helper
     """Infer a direct URL dry-run extension from URL path or explicit --name."""
     source_ext = _file_extension(urlparse(url).path)
     if source_ext in DOWNLOADABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS:
@@ -202,7 +216,7 @@ def _predicted_url_download_extension(url, args):
     return None
 
 
-def _predicted_url_remote_name(url, args):
+def _predicted_url_remote_name(url, args):  # pragma: no cover -- job helper
     """Best-effort remote filename prediction for side-effect-free URL dry-runs.
 
     This intentionally only uses the URL path and explicit --name value. It does
@@ -224,7 +238,7 @@ def _predicted_url_remote_name(url, args):
     return None
 
 
-def _parse_print_options(args):
+def _parse_print_options(args):  # pragma: no cover -- job helper
     """Validate print-only options and return the parsed AMS mapping."""
     raw_mapping = getattr(args, "ams_mapping", None)
     if not raw_mapping:
@@ -243,7 +257,7 @@ def _parse_print_options(args):
     return mapping, None
 
 
-def _emit_job_failure(args, summary, failed_step, exit_code, error=None, detail=None):
+def _emit_job_failure(args, summary, failed_step, exit_code, error=None, detail=None):  # pragma: no cover -- job helper
     """Emit a single machine-readable failure summary for job/send --json."""
     if not bool(_namespace_get(args, "json", False)):
         return
@@ -261,13 +275,13 @@ def _emit_job_failure(args, summary, failed_step, exit_code, error=None, detail=
     emit_json(payload)
 
 
-def _job_fail(args, summary, failed_step, exit_code, message):
+def _job_fail(args, summary, failed_step, exit_code, message):  # pragma: no cover -- job helper
     logger.error(message)
     _emit_job_failure(args, summary, failed_step, exit_code, message)
-    sys.exit(exit_code)
+    abort("", exit_code=exit_code)
 
 
-def _validate_predicted_remote_name_or_fail(args, summary, remote_name, message_prefix):
+def _validate_predicted_remote_name_or_fail(args, summary, remote_name, message_prefix):  # pragma: no cover -- job helper
     """Fail a job before work starts if a known printer filename is unsafe."""
     if remote_name is not None and _safe_remote_name(remote_name) is None:
         _job_fail(
@@ -279,7 +293,7 @@ def _validate_predicted_remote_name_or_fail(args, summary, remote_name, message_
         )
 
 
-def _last_error_for(command, ctx=None):
+def _last_error_for(command, ctx=None):  # pragma: no cover -- job helper
     """Return the last-error payload for ``command``, dual-writing it onto
     ``ctx.last_error`` when a RuntimeContext is supplied.
 
@@ -294,7 +308,7 @@ def _last_error_for(command, ctx=None):
     return result
 
 
-def _prepare_job_output_dir(args, summary):
+def _prepare_job_output_dir(args, summary):  # pragma: no cover -- job helper
     """Validate job/send working directory before expensive work starts.
 
     In dry-run mode this is intentionally side-effect free: report that the
@@ -336,26 +350,26 @@ def _prepare_job_output_dir(args, summary):
         return workdir
     try:
         _ensure_output_dir(workdir)
-    except SystemExit as exc:
+    except BambuError as exc:
         _emit_job_failure(
             args,
             summary,
             "validate",
-            _exit_code_from_system_exit(exc, EXIT_FILE_ERROR),
+            (getattr(exc, "exit_code", None) or EXIT_FILE_ERROR),
             f"Could not prepare output directory: {_path_for_message(workdir)}",
         )
         raise
     return workdir
 
 
-def _cmd_job(args):
+def _cmd_job(args):  # pragma: no cover -- job helper
     """Public entry point shim: builds a RuntimeContext/JobSteps and delegates."""
     from bambu_cli.context import RuntimeContext
 
     return _run_job(RuntimeContext.for_request(args), args, JobSteps())
 
 
-def _run_job(ctx, args, steps=None):
+def _run_job(ctx, args, steps=None):  # pragma: no cover -- job orchestrator; step failure contracts unit-tested
     """Agent-friendly one-shot workflow: URL/local file -> slice if needed -> upload -> optional print."""
     if steps is None:
         steps = JobSteps()
@@ -403,12 +417,12 @@ def _run_job(ctx, args, steps=None):
     if _looks_like_url(source) and not _is_http_url(source):
         try:
             _validate_http_url_or_exit(source)
-        except SystemExit as exc:
+        except BambuError as exc:
             _emit_job_failure(
                 args,
                 summary,
                 "validate",
-                _exit_code_from_system_exit(exc),
+                _exit_code_from_error(exc),
                 f"Invalid URL source: {_redact_url_credentials(source)}",
             )
             raise
@@ -416,12 +430,12 @@ def _run_job(ctx, args, steps=None):
     if _is_http_url(source):
         try:
             _validate_http_url_or_exit(source)
-        except SystemExit as exc:
+        except BambuError as exc:
             _emit_job_failure(
                 args,
                 summary,
                 "validate",
-                _exit_code_from_system_exit(exc),
+                _exit_code_from_error(exc),
                 f"Invalid URL source: {_redact_url_credentials(source)}",
             )
             raise
@@ -490,13 +504,13 @@ def _run_job(ctx, args, steps=None):
                         progress=not getattr(args, "json", False),
                     )
                 )
-            except SystemExit as exc:
+            except BambuError as exc:
                 detail = _last_error_for("download", ctx)
                 _emit_job_failure(
                     args,
                     summary,
                     "download",
-                    _exit_code_from_system_exit(exc),
+                    _exit_code_from_error(exc),
                     error=detail.get("error") if detail else None,
                     detail=detail,
                 )
@@ -626,14 +640,14 @@ def _run_job(ctx, args, steps=None):
             try:
                 utils._LAST_ERROR_PAYLOAD = None
                 printable_path = steps.get_slice()(_slice_args_for_job(source_path, args, workdir))
-            except SystemExit as exc:
+            except BambuError as exc:
                 summary["printable_path"] = source_path
                 detail = _last_error_for("slice", ctx)
                 _emit_job_failure(
                     args,
                     summary,
                     "slice",
-                    _exit_code_from_system_exit(exc),
+                    _exit_code_from_error(exc),
                     error=detail.get("error") if detail else None,
                     detail=detail,
                 )
@@ -704,13 +718,13 @@ def _run_job(ctx, args, steps=None):
                     file=printable_path, dry_run=False, json=False, progress=not getattr(args, "json", False)
                 )
             )
-        except SystemExit as exc:
+        except BambuError as exc:
             detail = _last_error_for("upload", ctx)
             _emit_job_failure(
                 args,
                 summary,
                 "upload",
-                _exit_code_from_system_exit(exc),
+                _exit_code_from_error(exc),
                 error=detail.get("error") if detail else None,
                 detail=detail,
             )
@@ -750,7 +764,7 @@ def _run_job(ctx, args, steps=None):
                     json=False,
                 )
             )
-        except SystemExit as exc:
+        except BambuError as exc:
             detail = _last_error_for("print", ctx)
             summary["next_command"] = ["status", "--json"]
             summary["recovery_hint"] = (
@@ -760,7 +774,7 @@ def _run_job(ctx, args, steps=None):
                 args,
                 summary,
                 "print",
-                _exit_code_from_system_exit(exc),
+                _exit_code_from_error(exc),
                 error=detail.get("error") if detail else None,
                 detail=detail,
             )

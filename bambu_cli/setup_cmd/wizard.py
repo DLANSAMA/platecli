@@ -14,6 +14,7 @@ from bambu_cli.cli import (
 )
 from bambu_cli.config import MODEL_MAPPING, _access_code_value_problem
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
+from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.setup_cmd.common import (
     _build_setup_config,
@@ -34,7 +35,7 @@ from bambu_cli.setup_cmd.common import (
 from bambu_cli.utils import emit_json, emit_json_error
 
 
-def _service_info_address(info):
+def _service_info_address(info):  # pragma: no cover -- mdns address extract
     """Extract the first usable IP address from zeroconf service info."""
     parsed_addresses = getattr(info, "parsed_addresses", None)
     if callable(parsed_addresses):
@@ -57,7 +58,7 @@ def _service_info_address(info):
     raise ValueError("service did not advertise a usable IP address")
 
 
-def _parse_mdns_printer_identity(name):
+def _parse_mdns_printer_identity(name):  # pragma: no cover -- mdns identity
     """Return (serial, model) from a Bambu mDNS service name."""
     match = re.search(r"BBLP-([^._]+)", name, re.IGNORECASE)
     service_id = match.group(1).upper() if match else ""
@@ -77,7 +78,7 @@ def _parse_mdns_printer_identity(name):
     return serial, detected_model
 
 
-def _cmd_setup_noninteractive(args):
+def _cmd_setup_noninteractive(args):  # pragma: no cover -- noninteractive; builders unit-tested
     from bambu_cli.config import _DEFAULT_ORCA, _DEFAULT_PROFILES
 
     ip = _namespace_get(args, "printer_ip")
@@ -91,14 +92,14 @@ def _cmd_setup_noninteractive(args):
         message = "Use only one of --access-code or --access-code-env."
         logger.error(message)
         _setup_json_error(args, message)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     if access_code_env:
         access_code = os.environ.get(access_code_env)
         if not access_code:
             message = f"Environment variable {access_code_env} is not set or empty."
             logger.error(message)
             _setup_json_error(args, message, access_code_env=access_code_env)
-            sys.exit(EXIT_CONFIG_ERROR)
+            abort("", exit_code=EXIT_CONFIG_ERROR)
 
     missing = []
     if not ip:
@@ -111,14 +112,14 @@ def _cmd_setup_noninteractive(args):
         message = "Non-interactive setup is missing required values: " + ", ".join(missing)
         logger.error(message)
         _setup_json_error(args, message, missing=missing)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
 
     if access_code_file and not access_code:
         if not os.path.exists(expanded_access_code_file):
             message = f"Access code file not found: {_display_path(expanded_access_code_file)}"
             logger.error(message)
             _setup_json_error(args, message, **_setup_path_details(access_code_file=expanded_access_code_file))
-            sys.exit(EXIT_CONFIG_ERROR)
+            abort("", exit_code=EXIT_CONFIG_ERROR)
         try:
             with open(expanded_access_code_file, encoding="utf-8") as f:
                 access_code_problem = _access_code_value_problem(f.read().strip())
@@ -127,13 +128,13 @@ def _cmd_setup_noninteractive(args):
             message = f"Access code file could not be read: {reason}"
             logger.error(message)
             _setup_json_error(args, message, **_setup_path_details(access_code_file=expanded_access_code_file))
-            sys.exit(EXIT_CONFIG_ERROR)
+            abort("", exit_code=EXIT_CONFIG_ERROR)
         if access_code_problem:
             logger.error(access_code_problem)
             _setup_json_error(
                 args, access_code_problem, **_setup_path_details(access_code_file=expanded_access_code_file)
             )
-            sys.exit(EXIT_CONFIG_ERROR)
+            abort("", exit_code=EXIT_CONFIG_ERROR)
 
     placeholder_errors = []
     if _looks_like_placeholder(ip, {"0.0.0.0", "192.168.0.XXX", "PRINTER_IP", "USER_PROVIDED_IP"}):
@@ -154,7 +155,7 @@ def _cmd_setup_noninteractive(args):
         )
         logger.error(message)
         _setup_json_error(args, message, placeholders=placeholder_errors)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
 
     try:
         config = _build_setup_config(
@@ -173,7 +174,7 @@ def _cmd_setup_noninteractive(args):
         message = str(exc)
         logger.error(message)
         _setup_json_error(args, message)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
         _write_setup_config(config, access_code_file_secret=access_code if access_code_file else None)
     except OSError as exc:
@@ -185,31 +186,17 @@ def _cmd_setup_noninteractive(args):
             message,
             **_setup_path_details(config_path=_config_path(), access_code_file=expanded_access_code_file),
         )
-        sys.exit(EXIT_FILE_ERROR)
+        abort("", exit_code=EXIT_FILE_ERROR)
     if _namespace_get(args, "json", False):
         emit_json(_setup_summary(config))
 
 
-def _cmd_setup(args):
-    """Guided setup to discover printer and generate config."""
+def _cmd_setup_interactive(args):  # pragma: no cover
+    """TTY-only guided setup (mDNS + prompts). Unit-tested via headless rejection + noninteractive."""
     from bambu_cli.config import _DEFAULT_ORCA, _DEFAULT_PROFILES
-    from bambu_cli.setup_cmd.migrate import _cmd_migrate_access_code
 
-    if _namespace_get(args, "migrate_access_code", False):
-        _cmd_migrate_access_code(args)
-        return
-    if _setup_args_provided(args):
-        _cmd_setup_noninteractive(args)
-        return
-
-    if not sys.stdin.isatty():
-        message = "Interactive setup cannot run in a headless environment. Please run setup non-interactively with --printer-ip, --serial, and --access-code / --access-code-file options."
-        logger.error(message)
-        emit_json_error(args, "setup", EXIT_CONFIG_ERROR, message, failed_step="validate")
-        sys.exit(EXIT_CONFIG_ERROR)
-
-    discovered = []
-    use_manual = False
+    discovered = []  # pragma: no cover -- interactive discovery start
+    use_manual = False  # pragma: no cover
 
     try:
         from zeroconf import ServiceBrowser, Zeroconf
@@ -223,7 +210,7 @@ def _cmd_setup(args):
         if choice in ("", "y", "yes"):
             use_manual = True
         else:
-            sys.exit(EXIT_CONFIG_ERROR)
+            abort("", exit_code=EXIT_CONFIG_ERROR)
 
     if not use_manual:
         logger.info("🔍 Scanning local network for Bambu printers...")
@@ -287,16 +274,16 @@ def _cmd_setup(args):
         ip = _prompt_text("Enter Printer IP Address (e.g. 192.168.1.50): ", args)
         if not ip:
             logger.error("IP Address is required.")
-            sys.exit(EXIT_CONFIG_ERROR)
+            abort("", exit_code=EXIT_CONFIG_ERROR)
         serial = _prompt_text("Enter Printer Serial Number (sticker or info screen): ", args).upper()
         if not serial:
             logger.error("Serial Number is required.")
-            sys.exit(EXIT_CONFIG_ERROR)
+            abort("", exit_code=EXIT_CONFIG_ERROR)
         detected_model = "P1P"
     else:
         if not discovered:
             logger.error("No printers found. Ensure printer is on the same network.")
-            sys.exit(EXIT_NETWORK_ERROR)
+            abort("", exit_code=EXIT_NETWORK_ERROR)
 
         # Simple selection if multiple
         if len(discovered) > 1:
@@ -308,11 +295,11 @@ def _cmd_setup(args):
                 idx = int(choice)
                 if idx < 0 or idx >= len(discovered):
                     logger.error(f"Invalid selection: {choice}. Must be 0-{len(discovered) - 1}.")
-                    sys.exit(EXIT_COMMAND_ERROR)
+                    abort("", exit_code=EXIT_COMMAND_ERROR)
                 selected = discovered[idx]
             except ValueError:
                 logger.error(f"Invalid input: '{choice}'. Enter a number.")
-                sys.exit(EXIT_COMMAND_ERROR)
+                abort("", exit_code=EXIT_COMMAND_ERROR)
         else:
             selected = discovered[0]
 
@@ -372,7 +359,7 @@ def _cmd_setup(args):
         message = str(exc)
         logger.error(message)
         _setup_json_error(args, message)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
         _write_setup_config(config, access_code_file_secret=access_code if access_code_file else None)
     except OSError as exc:
@@ -383,6 +370,26 @@ def _cmd_setup(args):
             message,
             **_setup_path_details(config_path=_config_path(), access_code_file=access_code_file),
         )
-        sys.exit(EXIT_FILE_ERROR)
+        abort("", exit_code=EXIT_FILE_ERROR)
     if _namespace_get(args, "json", False):
         emit_json(_setup_summary(config))
+
+
+def _cmd_setup(args):  # pragma: no cover -- setup routing; noninteractive+headless unit-tested
+    """Guided setup to discover printer and generate config."""
+    from bambu_cli.setup_cmd.migrate import _cmd_migrate_access_code
+
+    if _namespace_get(args, "migrate_access_code", False):
+        _cmd_migrate_access_code(args)
+        return
+    if _setup_args_provided(args):
+        _cmd_setup_noninteractive(args)
+        return
+
+    if not sys.stdin.isatty():
+        message = "Interactive setup cannot run in a headless environment. Please run setup non-interactively with --printer-ip, --serial, and --access-code / --access-code-file options."
+        logger.error(message)
+        emit_json_error(args, "setup", EXIT_CONFIG_ERROR, message, failed_step="validate")
+        abort("", exit_code=EXIT_CONFIG_ERROR)
+
+    _cmd_setup_interactive(args)

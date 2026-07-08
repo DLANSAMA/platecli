@@ -1,4 +1,5 @@
 from tests.bambu_test_base import *  # noqa: F401,F403
+from bambu_cli.errors import BambuError
 
 
 class TestMain(unittest.TestCase):
@@ -11,7 +12,7 @@ class TestMain(unittest.TestCase):
 
     @patch('sys.argv', ['bambu.py', 'status'])
     @patch('bambu_cli.bambu.cmd_status')
-    @patch('bambu_cli.bambu.setup_logging')
+    @patch('bambu_cli.cli.setup_logging')
     @patch('socket.getaddrinfo')
     def test_main_argparse_subcommand(self, mock_getaddrinfo, mock_setup_logging, mock_cmd_status):
         import bambu_cli.bambu
@@ -22,7 +23,7 @@ class TestMain(unittest.TestCase):
 
     @patch('sys.argv', ['bambu.py', '--sim', 'status'])
     @patch('bambu_cli.bambu.cmd_status')
-    @patch('bambu_cli.bambu.setup_logging')
+    @patch('bambu_cli.cli.setup_logging')
     def test_main_sim_flag(self, mock_setup_logging, mock_cmd_status):
         import bambu_cli.bambu
         from bambu_cli import context
@@ -42,10 +43,10 @@ class TestMain(unittest.TestCase):
         # doesn't overwrite it from the on-disk config.
         context.set_current(RuntimeContext(settings=Settings(printer_ip='invalid_ip')))
         with patch('bambu_cli.bambu.load_config', return_value=None):
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises((SystemExit, BambuError)) as cm:
                 bambu_cli.bambu.main()
 
-        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
         mock_logger.error.assert_called_with("Invalid printer_ip or hostname in config: invalid_ip")
 
 
@@ -134,7 +135,7 @@ class TestBambuCmdSetup(unittest.TestCase):
         from bambu_cli.bambu import cmd_setup
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises((SystemExit, BambuError)):
             cmd_setup(MagicMock())
 
         mock_logger.error.assert_called_with("No printers found. Ensure printer is on the same network.")
@@ -160,7 +161,7 @@ class TestBambuCmdSetup(unittest.TestCase):
             from bambu_cli.bambu import cmd_setup
             mock_exit.side_effect = SystemExit(1)
 
-            with self.assertRaises(SystemExit):
+            with self.assertRaises((SystemExit, BambuError)):
                 cmd_setup(MagicMock())
 
             mock_logger.warning.assert_called_with("⚠️  'zeroconf' package is not installed; network printer auto-discovery is disabled.")

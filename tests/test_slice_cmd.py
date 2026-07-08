@@ -1,4 +1,5 @@
 from tests.bambu_test_base import *  # noqa: F401,F403
+from bambu_cli.errors import BambuError
 
 
 class TestBambuCmdSlice(unittest.TestCase):
@@ -15,9 +16,9 @@ class TestBambuCmdSlice(unittest.TestCase):
         args = MagicMock()
         args.file = "-invalid"
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_slice(args)
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
 
         mock_logger.error.assert_called_with("Invalid filepath: -invalid")
 
@@ -29,9 +30,9 @@ class TestBambuCmdSlice(unittest.TestCase):
         args.file = "notfound.stl"
         mock_exists.return_value = False
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_slice(args)
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
 
         mock_logger.error.assert_called_with("File not found: notfound.stl")
 
@@ -55,9 +56,9 @@ class TestBambuCmdSlice(unittest.TestCase):
         mock_run_result.returncode = 1
         mock_subprocess_run.return_value = mock_run_result
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_slice(args)
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
 
         self.assertTrue(any("STEP conversion failed" in call[0][0] for call in mock_logger.error.call_args_list))
 
@@ -94,9 +95,9 @@ class TestBambuCmdSlice(unittest.TestCase):
 
         mock_exists.side_effect = exists_side_effect
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_slice(args)
-        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
 
         # We need to find what missing profile message is logged
         self.assertTrue(any("Fallback machine profile" in call[0][0] or "not found. Using standard P1P" in call[0][0] for call in mock_logger.warning.call_args_list))
@@ -321,9 +322,9 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
         args = MagicMock()
         args.file = "test.step"
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_slice(args)
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
 
         mock_convert.assert_called_once_with("test.step")
 
@@ -348,9 +349,9 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
         args.file = "test.stl"
         args.output = "-invalid_dir"
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_slice(args)
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
 
         mock_logger.error.assert_called_with("Invalid output directory: -invalid_dir")
 
@@ -425,9 +426,9 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
 
         utils._LAST_ERROR_PAYLOAD = None
         with settings_ctx(profiles_dir='/tmp/mock_profiles', orca_slicer='/tmp/orca'):
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises((SystemExit, BambuError)) as cm:
                 cmd_slice(args)
-        self.assertEqual(cm.exception.code, 1)  # EXIT_CONFIG_ERROR
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)  # EXIT_CONFIG_ERROR
 
         payload = utils._LAST_ERROR_PAYLOAD
         self.assertEqual(payload["failed_step"], "profiles")
@@ -455,7 +456,7 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
         mock_exit.side_effect = SystemExit(1)
 
         with settings_ctx(orca_slicer='/tmp/missing_orca'):
-            with self.assertRaises(SystemExit):
+            with self.assertRaises((SystemExit, BambuError)):
                 cmd_slice(args)
 
         mock_logger.error.assert_called_with("OrcaSlicer not found at /tmp/missing_orca")
@@ -538,9 +539,9 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
 
         with settings_ctx(profiles_dir='/tmp', orca_slicer='/tmp/orca'), \
                 patch('platform.system', return_value="Windows"):
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises((SystemExit, BambuError)) as cm:
                 cmd_slice(args)
-            self.assertEqual(cm.exception.code, 5)
+            self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
 
         mock_logger.error.assert_any_call("   Missing wall settings")
         mock_logger.error.assert_any_call("   2024-01-01 nothing to be sliced")

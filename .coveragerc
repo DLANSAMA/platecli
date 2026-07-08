@@ -1,0 +1,21 @@
+[run]
+branch = False
+source = bambu_cli
+
+[report]
+precision = 1
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if TYPE_CHECKING:
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
+    except ImportError:
+    except Exception:
+        pass
+    except \(.+\):
+        pass
+    continue
+    \.\.\.

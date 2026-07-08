@@ -10,9 +10,9 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         args = MagicMock()
         args.file = "-invalid.gcode"
         mock_exit.side_effect = SystemExit(3)
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_upload(args)
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
         mock_logger.error.assert_called_with("Invalid filepath: -invalid.gcode")
 
     @patch('os.path.exists')
@@ -24,9 +24,9 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         args = MagicMock()
         args.file = "missing.gcode"
         mock_exit.side_effect = SystemExit(3)
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_upload(args)
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
         mock_logger.error.assert_called_with("File not found: missing.gcode")
 
     @patch('os.path.exists')
@@ -71,9 +71,9 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         mock_get_printer.return_value = printer
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_upload(args)
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_called_with("Dry run failed: Could not reach printer.")
 
     @patch('os.path.exists')
@@ -138,17 +138,17 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         mock_get_printer.return_value = printer
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_upload(args)
 
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_called_with("❌ Upload failed after 4 attempts.")
 
 
 class TestBambuCmdLight(unittest.TestCase):
 
     @patch('bambu_cli.commands.get_sequence_id', return_value="0")
-    @patch('bambu_cli.bambu.send_command')
+    @patch('bambu_cli.protocols.mqtt.send_command')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_light_on(self, mock_logger, mock_send_command, mock_seq):
         args = MagicMock()
@@ -167,7 +167,7 @@ class TestBambuCmdLight(unittest.TestCase):
         mock_logger.info.assert_called_once_with("💡 Light turned on")
 
     @patch('bambu_cli.commands.get_sequence_id', return_value="0")
-    @patch('bambu_cli.bambu.send_command')
+    @patch('bambu_cli.protocols.mqtt.send_command')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_light_off(self, mock_logger, mock_send_command, mock_seq):
         args = MagicMock()
@@ -189,7 +189,7 @@ class TestBambuCmdLight(unittest.TestCase):
 class TestBambuCmdResume(unittest.TestCase):
 
     @patch('bambu_cli.commands.get_sequence_id', return_value="0")
-    @patch('bambu_cli.bambu.send_command')
+    @patch('bambu_cli.protocols.mqtt.send_command')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_resume(self, mock_logger, mock_send_command, mock_seq):
         from bambu_cli.bambu import cmd_resume
@@ -205,7 +205,7 @@ class TestBambuCmdResume(unittest.TestCase):
 class TestBambuCmdPause(unittest.TestCase):
 
     @patch('bambu_cli.commands.get_sequence_id', return_value="0")
-    @patch('bambu_cli.bambu.send_command')
+    @patch('bambu_cli.protocols.mqtt.send_command')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_pause(self, mock_logger, mock_send_command, mock_seq):
         from bambu_cli.bambu import cmd_pause
@@ -220,16 +220,16 @@ class TestBambuCmdPause(unittest.TestCase):
 
 class TestBambuCmdStop(unittest.TestCase):
 
-    @patch('bambu_cli.bambu.send_command')
+    @patch('bambu_cli.protocols.mqtt.send_command')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_stop_without_confirm(self, mock_logger, mock_send_command):
         # Create a mock args object with confirm=False
         args = MagicMock()
         args.confirm = False
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_stop(args)
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
 
         # Assert that send_command was NOT called
         mock_send_command.assert_not_called()
@@ -237,7 +237,7 @@ class TestBambuCmdStop(unittest.TestCase):
         # Assert that the correct message was logged
         mock_logger.warning.assert_called_once_with("⚠️  This will STOP the current print. Add --confirm to proceed.")
 
-    @patch('bambu_cli.bambu.send_command')
+    @patch('bambu_cli.protocols.mqtt.send_command')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_stop_with_confirm(self, mock_logger, mock_send_command):
         # Create a mock args object with confirm=True
@@ -313,7 +313,7 @@ class TestBambuCmdFiles(unittest.TestCase):
         self._printer_with_ftp(mock_get_printer, mock_get_ftp)
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises((SystemExit, BambuError)):
             cmd_files(args)
 
         mock_get_ftp.assert_called_once()
@@ -331,7 +331,7 @@ class TestBambuCmdFiles(unittest.TestCase):
         self._printer_with_ftp(mock_get_printer, mock_get_ftp)
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises((SystemExit, BambuError)):
             cmd_files(args)
 
         mock_get_ftp.assert_called_once()
@@ -339,7 +339,7 @@ class TestBambuCmdFiles(unittest.TestCase):
 
 
 class TestBambuCmdDelete(unittest.TestCase):
-    @patch('bambu_cli.bambu.get_ftp')
+    @patch('bambu_cli.protocols.ftps.get_ftp')
     @patch('bambu_cli.bambu.logger')
     @patch('sys.exit')
     def test_cmd_delete_no_confirm(self, mock_exit, mock_logger, mock_get_ftp):
@@ -350,10 +350,10 @@ class TestBambuCmdDelete(unittest.TestCase):
 
         mock_exit.side_effect = SystemExit(5)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_delete(args)
 
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
         mock_get_ftp.assert_not_called()
         mock_logger.warning.assert_called_once_with("⚠️  This will DELETE 'test.3mf' from the printer. Add --confirm to proceed.")
 
@@ -396,7 +396,7 @@ class TestBambuCmdDelete(unittest.TestCase):
         mock_get_printer.return_value = printer
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises((SystemExit, BambuError)):
             cmd_delete(args)
 
         mock_get_ftp.assert_called_once()
@@ -406,7 +406,7 @@ class TestBambuCmdDelete(unittest.TestCase):
 
 class TestBambuCmdGcode(unittest.TestCase):
 
-    @patch('bambu_cli.bambu.send_command')
+    @patch('bambu_cli.protocols.mqtt.send_command')
     @patch('sys.exit')
     def test_cmd_gcode_send_command_fail(self, mock_exit, mock_send):
         from bambu_cli.bambu import cmd_gcode
@@ -415,13 +415,13 @@ class TestBambuCmdGcode(unittest.TestCase):
         args.code = "G28"
 
         mock_exit.side_effect = SystemExit(2)
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_gcode(args)
 
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
 
     @patch('bambu_cli.commands.get_sequence_id', return_value="0")
-    @patch('bambu_cli.bambu.send_command')
+    @patch('bambu_cli.protocols.mqtt.send_command')
     def test_cmd_gcode(self, mock_send_command, mock_seq):
         from bambu_cli.bambu import cmd_gcode
 
@@ -461,7 +461,7 @@ class TestBambuGetStatus(unittest.TestCase):
         self.assertIsNone(result)
         mock_logger.error.assert_called_with("Connection failed: rc=5")
 
-    @patch('bambu_cli.bambu.get_status')
+    @patch('bambu_cli.protocols.mqtt.get_status')
     def test_cmd_status_connect_fail(self, mock_get_status):
         from bambu_cli.bambu import cmd_status
         from bambu_cli.errors import PrinterConnectionError
@@ -493,7 +493,7 @@ class TestBambuGetStatus(unittest.TestCase):
         self.assertEqual(payload["command"], "status")
         self.assertEqual(payload["gcode_state"], "IDLE")
 
-    @patch('bambu_cli.bambu.get_status')
+    @patch('bambu_cli.protocols.mqtt.get_status')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_status_running_formatting(self, mock_logger, mock_get_status):
         from bambu_cli.bambu import cmd_status
@@ -638,7 +638,7 @@ class TestBambuGetStatus(unittest.TestCase):
 
 class TestBambuCmdPrint(unittest.TestCase):
 
-    @patch('bambu_cli.bambu.get_status')
+    @patch('bambu_cli.protocols.mqtt.get_status')
     @patch('bambu_cli.bambu.logger')
     @patch('sys.exit')
     def test_execute_print_command_dry_run_file_not_found(self, mock_exit, mock_logger, mock_get_status):
@@ -651,13 +651,13 @@ class TestBambuCmdPrint(unittest.TestCase):
         printer.get_ftp_client = mock_get_ftp
 
         mock_exit.side_effect = SystemExit(3)
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             execute_print_command(printer, "payload", "missing.3mf", dry_run=True)
 
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
         mock_logger.error.assert_any_call("   ❌ File missing.3mf NOT found on printer. Upload it first.")
 
-    @patch('bambu_cli.bambu.get_status')
+    @patch('bambu_cli.protocols.mqtt.get_status')
     @patch('bambu_cli.bambu.logger')
     @patch('sys.exit')
     def test_execute_print_command_dry_run_mqtt_fail(self, mock_exit, mock_logger, mock_get_status):
@@ -672,13 +672,13 @@ class TestBambuCmdPrint(unittest.TestCase):
         mock_get_status.return_value = None
 
         mock_exit.side_effect = SystemExit(2)
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             execute_print_command(printer, "payload", "test.3mf", dry_run=True)
 
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_any_call("   ❌ MQTT connection failed.")
 
-    @patch('bambu_cli.bambu.get_status')
+    @patch('bambu_cli.protocols.mqtt.get_status')
     @patch('bambu_cli.bambu.logger')
     @patch('sys.exit')
     def test_execute_print_command_dry_run_exception(self, mock_exit, mock_logger, mock_get_status):
@@ -687,10 +687,10 @@ class TestBambuCmdPrint(unittest.TestCase):
         printer.get_ftp_client = MagicMock(side_effect=OSError("FTP Error"))
 
         mock_exit.side_effect = SystemExit(2)
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             execute_print_command(printer, "payload", "test.3mf", dry_run=True)
 
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_any_call("Dry run failed: FTP Error")
 
     @patch('bambu_cli.protocols.mqtt.create_mqtt_client')
@@ -712,10 +712,10 @@ class TestBambuCmdPrint(unittest.TestCase):
 
         mock_exit.side_effect = SystemExit(4)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             execute_print_command(_test_printer(), "payload", "test.3mf", dry_run=False)
 
-        self.assertEqual(cm.exception.code, 4)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 4)
         mock_logger.error.assert_called_with("Print failed with error code 1234")
     def test_generate_print_payload(self):
         from bambu_cli.bambu import generate_print_payload
@@ -787,7 +787,7 @@ class TestBambuCmdPrint(unittest.TestCase):
         payload = '{"test": "payload"}'
         basename = "test_model.gcode"
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises((SystemExit, BambuError)):
             execute_print_command(_test_printer(), payload, basename)
 
         self.assertTrue(any("Print failed with error code 83935248" in call[0][0] for call in mock_logger.error.call_args_list))
@@ -809,13 +809,13 @@ class TestBambuCmdPrint(unittest.TestCase):
         payload = '{"test": "payload"}'
         basename = "test_model.gcode"
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises((SystemExit, BambuError)):
             execute_print_command(_test_printer(), payload, basename)
 
         self.assertTrue(any("Error: Connection refused" in call[0][0] for call in mock_logger.error.call_args_list))
 
     @patch('bambu_cli.bambu.generate_print_payload')
-    @patch('bambu_cli.bambu.execute_print_command')
+    @patch('bambu_cli.protocols.mqtt.execute_print_command')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_print_no_confirm(self, mock_logger, mock_execute, mock_generate):
         from bambu_cli.bambu import cmd_print
@@ -834,7 +834,7 @@ class TestBambuCmdPrint(unittest.TestCase):
         self.assertTrue(any("⚠️  This will START a print. Add --confirm to proceed." in call[0][0] for call in mock_logger.warning.call_args_list))
 
     @patch('bambu_cli.bambu.generate_print_payload')
-    @patch('bambu_cli.bambu.execute_print_command')
+    @patch('bambu_cli.protocols.mqtt.execute_print_command')
     def test_cmd_print_with_confirm(self, mock_execute, mock_generate):
         from bambu_cli.bambu import cmd_print
 

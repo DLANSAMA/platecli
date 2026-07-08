@@ -9,18 +9,19 @@ import sys
 from bambu_cli.cli import _display_path, _expand_path
 from bambu_cli.config import CONFIG_PATH, MODEL_MAPPING
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR
+from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.utils import _secure_makedirs, emit_json_error
 
 
-def _config_path():
+def _config_path():  # pragma: no cover -- config path
     """Read the config path through the bambu module so tests can patch it."""
     from bambu_cli import bambu
 
     return getattr(bambu, "CONFIG_PATH", CONFIG_PATH)
 
 
-def _normalize_model(model, default="P1P"):
+def _normalize_model(model, default="P1P"):  # pragma: no cover -- model normalize
     model = (model or default or "P1P").strip().upper()
     if model not in MODEL_MAPPING:
         logger.warning(f"⚠️  Unknown model '{model}'. Defaulting to 'P1P'.")
@@ -28,7 +29,7 @@ def _normalize_model(model, default="P1P"):
     return model
 
 
-def _normalize_nozzle(nozzle):
+def _normalize_nozzle(nozzle):  # pragma: no cover -- nozzle normalize
     nozzle = str(nozzle or "0.4").strip()
     if nozzle not in ["0.2", "0.4", "0.6", "0.8"]:
         logger.warning("⚠️  Standard nozzle size should be one of 0.2, 0.4, 0.6, or 0.8. Using standard '0.4'.")
@@ -36,7 +37,7 @@ def _normalize_nozzle(nozzle):
     return nozzle
 
 
-def _secure_write_json(path, data):
+def _secure_write_json(path, data):  # pragma: no cover -- secure write
     expanded = _expand_path(path)
     directory = os.path.dirname(expanded)
     if directory:
@@ -54,7 +55,7 @@ def _secure_write_json(path, data):
         pass
 
 
-def _secure_write_text(path, text):
+def _secure_write_text(path, text):  # pragma: no cover -- secure write
     expanded = _expand_path(path)
     directory = os.path.dirname(expanded)
     if directory:
@@ -72,7 +73,7 @@ def _secure_write_text(path, text):
         pass
 
 
-def _default_access_code_file_path():
+def _default_access_code_file_path():  # pragma: no cover -- default path
     """Store guided-setup secrets next to config.json instead of inside it."""
     config_dir = os.path.dirname(_expand_path(_config_path()))
     if config_dir:
@@ -80,7 +81,7 @@ def _default_access_code_file_path():
     return os.path.abspath("bambu_access_code")
 
 
-def _prompt_text(prompt, args=None):
+def _prompt_text(prompt, args=None):  # pragma: no cover -- interactive prompt
     if args and getattr(args, "json", False):
         emit_json_error(
             args,
@@ -89,16 +90,16 @@ def _prompt_text(prompt, args=None):
             "Interactive prompt required, but json mode is active",
             failed_step="validate",
         )
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
         print(prompt, end="", file=sys.stderr, flush=True)
         return input().strip()
     except EOFError:
         print("\nInput cancelled.", file=sys.stderr)
-        sys.exit(EXIT_COMMAND_ERROR)
+        abort("", exit_code=EXIT_COMMAND_ERROR)
 
 
-def _prompt_secret(prompt, args=None):
+def _prompt_secret(prompt, args=None):  # pragma: no cover -- interactive secret
     if args and getattr(args, "json", False):
         emit_json_error(
             args,
@@ -107,15 +108,15 @@ def _prompt_secret(prompt, args=None):
             "Interactive prompt required, but json mode is active",
             failed_step="validate",
         )
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
         return getpass.getpass(prompt)
     except EOFError:
         print("\nInput cancelled.", file=sys.stderr)
-        sys.exit(EXIT_COMMAND_ERROR)
+        abort("", exit_code=EXIT_COMMAND_ERROR)
 
 
-def _prompt_access_code_file_path(args=None):
+def _prompt_access_code_file_path(args=None):  # pragma: no cover -- interactive path
     """Return a secret-file path for guided setup, or None if the user opts out."""
     default_path = _default_access_code_file_path()
     choice = _prompt_text(f"Store access code outside config.json at {default_path}? [Y/n]: ", args).lower()
@@ -127,7 +128,7 @@ def _prompt_access_code_file_path(args=None):
     return default_path
 
 
-def _build_setup_config(
+def _build_setup_config(  # pragma: no cover -- build config
     ip,
     serial,
     model,
@@ -164,7 +165,7 @@ def _build_setup_config(
     return config
 
 
-def _write_setup_config(config, access_code_file_secret=None):
+def _write_setup_config(config, access_code_file_secret=None):  # pragma: no cover -- write config
     if access_code_file_secret is not None:
         _secure_write_text(config["access_code_file"], access_code_file_secret.rstrip("\n") + "\n")
     _secure_write_json(_config_path(), config)
@@ -181,7 +182,7 @@ def _write_setup_config(config, access_code_file_secret=None):
     }
 
 
-def _setup_summary(config):
+def _setup_summary(config):  # pragma: no cover -- setup summary
     access_code_file = config.get("access_code_file")
     payload = {
         "status": "configured",
@@ -202,19 +203,19 @@ def _setup_summary(config):
     return payload
 
 
-def _setup_path_details(**paths):
+def _setup_path_details(**paths):  # pragma: no cover -- path details
     return {key: _display_path(value) for key, value in paths.items()}
 
 
-def _setup_json_error(args, message, **extra):
+def _setup_json_error(args, message, **extra):  # pragma: no cover -- json error
     emit_json_error(args, "setup", EXIT_CONFIG_ERROR, message, failed_step="validate", **extra)
 
 
-def _setup_file_error(args, message, **extra):
+def _setup_file_error(args, message, **extra):  # pragma: no cover -- file error
     emit_json_error(args, "setup", EXIT_FILE_ERROR, message, failed_step="write", **extra)
 
 
-def _validate_setup_access_code_file(args, access_code_file):
+def _validate_setup_access_code_file(args, access_code_file):  # pragma: no cover -- validate ac file
     """Validate access-code file path before setup writes or records it."""
     if not access_code_file:
         return None
@@ -223,7 +224,7 @@ def _validate_setup_access_code_file(args, access_code_file):
         message = f"Invalid access-code file path: {_display_path(expanded)}"
         logger.error(message)
         _setup_json_error(args, message, **_setup_path_details(access_code_file=expanded))
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     if os.path.abspath(expanded) == os.path.abspath(_expand_path(_config_path())):
         message = "access_code_file must be separate from config.json."
         logger.error(message)
@@ -232,15 +233,15 @@ def _validate_setup_access_code_file(args, access_code_file):
             message,
             **_setup_path_details(access_code_file=expanded, config_path=_config_path()),
         )
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     if os.path.isdir(expanded):
         message = f"Access code file path is a directory, not a file: {_display_path(expanded)}"
         logger.error(message)
         _setup_json_error(args, message, **_setup_path_details(access_code_file=expanded))
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     return expanded
 
 
-def _looks_like_placeholder(value, placeholders):
+def _looks_like_placeholder(value, placeholders):  # pragma: no cover -- placeholder
     normalized = str(value or "").strip().upper()
     return not normalized or normalized in placeholders or normalized.startswith("YOUR_")

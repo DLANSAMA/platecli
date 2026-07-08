@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/ok_envelope.json",
+  "title": "bambu-cli JSON ok envelope",
+  "type": "object",
+  "required": ["status", "command"],
+  "properties": {
+    "status": {"type": "string"},
+    "command": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": true
+}

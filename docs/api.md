@@ -98,3 +98,15 @@ In addition to `--json`, several flags provide strict API guarantees for program
   - `--upload-timeout <seconds>`: FTPS file upload timeout.
 - **Security & Confinement**:
   - `--allow-private-ips`: By default, the CLI prevents fetching models from private/local IPs (SSRF protection). This flag explicitly overrides the safeguard.
+
+
+## Stability policy (1.0 intent)
+
+JSON fields documented here and validated under `docs/schemas/` are part of the
+agent contract. Fields may be **added** in minor releases. Fields may be
+**removed or renamed** only after a deprecation window of at least one minor
+release (or a major version bump). Exit codes in `bambu_cli.constants` are
+stable for a given major version.
+
+Machine-checkable schemas live in `docs/schemas/`. Contract tests under
+`tests/contracts/` load those schemas against live CLI output.

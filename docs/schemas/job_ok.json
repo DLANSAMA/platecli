@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/job_ok.json",
+  "title": "bambu-cli job/send success or dry-run envelope",
+  "type": "object",
+  "required": ["status", "command"],
+  "properties": {
+    "status": {"type": "string"},
+    "command": {"type": "string", "minLength": 1},
+    "steps": {"type": "object"},
+    "source": {"type": "string"},
+    "local_path": {"type": "string"},
+    "remote_path": {"type": "string"},
+    "print_started": {"type": "boolean"},
+    "dry_run": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}

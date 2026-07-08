@@ -125,6 +125,7 @@ except ImportError:
 import socket
 
 from bambu_cli.printer import BambuPrinter
+from bambu_cli.errors import BambuError
 
 
 def _test_printer(ip='192.168.1.1', serial=None, access_code='MOCK_CODE', **kwargs):
@@ -147,4 +148,4 @@ def _setup_slice_proc(mock_proc, returncode=0, stdout=b"", stderr=b""):
 
 
 
-__all__ = [name for name in ('unittest', 'sys', 'io', 'json', 'os', 'platform', 'patch', 'MagicMock', 'mock_open', 'ANY', '_HOST_SYSTEM', 'mock_mqtt', 'tempfile', 'atexit', 'shutil', 'mock_config_dir', 'mock_config_path', 'bambu', 'cmd_stop', 'get_ftp', 'load_config', 'create_mqtt_client', 'cmd_light', 'execute_print_command', 'setup_logging', 'ssl', 'socket', 'urllib', 'BambuPrinter', '_test_printer', '_setup_slice_proc', 'install_baseline_context', 'config_ctx', 'settings_ctx') if name in globals()]
+__all__ = [name for name in ('BambuError', 'unittest', 'sys', 'io', 'json', 'os', 'platform', 'patch', 'MagicMock', 'mock_open', 'ANY', '_HOST_SYSTEM', 'mock_mqtt', 'tempfile', 'atexit', 'shutil', 'mock_config_dir', 'mock_config_path', 'bambu', 'cmd_stop', 'get_ftp', 'load_config', 'create_mqtt_client', 'cmd_light', 'execute_print_command', 'setup_logging', 'ssl', 'socket', 'urllib', 'BambuPrinter', '_test_printer', '_setup_slice_proc', 'install_baseline_context', 'config_ctx', 'settings_ctx') if name in globals()]

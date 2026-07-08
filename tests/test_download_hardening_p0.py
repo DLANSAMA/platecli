@@ -25,6 +25,7 @@ sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 from bambu_cli import bambu  # noqa: E402
 from bambu_cli import download  # noqa: E402
 from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR  # noqa: E402
+from bambu_cli.errors import BambuError
 
 
 def _args(tmp_path, url, **overrides):
@@ -116,10 +117,10 @@ def test_redirected_url_with_unsupported_extension_rejected(tmp_path):
     args = _args(tmp_path, original_url)
 
     with patch.object(download, "build_safe_opener", return_value=opener):
-        with pytest.raises(SystemExit) as excinfo:
+        with pytest.raises((SystemExit, BambuError)) as excinfo:
             download._cmd_download(args)
 
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
 
@@ -140,10 +141,10 @@ def test_mid_stream_oversize_deletes_partial_file(tmp_path):
     args = _args(tmp_path, url, max_download_mb=1)
 
     with patch.object(download, "build_safe_opener", return_value=opener):
-        with pytest.raises(SystemExit) as excinfo:
+        with pytest.raises((SystemExit, BambuError)) as excinfo:
             download._cmd_download(args)
 
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
 
@@ -174,10 +175,10 @@ def test_short_read_detected_and_partial_removed(tmp_path):
     args = _args(tmp_path, url, max_download_mb=100)
 
     with patch.object(download, "build_safe_opener", return_value=opener):
-        with pytest.raises(SystemExit) as excinfo:
+        with pytest.raises((SystemExit, BambuError)) as excinfo:
             download._cmd_download(args)
 
-    assert excinfo.value.code == EXIT_NETWORK_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_NETWORK_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
 
@@ -195,10 +196,10 @@ def test_empty_download_rejected(tmp_path):
     args = _args(tmp_path, url, max_download_mb=100)
 
     with patch.object(download, "build_safe_opener", return_value=opener):
-        with pytest.raises(SystemExit) as excinfo:
+        with pytest.raises((SystemExit, BambuError)) as excinfo:
             download._cmd_download(args)
 
-    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
 

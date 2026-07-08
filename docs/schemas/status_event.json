@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["event", "command", "gcode_state", "mc_percent"],
+  "properties": {
+    "event": {"enum": ["update", "terminal"]},
+    "command": {"const": "status"},
+    "gcode_state": {"type": "string"},
+    "mc_percent": {"type": "integer"}
+  },
+  "additionalProperties": true
+}

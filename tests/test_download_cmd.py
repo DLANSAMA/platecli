@@ -1,4 +1,5 @@
 from tests.bambu_test_base import *  # noqa: F401,F403
+from bambu_cli.errors import BambuError
 
 
 class _FakeResp:
@@ -430,9 +431,9 @@ class TestBambuCmdDownload(unittest.TestCase):
         args.url = "http://example.com/test.stl"
         args.output = "-invalid_dir"
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(args)
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
 
         mock_logger.error.assert_called_with("Invalid output directory: -invalid_dir")
 
@@ -591,9 +592,9 @@ class TestBambuCmdDownload(unittest.TestCase):
 
         mock_resolve.return_value = (None, None)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(args)
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
 
         mock_resolve.assert_called_once_with("https://www.printables.com/model/12345")
         mock_urlopen.assert_not_called()
@@ -615,9 +616,9 @@ class TestBambuCmdDownload(unittest.TestCase):
 
         mock_urlopen.side_effect = urllib.error.HTTPError(url="https://example.com/model.stl", code=404, msg="Not Found", hdrs={}, fp=None)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(args)
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
 
         mock_resolve.assert_called_once_with("https://example.com/model.stl")
         mock_urlopen.assert_called_once()
@@ -640,9 +641,9 @@ class TestBambuCmdDownload(unittest.TestCase):
 
         mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(args)
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
 
         mock_resolve.assert_called_once_with("https://example.com/model.stl")
         mock_urlopen.assert_called_once()
@@ -694,9 +695,9 @@ class TestBambuCmdDownload(unittest.TestCase):
 
         mock_resolve.return_value = (None, None)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(args)
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
 
         # urllib.request.urlopen should NOT be called
         mock_urlopen.assert_not_called()
@@ -785,9 +786,9 @@ class TestDownloadLoopBranches(unittest.TestCase):
     def test_content_length_over_limit_rejected(self, mock_logger):
         from bambu_cli.bambu import cmd_download
         self._respond(_FakeResp([b"", b""], headers={"Content-Length": str(5 * 1024 * 1024)}))
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(self._args(max_download_mb=1))
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
         self.assertTrue(any("too large" in c[0][0] for c in mock_logger.error.call_args_list))
 
     @patch('bambu_cli.bambu.logger')
@@ -796,9 +797,9 @@ class TestDownloadLoopBranches(unittest.TestCase):
         # No Content-Length; a single chunk larger than the 1 MB cap trips the
         # in-loop guard.
         self._respond(_FakeResp([b"x" * (2 * 1024 * 1024), b""]))
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(self._args(max_download_mb=1))
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
         self.assertTrue(any("exceeded the" in c[0][0] for c in mock_logger.error.call_args_list))
 
     @patch('bambu_cli.bambu.logger')
@@ -806,18 +807,18 @@ class TestDownloadLoopBranches(unittest.TestCase):
         from bambu_cli.bambu import cmd_download
         self.mock_getsize.return_value = 0
         self._respond(_FakeResp([b"data", b""]))
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(self._args())
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
         self.assertTrue(any("empty" in c[0][0] for c in mock_logger.error.call_args_list))
 
     @patch('bambu_cli.bambu.logger')
     def test_truncated_download_rejected(self, mock_logger):
         from bambu_cli.bambu import cmd_download
         self._respond(_FakeResp([b"x" * 10, b""], headers={"Content-Length": "1000"}))
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(self._args())
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         self.assertTrue(any("ended early" in c[0][0] for c in mock_logger.error.call_args_list))
 
     @patch('bambu_cli.bambu.logger')
@@ -825,27 +826,27 @@ class TestDownloadLoopBranches(unittest.TestCase):
         import urllib.error
         from bambu_cli.bambu import cmd_download
         self.mock_open.side_effect = urllib.error.URLError("Security Error: blocked host")
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(self._args())
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
         self.assertTrue(any("SSRF Security Violation" in c[0][0] for c in mock_logger.error.call_args_list))
 
     @patch('bambu_cli.bambu.logger')
     def test_oserror_reported_as_local_file_error(self, mock_logger):
         from bambu_cli.bambu import cmd_download
         self.mock_open.side_effect = OSError("No space left on device")
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(self._args())
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
         self.assertTrue(any("Local file error" in c[0][0] for c in mock_logger.error.call_args_list))
 
     @patch('bambu_cli.bambu.logger')
     def test_generic_exception_reported(self, mock_logger):
         from bambu_cli.bambu import cmd_download
         self.mock_open.side_effect = RuntimeError("kaboom")
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(self._args())
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         self.assertTrue(any("Download failed: kaboom" in c[0][0] for c in mock_logger.error.call_args_list))
 
     @patch('bambu_cli.bambu.logger')
@@ -855,9 +856,9 @@ class TestDownloadLoopBranches(unittest.TestCase):
             [b"<html><body>no model links here</body></html>", b""],
             headers={"Content-Type": "text/html"},
         ))
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_download(self._args(url="https://example.com/page"))
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
         self.assertTrue(any(
             "did not contain a direct model file link" in c[0][0]
             for c in mock_logger.error.call_args_list

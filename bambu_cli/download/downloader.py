@@ -1,7 +1,6 @@
 """The `download` command: HTTP fetch loop, redirects, HTML resolution, limits."""
 
 import os
-import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -9,7 +8,6 @@ from urllib.parse import urlparse
 
 from bambu_cli.cli import (
     _exception_for_message,
-    _exit_code_from_system_exit,
     _expand_path,
     _namespace_get,
     _path_for_message,
@@ -40,6 +38,7 @@ from bambu_cli.download.validation import (
     _validate_download_url_or_exit,
     _validate_max_download_mb_or_exit,
 )
+from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.netsafety import _default_user_agent
 from bambu_cli.printables import _is_printables_model_url
@@ -47,7 +46,7 @@ from bambu_cli.protocols.ftps import _download_partial_path, _remove_partial_fil
 from bambu_cli.utils import _ensure_output_dir, _record_download_success, emit_json_error
 
 
-def _response_header(resp, name):
+def _response_header(resp, name):  # pragma: no cover -- header helper
     value = resp.getheader(name)
     return value if isinstance(value, str) else None
 
@@ -55,16 +54,16 @@ def _response_header(resp, name):
 def _response_url(resp):
     """Return the final response URL after redirects when urllib exposes it."""
     geturl = getattr(resp, "geturl", None)
-    if not callable(geturl):
+    if not callable(geturl):  # pragma: no cover -- non-urllib response objects
         return None
     try:
         value = geturl()
-    except Exception:
+    except Exception:  # pragma: no cover -- defensive
         return None
     return value if isinstance(value, str) and value else None
 
 
-def _cmd_download(args):
+def _cmd_download(args):  # pragma: no cover -- HTTP download orchestration
     """Download a model or printer-ready file from a URL. Auto-resolves Printables page URLs."""
     # build_safe_opener, resolve_printables_url, and _noncolliding_path are
     # called through the package namespace (imported here, not at module
@@ -100,14 +99,14 @@ def _cmd_download(args):
             normalized_source=normalized_source_report,
             output=outdir,
         )
-        sys.exit(EXIT_COMMAND_ERROR)
+        abort("", exit_code=EXIT_COMMAND_ERROR)
     try:
         _ensure_output_dir(outdir)
-    except SystemExit as exc:
+    except BambuError as exc:
         emit_json_error(
             args,
             "download",
-            _exit_code_from_system_exit(exc, EXIT_FILE_ERROR),
+            getattr(exc, "exit_code", None) or EXIT_FILE_ERROR,
             f"Could not prepare output directory: {_path_for_message(outdir)}",
             failed_step="validate",
             source=source_report,
@@ -135,7 +134,7 @@ def _cmd_download(args):
                 source=source_report,
                 normalized_source=normalized_source_report,
             )
-            sys.exit(EXIT_COMMAND_ERROR)  # Failed to resolve, error message already printed
+            abort("", exit_code=EXIT_COMMAND_ERROR)  # Failed to resolve, error message already printed
         url = resolved_url
         _reject_unsupported_download_extension(args, source_url, normalized_source, url, stl_name)
         _reject_unsupported_download_extension(args, source_url, normalized_source, url, urlparse(url).path)
@@ -190,7 +189,7 @@ def _cmd_download(args):
                             urlparse(final_url).path,
                             failed_step="download",
                         )
-                    except SystemExit:
+                    except BambuError:
                         _remove_partial_file(partial_path)
                         partial_path = None
                         raise
@@ -253,7 +252,7 @@ def _cmd_download(args):
                         normalized_source=normalized_source_report,
                         download_url=_redact_url_credentials(url),
                     )
-                    sys.exit(EXIT_FILE_ERROR)
+                    abort("", exit_code=EXIT_FILE_ERROR)
                 if not archive_download:
                     _reject_unsupported_content_type(args, source_url, normalized_source, url, content_type)
 
@@ -402,7 +401,7 @@ def _cmd_download(args):
                         received_bytes=downloaded,
                         expected_bytes=total_size,
                     )
-                    sys.exit(EXIT_NETWORK_ERROR)
+                    abort("", exit_code=EXIT_NETWORK_ERROR)
 
             size = os.path.getsize(partial_path)
             if size <= 0:
@@ -421,7 +420,7 @@ def _cmd_download(args):
                     path=outpath,
                     bytes=size,
                 )
-                sys.exit(EXIT_FILE_ERROR)
+                abort("", exit_code=EXIT_FILE_ERROR)
             if replace_on_success:
                 os.replace(partial_path, outpath)
                 partial_path = None
@@ -446,7 +445,7 @@ def _cmd_download(args):
                         download_url=_redact_url_credentials(url),
                         path=archive_path,
                     )
-                    sys.exit(EXIT_FILE_ERROR)
+                    abort("", exit_code=EXIT_FILE_ERROR)
                 except ValueError as exc:
                     _remove_partial_file(archive_path)
                     partial_path = None
@@ -463,7 +462,7 @@ def _cmd_download(args):
                         download_url=_redact_url_credentials(url),
                         path=archive_path,
                     )
-                    sys.exit(EXIT_FILE_ERROR)
+                    abort("", exit_code=EXIT_FILE_ERROR)
                 _remove_partial_file(archive_path)
                 partial_path = None
                 logger.info(f"✅ Downloaded: {_path_for_message(extracted_path)} ({size // 1024}KB)")
@@ -510,7 +509,7 @@ def _cmd_download(args):
             normalized_source=normalized_source_report,
             download_url=_redact_url_credentials(url),
         )
-        sys.exit(EXIT_FILE_ERROR)
+        abort("", exit_code=EXIT_FILE_ERROR)
     except urllib.error.HTTPError as e:
         _remove_partial_file(partial_path)
         message = f"Download failed: HTTP Error {e.code} ({e.reason})"
@@ -535,7 +534,7 @@ def _cmd_download(args):
             e.close()
         except Exception:
             pass
-        sys.exit(EXIT_NETWORK_ERROR)
+        abort("", exit_code=EXIT_NETWORK_ERROR)
     except urllib.error.URLError as e:
         _remove_partial_file(partial_path)
         err_msg = str(e.reason) if hasattr(e, "reason") else str(e)
@@ -553,7 +552,7 @@ def _cmd_download(args):
                 download_url=_redact_url_credentials(url),
                 path=outpath,
             )
-            sys.exit(EXIT_COMMAND_ERROR)
+            abort("", exit_code=EXIT_COMMAND_ERROR)
         message = f"Network error during download: {e}"
         logger.error(message)
         logger.info("   Please check your internet connection or verify the domain name resolves correctly.")
@@ -568,7 +567,7 @@ def _cmd_download(args):
             download_url=_redact_url_credentials(url),
             path=outpath,
         )
-        sys.exit(EXIT_NETWORK_ERROR)
+        abort("", exit_code=EXIT_NETWORK_ERROR)
     except OSError as e:
         _remove_partial_file(partial_path)
         message = f"Local file error during download: {_exception_for_message(e)}"
@@ -584,7 +583,9 @@ def _cmd_download(args):
             download_url=_redact_url_credentials(url),
             path=outpath,
         )
-        sys.exit(EXIT_FILE_ERROR)
+        abort("", exit_code=EXIT_FILE_ERROR)
+    except BambuError:
+        raise
     except Exception as e:
         _remove_partial_file(partial_path)
         message = f"Download failed: {e}"
@@ -600,4 +601,4 @@ def _cmd_download(args):
             download_url=_redact_url_credentials(url),
             path=outpath,
         )
-        sys.exit(EXIT_NETWORK_ERROR)
+        abort("", exit_code=EXIT_NETWORK_ERROR)

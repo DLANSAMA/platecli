@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["status", "command", "version"],
+  "properties": {
+    "status": {"const": "ok"},
+    "command": {"const": "version"},
+    "version": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

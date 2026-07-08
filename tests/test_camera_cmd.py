@@ -1,4 +1,5 @@
 from tests.bambu_test_base import *  # noqa: F401,F403
+from bambu_cli.errors import BambuError
 
 
 class TestGrabCameraFrameDirect(unittest.TestCase):
@@ -114,9 +115,9 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args = MagicMock()
         args.output = "snap.jpg"
         with settings_ctx(camera_stream_url="http://evil.example.com:8080/frame.jpeg"):
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises((SystemExit, BambuError)) as cm:
                 cmd_snapshot(args)
-        self.assertEqual(cm.exception.code, 1)  # EXIT_CONFIG_ERROR
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)  # EXIT_CONFIG_ERROR
         mock_urlopen.assert_not_called()
         mock_run.assert_not_called()
         self.assertTrue(any(
@@ -130,10 +131,10 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args = MagicMock()
         args.output = "-invalid.jpg"
         mock_exit.side_effect = SystemExit(3)
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_snapshot(args)
 
-        self.assertEqual(cm.exception.code, 3)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
         mock_logger.error.assert_called_with("Invalid output path: -invalid.jpg")
 
     @patch('bambu_cli.bambu.shutil.which', return_value='/usr/bin/docker')
@@ -158,10 +159,10 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         mock_urlopen.side_effect = urllib.error.URLError("Network Error")
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_snapshot(args)
 
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_called_with("Snapshot network error: <urlopen error Network Error>")
 
     @patch('bambu_cli.bambu.shutil.which', return_value='/usr/bin/docker')
@@ -185,10 +186,10 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         mock_urlopen.side_effect = Exception("Generic Error")
         mock_exit.side_effect = SystemExit(5)
 
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_snapshot(args)
 
-        self.assertEqual(cm.exception.code, 5)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
         mock_logger.error.assert_called_with("Snapshot failed: Generic Error")
     @patch('bambu_cli.bambu.shutil.which', return_value='/usr/bin/docker')
     @patch('bambu_cli.bambu._grab_camera_frame_direct', return_value=None)

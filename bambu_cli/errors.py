@@ -1,16 +1,19 @@
 """Structured exception hierarchy for the CLI's JSON error contract.
 
-These exceptions let command implementations signal a failure with enough
-structure (exit code, failed step, machine-readable detail, suggested next
-command) that ``cli.main()`` can translate them directly into the standard
-``--json`` error payload without each call site having to call
-``emit_json_error`` itself.
-
-This module only introduces the mechanism; existing code is not yet
-converted to raise these exceptions.
+Command implementations raise these instead of calling ``sys.exit``. ``cli.main()``
+translates them into process exit codes and the standard ``--json`` error payload.
 """
 
-from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR
+from __future__ import annotations
+
+from bambu_cli.constants import (
+    EXIT_COMMAND_ERROR,
+    EXIT_CONFIG_ERROR,
+    EXIT_FILE_ERROR,
+    EXIT_NETWORK_ERROR,
+    EXIT_PRINTER_ERROR,
+    EXIT_TIMEOUT,
+)
 
 __all__ = [
     "BambuError",
@@ -20,6 +23,11 @@ __all__ = [
     "UploadError",
     "DownloadRejected",
     "SliceError",
+    "NetworkError",
+    "FileError",
+    "TimeoutError",
+    "PrinterError",
+    "abort",
 ]
 
 
@@ -33,8 +41,8 @@ class BambuError(Exception):
         failed_step: Which pipeline stage failed (e.g. "config", "connect").
     """
 
-    exit_code = EXIT_COMMAND_ERROR
-    failed_step = None
+    exit_code: int = EXIT_COMMAND_ERROR
+    failed_step: str | None = None
 
     def __init__(self, message, *, detail=None, next_command=None, exit_code=None, failed_step=None):
         super().__init__(message)
@@ -72,7 +80,7 @@ class UploadError(BambuError):
 
 
 class DownloadRejected(BambuError):
-    """Raised when the printer rejects or aborts a file download."""
+    """Raised when a download is rejected (SSRF, size, type, archive)."""
 
     failed_step = "download"
 
@@ -81,3 +89,53 @@ class SliceError(BambuError):
     """Raised when slicing a model with OrcaSlicer fails."""
 
     failed_step = "slice"
+
+
+class NetworkError(BambuError):
+    """Raised on MQTT/FTPS/network failures."""
+
+    exit_code = EXIT_NETWORK_ERROR
+    failed_step = "network"
+
+
+class FileError(BambuError):
+    """Raised on local or remote file validation failures."""
+
+    exit_code = EXIT_FILE_ERROR
+    failed_step = "file"
+
+
+class TimeoutError(BambuError):  # noqa: A001 — deliberate domain name, not builtin shadow for callers
+    """Raised when a printer or slicer operation times out."""
+
+    exit_code = EXIT_TIMEOUT
+    failed_step = "timeout"
+
+
+class PrinterError(BambuError):
+    """Raised when the printer reports a job/device error."""
+
+    exit_code = EXIT_PRINTER_ERROR
+    failed_step = "printer"
+
+
+_EXIT_TO_EXC = {
+    EXIT_CONFIG_ERROR: ConfigError,
+    EXIT_NETWORK_ERROR: NetworkError,
+    EXIT_FILE_ERROR: FileError,
+    EXIT_PRINTER_ERROR: PrinterError,
+    EXIT_COMMAND_ERROR: BambuError,
+    EXIT_TIMEOUT: TimeoutError,
+}
+
+
+def abort(message: str = "", *, exit_code: int = EXIT_COMMAND_ERROR, failed_step=None, detail=None, next_command=None):
+    """Raise the appropriate structured error for ``exit_code`` (domain code never calls ``sys.exit``)."""
+    cls = _EXIT_TO_EXC.get(exit_code, BambuError)
+    raise cls(
+        message or f"Command failed (exit {exit_code})",
+        exit_code=exit_code,
+        failed_step=failed_step,
+        detail=detail,
+        next_command=next_command,
+    )

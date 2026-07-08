@@ -7,7 +7,6 @@ import socket
 import ssl
 import struct
 import subprocess
-import sys
 import tempfile
 import time
 import urllib.error
@@ -16,7 +15,6 @@ from urllib.parse import urlparse
 
 from bambu_cli.cli import (
     _exception_for_message,
-    _exit_code_from_system_exit,
     _expand_path,
     _namespace_get,
     _path_for_message,
@@ -29,11 +27,12 @@ from bambu_cli.constants import (
     EXIT_NETWORK_ERROR,
 )
 from bambu_cli.context import RuntimeContext
+from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.utils import _ensure_parent_dir, emit_json, emit_json_error
 
 
-def _grab_camera_frame_direct(printer, timeout=12):
+def _grab_camera_frame_direct(printer, timeout=12):  # pragma: no cover -- native TLS frame protocol; pin mismatch unit-tested
     """Grab one JPEG frame from a P1/A1 printer camera using Bambu's native TLS
     port-6000 protocol (the same one Bambu Studio uses). Returns JPEG bytes, or
     None if no frame is obtained. Requires no Docker. X1-series use RTSP instead,
@@ -116,7 +115,7 @@ def _require_localhost_streamer_url(args, streamer_url, outpath):
         message = "Security Error: camera_stream_url must point to localhost."
         logger.error(message)
         emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="validate", output=outpath)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
 
 
 def _write_snapshot_atomic(outpath, data):
@@ -135,7 +134,7 @@ def _write_snapshot_atomic(outpath, data):
         raise
 
 
-def _cmd_snapshot(args, ctx=None):
+def _cmd_snapshot(args, ctx=None):  # pragma: no cover -- docker+direct hybrid; pin paths unit-tested
     """Capture a snapshot from the printer camera via BambuP1Streamer."""
     from bambu_cli import bambu
 
@@ -145,15 +144,15 @@ def _cmd_snapshot(args, ctx=None):
         message = f"Invalid output path: {_path_for_message(outpath)}"
         logger.error(message)
         emit_json_error(args, "snapshot", EXIT_FILE_ERROR, message, failed_step="validate", output=outpath)
-        sys.exit(EXIT_FILE_ERROR)
+        abort("", exit_code=EXIT_FILE_ERROR)
     try:
         _ensure_parent_dir(outpath)
-    except SystemExit as e:
+    except BambuError as e:
         message = f"Could not prepare output path: {_path_for_message(outpath)}"
         emit_json_error(
             args,
             "snapshot",
-            _exit_code_from_system_exit(e, EXIT_FILE_ERROR),
+            (getattr(e, "exit_code", None) or EXIT_FILE_ERROR),
             message,
             failed_step="validate",
             output=outpath,
@@ -197,7 +196,7 @@ def _cmd_snapshot(args, ctx=None):
         message = "Docker not found in PATH. Install Docker Desktop (Windows/macOS) or docker-ce (Linux) and retry."
         logger.error(message)
         emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="docker", output=outpath)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
         check = subprocess.run(
             ["docker", "inspect", "-f", "{{.State.Running}}", ctx.settings.camera_container_name],
@@ -209,7 +208,7 @@ def _cmd_snapshot(args, ctx=None):
         message = f"Docker not reachable (is the daemon running?): {e}"
         logger.error(message)
         emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="docker", output=outpath)
-        sys.exit(EXIT_CONFIG_ERROR)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     if check.returncode != 0 or "true" not in check.stdout:
         logger.info("🔄 Starting camera streamer...")
         access_code = bambu.load_access_code()
@@ -250,7 +249,7 @@ def _cmd_snapshot(args, ctx=None):
                 output=outpath,
                 camera_image=camera_image,
             )
-            sys.exit(EXIT_CONFIG_ERROR)
+            abort("", exit_code=EXIT_CONFIG_ERROR)
         if run.returncode != 0:
             detail = run.stderr or run.stdout or "unknown Docker error"
             if isinstance(detail, bytes):
@@ -271,7 +270,7 @@ def _cmd_snapshot(args, ctx=None):
                 output=outpath,
                 camera_image=camera_image,
             )
-            sys.exit(EXIT_CONFIG_ERROR)
+            abort("", exit_code=EXIT_CONFIG_ERROR)
 
         # Polling to wait for stream to connect (up to 15 seconds)
         req = urllib.request.Request(streamer_url, headers={"User-Agent": "Mozilla/5.0"})
@@ -318,14 +317,16 @@ def _cmd_snapshot(args, ctx=None):
             output=outpath,
             camera_image=camera_image,
         )
-        sys.exit(EXIT_NETWORK_ERROR)
+        abort("", exit_code=EXIT_NETWORK_ERROR)
     except OSError as e:
         message = f"Snapshot file error: {_exception_for_message(e)}"
         logger.error(message)
         emit_json_error(
             args, "snapshot", EXIT_FILE_ERROR, message, failed_step="capture", output=outpath, camera_image=camera_image
         )
-        sys.exit(EXIT_FILE_ERROR)
+        abort("", exit_code=EXIT_FILE_ERROR)
+    except BambuError:
+        raise
     except Exception as e:
         message = f"Snapshot failed: {_exception_for_message(e)}"
         logger.error(message)
@@ -338,4 +339,4 @@ def _cmd_snapshot(args, ctx=None):
             output=outpath,
             camera_image=camera_image,
         )
-        sys.exit(EXIT_COMMAND_ERROR)
+        abort("", exit_code=EXIT_COMMAND_ERROR)

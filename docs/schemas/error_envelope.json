@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/error_envelope.json",
+  "title": "bambu-cli JSON error envelope",
+  "type": "object",
+  "required": ["status", "command", "exit_code", "error"],
+  "properties": {
+    "status": {"const": "error"},
+    "command": {"type": "string", "minLength": 1},
+    "exit_code": {"type": "integer"},
+    "error": {"type": "string"},
+    "failed_step": {"type": "string"},
+    "next_command": {},
+    "detail": {"type": "object"}
+  },
+  "additionalProperties": true
+}

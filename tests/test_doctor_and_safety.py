@@ -1,4 +1,5 @@
 from tests.bambu_test_base import *  # noqa: F401,F403
+from bambu_cli.errors import BambuError
 
 
 class TestBambuDoctor(unittest.TestCase):
@@ -9,17 +10,18 @@ class TestBambuDoctor(unittest.TestCase):
     @patch('bambu_cli.bambu.logger')
     def test_cmd_doctor_config_load_fail(self, mock_logger, mock_exit, mock_load):
         from bambu_cli.bambu import cmd_doctor
-        mock_load.side_effect = SystemExit(1)
-        mock_exit.side_effect = SystemExit(1)
+        from bambu_cli.errors import ConfigError
 
-        with self.assertRaises(SystemExit) as cm:
+        mock_load.side_effect = ConfigError("config missing")
+
+        with self.assertRaises(BambuError) as cm:
             cmd_doctor(MagicMock())
 
-        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(cm.exception.exit_code, 1)
         mock_logger.error.assert_any_call("   ❌ Config check failed.")
 
     @patch('bambu_cli.bambu.load_config')
-    @patch('bambu_cli.bambu.get_status')
+    @patch('bambu_cli.protocols.mqtt.get_status')
     @patch('sys.exit')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_doctor_mqtt_fail(self, mock_logger, mock_exit, mock_get_status, mock_load):
@@ -29,15 +31,15 @@ class TestBambuDoctor(unittest.TestCase):
         mock_get_status.return_value = None
 
         mock_exit.side_effect = SystemExit(2)
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_doctor(MagicMock())
 
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_any_call(f"   ❌ MQTT connection failed. Ensure printer at {current_settings().printer_ip} is on and access code is correct.")
 
     @patch('bambu_cli.bambu.load_config')
-    @patch('bambu_cli.bambu.get_status')
-    @patch('bambu_cli.bambu.get_ftp')
+    @patch('bambu_cli.protocols.mqtt.get_status')
+    @patch('bambu_cli.protocols.ftps.get_ftp')
     @patch('sys.exit')
     @patch('bambu_cli.bambu.logger')
     def test_cmd_doctor_ftps_fail(self, mock_logger, mock_exit, mock_get_ftp, mock_get_status, mock_load):
@@ -48,13 +50,13 @@ class TestBambuDoctor(unittest.TestCase):
         mock_get_ftp.side_effect = OSError("FTPS Fail")
 
         mock_exit.side_effect = SystemExit(2)
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_doctor(MagicMock())
 
-        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_any_call("   ❌ FTPS connection failed: FTPS Fail")
-    @patch('bambu_cli.bambu.get_status')
-    @patch('bambu_cli.bambu.get_ftp')
+    @patch('bambu_cli.protocols.mqtt.get_status')
+    @patch('bambu_cli.protocols.ftps.get_ftp')
     @patch('bambu_cli.bambu.logger')
     @patch('builtins.open')
     def test_cmd_doctor_success(self, mock_file_open, mock_logger, mock_get_ftp, mock_get_status):
@@ -141,7 +143,7 @@ class TestOfferPinFingerprint(unittest.TestCase):
 
 class TestBambuDryRun(unittest.TestCase):
     @patch('bambu_cli.printer.get_printer')
-    @patch('bambu_cli.bambu.get_status')
+    @patch('bambu_cli.protocols.mqtt.get_status')
     def test_cmd_print_dry_run_success(self, mock_get_status, mock_get_printer):
         from bambu_cli.bambu import cmd_print
         args = MagicMock()

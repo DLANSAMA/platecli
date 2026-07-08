@@ -146,11 +146,10 @@ def _metadata_name():
 
 
 def _cli_version():
-    text = Path("bambu_cli/constants.py").read_text(encoding="utf-8")
-    match = re.search(r'^VERSION\s*=\s*"([^"]+)"', text, re.MULTILINE)
-    if not match:
-        raise SystemExit("bambu_cli/constants.py is missing VERSION")
-    return match.group(1)
+    """Runtime VERSION resolved from package metadata / pyproject (single source)."""
+    from bambu_cli.constants import VERSION
+
+    return VERSION
 
 
 def _project_script_entry():
@@ -165,12 +164,13 @@ def _project_script_entry():
 
 
 def check_version_consistency():
+    # Canonical version lives only in pyproject.toml; constants.VERSION must resolve to it.
     metadata_version = _metadata_version()
     cli_version = _cli_version()
     if metadata_version != cli_version:
         raise SystemExit(
             "version mismatch: "
-            f"pyproject.toml has {metadata_version}, bambu_cli/bambu.py has {cli_version}"
+            f"pyproject.toml has {metadata_version}, bambu_cli.constants.VERSION is {cli_version}"
         )
 
 

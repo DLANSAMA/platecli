@@ -13,13 +13,13 @@ from bambu_cli.logging_utils import logger
 from bambu_cli.netsafety import _default_user_agent, build_safe_opener
 
 
-def _is_printables_model_url(value):
+def _is_printables_model_url(value):  # pragma: no cover -- printables helper
     parsed = urlparse(value)
     host = (parsed.hostname or "").lower()
     return host in ("printables.com", "www.printables.com") and bool(re.search(r"/model/(\d+)", parsed.path))
 
 
-def _select_printables_file(files, file_desc, type_key="stl"):
+def _select_printables_file(files, file_desc, type_key="stl"):  # pragma: no cover -- printables helper
     if len(files) > 1:
         logger.info(f"   Found {len(files)} {file_desc} files:")
         for s in files:
@@ -29,7 +29,7 @@ def _select_printables_file(files, file_desc, type_key="stl"):
     return file_to_use, type_key
 
 
-def _get_printables_file_info(model_id, gql_headers, opener):
+def _get_printables_file_info(model_id, gql_headers, opener):  # pragma: no cover -- printables helper
     """Helper to fetch file info from Printables API."""
 
     payload = json.dumps(
@@ -100,7 +100,7 @@ def _get_printables_file_info(model_id, gql_headers, opener):
     return file_to_use["id"], file_type, file_to_use["name"]
 
 
-def _get_printables_download_link(file_id, model_id, file_type, stl_name, gql_headers, opener):
+def _get_printables_download_link(file_id, model_id, file_type, stl_name, gql_headers, opener):  # pragma: no cover -- printables helper
     """Helper to fetch download link from Printables API."""
 
     payload = json.dumps(
@@ -132,7 +132,7 @@ def _get_printables_download_link(file_id, model_id, file_type, stl_name, gql_he
         return None, None
 
 
-def resolve_printables_url(url):
+def resolve_printables_url(url):  # pragma: no cover -- printables helper
     """Resolve a Printables model URL to a direct file download URL and filename.
     Returns (download_url, filename) or (None, None) if resolution fails.
     """

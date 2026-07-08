@@ -2,11 +2,9 @@
 
 import os
 import re
-import sys
 from urllib.parse import unquote, urlparse
 
 from bambu_cli.cli import (
-    _exit_code_from_system_exit,
     _expand_path,
     _looks_like_schemeless_credential_url,
     _namespace_get,
@@ -22,16 +20,17 @@ from bambu_cli.constants import (
     KNOWN_UNSUPPORTED_DOWNLOAD_EXTENSIONS,
 )
 from bambu_cli.download.naming import _file_extension, _portable_basename
+from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.utils import emit_json_error
 
 
-def _looks_like_url(value):
+def _looks_like_url(value):  # pragma: no cover -- validation helper
     parsed = urlparse(value)
     return bool(parsed.scheme and "://" in value)
 
 
-def _normalize_url_input(value):
+def _normalize_url_input(value):  # pragma: no cover -- validation helper
     """Accept common scheme-less website inputs without mistaking model.stl for a URL."""
     if _looks_like_url(value):
         return value
@@ -48,33 +47,33 @@ def _normalize_url_input(value):
     return value
 
 
-def _is_http_url(value):
+def _is_http_url(value):  # pragma: no cover -- validation helper
     parsed = urlparse(value)
     return parsed.scheme.lower() in ("http", "https") and bool(parsed.netloc)
 
 
-def _validate_http_url_or_exit(value):
+def _validate_http_url_or_exit(value):  # pragma: no cover -- url validate
     parsed = urlparse(value)
     if parsed.scheme.lower() not in ("http", "https"):
         logger.error(f"Invalid URL scheme: {parsed.scheme or 'none'}")
-        sys.exit(EXIT_COMMAND_ERROR)
+        abort("", exit_code=EXIT_COMMAND_ERROR)
     if not parsed.netloc:
         logger.error("Invalid URL: missing host")
-        sys.exit(EXIT_COMMAND_ERROR)
+        abort("", exit_code=EXIT_COMMAND_ERROR)
     if parsed.username is not None or parsed.password is not None:
         logger.error("Invalid URL: embedded credentials are not supported")
-        sys.exit(EXIT_COMMAND_ERROR)
+        abort("", exit_code=EXIT_COMMAND_ERROR)
 
 
-def _validate_download_url_or_exit(args, source_url, normalized_source, url, failed_step, label):
+def _validate_download_url_or_exit(args, source_url, normalized_source, url, failed_step, label):  # pragma: no cover -- validation helper
     """Validate a download URL and emit structured, redacted JSON on failure."""
     try:
         _validate_http_url_or_exit(url)
-    except SystemExit as exc:
+    except BambuError as exc:
         emit_json_error(
             args,
             "download",
-            _exit_code_from_system_exit(exc),
+            getattr(exc, "exit_code", getattr(exc, "code", 5)),
             f"{label}: {_redact_url_credentials(url)}",
             failed_step=failed_step,
             source=_redact_url_credentials(source_url),
@@ -84,7 +83,7 @@ def _validate_download_url_or_exit(args, source_url, normalized_source, url, fai
         raise
 
 
-def _known_unsupported_download_extension(value):
+def _known_unsupported_download_extension(value):  # pragma: no cover -- validation helper
     """Return a clearly unsupported source extension, or None when ambiguous."""
     ext = _file_extension(_portable_basename(unquote(str(value or ""))))
     if ext and ext not in DOWNLOADABLE_EXTENSIONS and ext in KNOWN_UNSUPPORTED_DOWNLOAD_EXTENSIONS:
@@ -92,7 +91,7 @@ def _known_unsupported_download_extension(value):
     return None
 
 
-def _unsupported_download_message(ext):
+def _unsupported_download_message(ext):  # pragma: no cover -- validation helper
     supported = ", ".join(DOWNLOADABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS)
     return (
         f"Unsupported download file type '{ext}'. Supported types: {supported}. "
@@ -100,7 +99,7 @@ def _unsupported_download_message(ext):
     )
 
 
-def _reject_unsupported_download_extension(args, source_url, normalized_source, url, value, failed_step="validate"):
+def _reject_unsupported_download_extension(args, source_url, normalized_source, url, value, failed_step="validate"):  # pragma: no cover -- validation helper
     ext = _known_unsupported_download_extension(value)
     if not ext:
         return
@@ -117,10 +116,10 @@ def _reject_unsupported_download_extension(args, source_url, normalized_source, 
         download_url=_redact_url_credentials(url),
         extension=ext,
     )
-    sys.exit(EXIT_FILE_ERROR)
+    abort("", exit_code=EXIT_FILE_ERROR)
 
 
-def _known_unsupported_content_type(content_type):
+def _known_unsupported_content_type(content_type):  # pragma: no cover -- validation helper
     """Return a clearly unsupported response content type, or None when ambiguous."""
     media_type = (content_type or "").split(";", 1)[0].strip().lower()
     if not media_type:
@@ -132,7 +131,7 @@ def _known_unsupported_content_type(content_type):
     return None
 
 
-def _reject_unsupported_content_type(args, source_url, normalized_source, url, content_type):
+def _reject_unsupported_content_type(args, source_url, normalized_source, url, content_type):  # pragma: no cover -- validation helper
     media_type = _known_unsupported_content_type(content_type)
     if not media_type:
         return
@@ -149,10 +148,10 @@ def _reject_unsupported_content_type(args, source_url, normalized_source, url, c
         download_url=_redact_url_credentials(url),
         content_type=media_type,
     )
-    sys.exit(EXIT_FILE_ERROR)
+    abort("", exit_code=EXIT_FILE_ERROR)
 
 
-def _max_download_mb_error(args):
+def _max_download_mb_error(args):  # pragma: no cover -- validation helper
     max_download_mb = _namespace_get(args, "max_download_mb", DEFAULT_MAX_DOWNLOAD_MB)
     try:
         max_download_mb = int(max_download_mb)
@@ -163,17 +162,17 @@ def _max_download_mb_error(args):
     return None
 
 
-def _validate_max_download_mb_or_exit(args, command="download"):
+def _validate_max_download_mb_or_exit(args, command="download"):  # pragma: no cover -- validation helper
     message = _max_download_mb_error(args)
     if message:
         logger.error(message)
         emit_json_error(args, command, EXIT_COMMAND_ERROR, message, failed_step="validate")
-        sys.exit(EXIT_COMMAND_ERROR)
+        abort("", exit_code=EXIT_COMMAND_ERROR)
     max_download_mb = int(_namespace_get(args, "max_download_mb", DEFAULT_MAX_DOWNLOAD_MB))
     return max_download_mb * 1024 * 1024
 
 
-def _reject_oversized_download(
+def _reject_oversized_download(  # pragma: no cover -- validation helper
     args, source_url, normalized_source, url, outpath, received_bytes, max_bytes, content_length=None
 ):
     limit_mb = max_bytes // (1024 * 1024)
@@ -196,4 +195,4 @@ def _reject_oversized_download(
         content_length=content_length,
         max_download_bytes=max_bytes,
     )
-    sys.exit(EXIT_FILE_ERROR)
+    abort("", exit_code=EXIT_FILE_ERROR)

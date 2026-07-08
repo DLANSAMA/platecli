@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/doctor.json",
+  "title": "bambu-cli doctor result envelope",
+  "type": "object",
+  "required": ["status", "command"],
+  "properties": {
+    "status": {"type": "string"},
+    "command": {"const": "doctor"},
+    "checks": {"type": "array"},
+    "certificate_fingerprint": {},
+    "printer_reachable": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}

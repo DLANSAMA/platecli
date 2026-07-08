@@ -99,7 +99,7 @@ def test_get_current_lazy_builds_and_set_current_overrides():
 
 @patch('sys.argv', ['bambu.py', '--sim', 'status'])
 @patch('bambu_cli.bambu.cmd_status')
-@patch('bambu_cli.bambu.setup_logging')
+@patch('bambu_cli.cli.setup_logging')
 def test_main_populates_current_context(mock_setup_logging, mock_cmd_status):
     context.set_current(None)
     bambu.main()
