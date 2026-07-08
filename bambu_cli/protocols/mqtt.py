@@ -247,6 +247,24 @@ def get_status(printer, timeout=None, retries=2):
             "sw_ver": "01.XX.XX.XX",
             "bed_temper": 25,
             "nozzle_temper": 25,
+            # A representative AMS so agents can exercise `status --json` AMS
+            # parsing (and --ams-mapping decisions) without hardware.
+            "ams": {
+                "tray_now": "0",
+                "ams": [
+                    {
+                        "id": "0",
+                        "humidity": "5",
+                        "temp": "26.0",
+                        "tray": [
+                            {"id": "0", "tray_type": "PLA", "tray_color": "F2F2F2FF", "remain": 90},
+                            {"id": "1", "tray_type": "PETG", "tray_color": "0A0AC8FF", "remain": 60},
+                            {"id": "2"},
+                            {"id": "3", "tray_type": "TPU", "tray_color": "000000FF", "remain": 45},
+                        ],
+                    }
+                ],
+            },
         }
 
     for attempt in range(retries + 1):

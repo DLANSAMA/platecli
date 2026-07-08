@@ -706,6 +706,7 @@ def cmd_gcode(args, ctx=None):
 
 def cmd_status(args, ctx=None):
     """Query and display the printer's current status."""
+    from bambu_cli.ams import parse_ams
     from bambu_cli.cli import _namespace_get
     from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.errors import PrinterConnectionError
@@ -726,6 +727,8 @@ def cmd_status(args, ctx=None):
             failed_step="mqtt",
         )
 
+    ams = parse_ams(data)
+
     if args.json:
         payload = {
             "status": "ok",
@@ -733,6 +736,9 @@ def cmd_status(args, ctx=None):
             "printer": data,
         }
         payload.update({k: v for k, v in data.items() if k not in ("status", "command")})
+        # Normalized AMS view (trays/filaments) for agents building --ams-mapping;
+        # None on printers without an AMS.
+        payload["ams"] = ams
         emit_json(payload)
         return
 
@@ -762,3 +768,16 @@ def cmd_status(args, ctx=None):
     logger.info(f"   Bed: {bed_temp}°C / {bed_target}°C")
     logger.info(f"   Nozzle: {nozzle_temp}°C / {nozzle_target}°C")
     logger.info(f"   Fan: {fan} | WiFi: {wifi}dBm")
+
+    if ams and ams["units"]:
+        logger.info("   AMS:")
+        for unit in ams["units"]:
+            logger.info(f"     Unit {unit['id']} (humidity {unit['humidity']}, {unit['temp']}°C)")
+            for tray in unit["trays"]:
+                marker = "▶ " if tray["active"] else "  "
+                if tray["empty"]:
+                    logger.info(f"       {marker}Slot {tray['slot']}: empty")
+                else:
+                    color = f" #{tray['color']}" if tray["color"] else ""
+                    remain = f" | {tray['remain']}%" if tray["remain"] is not None else ""
+                    logger.info(f"       {marker}Slot {tray['slot']}: {tray['type']}{color}{remain}")

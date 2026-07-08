@@ -88,6 +88,27 @@ exercise the exact event shape without a printer.
 
 `slice` accepts common mesh formats in the precedence order STL > STEP > OBJ > 3MF > G-code. When mapping filaments to AMS slots, mapping arguments take zero-or-positive slot indexes.
 
+To decide that mapping, read what is actually loaded first: `bambu-cli status`
+shows each AMS unit's trays (filament type, colour, and remaining %), and
+`status --json` includes a normalized `ams` block agents can consume directly:
+
+```json
+"ams": {
+  "active_tray": 1,
+  "units": [
+    {"id": 0, "humidity": 4, "temp": 28.5, "trays": [
+      {"slot": 0, "type": "PLA",  "color": "F2F2F2", "remain": 80, "empty": false, "active": false},
+      {"slot": 1, "type": "PETG", "color": "0A0AC8", "remain": 55, "empty": false, "active": true},
+      {"slot": 2, "type": null,   "color": null,     "remain": null, "empty": true,  "active": false}
+    ]}
+  ]
+}
+```
+
+`ams` is `null` on printers without an AMS. `active` marks the currently loaded
+tray (absolute index `unit * 4 + slot`); feed the `slot` indexes to
+`--ams-mapping` when printing with `--use-ams`.
+
 ## Project layout
 
 - `bambu_cli/` — Runtime package used by installed command (`bambu-cli`).
