@@ -85,6 +85,60 @@ class TestBambuDoctor(unittest.TestCase):
         self.assertTrue(any_caps_open, f"Expected {expected_path} to be opened for writing")
 
 
+class TestOfferPinFingerprint(unittest.TestCase):
+    """The doctor cert-fingerprint auto-pin offer (1.3)."""
+
+    FP = "a" * 64
+
+    def setUp(self):
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp()
+        self.config_path = os.path.join(self.tmpdir, "config.json")
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump({"printer_ip": "1.2.3.4", "serial": "MOCK"}, f)
+
+    def _read_config(self):
+        with open(self.config_path, encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_json_mode_never_prompts_or_writes(self):
+        from bambu_cli.commands import _offer_pin_fingerprint
+        with patch("builtins.input") as mock_input:
+            result = _offer_pin_fingerprint(self.FP, self.config_path, json_mode=True, interactive=True)
+        self.assertFalse(result)
+        mock_input.assert_not_called()
+        self.assertNotIn("cert_fingerprint", self._read_config())
+
+    def test_non_interactive_never_prompts_or_writes(self):
+        from bambu_cli.commands import _offer_pin_fingerprint
+        with patch("builtins.input") as mock_input:
+            result = _offer_pin_fingerprint(self.FP, self.config_path, json_mode=False, interactive=False)
+        self.assertFalse(result)
+        mock_input.assert_not_called()
+        self.assertNotIn("cert_fingerprint", self._read_config())
+
+    def test_decline_leaves_config_untouched(self):
+        from bambu_cli.commands import _offer_pin_fingerprint
+        with patch("builtins.input", return_value="n"):
+            result = _offer_pin_fingerprint(self.FP, self.config_path, json_mode=False, interactive=True)
+        self.assertFalse(result)
+        self.assertNotIn("cert_fingerprint", self._read_config())
+
+    def test_accept_pins_fingerprint_and_preserves_config(self):
+        from bambu_cli.commands import _offer_pin_fingerprint
+        with patch("builtins.input", return_value="y"):
+            result = _offer_pin_fingerprint(self.FP, self.config_path, json_mode=False, interactive=True)
+        self.assertTrue(result)
+        cfg = self._read_config()
+        self.assertEqual(cfg["cert_fingerprint"], self.FP)
+        # Existing keys survive the read-modify-write.
+        self.assertEqual(cfg["printer_ip"], "1.2.3.4")
+        if os.name != "nt":
+            import stat
+            mode = stat.S_IMODE(os.stat(self.config_path).st_mode)
+            self.assertEqual(mode, 0o600)
+
+
 class TestBambuDryRun(unittest.TestCase):
     @patch('bambu_cli.printer.get_printer')
     @patch('bambu_cli.bambu.get_status')

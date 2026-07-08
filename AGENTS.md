@@ -15,6 +15,8 @@ The core interaction with the printer is handled via the `BambuPrinter` class lo
 Agents interacting directly with the codebase should instantiate this class via the `get_printer()` factory instead of manipulating globals.
 - `BambuPrinter` handles FTPS and MQTT connections.
 - Set `insecure_tls = False` and supply the `cert_fingerprint` to ensure MITM protection. All TLS channels (MQTT, FTPS, camera port 6000) fail closed when no fingerprint is pinned and `insecure_tls` is not set.
+- `doctor` prints the live certificate fingerprint and, in an interactive TTY session with no fingerprint pinned, offers to write `cert_fingerprint` into config.json for you. It never prompts in `--json` mode or non-interactive runs.
+- Secret-bearing files are tightened to `0600` automatically: config.json on load, and the `access_code_file` when `load_access_code()` reads it.
 - Network operations (like MQTT request-response) support `timeout` and `retries` out of the box through `printer.send_command()` and `printer.status()`.
 
 ### Module layout
@@ -38,7 +40,7 @@ When adding tests, follow the conventions and prioritized gap list in
 test-awareness branches in production code).
 
 ## Agent Usage
-Agents may place `--json` before or after the subcommand; `bambu-cli --json --version` emits machine-readable version details. Slicing accepts meshes in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. AMS slot mappings are zero-or-positive integers.
+Agents may place `--json` before or after the subcommand; `bambu-cli --json --version` emits machine-readable version details. Slicing accepts meshes in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. AMS slot mappings are zero-or-positive integers. When a slice fails because OrcaSlicer profiles are missing, the `--json` error includes `profiles_dir` (configured) and `detected_profiles_dir` (a real BBL profiles directory found on disk, or null) so the fix is machine-actionable.
 
 ## Packaging
 Published on PyPI as `bambu-local-cli`; the installed command is `bambu-cli`.

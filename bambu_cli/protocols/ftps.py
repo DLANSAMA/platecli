@@ -54,20 +54,6 @@ class _SimFtp:
         pass
 
 
-def _verify_cert_fingerprint(der_cert, host):
-    """Raise ssl.SSLError if the presented cert doesn't match the pinned fingerprint."""
-    from bambu_cli import bambu
-
-    expected = bambu._expected_fingerprint()
-    if not expected:
-        return
-    actual = bambu.fingerprint_sha256(der_cert)
-    if actual is None:
-        raise ssl.SSLError(f"cert_fingerprint is set but {host} presented no certificate")
-    if actual.lower() != expected:
-        raise ssl.SSLError(f"Certificate fingerprint mismatch for {host}: expected {expected}, got {actual.lower()}")
-
-
 class ImplicitFTPS(ftplib.FTP_TLS):
     """FTP_TLS subclass for implicit FTPS (Bambu printers use port 990)."""
 

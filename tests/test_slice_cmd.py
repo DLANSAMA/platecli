@@ -399,6 +399,42 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
         outfile_idx = call_args.index("--export-3mf") + 1
         self.assertEqual(call_args[outfile_idx], "test_x2_sliced.3mf")
 
+    @patch('bambu_cli.config.detect_profiles_dir', return_value='/real/OrcaSlicer/profiles/BBL')
+    @patch('os.listdir', return_value=['Bambu PLA Basic @base.json'])
+    @patch('os.path.isdir', return_value=True)
+    @patch('os.path.exists')
+    @patch('os.makedirs', MagicMock())
+    @patch('bambu_cli.slicer.logger')
+    def test_cmd_slice_missing_profile_reports_detected_dir(
+        self, mock_logger, mock_exists, mock_isdir, mock_listdir, mock_detect
+    ):
+        """A missing machine profile surfaces the configured + detected profiles dir."""
+        from bambu_cli.bambu import cmd_slice
+        import bambu_cli.utils as utils
+
+        sep = os.sep
+        # Everything resolves except the machine profile directory contents.
+        mock_exists.side_effect = lambda path: f"{sep}machine{sep}" not in path
+
+        args = MagicMock()
+        args.file = "test.stl"
+        args.output = "/tmp/out"
+        args.copies = 1
+        args.quality = "standard"
+        args.filament = "PLA Basic"
+
+        utils._LAST_ERROR_PAYLOAD = None
+        with settings_ctx(profiles_dir='/tmp/mock_profiles', orca_slicer='/tmp/orca'):
+            with self.assertRaises(SystemExit) as cm:
+                cmd_slice(args)
+        self.assertEqual(cm.exception.code, 1)  # EXIT_CONFIG_ERROR
+
+        payload = utils._LAST_ERROR_PAYLOAD
+        self.assertEqual(payload["failed_step"], "profiles")
+        self.assertEqual(payload["profile"], "machine")
+        self.assertEqual(payload["profiles_dir"], "/tmp/mock_profiles")
+        self.assertEqual(payload["detected_profiles_dir"], "/real/OrcaSlicer/profiles/BBL")
+
     @patch('os.path.exists')
     @patch('os.makedirs', MagicMock())
     @patch('bambu_cli.bambu.logger')

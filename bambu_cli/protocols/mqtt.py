@@ -167,7 +167,13 @@ def _mqtt_connect(printer, client):
     resolved_ip = _resolve_ip(printer.ip)
     old_timeout = socket.getdefaulttimeout()
     try:
-        # timeout mutation fixed by explicit client connect keepalive logic elsewhere, but retaining for compatibility
+        # Bound the connect phase by the printer's configured timeout. The socket
+        # default covers blocking name/socket ops, while paho caps its own TCP/TLS
+        # connect via client._connect_timeout (default 5s) independent of the
+        # socket default — so set both to actually honor the configured value.
+        socket.setdefaulttimeout(printer.mqtt_timeout)
+        if hasattr(client, "_connect_timeout"):
+            client._connect_timeout = printer.mqtt_timeout
         client.connect(resolved_ip, 8883, keepalive=10)
     finally:
         socket.setdefaulttimeout(old_timeout)

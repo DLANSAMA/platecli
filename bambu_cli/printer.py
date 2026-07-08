@@ -196,15 +196,28 @@ class BambuPrinter:
     def download_file(
         self, remote_path: str, local_path: str, timeout: Optional[float] = None, progress_callback=None
     ) -> bool:
-        """Download a file via FTPS."""
-        # Simple download implementation without resume for now
+        """Download a file via FTPS into a temp sibling, then atomically replace
+        ``local_path``. A dropped/failed transfer therefore never truncates or
+        corrupts an existing file at ``local_path``."""
+        import tempfile
+
+        directory = os.path.dirname(os.path.abspath(local_path)) or "."
+        partial_fd, partial_path = tempfile.mkstemp(
+            prefix=f".{os.path.basename(local_path) or 'download'}.", suffix=".part", dir=directory
+        )
         try:
-            with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp:
-                with open(local_path, "wb") as f:
-                    ftp.retrbinary(f"RETR {remote_path}", f.write, blocksize=1048576)
-                return True
+            with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp, os.fdopen(partial_fd, "wb") as f:
+                partial_fd = None  # ownership transferred to the file object
+                ftp.retrbinary(f"RETR {remote_path}", f.write, blocksize=1048576)
+            os.replace(partial_path, local_path)
+            return True
         except (*ftplib.all_errors, ssl.SSLError) as e:
             logger.error(f"Download failed: {e}")
+            if partial_fd is not None:
+                with contextlib.suppress(OSError):
+                    os.close(partial_fd)
+            with contextlib.suppress(OSError):
+                os.remove(partial_path)
             return False
 
     def delete_file(self, remote_path: str, timeout: Optional[float] = None) -> bool:

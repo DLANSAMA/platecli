@@ -1,6 +1,35 @@
 from tests.bambu_test_base import *  # noqa: F401,F403
 
 
+class _FakeResp:
+    """Minimal urllib-response stand-in usable as a context manager.
+
+    ``read(n)`` yields the queued chunks then b"", ``getheader`` maps header
+    names to values (missing -> None like the real API), and ``geturl`` returns
+    the post-redirect URL (or None when there was no redirect).
+    """
+
+    def __init__(self, chunks, headers=None, final_url=None):
+        self._chunks = list(chunks)
+        self._headers = headers or {}
+        self._final_url = final_url
+
+    def read(self, n=None):
+        return self._chunks.pop(0) if self._chunks else b""
+
+    def getheader(self, name):
+        return self._headers.get(name)
+
+    def geturl(self):
+        return self._final_url
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
 class TestResolvePrintablesUrl(unittest.TestCase):
 
 
@@ -710,6 +739,160 @@ class TestBambuCmdDownload(unittest.TestCase):
         # native-path mock_open check above intact while matching the log on Windows.
         expected_display = expected_path.replace(os.sep, "/")
         self.assertTrue(any(f"✅ Downloaded: {expected_display}" in call[0][0] for call in mock_logger.info.call_args_list))
+
+
+class TestDownloadLoopBranches(unittest.TestCase):
+    """Error/limit branches of the _cmd_download HTTP loop, driven with a fake
+    response so no network or real filesystem writes occur."""
+
+    def setUp(self):
+        self.safe_opener_patcher = patch('bambu_cli.download.build_safe_opener')
+        self.mock_safe_opener = self.safe_opener_patcher.start()
+        self.mock_open = self.mock_safe_opener.return_value.open
+        self.resolve_patcher = patch(
+            'bambu_cli.download.resolve_printables_url', return_value=(None, None))
+        self.resolve_patcher.start()
+        self.exists_patcher = patch('os.path.exists', return_value=False)
+        self.exists_patcher.start()
+        self.getsize_patcher = patch('os.path.getsize', return_value=1024)
+        self.mock_getsize = self.getsize_patcher.start()
+        self.noncolliding_patcher = patch(
+            'bambu_cli.download._noncolliding_path', side_effect=lambda p: p)
+        self.noncolliding_patcher.start()
+        self.file_patcher = patch('builtins.open', new_callable=mock_open)
+        self.file_patcher.start()
+
+    def tearDown(self):
+        for p in (
+            self.file_patcher, self.noncolliding_patcher, self.getsize_patcher,
+            self.exists_patcher, self.resolve_patcher, self.safe_opener_patcher,
+        ):
+            p.stop()
+
+    def _args(self, url="https://example.com/model.stl", **over):
+        args = MagicMock()
+        args.url = url
+        args.output = "."
+        args.name = None
+        for k, v in over.items():
+            setattr(args, k, v)
+        return args
+
+    def _respond(self, resp):
+        self.mock_open.return_value = resp
+
+    @patch('bambu_cli.bambu.logger')
+    def test_content_length_over_limit_rejected(self, mock_logger):
+        from bambu_cli.bambu import cmd_download
+        self._respond(_FakeResp([b"", b""], headers={"Content-Length": str(5 * 1024 * 1024)}))
+        with self.assertRaises(SystemExit) as cm:
+            cmd_download(self._args(max_download_mb=1))
+        self.assertEqual(cm.exception.code, 3)
+        self.assertTrue(any("too large" in c[0][0] for c in mock_logger.error.call_args_list))
+
+    @patch('bambu_cli.bambu.logger')
+    def test_streaming_over_limit_rejected(self, mock_logger):
+        from bambu_cli.bambu import cmd_download
+        # No Content-Length; a single chunk larger than the 1 MB cap trips the
+        # in-loop guard.
+        self._respond(_FakeResp([b"x" * (2 * 1024 * 1024), b""]))
+        with self.assertRaises(SystemExit) as cm:
+            cmd_download(self._args(max_download_mb=1))
+        self.assertEqual(cm.exception.code, 3)
+        self.assertTrue(any("exceeded the" in c[0][0] for c in mock_logger.error.call_args_list))
+
+    @patch('bambu_cli.bambu.logger')
+    def test_empty_download_rejected(self, mock_logger):
+        from bambu_cli.bambu import cmd_download
+        self.mock_getsize.return_value = 0
+        self._respond(_FakeResp([b"data", b""]))
+        with self.assertRaises(SystemExit) as cm:
+            cmd_download(self._args())
+        self.assertEqual(cm.exception.code, 3)
+        self.assertTrue(any("empty" in c[0][0] for c in mock_logger.error.call_args_list))
+
+    @patch('bambu_cli.bambu.logger')
+    def test_truncated_download_rejected(self, mock_logger):
+        from bambu_cli.bambu import cmd_download
+        self._respond(_FakeResp([b"x" * 10, b""], headers={"Content-Length": "1000"}))
+        with self.assertRaises(SystemExit) as cm:
+            cmd_download(self._args())
+        self.assertEqual(cm.exception.code, 2)
+        self.assertTrue(any("ended early" in c[0][0] for c in mock_logger.error.call_args_list))
+
+    @patch('bambu_cli.bambu.logger')
+    def test_ssrf_urlerror_reported_as_security_violation(self, mock_logger):
+        import urllib.error
+        from bambu_cli.bambu import cmd_download
+        self.mock_open.side_effect = urllib.error.URLError("Security Error: blocked host")
+        with self.assertRaises(SystemExit) as cm:
+            cmd_download(self._args())
+        self.assertEqual(cm.exception.code, 5)
+        self.assertTrue(any("SSRF Security Violation" in c[0][0] for c in mock_logger.error.call_args_list))
+
+    @patch('bambu_cli.bambu.logger')
+    def test_oserror_reported_as_local_file_error(self, mock_logger):
+        from bambu_cli.bambu import cmd_download
+        self.mock_open.side_effect = OSError("No space left on device")
+        with self.assertRaises(SystemExit) as cm:
+            cmd_download(self._args())
+        self.assertEqual(cm.exception.code, 3)
+        self.assertTrue(any("Local file error" in c[0][0] for c in mock_logger.error.call_args_list))
+
+    @patch('bambu_cli.bambu.logger')
+    def test_generic_exception_reported(self, mock_logger):
+        from bambu_cli.bambu import cmd_download
+        self.mock_open.side_effect = RuntimeError("kaboom")
+        with self.assertRaises(SystemExit) as cm:
+            cmd_download(self._args())
+        self.assertEqual(cm.exception.code, 2)
+        self.assertTrue(any("Download failed: kaboom" in c[0][0] for c in mock_logger.error.call_args_list))
+
+    @patch('bambu_cli.bambu.logger')
+    def test_html_page_without_model_link_fails(self, mock_logger):
+        from bambu_cli.bambu import cmd_download
+        self._respond(_FakeResp(
+            [b"<html><body>no model links here</body></html>", b""],
+            headers={"Content-Type": "text/html"},
+        ))
+        with self.assertRaises(SystemExit) as cm:
+            cmd_download(self._args(url="https://example.com/page"))
+        self.assertEqual(cm.exception.code, 3)
+        self.assertTrue(any(
+            "did not contain a direct model file link" in c[0][0]
+            for c in mock_logger.error.call_args_list
+        ))
+
+    @patch('bambu_cli.bambu.logger')
+    def test_redirect_url_is_revalidated_and_used(self, mock_logger):
+        from bambu_cli.bambu import cmd_download
+        # geturl() reports a post-redirect URL; the loop must re-validate it and
+        # recompute the output filename from the final URL.
+        self._respond(_FakeResp(
+            [b"stl bytes", b""],
+            final_url="https://example.com/final.stl",
+        ))
+        cmd_download(self._args(url="https://example.com/start.stl"))
+        self.assertTrue(any(
+            "final.stl" in c[0][0] for c in mock_logger.info.call_args_list
+        ))
+
+    @patch('bambu_cli.download.downloader._resolve_html_model_link')
+    @patch('bambu_cli.bambu.logger')
+    def test_html_page_resolving_to_model_link_downloads_it(self, mock_logger, mock_resolve_html):
+        from bambu_cli.bambu import cmd_download
+        mock_resolve_html.return_value = ("https://example.com/found.stl", "found.stl")
+        html = _FakeResp([b"<html>link</html>", b""], headers={"Content-Type": "text/html"})
+        stl = _FakeResp([b"stl bytes", b""], headers={"Content-Type": "application/octet-stream"})
+        self.mock_open.side_effect = [html, stl]
+        cmd_download(self._args(url="https://example.com/page"))
+        # Second loop iteration fetches the resolved direct link.
+        self.assertTrue(any(
+            "Found model file link" in c[0][0] for c in mock_logger.info.call_args_list
+        ))
+        self.assertTrue(any(
+            "found.stl" in c[0][0] for c in mock_logger.info.call_args_list
+        ))
 
 
 if __name__ == '__main__':

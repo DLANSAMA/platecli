@@ -71,6 +71,42 @@ def _fake_file(contents):
     return io.StringIO(contents)
 
 
+@unittest.skipIf(os.name == "nt", "POSIX permission enforcement only")
+class TestAccessCodeFilePermissionEnforcement(unittest.TestCase):
+    """load_access_code() tightens a group/world-readable secret file to 0600."""
+
+    def setUp(self):
+        import tempfile
+
+        self.tmpdir = tempfile.mkdtemp()
+        self.access_code_file = os.path.join(self.tmpdir, "access_code")
+        with open(self.access_code_file, "w", encoding="utf-8") as f:
+            f.write("SECRET123\n")
+
+    def _mode(self):
+        return stat.S_IMODE(os.stat(self.access_code_file).st_mode)
+
+    def test_loose_permissions_are_enforced_to_0600(self):
+        os.chmod(self.access_code_file, 0o644)
+        with config_ctx({"access_code_file": self.access_code_file}):
+            with self.assertLogs("bambu", level="WARNING") as cm:
+                code = config.load_access_code()
+        self.assertEqual(code, "SECRET123")
+        self.assertEqual(self._mode(), 0o600)
+        joined = "\n".join(cm.output)
+        self.assertIn("insecure", joined)
+        self.assertNotIn("SECRET123", joined)
+
+    def test_already_restricted_file_is_not_warned(self):
+        os.chmod(self.access_code_file, 0o600)
+        with config_ctx({"access_code_file": self.access_code_file}):
+            with patch.object(config.logger, "warning") as mock_warn:
+                code = config.load_access_code()
+        self.assertEqual(code, "SECRET123")
+        self.assertEqual(self._mode(), 0o600)
+        mock_warn.assert_not_called()
+
+
 class TestPreflightAccessCodeCheck(unittest.TestCase):
     def test_inline_access_code_warning_shape(self):
         cfg = {

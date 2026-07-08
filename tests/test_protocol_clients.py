@@ -197,5 +197,28 @@ class TestCreateMqttClient(unittest.TestCase):
         self.assertEqual(client, mock_client_instance)
 
 
+class TestMqttConnectTimeout(unittest.TestCase):
+    def test_mqtt_connect_honors_configured_timeout_and_restores_socket_default(self):
+        import socket as socket_mod
+
+        from bambu_cli.protocols import mqtt
+
+        client = MagicMock()
+        client._connect_timeout = 5.0
+        printer = MagicMock()
+        printer.ip = "192.168.1.5"
+        printer.mqtt_timeout = 30.0
+
+        before = socket_mod.getdefaulttimeout()
+        with patch.object(mqtt, "_resolve_ip", return_value="192.168.1.5"):
+            mqtt._mqtt_connect(printer, client)
+
+        # paho's own connect cap is raised to the configured timeout...
+        self.assertEqual(client._connect_timeout, 30.0)
+        client.connect.assert_called_once_with("192.168.1.5", 8883, keepalive=10)
+        # ...and the process-wide socket default is left untouched afterwards.
+        self.assertEqual(socket_mod.getdefaulttimeout(), before)
+
+
 if __name__ == '__main__':
     unittest.main()

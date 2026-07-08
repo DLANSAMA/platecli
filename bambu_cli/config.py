@@ -285,6 +285,32 @@ def _warn_inline_access_code_once():
     logger.warning(INLINE_ACCESS_CODE_DEPRECATION_MESSAGE)
 
 
+def _enforce_secret_file_permissions(path, display):
+    """Best-effort: warn and tighten a secret-bearing file to 0600 on POSIX.
+
+    Mirrors the config.json enforcement in :func:`load_config`. Never raises —
+    permission hygiene must not block reading an otherwise-valid secret, and the
+    file may not exist yet (callers handle that separately).
+    """
+    if sys.platform == "win32":
+        return
+    try:
+        mode = os.stat(path).st_mode
+    except OSError:
+        return
+    if not mode & 0o077:
+        return
+    logger.warning(
+        f"⚠️  Access code file '{display}' has insecure, group/world-readable permissions! "
+        "Restricting access: run 'chmod 600' on this file."
+    )
+    try:
+        os.chmod(path, 0o600)
+        logger.info(f"🔒 Automatically enforced 0600 permissions on {display}")
+    except OSError as exc:
+        logger.warning(f"Could not tighten permissions on {display}: {exc}")
+
+
 def load_access_code():
     from bambu_cli.cli import _display_path, _exception_for_message, _expand_path
     from bambu_cli.constants import EXIT_CONFIG_ERROR
@@ -302,6 +328,7 @@ def load_access_code():
         return access_code
     if "access_code_file" in cfg:
         path = _expand_path(cfg["access_code_file"])
+        _enforce_secret_file_permissions(path, _display_path(path))
         try:
             with open(path, encoding="utf-8") as f:
                 access_code = f.read().strip()

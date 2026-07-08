@@ -19,6 +19,42 @@ def cmd_setup(args):
 from bambu_cli.utils import get_sequence_id
 
 
+def _offer_pin_fingerprint(fp, config_path, json_mode, interactive=None):
+    """Offer to pin an unpinned printer cert fingerprint into config.json.
+
+    Returns True only if the fingerprint was written. Silently declines (returns
+    False) in ``--json`` mode or when the session is not interactive, so agent
+    and non-TTY runs are never blocked on a prompt. Writes are atomic and 0600.
+    """
+    from bambu_cli.cli import _display_path, _exception_for_message
+    from bambu_cli.setup_cmd.common import _secure_write_json
+
+    if json_mode:
+        return False
+    if interactive is None:
+        interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    if not interactive:
+        return False
+    try:
+        answer = input("      Pin this fingerprint to config.json for MITM protection? [y/N] ")
+    except (EOFError, KeyboardInterrupt):
+        logger.info("")
+        return False
+    if answer.strip().lower() not in ("y", "yes"):
+        logger.info('      Skipped. Add "cert_fingerprint" to config.json later to pin it.')
+        return False
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        cfg["cert_fingerprint"] = fp
+        _secure_write_json(config_path, cfg)
+    except (OSError, ValueError) as exc:
+        logger.error(f"      Could not pin fingerprint: {_exception_for_message(exc)}")
+        return False
+    logger.info(f"      🔐 Pinned cert_fingerprint in {_display_path(config_path)}.")
+    return True
+
+
 def cmd_doctor(args, ctx=None):
     """Health-check: auto-discover printer capabilities and verify configuration."""
     from bambu_cli import bambu
@@ -118,7 +154,7 @@ def cmd_doctor(args, ctx=None):
             logger.info("      ✅ Matches the pinned cert_fingerprint in your config.")
         elif bambu._expected_fingerprint():
             logger.warning("      ⚠️  Does NOT match the cert_fingerprint in your config!")
-        else:
+        elif ctx.settings.insecure_tls or not _offer_pin_fingerprint(fp, bambu.CONFIG_PATH, json_mode):
             logger.info('      Add "cert_fingerprint": "<above>" to config.json to pin this connection.')
 
     model_info = bambu.MODEL_MAPPING.get(ctx.settings.printer_model, bambu.MODEL_MAPPING["P1P"])

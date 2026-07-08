@@ -28,6 +28,27 @@ def _normalize_wall_type(wall_type: str | None) -> str | None:
     return wall_type
 
 
+def _profiles_dir_diagnostic(profiles_dir):
+    """Return ``(hint_or_None, detected_dir_or_None)`` for a bad profiles dir.
+
+    ``detected_dir`` is a real, *different* OrcaSlicer BBL profiles directory
+    found on disk that the user should point ``profiles_dir`` at when the
+    configured one is unusable. Mirrors the binary-missing detection hint so
+    profile errors are just as actionable, including in ``--json`` mode.
+    """
+    from bambu_cli import bambu
+    from bambu_cli.config import detect_profiles_dir
+
+    detected = detect_profiles_dir()
+    if detected and detected != profiles_dir:
+        hint = (
+            f"Detected OrcaSlicer profiles at {bambu._display_path(detected)} — "
+            'set "profiles_dir" to this in config.json.'
+        )
+        return hint, detected
+    return None, detected
+
+
 def _slicer_executable_problem(path: str | None) -> str | None:
     """Return a human-readable OrcaSlicer path problem, or None when usable."""
     from bambu_cli import bambu
@@ -826,6 +847,9 @@ def cmd_slice(args: argparse.Namespace) -> str:
                 profiles_dir=settings.profiles_dir,
             )
             if not discovered_process:
+                hint, detected_profiles = _profiles_dir_diagnostic(settings.profiles_dir)
+                if hint:
+                    logger.info(hint)
                 emit_json_error(
                     args,
                     "slice",
@@ -833,6 +857,8 @@ def cmd_slice(args: argparse.Namespace) -> str:
                     "No slicer process profile found.",
                     failed_step="profiles",
                     file=filepath,
+                    profiles_dir=settings.profiles_dir,
+                    detected_profiles_dir=detected_profiles,
                 )
                 sys.exit(EXIT_CONFIG_ERROR)
             process = discovered_process
@@ -841,6 +867,9 @@ def cmd_slice(args: argparse.Namespace) -> str:
             if not os.path.exists(path):
                 message = f"Missing {name} profile: {bambu._path_for_message(path)}"
                 logger.error(message)
+                hint, detected_profiles = _profiles_dir_diagnostic(settings.profiles_dir)
+                if hint:
+                    logger.info(hint)
                 emit_json_error(
                     args,
                     "slice",
@@ -850,6 +879,8 @@ def cmd_slice(args: argparse.Namespace) -> str:
                     file=filepath,
                     profile=name,
                     path=path,
+                    profiles_dir=settings.profiles_dir,
+                    detected_profiles_dir=detected_profiles,
                 )
                 sys.exit(EXIT_CONFIG_ERROR)
 

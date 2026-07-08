@@ -6,13 +6,33 @@ network; inject fake step callables via JobSteps instead of monkeypatching
 bambu.cmd_* where injection suffices; assert full JSON payload shapes, not
 just exit codes.
 """
+import contextlib
 import json
+import logging
 import os
 import sys
 import zipfile
 from unittest.mock import MagicMock
 
 import pytest
+
+
+@contextlib.contextmanager
+def _capture_bambu_warnings():
+    """Collect WARNING+ records emitted on the 'bambu' logger."""
+    records = []
+
+    class _Collector(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    handler = _Collector(level=logging.WARNING)
+    log = logging.getLogger("bambu")
+    log.addHandler(handler)
+    try:
+        yield records
+    finally:
+        log.removeHandler(handler)
 
 _mock_mqtt = MagicMock()
 sys.modules.setdefault("paho", _mock_mqtt)
@@ -470,3 +490,259 @@ def test_cmd_job_shim_builds_context_and_default_steps(tmp_path, capsys, monkeyp
     job._cmd_job(args)
     payload = _read_json(capsys)
     assert payload["status"] == "uploaded"
+
+
+# ---------------------------------------------------------------------------
+# Source-validation failures (fail before any step runs, so no steps needed)
+# ---------------------------------------------------------------------------
+
+def test_non_http_url_scheme_rejected(capsys):
+    args = _parse(["job", "ftp://example.com/model.stl", "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"
+    assert "invalid url source" in payload["error"].lower()
+
+
+def test_http_url_with_embedded_credentials_rejected_and_redacted(capsys):
+    # Username-only + IP host: still trips the embedded-credentials rejection,
+    # but avoids the repo privacy-smoke's email / user:pass@host literal patterns.
+    args = _parse(["job", "http://user@127.0.0.1/model.stl", "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"
+    # Userinfo must be stripped from the machine-readable failure.
+    assert "user@" not in json.dumps(payload)
+
+
+def test_local_file_not_found_fails(tmp_path, capsys):
+    args = _parse(["job", str(tmp_path / "missing.stl"), "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_FILE_ERROR
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"
+    assert "file not found" in payload["error"].lower()
+
+
+def test_directory_source_fails(tmp_path, capsys):
+    args = _parse(["job", str(tmp_path), "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert _read_json(capsys)["failed_step"] == "validate"
+
+
+def test_unsupported_local_file_type_fails(tmp_path, capsys):
+    junk = tmp_path / "notes.txt"
+    junk.write_text("hello", encoding="utf-8")
+    args = _parse(["job", str(junk), "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_FILE_ERROR
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"
+    assert "unsupported source file type" in payload["error"].lower()
+
+
+def test_unsafe_sliced_local_name_rejected_before_slicing(tmp_path, capsys):
+    # A 150-char stem is fine on its own, but the predicted "<stem>_sliced.3mf"
+    # exceeds MAX_DOWNLOAD_FILENAME_LENGTH and must be rejected before slicing.
+    stl = tmp_path / (("a" * 150) + ".stl")
+    stl.write_bytes(b"solid x")
+    sliced_called = {"n": 0}
+
+    def _slice(_a):
+        sliced_called["n"] += 1
+        return "x"
+
+    args = _parse(["job", str(stl), "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps(slice=_slice))
+    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert sliced_called["n"] == 0
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"
+    assert "unsafe printer filename" in payload["error"].lower()
+
+
+def test_unsafe_printer_ready_local_name_rejected_before_upload(tmp_path, capsys):
+    ready = tmp_path / (("a" * 200) + ".3mf")
+    ready.write_bytes(b"x" * 10)
+    upload_called = {"n": 0}
+
+    def _upload(_a):
+        upload_called["n"] += 1
+        return "x"
+
+    args = _parse(["job", str(ready), "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps(upload=_upload))
+    assert excinfo.value.code == EXIT_FILE_ERROR
+    assert upload_called["n"] == 0
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"
+    assert "unsafe name" in payload["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Slice- and print-option validation
+# ---------------------------------------------------------------------------
+
+def test_invalid_slice_option_fails(tmp_path, capsys):
+    stl = tmp_path / "model.stl"
+    stl.write_bytes(b"solid x")
+    args = _parse(["job", str(stl), "--copies", "0", "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"
+    assert "--copies" in payload["error"]
+
+
+def test_ams_mapping_without_use_ams_fails(tmp_path, capsys):
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--confirm", "--ams-mapping", "0", "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"
+    assert "--ams-mapping requires --use-ams" in payload["error"]
+
+
+def test_ams_mapping_non_integer_fails(tmp_path, capsys):
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--confirm", "--use-ams", "--ams-mapping", "a,b", "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert "Invalid AMS mapping format" in _read_json(capsys)["error"]
+
+
+def test_ams_mapping_negative_slot_fails(tmp_path, capsys):
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--confirm", "--use-ams", "--ams-mapping=-1", "--json"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    assert "zero or positive" in _read_json(capsys)["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# --name is URL-only; warn and ignore for a local source
+# ---------------------------------------------------------------------------
+
+def test_name_ignored_for_local_file_warns(tmp_path, capsys):
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--name", "renamed.3mf", "--upload-only", "--json"])
+    steps = JobSteps(upload=fake_upload("model.3mf"))
+    with _capture_bambu_warnings() as records:
+        _run_job(_ctx(), args, steps)
+    payload = _read_json(capsys)
+    assert payload["status"] == "uploaded"
+    assert any("--name is only used for URL downloads" in r.getMessage() for r in records), (
+        [r.getMessage() for r in records]
+    )
+    # The remote name comes from the file, not --name.
+    assert payload["remote_name"] == "model.3mf"
+
+
+# ---------------------------------------------------------------------------
+# Successful URL download -> continue (the archive-detection branch)
+# ---------------------------------------------------------------------------
+
+def test_url_download_success_flows_into_slice_and_upload(tmp_path, capsys):
+    downloaded = tmp_path / "model.stl"
+    downloaded.write_bytes(b"solid x")
+    out = tmp_path / "out"
+
+    def _download(_a):
+        return str(downloaded)
+
+    args = _parse(["job", "https://example.com/model.stl", "--json", "--output", str(out)])
+    steps = JobSteps(
+        download=_download,
+        slice=fake_slice(str(out / "model.3mf")),
+        upload=fake_upload("model.3mf"),
+    )
+    _run_job(_ctx(), args, steps)
+    payload = _read_json(capsys)
+    assert payload["would_download"] is True
+    assert payload["downloaded_path"] == _display_path(str(downloaded))
+    assert payload["uploaded"] is True
+    assert payload["remote_name"] == "model.3mf"
+
+
+def test_url_download_reports_extracted_archive_member(tmp_path, capsys):
+    # Simulate cmd_download having transparently extracted a ZIP: it records a
+    # _LAST_DOWNLOAD_PAYLOAD with an archive_entry, which job/send surfaces.
+    extracted = tmp_path / "part.stl"
+    extracted.write_bytes(b"solid x")
+    out = tmp_path / "out"
+
+    def _download(_a):
+        utils._LAST_DOWNLOAD_PAYLOAD = {
+            "path": str(extracted),
+            "archive_entry": "part.stl",
+        }
+        return str(extracted)
+
+    args = _parse(["job", "https://example.com/bundle.zip", "--json", "--output", str(out)])
+    steps = JobSteps(
+        download=_download,
+        slice=fake_slice(str(out / "part.3mf")),
+        upload=fake_upload("part.3mf"),
+    )
+    _run_job(_ctx(), args, steps)
+    payload = _read_json(capsys)
+    assert payload["would_extract"] is True
+    assert payload["archive_entry"] == "part.stl"
+    assert payload["extracted_path"] == _display_path(str(extracted))
+    assert payload["uploaded"] is True
+
+
+def test_url_invalid_max_download_mb_fails(capsys):
+    args = _parse(["job", "https://example.com/model.stl", "--json", "--max-download-mb", "0"])
+    with pytest.raises(SystemExit) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert excinfo.value.code == EXIT_COMMAND_ERROR
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"
+    assert "--max-download-mb must be a positive integer" in payload["error"]
+
+
+def test_run_job_defaults_steps_when_omitted(tmp_path, capsys, monkeypatch):
+    # _run_job(ctx, args) with no steps arg builds default JobSteps() that
+    # late-bind through the bambu facade.
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--upload-only", "--json"])
+    monkeypatch.setattr(bambu, "cmd_upload", lambda ns: "model.3mf")
+    _run_job(_ctx(), args)
+    assert _read_json(capsys)["status"] == "uploaded"
+
+
+# ---------------------------------------------------------------------------
+# generate_print_payload
+# ---------------------------------------------------------------------------
+
+def test_generate_print_payload_includes_ams_mapping():
+    payload = json.loads(job.generate_print_payload("m.3mf", use_ams=True, ams_mapping=[0, 1]))
+    assert payload["print"]["use_ams"] is True
+    assert payload["print"]["ams_mapping"] == [0, 1]
+
+
+def test_generate_print_payload_omits_ams_mapping_without_use_ams():
+    payload = json.loads(job.generate_print_payload("m.3mf", use_ams=False, ams_mapping=[0, 1]))
+    assert payload["print"]["use_ams"] is False
+    assert "ams_mapping" not in payload["print"]
