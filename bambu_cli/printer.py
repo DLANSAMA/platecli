@@ -198,7 +198,13 @@ class BambuPrinter:
     ) -> bool:
         """Download a file via FTPS into a temp sibling, then atomically replace
         ``local_path``. A dropped/failed transfer therefore never truncates or
-        corrupts an existing file at ``local_path``."""
+        corrupts an existing file at ``local_path``.
+
+        After RETR, probe remote SIZE and compare to bytes written. Bambu's FTPS
+        data channel skips TLS close-notify, so retrbinary can return after a
+        truncated transfer; size mismatch must fail without replacing the
+        destination (mirrors upload_file's post-STOR verification).
+        """
         import tempfile
 
         directory = os.path.dirname(os.path.abspath(local_path)) or "."
@@ -209,9 +215,23 @@ class BambuPrinter:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp, os.fdopen(partial_fd, "wb") as f:
                 partial_fd = None  # ownership transferred to the file object
                 ftp.retrbinary(f"RETR {remote_path}", f.write, blocksize=1048576)
+                # Flush before sizing so getsize reflects all written bytes.
+                f.flush()
+                remote_size = self._probe_remote_size(ftp, remote_path)
+
+            written = os.path.getsize(partial_path)
+            if remote_size is None:
+                # Server doesn't support SIZE; don't invent a new failure mode.
+                logger.warning(f"⚠️ Could not verify remote size for {remote_path}; assuming download succeeded.")
+            elif written != remote_size:
+                logger.error(f"Download failed: size mismatch (local {written}, remote {remote_size})")
+                with contextlib.suppress(OSError):
+                    os.remove(partial_path)
+                return False
+
             os.replace(partial_path, local_path)
             return True
-        except (*ftplib.all_errors, ssl.SSLError) as e:
+        except (*ftplib.all_errors, ssl.SSLError, OSError) as e:
             logger.error(f"Download failed: {e}")
             if partial_fd is not None:  # pragma: no cover -- fd not yet transferred
                 with contextlib.suppress(OSError):
