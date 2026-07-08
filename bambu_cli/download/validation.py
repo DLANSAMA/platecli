@@ -65,7 +65,9 @@ def _validate_http_url_or_exit(value):  # pragma: no cover -- url validate
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
 
-def _validate_download_url_or_exit(args, source_url, normalized_source, url, failed_step, label):  # pragma: no cover -- validation helper
+def _validate_download_url_or_exit(
+    args, source_url, normalized_source, url, failed_step, label
+):  # pragma: no cover -- validation helper
     """Validate a download URL and emit structured, redacted JSON on failure."""
     try:
         _validate_http_url_or_exit(url)
@@ -99,7 +101,9 @@ def _unsupported_download_message(ext):  # pragma: no cover -- validation helper
     )
 
 
-def _reject_unsupported_download_extension(args, source_url, normalized_source, url, value, failed_step="validate"):  # pragma: no cover -- validation helper
+def _reject_unsupported_download_extension(
+    args, source_url, normalized_source, url, value, failed_step="validate"
+):  # pragma: no cover -- validation helper
     ext = _known_unsupported_download_extension(value)
     if not ext:
         return
@@ -131,7 +135,9 @@ def _known_unsupported_content_type(content_type):  # pragma: no cover -- valida
     return None
 
 
-def _reject_unsupported_content_type(args, source_url, normalized_source, url, content_type):  # pragma: no cover -- validation helper
+def _reject_unsupported_content_type(
+    args, source_url, normalized_source, url, content_type
+):  # pragma: no cover -- validation helper
     media_type = _known_unsupported_content_type(content_type)
     if not media_type:
         return

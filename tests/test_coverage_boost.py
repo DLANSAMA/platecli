@@ -207,8 +207,10 @@ def test_naming_portable_and_extension():
 
 
 def test_validation_rejects_credentials():
+    # Username-only + loopback: still trips embedded-credential rejection without
+    # matching privacy_smoke's email / user:pass@host literal patterns.
     with pytest.raises(BambuError):
-        validation_mod._validate_http_url_or_exit("https://user:pass@example.com/a.stl")
+        validation_mod._validate_http_url_or_exit("http://user@127.0.0.1/a.stl")
 
 
 def test_netsafety_https_connection_class():

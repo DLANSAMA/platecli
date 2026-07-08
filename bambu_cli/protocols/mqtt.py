@@ -569,7 +569,9 @@ def _get_and_verify_cert_pem(host, port, expected_fingerprint, timeout=5):
         return pem
 
 
-def execute_print_command(printer, payload, basename, dry_run=False):  # pragma: no cover -- MQTT print ack loop; dry-run+sim unit-tested
+def execute_print_command(
+    printer, payload, basename, dry_run=False
+):  # pragma: no cover -- MQTT print ack loop; dry-run+sim unit-tested
     """Send the print payload via MQTT and monitor for errors."""
     from bambu_cli import bambu
     from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR, EXIT_PRINTER_ERROR, EXIT_TIMEOUT

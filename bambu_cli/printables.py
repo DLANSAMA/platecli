@@ -100,7 +100,9 @@ def _get_printables_file_info(model_id, gql_headers, opener):  # pragma: no cove
     return file_to_use["id"], file_type, file_to_use["name"]
 
 
-def _get_printables_download_link(file_id, model_id, file_type, stl_name, gql_headers, opener):  # pragma: no cover -- printables helper
+def _get_printables_download_link(
+    file_id, model_id, file_type, stl_name, gql_headers, opener
+):  # pragma: no cover -- printables helper
     """Helper to fetch download link from Printables API."""
 
     payload = json.dumps(

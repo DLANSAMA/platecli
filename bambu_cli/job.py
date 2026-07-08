@@ -281,7 +281,9 @@ def _job_fail(args, summary, failed_step, exit_code, message):  # pragma: no cov
     abort("", exit_code=exit_code)
 
 
-def _validate_predicted_remote_name_or_fail(args, summary, remote_name, message_prefix):  # pragma: no cover -- job helper
+def _validate_predicted_remote_name_or_fail(
+    args, summary, remote_name, message_prefix
+):  # pragma: no cover -- job helper
     """Fail a job before work starts if a known printer filename is unsafe."""
     if remote_name is not None and _safe_remote_name(remote_name) is None:
         _job_fail(

@@ -32,7 +32,9 @@ from bambu_cli.logging_utils import logger
 from bambu_cli.utils import _ensure_parent_dir, emit_json, emit_json_error
 
 
-def _grab_camera_frame_direct(printer, timeout=12):  # pragma: no cover -- native TLS frame protocol; pin mismatch unit-tested
+def _grab_camera_frame_direct(
+    printer, timeout=12
+):  # pragma: no cover -- native TLS frame protocol; pin mismatch unit-tested
     """Grab one JPEG frame from a P1/A1 printer camera using Bambu's native TLS
     port-6000 protocol (the same one Bambu Studio uses). Returns JPEG bytes, or
     None if no frame is obtained. Requires no Docker. X1-series use RTSP instead,

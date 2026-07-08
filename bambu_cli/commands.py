@@ -20,7 +20,9 @@ def cmd_setup(args):
 from bambu_cli.utils import get_sequence_id
 
 
-def _offer_pin_fingerprint(fp, config_path, json_mode, interactive=None):  # pragma: no cover -- interactive TTY pin prompt
+def _offer_pin_fingerprint(
+    fp, config_path, json_mode, interactive=None
+):  # pragma: no cover -- interactive TTY pin prompt
     """Offer to pin an unpinned printer cert fingerprint into config.json.
 
     Returns True only if the fingerprint was written. Silently declines (returns

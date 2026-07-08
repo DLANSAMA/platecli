@@ -68,7 +68,9 @@ def _slicer_executable_problem(path: str | None) -> str | None:  # pragma: no co
     return None
 
 
-def _sliced_output_path(filepath: str, output_dir: str | None = None, copies: int = 1) -> str:  # pragma: no cover -- output path helper
+def _sliced_output_path(
+    filepath: str, output_dir: str | None = None, copies: int = 1
+) -> str:  # pragma: no cover -- output path helper
     from bambu_cli import bambu
 
     basename = os.path.splitext(bambu._portable_basename(filepath))[0]
@@ -108,7 +110,9 @@ def _validate_slice_options(args: argparse.Namespace) -> str | None:  # pragma: 
     return None
 
 
-def _safe_temp_prefix(value: Any, fallback: str = "tmp", max_length: int = 48) -> str:  # pragma: no cover -- slicer helper
+def _safe_temp_prefix(
+    value: Any, fallback: str = "tmp", max_length: int = 48
+) -> str:  # pragma: no cover -- slicer helper
     """Return a filesystem-safe, bounded tempfile prefix ending in '_'."""
     prefix = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", str(value or "")).strip(" .")
     if not prefix:
@@ -116,7 +120,9 @@ def _safe_temp_prefix(value: Any, fallback: str = "tmp", max_length: int = 48) -
     return f"{prefix[:max_length]}_"
 
 
-def _convert_step_to_stl(filepath: str) -> tuple[str | None, bool]:  # pragma: no cover -- gmsh external process; platform matrix
+def _convert_step_to_stl(
+    filepath: str,
+) -> tuple[str | None, bool]:  # pragma: no cover -- gmsh external process; platform matrix
     """Convert STEP to STL using gmsh."""
     from bambu_cli import bambu
 
@@ -201,7 +207,9 @@ def _convert_step_to_stl(filepath: str) -> tuple[str | None, bool]:  # pragma: n
     return stl_path, True
 
 
-def _process_profile_compatible(path: str, compatible_printer: str | None) -> bool:  # pragma: no cover -- profile compat
+def _process_profile_compatible(
+    path: str, compatible_printer: str | None
+) -> bool:  # pragma: no cover -- profile compat
     if not compatible_printer:
         return False
     try:
@@ -285,7 +293,9 @@ def _discover_process_profile(  # pragma: no cover -- slicer helper
     return None
 
 
-def _create_temp_profiles(process: str, filament: str, args: argparse.Namespace) -> tuple[IO[str], IO[str]]:  # pragma: no cover -- slicer helper
+def _create_temp_profiles(
+    process: str, filament: str, args: argparse.Namespace
+) -> tuple[IO[str], IO[str]]:  # pragma: no cover -- slicer helper
     """Create temporary process and filament profiles with overrides."""
     infill = getattr(args, "infill", 15)
     pattern = getattr(args, "pattern", "3dhoneycomb")
@@ -674,7 +684,9 @@ def _finalize_slice(  # pragma: no cover -- slicer helper
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
 
-def cmd_slice(args: argparse.Namespace) -> str:  # pragma: no cover -- OrcaSlicer orchestration; pure helpers + slice unit tests cover API
+def cmd_slice(
+    args: argparse.Namespace,
+) -> str:  # pragma: no cover -- OrcaSlicer orchestration; pure helpers + slice unit tests cover API
     """Slice an STL/STEP file into a printable .3mf using OrcaSlicer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
