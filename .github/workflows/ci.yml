@@ -157,6 +157,10 @@ jobs:
         run: uvx ruff format --check bambu_cli
       - name: bandit (non-blocking)
         run: uvx bandit -c pyproject.toml -r bambu_cli -ll || true
+      - name: pip-audit (non-blocking, dependency CVEs)
+        run: |
+          uv export --frozen --no-emit-project --format requirements-txt > audit-requirements.txt
+          uvx pip-audit -r audit-requirements.txt || true
       - name: mypy (blocking, typed modules only — ratchet this list)
         run: uvx mypy bambu_cli/context.py bambu_cli/constants.py bambu_cli/slicer.py
       - name: no test-awareness in production code (blocking)
