@@ -951,5 +951,51 @@ class TestMonitorStatusStreaming(unittest.TestCase):
                 self.assertEqual(obj["command"], "status")
 
 
+class TestBambuDownloadFile(unittest.TestCase):
+    """download_file streams to a temp sibling then atomically replaces, so a
+    failed transfer never corrupts an existing file at local_path."""
+
+    def _printer_with_ftp(self, mock_ftp):
+        mock_get_ftp = MagicMock()
+        mock_get_ftp.return_value.__enter__.return_value = mock_ftp
+        printer = _test_printer()
+        printer.get_ftp_client = mock_get_ftp
+        return printer
+
+    def test_download_file_success_writes_content_no_temp_left(self):
+        import tempfile
+
+        d = tempfile.mkdtemp()
+        local = os.path.join(d, "out.gcode")
+        mock_ftp = MagicMock()
+        mock_ftp.retrbinary.side_effect = lambda cmd, cb, blocksize=None: cb(b"new content")
+
+        ok = self._printer_with_ftp(mock_ftp).download_file("/model/out.gcode", local)
+
+        self.assertTrue(ok)
+        with open(local, "rb") as f:
+            self.assertEqual(f.read(), b"new content")
+        self.assertEqual([p for p in os.listdir(d) if p.endswith(".part")], [])
+
+    def test_download_file_failure_preserves_existing_and_cleans_temp(self):
+        import ftplib
+        import tempfile
+
+        d = tempfile.mkdtemp()
+        local = os.path.join(d, "out.gcode")
+        with open(local, "wb") as f:
+            f.write(b"original good file")
+
+        mock_ftp = MagicMock()
+        mock_ftp.retrbinary.side_effect = ftplib.error_temp("connection dropped")
+
+        ok = self._printer_with_ftp(mock_ftp).download_file("/model/out.gcode", local)
+
+        self.assertFalse(ok)
+        with open(local, "rb") as f:
+            self.assertEqual(f.read(), b"original good file")  # untouched
+        self.assertEqual([p for p in os.listdir(d) if p.endswith(".part")], [])
+
+
 if __name__ == '__main__':
     unittest.main()
