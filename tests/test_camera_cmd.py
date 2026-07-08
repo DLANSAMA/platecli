@@ -80,8 +80,48 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
             _grab_camera_frame_direct(printer)
         mock_tls.sendall.assert_not_called()
 
+    @patch('bambu_cli.bambu.socket.create_connection')
+    @patch('bambu_cli.bambu.ssl.create_default_context')
+    def test_grab_camera_frame_direct_oversized_header_aborts(self, mock_ssl, mock_create_conn):
+        """An implausibly large frame length means the stream is desynced; the
+        grab must give up (return None) instead of reading the skipped body as
+        the next frame header for the rest of the loop."""
+        from bambu_cli.bambu import _grab_camera_frame_direct
+        mock_sock, mock_tls, mock_ctx = self._mock_net(mock_ssl, mock_create_conn)
+        mock_tls.recv.side_effect = [(99_000_000).to_bytes(4, "little") + b"\x00" * 12]
+        printer = _test_printer(ip="192.168.1.100", access_code="c", insecure_tls=True)
+
+        res = _grab_camera_frame_direct(printer)
+        self.assertIsNone(res)
+        # Only the one bogus header was read — no attempt to drain/parse a body.
+        self.assertEqual(mock_tls.recv.call_count, 1)
+
 
 class TestBambuCmdSnapshot(unittest.TestCase):
+
+    @patch('bambu_cli.bambu.shutil.which', return_value='/usr/bin/docker')
+    @patch('bambu_cli.bambu._grab_camera_frame_direct', return_value=None)
+    @patch('bambu_cli.bambu.subprocess.run')
+    @patch('urllib.request.urlopen')
+    @patch('bambu_cli.bambu.logger')
+    def test_cmd_snapshot_non_localhost_url_blocked_before_any_request(
+        self, mock_logger, mock_urlopen, mock_run, mock_grab, mock_which
+    ):
+        """A non-localhost camera_stream_url must be rejected before the
+        readiness-polling loop issues any request (validate-then-use)."""
+        from bambu_cli.bambu import cmd_snapshot
+
+        args = MagicMock()
+        args.output = "snap.jpg"
+        with settings_ctx(camera_stream_url="http://evil.example.com:8080/frame.jpeg"):
+            with self.assertRaises(SystemExit) as cm:
+                cmd_snapshot(args)
+        self.assertEqual(cm.exception.code, 1)  # EXIT_CONFIG_ERROR
+        mock_urlopen.assert_not_called()
+        mock_run.assert_not_called()
+        self.assertTrue(any(
+            "must point to localhost" in c[0][0] for c in mock_logger.error.call_args_list
+        ))
 
     @patch('bambu_cli.bambu.logger')
     @patch('sys.exit')

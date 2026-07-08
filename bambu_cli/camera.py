@@ -84,8 +84,15 @@ def _grab_camera_frame_direct(printer, timeout=12):
         for _ in range(30):
             hdr = _recv_exact(tls, 16)
             size = int.from_bytes(hdr[0:4], "little")
-            if size <= 0 or size > 12_000_000:
+            if size <= 0:
+                # Empty/keepalive frame: nothing to drain, just read the next header.
                 continue
+            if size > 12_000_000:
+                # Implausible frame length means the stream is desynced — the body
+                # we'd skip would be misread as the next header, so every later
+                # iteration reads garbage. Abandon the direct grab and let the
+                # caller fall back to the Docker streamer instead.
+                break
             data = _recv_exact(tls, size)
             if data[:2] == b"\xff\xd8" and data[-2:] == b"\xff\xd9":
                 return bytes(data)
@@ -95,6 +102,21 @@ def _grab_camera_frame_direct(printer, timeout=12):
             sock.close()
         except Exception:
             pass
+
+
+def _require_localhost_streamer_url(args, streamer_url, outpath):
+    """Fail closed unless the configured camera streamer URL targets localhost.
+
+    Called before any request is issued to the URL (readiness polling included)
+    so a misconfigured non-local ``camera_stream_url`` can never trigger
+    outbound requests.
+    """
+    parsed = urlparse(streamer_url)
+    if parsed.scheme not in ("http", "https") or parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+        message = "Security Error: camera_stream_url must point to localhost."
+        logger.error(message)
+        emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="validate", output=outpath)
+        sys.exit(EXIT_CONFIG_ERROR)
 
 
 def _write_snapshot_atomic(outpath, data):
@@ -164,6 +186,11 @@ def _cmd_snapshot(args, ctx=None):
 
     streamer_url = ctx.settings.camera_stream_url
     camera_image = ctx.settings.camera_image
+
+    # Fail closed before ANY request is issued to the streamer URL — including
+    # the readiness-polling loop below — so a misconfigured non-local
+    # camera_stream_url can never trigger outbound (SSRF-shaped) requests.
+    _require_localhost_streamer_url(args, streamer_url, outpath)
 
     # Check if streamer container is running, start if needed
     if not shutil.which("docker"):
@@ -259,13 +286,7 @@ def _cmd_snapshot(args, ctx=None):
 
     logger.info("📸 Capturing snapshot...")
     try:
-        parsed_url = urlparse(streamer_url)
-        if parsed_url.scheme not in ("http", "https") or parsed_url.hostname not in ("localhost", "127.0.0.1", "::1"):
-            message = "Security Error: camera_stream_url must point to localhost."
-            logger.error(message)
-            emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="validate", output=outpath)
-            sys.exit(EXIT_CONFIG_ERROR)
-
+        # streamer_url was already validated as localhost-only before polling.
         req = urllib.request.Request(streamer_url, headers={"User-Agent": "Mozilla/5.0"})
         # Use standard urlopen for localhost streamer to bypass SSRF protections
         with urllib.request.urlopen(req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
