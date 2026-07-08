@@ -153,6 +153,8 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: ruff (blocking, correctness rules only)
         run: uvx ruff check bambu_cli
+      - name: ruff format (blocking, style consistency)
+        run: uvx ruff format --check bambu_cli
       - name: bandit (non-blocking)
         run: uvx bandit -c pyproject.toml -r bambu_cli -ll || true
       - name: mypy (blocking, typed modules only — ratchet this list)

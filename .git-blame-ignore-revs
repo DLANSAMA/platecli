@@ -1,0 +1,14 @@
+# Commits listed here are excluded from `git blame` by default when git is
+# configured with:
+#
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# (GitHub also honors this file automatically for blame views in the web UI.)
+#
+# Only large, purely-mechanical commits belong here (e.g. bulk `ruff format`
+# reformats) — never a commit that also changes behavior. Add one full commit
+# SHA per line, oldest first, with a short comment above each explaining what
+# it did.
+
+# Reformat bambu_cli with ruff format (no logic changes)
+087e1e3e2ecbb847396687db416364384ddc347f

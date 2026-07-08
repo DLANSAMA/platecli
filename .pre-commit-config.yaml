@@ -1,0 +1,13 @@
+# Local mirror of the `lint` job in .github/workflows/ci.yml (ruff check +
+# ruff format), scoped to bambu_cli to match CI exactly.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      - id: ruff
+        name: ruff check (bambu_cli)
+        args: [--fix]
+        files: ^bambu_cli/
+      - id: ruff-format
+        name: ruff format (bambu_cli)
+        files: ^bambu_cli/
