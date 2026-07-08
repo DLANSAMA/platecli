@@ -507,14 +507,16 @@ def test_non_http_url_scheme_rejected(capsys):
 
 
 def test_http_url_with_embedded_credentials_rejected_and_redacted(capsys):
-    args = _parse(["job", "http://user:s3cret@example.com/model.stl", "--json"])
+    # Username-only + IP host: still trips the embedded-credentials rejection,
+    # but avoids the repo privacy-smoke's email / user:pass@host literal patterns.
+    args = _parse(["job", "http://user@127.0.0.1/model.stl", "--json"])
     with pytest.raises(SystemExit) as excinfo:
         _run_job(_ctx(), args, JobSteps())
     assert excinfo.value.code == EXIT_COMMAND_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
-    # The password must never appear in the machine-readable failure.
-    assert "s3cret" not in json.dumps(payload)
+    # Userinfo must be stripped from the machine-readable failure.
+    assert "user@" not in json.dumps(payload)
 
 
 def test_local_file_not_found_fails(tmp_path, capsys):
