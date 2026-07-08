@@ -80,9 +80,9 @@ class TestPreflightAccessCodeCheck(unittest.TestCase):
             "serial": "MOCK",
             "access_code": "SECRET123",
         }
-        with patch("bambu_cli.setup_cmd.load_config", return_value=cfg), \
-             patch("bambu_cli.setup_cmd._config_path", return_value="/tmp/config.json"), \
-             patch("bambu_cli.setup_cmd._display_path", side_effect=lambda p: p), \
+        with patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg), \
+             patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"), \
+             patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p), \
              patch("bambu_cli.slicer._slicer_executable_problem", return_value=None), \
              patch("os.path.isdir", return_value=True), \
              patch("shutil.which", return_value=None):

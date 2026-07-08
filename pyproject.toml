@@ -50,7 +50,7 @@ Changelog = "https://github.com/DLANSAMA/bambu-cli/blob/main/CHANGELOG.md"
 bambu-cli = "bambu_cli.bambu:main"
 
 [tool.setuptools]
-packages = ["bambu_cli", "bambu_cli.download", "bambu_cli.protocols"]
+packages = ["bambu_cli", "bambu_cli.download", "bambu_cli.protocols", "bambu_cli.setup_cmd"]
 
 [tool.ruff]
 target-version = "py39"
