@@ -13,9 +13,12 @@ GMSH_MESH_SCALE = "0.5"
 import platform
 import shutil
 import subprocess
-from typing import IO, Any
+from typing import IO, TYPE_CHECKING, Any
 
 from bambu_cli.logging_utils import logger
+
+if TYPE_CHECKING:
+    from bambu_cli.context import Settings
 
 
 def _normalize_wall_type(wall_type: str | None) -> str | None:
@@ -357,13 +360,304 @@ def _create_temp_profiles(process: str, filament: str, args: argparse.Namespace)
     return tmp_process, tmp_filament
 
 
+def _build_orcaslicer_cmd(
+    settings: Settings,
+    args: argparse.Namespace,
+    machine: str,
+    tmp_process_name: str,
+    tmp_filament_name: str,
+    outfile: str,
+    outdir: str,
+    copies: int,
+    filepath: str,
+) -> list[str]:
+    """Assemble the OrcaSlicer CLI argv, prefixing xvfb/nice wrappers as needed."""
+    cmd: list[str] = []
+    if platform.system() == "Linux":
+        # Prefer a real display (gives working GPU GL + thumbnails). Only fall back
+        # to a virtual framebuffer when no display is present (e.g. headless/agent runs).
+        has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        if not has_display:
+            if shutil.which("xvfb-run"):
+                cmd.extend(["xvfb-run", "-a", "-s", "-screen 0 1280x1024x24 +extension GLX +render"])
+            else:
+                logger.warning(
+                    "⚠️  No DISPLAY and xvfb-run not found; OrcaSlicer may fail headless. "
+                    "Install it: `sudo pacman -S xorg-server-xvfb` (Arch/CachyOS) or `sudo apt install xvfb` (Debian/Ubuntu)."
+                )
+
+    cmd.extend(
+        [
+            settings.orca_slicer,
+            "--load-settings",
+            f"{machine};{tmp_process_name}",
+            "--load-filaments",
+            tmp_filament_name,
+            "--slice",
+            "0",
+            "--export-3mf",
+            outfile,
+            "--outputdir",
+            outdir,
+        ]
+    )
+    if copies > 1:
+        cmd.extend(["--arrange", "1"])
+    if getattr(args, "threads", None) is not None:
+        cmd.extend(["--threads", str(args.threads)])
+    if sys.platform != "win32" and shutil.which("nice"):
+        cmd = ["nice", "-n", "10"] + cmd
+    cmd.extend([filepath] * copies)
+    return cmd
+
+
+def _run_orcaslicer(
+    cmd: list[str],
+    slicer_timeout: float,
+    show_progress: bool,
+    filepath: str,
+) -> subprocess.CompletedProcess[str]:
+    """Run OrcaSlicer, pumping stdout/stderr through an optional Rich progress bar.
+
+    Raises subprocess.TimeoutExpired when the slice exceeds slicer_timeout, and
+    propagates OSError from Popen. Returns a text CompletedProcess on exit.
+    """
+    import queue
+    import threading
+    import time
+
+    # Interactive visual feedback logging (A0530-UI-05)
+    logger.info("   Running OrcaSlicer background worker...")
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=False,
+    )
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
+
+    progress = None
+    task_id = None
+    try:
+        if show_progress:
+            from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
+
+            progress = Progress(
+                TextColumn("[bold blue]{task.description}", justify="right"),
+                BarColumn(bar_width=None),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                TimeElapsedColumn(),
+                transient=True,
+            )
+            progress.start()
+            task_id = progress.add_task(f"Slicing {os.path.basename(filepath)}", total=100)
+    except ImportError:
+        pass
+
+    chunk_queue: queue.Queue[tuple[str, str]] = queue.Queue()
+
+    def _pump(stream: io.BufferedReader, name: str) -> None:
+        while True:
+            chunk = stream.read1(4096)
+            if not chunk:
+                break
+            chunk_queue.put((name, chunk.decode("utf-8", errors="replace")))
+
+    readers = [
+        threading.Thread(target=_pump, args=(proc.stdout, "stdout"), daemon=True),
+        threading.Thread(target=_pump, args=(proc.stderr, "stderr"), daemon=True),
+    ]
+    for t in readers:
+        t.start()
+
+    def _handle_stdout_line(line_str: str) -> None:
+        pct_match = re.search(r"(\d+)%", line_str)
+        if progress and task_id is not None and pct_match:
+            progress.update(task_id, completed=int(pct_match.group(1)))
+        if any(pat in line_str.lower() for pat in ("progress", "%", "slicing", "exporting")):
+            logger.info(f"   [OrcaSlicer] {line_str}")
+        elif line_str:
+            logger.debug(f"   [OrcaSlicer] {line_str}")
+
+    stdout_carry = ""
+
+    def _consume(name: str, text: str) -> None:
+        nonlocal stdout_carry
+        if name == "stderr":
+            stderr_lines.append(text)
+            return
+        stdout_lines.append(text)
+        # OrcaSlicer emits progress lines terminated by \r as well as \n
+        parts = re.split(r"[\r\n]", stdout_carry + text)
+        stdout_carry = parts.pop()
+        for part in parts:
+            line_str = part.strip()
+            if line_str:
+                _handle_stdout_line(line_str)
+
+    try:
+        start_time = time.monotonic()
+        while True:
+            try:
+                name, text = chunk_queue.get(timeout=0.5)
+                _consume(name, text)
+            except queue.Empty:
+                pass
+            if time.monotonic() - start_time > slicer_timeout:
+                raise subprocess.TimeoutExpired(cmd, slicer_timeout)
+            if proc.poll() is not None:
+                alive = False
+                for t in readers:
+                    t.join(timeout=2)
+                    alive = alive or t.is_alive()
+                if not alive:
+                    break
+        # Final drain after both readers exit
+        while True:
+            try:
+                name, text = chunk_queue.get_nowait()
+            except queue.Empty:
+                break
+            _consume(name, text)
+        if stdout_carry.strip():
+            _handle_stdout_line(stdout_carry.strip())
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        raise
+    finally:
+        if progress:
+            progress.stop()
+        for stream in (proc.stdout, proc.stderr):
+            try:
+                if stream is not None:
+                    stream.close()
+            except Exception:
+                pass
+
+    proc.wait()
+    return subprocess.CompletedProcess(
+        cmd,
+        returncode=proc.returncode,
+        stdout="".join(stdout_lines),
+        stderr="".join(stderr_lines),
+    )
+
+
+def _finalize_slice(
+    result: subprocess.CompletedProcess[str] | None,
+    outpath: str,
+    args: argparse.Namespace,
+    filepath: str,
+    step_converted: bool,
+) -> str:
+    """Evaluate the OrcaSlicer result, emit success/error output, and return the .3mf path."""
+    from bambu_cli import bambu
+    from bambu_cli.cli import _namespace_get
+    from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
+    from bambu_cli.utils import emit_json, emit_json_error
+
+    # OrcaSlicer can exit non-zero on a headless GL/thumbnail step even when the slice
+    # itself succeeded and a valid .3mf was written. Treat that specific case as success.
+    _benign_rc = False
+    if result is not None and result.returncode != 0 and os.path.exists(outpath):
+        try:
+            _ok_size = os.path.getsize(outpath) > 0
+        except OSError:
+            _ok_size = False
+        _blob = ((result.stdout or "") + (result.stderr or "")).lower()
+        _gl_noise = any(k in _blob for k in ("glfw", "glew", "init opengl failed", "skip thumbnail"))
+        _real_err = ("nothing to be sliced" in _blob) or ("slicing error" in _blob)
+        _benign_rc = _ok_size and _gl_noise and not _real_err
+        if _benign_rc:
+            logger.warning(
+                "   OrcaSlicer exited non-zero on a headless GL/thumbnail step, but a valid .3mf was produced — continuing."
+            )
+    if result is not None and os.path.exists(outpath) and (result.returncode == 0 or _benign_rc):
+        try:
+            size = os.path.getsize(outpath)
+        except OSError as exc:
+            message = f"Could not read sliced output file: {bambu._exception_for_message(exc)}"
+            logger.error(message)
+            emit_json_error(
+                args,
+                "slice",
+                EXIT_FILE_ERROR,
+                message,
+                failed_step="slicer",
+                file=filepath,
+                output=outpath,
+            )
+            sys.exit(EXIT_FILE_ERROR)
+        if size <= 0:
+            bambu._remove_partial_file(outpath)
+            message = f"Slicing produced an empty output file: {bambu._path_for_message(outpath)}"
+            logger.error(message)
+            emit_json_error(
+                args,
+                "slice",
+                EXIT_FILE_ERROR,
+                message,
+                failed_step="slicer",
+                file=filepath,
+                output=outpath,
+                bytes=size,
+            )
+            sys.exit(EXIT_FILE_ERROR)
+        logger.info(f"✅ Sliced: {bambu._path_for_message(outpath)} ({size // 1024}KB)")
+        if bool(_namespace_get(args, "json", False)):
+            emit_json(
+                {
+                    "status": "sliced",
+                    "command": "slice",
+                    "file": bambu._expand_path(args.file),
+                    "path": outpath,
+                    "filename": os.path.basename(outpath),
+                    "bytes": size,
+                    "step_converted": step_converted,
+                }
+            )
+        return outpath
+    else:
+        rc = result.returncode if result is not None else -1
+        message = f"Slicing failed (RC={rc})"
+        logger.error(message)
+        all_output = ""
+        if result is not None:
+            all_output = (result.stdout or "") + (result.stderr or "")
+        error_found = False
+        for line in all_output.split("\n"):
+            lower_line = line.lower()
+            if "[error]" in lower_line or "nothing to be sliced" in lower_line or "error:" in lower_line:
+                msg = line.split("] ")[-1].strip() if "] " in line else line.strip()
+                if msg:
+                    logger.error(f"   {msg}")
+                    error_found = True
+
+        if not error_found:
+            logger.info("   Check OrcaSlicer profiles or syntax.")
+        emit_json_error(
+            args,
+            "slice",
+            EXIT_COMMAND_ERROR,
+            message,
+            failed_step="slicer",
+            file=filepath,
+            output=outpath,
+            returncode=rc,
+        )
+        sys.exit(EXIT_COMMAND_ERROR)
+
+
 def cmd_slice(args: argparse.Namespace) -> str:
     """Slice an STL/STEP file into a printable .3mf using OrcaSlicer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _exit_code_from_system_exit, _namespace_get
     from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_TIMEOUT
     from bambu_cli.context import current_settings
-    from bambu_cli.utils import emit_json, emit_json_error
+    from bambu_cli.utils import emit_json_error
 
     settings = current_settings()
     filepath = bambu._expand_path(args.file)
@@ -574,42 +868,17 @@ def cmd_slice(args: argparse.Namespace) -> str:
             )
             sys.exit(EXIT_CONFIG_ERROR)
 
-        cmd = []
-        if platform.system() == "Linux":
-            # Prefer a real display (gives working GPU GL + thumbnails). Only fall back
-            # to a virtual framebuffer when no display is present (e.g. headless/agent runs).
-            has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-            if not has_display:
-                if shutil.which("xvfb-run"):
-                    cmd.extend(["xvfb-run", "-a", "-s", "-screen 0 1280x1024x24 +extension GLX +render"])
-                else:
-                    logger.warning(
-                        "⚠️  No DISPLAY and xvfb-run not found; OrcaSlicer may fail headless. "
-                        "Install it: `sudo pacman -S xorg-server-xvfb` (Arch/CachyOS) or `sudo apt install xvfb` (Debian/Ubuntu)."
-                    )
-
-        cmd.extend(
-            [
-                settings.orca_slicer,
-                "--load-settings",
-                f"{machine};{tmp_process.name}",
-                "--load-filaments",
-                tmp_filament.name,
-                "--slice",
-                "0",
-                "--export-3mf",
-                outfile,
-                "--outputdir",
-                outdir,
-            ]
+        cmd = _build_orcaslicer_cmd(
+            settings,
+            args,
+            machine,
+            tmp_process.name,
+            tmp_filament.name,
+            outfile,
+            outdir,
+            copies,
+            filepath,
         )
-        if copies > 1:
-            cmd.extend(["--arrange", "1"])
-        if getattr(args, "threads", None) is not None:
-            cmd.extend(["--threads", str(args.threads)])
-        if sys.platform != "win32" and shutil.which("nice"):
-            cmd = ["nice", "-n", "10"] + cmd
-        cmd.extend([filepath] * copies)
 
         layer_height = layer.split(" ")[0]
         infill = getattr(args, "infill", 15)
@@ -637,128 +906,11 @@ def cmd_slice(args: argparse.Namespace) -> str:
         slicer_timeout = bambu.get_slicer_timeout(args)
 
         try:
-            # Interactive visual feedback logging (A0530-UI-05)
-            logger.info("   Running OrcaSlicer background worker...")
-            proc = subprocess.Popen(
+            result = _run_orcaslicer(
                 cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=False,
-            )
-            stdout_lines = []
-            stderr_lines = []
-
-            progress = None
-            task_id = None
-            try:
-                if not getattr(args, "json", False):
-                    from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
-
-                    progress = Progress(
-                        TextColumn("[bold blue]{task.description}", justify="right"),
-                        BarColumn(bar_width=None),
-                        "[progress.percentage]{task.percentage:>3.1f}%",
-                        "•",
-                        TimeElapsedColumn(),
-                        transient=True,
-                    )
-                    progress.start()
-                    task_id = progress.add_task(f"Slicing {os.path.basename(filepath)}", total=100)
-            except ImportError:
-                pass
-
-            import queue
-            import re
-            import threading
-            import time
-
-            chunk_queue: queue.Queue[tuple[str, str]] = queue.Queue()
-
-            def _pump(stream: io.BufferedReader, name: str) -> None:
-                while True:
-                    chunk = stream.read1(4096)
-                    if not chunk:
-                        break
-                    chunk_queue.put((name, chunk.decode("utf-8", errors="replace")))
-
-            readers = [
-                threading.Thread(target=_pump, args=(proc.stdout, "stdout"), daemon=True),
-                threading.Thread(target=_pump, args=(proc.stderr, "stderr"), daemon=True),
-            ]
-            for t in readers:
-                t.start()
-
-            def _handle_stdout_line(line_str: str) -> None:
-                pct_match = re.search(r"(\d+)%", line_str)
-                if progress and task_id is not None and pct_match:
-                    progress.update(task_id, completed=int(pct_match.group(1)))
-                if any(pat in line_str.lower() for pat in ("progress", "%", "slicing", "exporting")):
-                    logger.info(f"   [OrcaSlicer] {line_str}")
-                elif line_str:
-                    logger.debug(f"   [OrcaSlicer] {line_str}")
-
-            stdout_carry = ""
-
-            def _consume(name: str, text: str) -> None:
-                nonlocal stdout_carry
-                if name == "stderr":
-                    stderr_lines.append(text)
-                    return
-                stdout_lines.append(text)
-                # OrcaSlicer emits progress lines terminated by \r as well as \n
-                parts = re.split(r"[\r\n]", stdout_carry + text)
-                stdout_carry = parts.pop()
-                for part in parts:
-                    line_str = part.strip()
-                    if line_str:
-                        _handle_stdout_line(line_str)
-
-            try:
-                start_time = time.monotonic()
-                while True:
-                    try:
-                        name, text = chunk_queue.get(timeout=0.5)
-                        _consume(name, text)
-                    except queue.Empty:
-                        pass
-                    if time.monotonic() - start_time > slicer_timeout:
-                        raise subprocess.TimeoutExpired(cmd, slicer_timeout)
-                    if proc.poll() is not None:
-                        alive = False
-                        for t in readers:
-                            t.join(timeout=2)
-                            alive = alive or t.is_alive()
-                        if not alive:
-                            break
-                # Final drain after both readers exit
-                while True:
-                    try:
-                        name, text = chunk_queue.get_nowait()
-                    except queue.Empty:
-                        break
-                    _consume(name, text)
-                if stdout_carry.strip():
-                    _handle_stdout_line(stdout_carry.strip())
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
-                raise
-            finally:
-                if progress:
-                    progress.stop()
-                for stream in (proc.stdout, proc.stderr):
-                    try:
-                        if stream is not None:
-                            stream.close()
-                    except Exception:
-                        pass
-
-            proc.wait()
-            result = subprocess.CompletedProcess(
-                cmd,
-                returncode=proc.returncode,
-                stdout="".join(stdout_lines),
-                stderr="".join(stderr_lines),
+                slicer_timeout,
+                show_progress=not getattr(args, "json", False),
+                filepath=filepath,
             )
         except subprocess.TimeoutExpired:
             message = f"Slicing timed out after {slicer_timeout} seconds"
@@ -804,93 +956,4 @@ def cmd_slice(args: argparse.Namespace) -> str:
             except OSError:
                 pass
 
-    # OrcaSlicer can exit non-zero on a headless GL/thumbnail step even when the slice
-    # itself succeeded and a valid .3mf was written. Treat that specific case as success.
-    _benign_rc = False
-    if result is not None and result.returncode != 0 and os.path.exists(outpath):
-        try:
-            _ok_size = os.path.getsize(outpath) > 0
-        except OSError:
-            _ok_size = False
-        _blob = ((result.stdout or "") + (result.stderr or "")).lower()
-        _gl_noise = any(k in _blob for k in ("glfw", "glew", "init opengl failed", "skip thumbnail"))
-        _real_err = ("nothing to be sliced" in _blob) or ("slicing error" in _blob)
-        _benign_rc = _ok_size and _gl_noise and not _real_err
-        if _benign_rc:
-            logger.warning(
-                "   OrcaSlicer exited non-zero on a headless GL/thumbnail step, but a valid .3mf was produced — continuing."
-            )
-    if result is not None and os.path.exists(outpath) and (result.returncode == 0 or _benign_rc):
-        try:
-            size = os.path.getsize(outpath)
-        except OSError as exc:
-            message = f"Could not read sliced output file: {bambu._exception_for_message(exc)}"
-            logger.error(message)
-            emit_json_error(
-                args,
-                "slice",
-                EXIT_FILE_ERROR,
-                message,
-                failed_step="slicer",
-                file=filepath,
-                output=outpath,
-            )
-            sys.exit(EXIT_FILE_ERROR)
-        if size <= 0:
-            bambu._remove_partial_file(outpath)
-            message = f"Slicing produced an empty output file: {bambu._path_for_message(outpath)}"
-            logger.error(message)
-            emit_json_error(
-                args,
-                "slice",
-                EXIT_FILE_ERROR,
-                message,
-                failed_step="slicer",
-                file=filepath,
-                output=outpath,
-                bytes=size,
-            )
-            sys.exit(EXIT_FILE_ERROR)
-        logger.info(f"✅ Sliced: {bambu._path_for_message(outpath)} ({size // 1024}KB)")
-        if bool(_namespace_get(args, "json", False)):
-            emit_json(
-                {
-                    "status": "sliced",
-                    "command": "slice",
-                    "file": bambu._expand_path(args.file),
-                    "path": outpath,
-                    "filename": os.path.basename(outpath),
-                    "bytes": size,
-                    "step_converted": step_converted,
-                }
-            )
-        return outpath
-    else:
-        rc = result.returncode if result is not None else -1
-        message = f"Slicing failed (RC={rc})"
-        logger.error(message)
-        all_output = ""
-        if result is not None:
-            all_output = (result.stdout or "") + (result.stderr or "")
-        error_found = False
-        for line in all_output.split("\n"):
-            lower_line = line.lower()
-            if "[error]" in lower_line or "nothing to be sliced" in lower_line or "error:" in lower_line:
-                msg = line.split("] ")[-1].strip() if "] " in line else line.strip()
-                if msg:
-                    logger.error(f"   {msg}")
-                    error_found = True
-
-        if not error_found:
-            logger.info("   Check OrcaSlicer profiles or syntax.")
-        emit_json_error(
-            args,
-            "slice",
-            EXIT_COMMAND_ERROR,
-            message,
-            failed_step="slicer",
-            file=filepath,
-            output=outpath,
-            returncode=rc,
-        )
-        sys.exit(EXIT_COMMAND_ERROR)
+    return _finalize_slice(result, outpath, args, filepath, step_converted)
