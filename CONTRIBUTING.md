@@ -5,7 +5,7 @@ Thanks for your interest in improving bambu-local-cli!
 ## Setup
 
 ```bash
-git clone https://github.com/DLANSAMA/bambu-cli
+git clone https://github.com/DLANSAMA/bambu-local-cli
 cd bambu-cli
 uv sync          # or: pip install -e ".[test]"
 ```

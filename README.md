@@ -1,7 +1,7 @@
 # bambu-cli — CLI for Bambu Lab Printers
 
-[![CI](https://github.com/DLANSAMA/bambu-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/DLANSAMA/bambu-cli/actions/workflows/ci.yml)
-[![Release Packaging](https://github.com/DLANSAMA/bambu-cli/actions/workflows/release.yml/badge.svg)](https://github.com/DLANSAMA/bambu-cli/actions/workflows/release.yml)
+[![CI](https://github.com/DLANSAMA/bambu-local-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/DLANSAMA/bambu-local-cli/actions/workflows/ci.yml)
+[![Release Packaging](https://github.com/DLANSAMA/bambu-local-cli/actions/workflows/release.yml/badge.svg)](https://github.com/DLANSAMA/bambu-local-cli/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Fully local 3D printing pipeline for Bambu Lab printers. Runs on **Linux, macOS, and Windows**. Download models from Printables, slice with OrcaSlicer, and print — all controlled via CLI by any AI agent or by hand. No cloud account needed.

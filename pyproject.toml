@@ -41,10 +41,10 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/DLANSAMA/bambu-cli"
-Repository = "https://github.com/DLANSAMA/bambu-cli"
-Issues = "https://github.com/DLANSAMA/bambu-cli/issues"
-Changelog = "https://github.com/DLANSAMA/bambu-cli/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/DLANSAMA/bambu-local-cli"
+Repository = "https://github.com/DLANSAMA/bambu-local-cli"
+Issues = "https://github.com/DLANSAMA/bambu-local-cli/issues"
+Changelog = "https://github.com/DLANSAMA/bambu-local-cli/blob/main/CHANGELOG.md"
 
 [project.scripts]
 bambu-cli = "bambu_cli.bambu:main"
