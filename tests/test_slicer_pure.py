@@ -193,3 +193,157 @@ def test_convert_step_subprocess_fail(monkeypatch, tmp_path):
     with patch.object(S.step_convert.subprocess, "run", side_effect=FileNotFoundError("nope")):
         path, created = S._convert_step_to_stl(str(step))
     assert path is None or created is False or path is not None
+
+
+# --- Generic setting overrides (--set / --set-filament / --settings-json) -----
+
+
+def test_parse_kv_overrides_valid_and_malformed():
+    assert S._parse_kv_overrides(["wall_loops=4", "brim_type=outer_only"], "set") == {
+        "wall_loops": "4",
+        "brim_type": "outer_only",
+    }
+    assert S._parse_kv_overrides(None, "set") == {}
+    with pytest.raises(ValueError):
+        S._parse_kv_overrides(["wall_loops"], "set")  # no '='
+    with pytest.raises(ValueError):
+        S._parse_kv_overrides(["=4"], "set")  # empty key
+
+
+def test_coerce_override_value_matches_base_shape():
+    # list-typed base -> single-element list, or a parsed JSON array
+    assert S._coerce_override_value(["220"], "230") == ["230"]
+    assert S._coerce_override_value(["220"], "[230, 235]") == ["230", "235"]
+    # scalar base -> string, regardless of numeric-looking input
+    assert S._coerce_override_value("3", "4") == "4"
+    assert S._coerce_override_value(None, "outer_only") == "outer_only"
+
+
+def test_generic_section_overrides_precedence():
+    # --set beats --settings-json for the same key
+    args = Namespace(
+        settings_json='{"process": {"wall_loops": "2", "brim_width": "1"}}',
+        set_process=["wall_loops=5"],
+        set_filament=None,
+    )
+    result = S._generic_section_overrides(args, "process")
+    assert result == {"wall_loops": "5", "brim_width": "1"}
+
+
+def test_create_temp_profiles_applies_set_override(tmp_path):
+    process = tmp_path / "process" / "p.json"
+    filament = tmp_path / "filament" / "f.json"
+    process.parent.mkdir()
+    filament.parent.mkdir()
+    process.write_text(json.dumps({"wall_loops": "2", "name": "p"}), encoding="utf-8")
+    filament.write_text(json.dumps({"nozzle_temperature": ["220"], "name": "f"}), encoding="utf-8")
+    args = Namespace(
+        infill=15,
+        pattern="3dhoneycomb",
+        supports=False,
+        nozzle_temp=220,
+        bed_temp=60,
+        set_process=["wall_loops=6"],
+        set_filament=["flow_ratio=0.98"],
+        settings_json=None,
+        brim=2,
+    )
+    tmp_proc, tmp_fil = S._create_temp_profiles(str(process), str(filament), args)
+    try:
+        proc = json.loads(Path(tmp_proc.name).read_text(encoding="utf-8"))
+        fil = json.loads(Path(tmp_fil.name).read_text(encoding="utf-8"))
+        assert proc["wall_loops"] == "6"  # --set won
+        assert proc["brim_width"] == "2"  # named --brim flag
+        assert proc["brim_type"] == "outer_only"
+        assert fil["flow_ratio"] == "0.98"  # --set-filament passthrough
+    finally:
+        import os as _os
+
+        _os.unlink(tmp_proc.name)
+        _os.unlink(tmp_fil.name)
+
+
+# --- Safety: overrides cannot bypass temperature bounds ----------------------
+
+
+def _base_slice_args(**over):
+    base = dict(
+        copies=1,
+        infill=15,
+        nozzle_temp=220,
+        bed_temp=60,
+        wall_type=None,
+        layer_height=None,
+        brim=None,
+        speed=None,
+        set_process=None,
+        set_filament=None,
+        settings_json=None,
+    )
+    base.update(over)
+    return Namespace(**base)
+
+
+def test_validate_rejects_unsafe_set_filament_nozzle_temp():
+    args = _base_slice_args(set_filament=["nozzle_temperature=999"])
+    err = S._validate_slice_options(args)
+    assert err is not None and "nozzle temperature override" in err
+
+
+def test_validate_rejects_unsafe_settings_json_bed_temp():
+    args = _base_slice_args(settings_json='{"filament": {"hot_plate_temp": "500"}}')
+    err = S._validate_slice_options(args)
+    assert err is not None and "bed temperature override" in err
+
+
+def test_validate_accepts_safe_overrides():
+    args = _base_slice_args(
+        set_process=["wall_loops=4"],
+        set_filament=["nozzle_temperature=230"],
+        layer_height=0.2,
+        brim=3.0,
+        speed=120.0,
+    )
+    assert S._validate_slice_options(args) is None
+
+
+def test_validate_rejects_malformed_set_and_json():
+    assert "KEY=VALUE" in (S._validate_slice_options(_base_slice_args(set_process=["oops"])) or "")
+    assert "valid JSON" in (S._validate_slice_options(_base_slice_args(settings_json="{not json")) or "")
+
+
+def test_validate_rejects_bad_named_flags():
+    assert "layer-height" in (S._validate_slice_options(_base_slice_args(layer_height=5.0)) or "")
+    assert "speed" in (S._validate_slice_options(_base_slice_args(speed=0)) or "")
+
+
+def test_known_setting_keys_reads_profiles(tmp_path):
+    (tmp_path / "process").mkdir()
+    (tmp_path / "filament").mkdir()
+    (tmp_path / "process" / "a.json").write_text(
+        json.dumps({"wall_loops": "3", "layer_height": "0.2", "name": "a", "inherits": "x"}), encoding="utf-8"
+    )
+    (tmp_path / "filament" / "f.json").write_text(json.dumps({"flow_ratio": "1.0", "name": "f"}), encoding="utf-8")
+    proc = S._known_setting_keys(str(tmp_path), "process")
+    fil = S._known_setting_keys(str(tmp_path), "filament")
+    assert "wall_loops" in proc and "layer_height" in proc
+    assert "name" not in proc and "inherits" not in proc  # bookkeeping keys excluded
+    assert "flow_ratio" in fil
+
+
+def test_slice_args_for_job_threads_overrides():
+    from bambu_cli.job.predict import _slice_args_for_job
+
+    src = Namespace(
+        set_process=["wall_loops=4"],
+        set_filament=["flow_ratio=0.9"],
+        settings_json='{"process":{}}',
+        layer_height=0.15,
+        brim=2.0,
+        speed=100.0,
+    )
+    out = _slice_args_for_job("m.stl", src, "/out")
+    assert out.set_process == ["wall_loops=4"]
+    assert out.set_filament == ["flow_ratio=0.9"]
+    assert out.settings_json == '{"process":{}}'
+    assert out.layer_height == 0.15 and out.brim == 2.0 and out.speed == 100.0

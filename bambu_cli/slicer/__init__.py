@@ -8,9 +8,14 @@ collaborators or patch the focused submodule where the name is defined/used
 
 from bambu_cli.slicer.cmd import cmd_slice  # noqa: F401
 from bambu_cli.slicer.options import (  # noqa: F401
+    _coerce_override_value,
     _directory_input_message,
+    _effective_override_temps,
+    _generic_section_overrides,
     _is_directory_input,
+    _known_setting_keys,
     _normalize_wall_type,
+    _parse_kv_overrides,
     _safe_temp_prefix,
     _sliced_output_path,
     _validate_slice_options,

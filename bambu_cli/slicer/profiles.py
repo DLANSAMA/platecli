@@ -11,7 +11,14 @@ from typing import IO
 
 from bambu_cli.cli import _display_path, _expand_path
 from bambu_cli.logging_utils import logger
-from bambu_cli.slicer.options import _normalize_wall_type
+from bambu_cli.slicer.options import (
+    _coerce_override_value,
+    _generic_section_overrides,
+    _known_setting_keys,
+    _normalize_wall_type,
+    _profiles_dir_from_process,
+    _warn_unknown_keys,
+)
 
 
 def _profiles_dir_diagnostic(profiles_dir):
@@ -191,6 +198,27 @@ def _create_temp_profiles(process: str, filament: str, args: argparse.Namespace)
         if accel_first_layer is not None:
             proc_data["initial_layer_acceleration"] = str(accel_first_layer)
 
+        # Named convenience flags (sugar over the generic override machinery).
+        layer_height = getattr(args, "layer_height", None)
+        if isinstance(layer_height, (int, float)):
+            proc_data["layer_height"] = str(layer_height)
+        brim = getattr(args, "brim", None)
+        if isinstance(brim, (int, float)):
+            proc_data["brim_width"] = str(brim)
+            proc_data["brim_type"] = "no_brim" if brim == 0 else "outer_only"
+        speed = getattr(args, "speed", None)
+        if isinstance(speed, (int, float)):
+            for key in ("outer_wall_speed", "inner_wall_speed", "sparse_infill_speed"):
+                proc_data[key] = str(speed)
+
+        # Generic process overrides (--set / --settings-json) win over the named
+        # flags above; unknown keys warn but still pass through to OrcaSlicer.
+        profiles_dir = _profiles_dir_from_process(process)
+        proc_overrides = _generic_section_overrides(args, "process")
+        _warn_unknown_keys(proc_overrides, _known_setting_keys(profiles_dir, "process"), "process")
+        for key, value in proc_overrides.items():
+            proc_data[key] = _coerce_override_value(proc_data.get(key), value)
+
         json.dump(proc_data, tmp_process)
         tmp_process.close()
 
@@ -212,6 +240,15 @@ def _create_temp_profiles(process: str, filament: str, args: argparse.Namespace)
         for plate in BED_PLATE_TYPES:
             fil_data[plate] = bed_temp_str_list
             fil_data[f"{plate}_initial_layer"] = bed_temp_str_list
+
+        # Generic filament overrides (--set-filament / --settings-json). Temp
+        # keys were already range-checked in _validate_slice_options, so a value
+        # reaching here is within the printer-safety bounds.
+        fil_overrides = _generic_section_overrides(args, "filament")
+        _warn_unknown_keys(fil_overrides, _known_setting_keys(profiles_dir, "filament"), "filament")
+        for key, value in fil_overrides.items():
+            fil_data[key] = _coerce_override_value(fil_data.get(key), value)
+
         json.dump(fil_data, tmp_filament)
         tmp_filament.close()
     except Exception:
