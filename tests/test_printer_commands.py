@@ -81,7 +81,7 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
 
     @patch("os.path.exists")
     @patch("os.path.getsize")
-    @patch("bambu_cli.bambu.time.sleep")
+    @patch("time.sleep")
     @patch("bambu_cli.printer.get_printer")
     @patch("bambu_cli.printer.logger")
     @patch("builtins.open", new_callable=mock_open)
@@ -124,7 +124,7 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
 
     @patch("os.path.exists")
     @patch("os.path.getsize")
-    @patch("bambu_cli.bambu.time.sleep")
+    @patch("time.sleep")
     @patch("bambu_cli.printer.get_printer")
     @patch("bambu_cli.bambu.logger")
     @patch("sys.exit")
@@ -554,7 +554,7 @@ class TestBambuGetStatus(unittest.TestCase):
     @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
     @patch("bambu_cli.bambu.logger")
     def test_get_status_on_connect_rc_error(self, mock_logger, mock_create):
-        from bambu_cli.bambu import get_status
+        from bambu_cli.protocols.mqtt import get_status
 
         mock_client = MagicMock()
         mock_create.return_value = mock_client
@@ -635,7 +635,7 @@ class TestBambuGetStatus(unittest.TestCase):
     @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
     @patch("time.sleep")
     def test_get_status_success(self, mock_sleep, mock_create_mqtt):
-        from bambu_cli.bambu import get_status
+        from bambu_cli.protocols.mqtt import get_status
         import json
 
         mock_client = MagicMock()
@@ -665,7 +665,7 @@ class TestBambuGetStatus(unittest.TestCase):
     @patch("time.sleep")
     @patch("bambu_cli.bambu.logger")
     def test_get_status_timeout(self, mock_logger, mock_sleep, mock_create_mqtt):
-        from bambu_cli.bambu import get_status
+        from bambu_cli.protocols.mqtt import get_status
 
         mock_client = MagicMock()
         mock_create_mqtt.return_value = mock_client
@@ -685,7 +685,7 @@ class TestBambuGetStatus(unittest.TestCase):
     @patch("bambu_cli.bambu.logger")
     @patch("time.sleep")
     def test_get_status_connection_failure(self, mock_sleep, mock_logger, mock_create_mqtt):
-        from bambu_cli.bambu import get_status
+        from bambu_cli.protocols.mqtt import get_status
 
         mock_client = MagicMock()
         mock_create_mqtt.return_value = mock_client
@@ -702,7 +702,7 @@ class TestBambuGetStatus(unittest.TestCase):
 
     @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
     def test_get_status_ignore_non_print_messages(self, mock_create_mqtt):
-        from bambu_cli.bambu import get_status
+        from bambu_cli.protocols.mqtt import get_status
         import json
 
         mock_client = MagicMock()
@@ -737,7 +737,7 @@ class TestBambuGetStatus(unittest.TestCase):
     @patch("bambu_cli.bambu.logger")
     @patch("time.sleep")
     def test_get_status_exception(self, mock_sleep, mock_logger, mock_create_mqtt):
-        from bambu_cli.bambu import get_status
+        from bambu_cli.protocols.mqtt import get_status
 
         mock_client = MagicMock()
         mock_create_mqtt.return_value = mock_client
@@ -756,7 +756,7 @@ class TestBambuCmdPrint(unittest.TestCase):
     @patch("bambu_cli.bambu.logger")
     @patch("sys.exit")
     def test_execute_print_command_dry_run_file_not_found(self, mock_exit, mock_logger, mock_get_status):
-        from bambu_cli.bambu import execute_print_command
+        from bambu_cli.protocols.mqtt import execute_print_command
 
         mock_ftp = MagicMock()
         mock_ftp.nlst.return_value = ["other.3mf"]
@@ -776,7 +776,7 @@ class TestBambuCmdPrint(unittest.TestCase):
     @patch("bambu_cli.bambu.logger")
     @patch("sys.exit")
     def test_execute_print_command_dry_run_mqtt_fail(self, mock_exit, mock_logger, mock_get_status):
-        from bambu_cli.bambu import execute_print_command
+        from bambu_cli.protocols.mqtt import execute_print_command
 
         mock_ftp = MagicMock()
         mock_ftp.nlst.return_value = ["test.3mf"]
@@ -798,7 +798,7 @@ class TestBambuCmdPrint(unittest.TestCase):
     @patch("bambu_cli.bambu.logger")
     @patch("sys.exit")
     def test_execute_print_command_dry_run_exception(self, mock_exit, mock_logger, mock_get_status):
-        from bambu_cli.bambu import execute_print_command
+        from bambu_cli.protocols.mqtt import execute_print_command
 
         printer = _test_printer()
         printer.get_ftp_client = MagicMock(side_effect=OSError("FTP Error"))
@@ -811,11 +811,11 @@ class TestBambuCmdPrint(unittest.TestCase):
         mock_logger.error.assert_any_call("Dry run failed: FTP Error")
 
     @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
-    @patch("bambu_cli.bambu.time.sleep")
+    @patch("bambu_cli.protocols.mqtt.time.sleep")
     @patch("bambu_cli.bambu.logger")
     @patch("sys.exit")
     def test_execute_print_command_non_sd_error(self, mock_exit, mock_logger, mock_sleep, mock_create):
-        from bambu_cli.bambu import execute_print_command
+        from bambu_cli.protocols.mqtt import execute_print_command
 
         mock_client = MagicMock()
         mock_create.return_value = mock_client
@@ -852,7 +852,7 @@ class TestBambuCmdPrint(unittest.TestCase):
     @patch("bambu_cli.bambu.logger")
     @patch("time.sleep")
     def test_execute_print_command_success(self, mock_sleep, mock_logger, mock_create_mqtt):
-        from bambu_cli.bambu import execute_print_command
+        from bambu_cli.protocols.mqtt import execute_print_command
         import json
 
         mock_client = MagicMock()
@@ -887,7 +887,7 @@ class TestBambuCmdPrint(unittest.TestCase):
     @patch("time.sleep")
     @patch("sys.exit")
     def test_execute_print_command_with_error(self, mock_exit, mock_sleep, mock_logger, mock_create_mqtt):
-        from bambu_cli.bambu import execute_print_command
+        from bambu_cli.protocols.mqtt import execute_print_command
         import json
 
         mock_client = MagicMock()
@@ -922,7 +922,7 @@ class TestBambuCmdPrint(unittest.TestCase):
     @patch("sys.exit")
     @patch("time.sleep")
     def test_execute_print_command_exception(self, mock_sleep, mock_exit, mock_logger, mock_create_mqtt):
-        from bambu_cli.bambu import execute_print_command
+        from bambu_cli.protocols.mqtt import execute_print_command
         import json
 
         mock_client = MagicMock()

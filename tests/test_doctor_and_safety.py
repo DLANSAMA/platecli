@@ -184,19 +184,21 @@ class TestBambuDryRun(unittest.TestCase):
 
 
 class TestBambuSimulation(unittest.TestCase):
-    @patch("bambu_cli.bambu.logger")
-    @patch("bambu_cli.bambu.ImplicitFTPS")
-    def test_simulation_mode_status(self, mock_ftps, mock_logger):
-        from bambu_cli.bambu import cmd_status
-        import bambu_cli.bambu as bambu
+    def test_simulation_mode_status(self):
+        from bambu_cli.commands import cmd_status
 
+        mock_logger = MagicMock()
         args = MagicMock()
         args.json = False
         args.verbose = False
         args.sim = True
 
         # Enable sim mode via the runtime context for the test
-        with settings_ctx(simulation=True):
+        with (
+            settings_ctx(simulation=True),
+            patch("bambu_cli.commands.logger", mock_logger),
+            patch("bambu_cli.protocols.mqtt.logger", mock_logger),
+        ):
             cmd_status(args)
             self.assertTrue(
                 any("Fetching simulated printer status" in call[0][0] for call in mock_logger.info.call_args_list)

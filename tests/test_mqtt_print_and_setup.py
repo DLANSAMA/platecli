@@ -260,10 +260,9 @@ def test_execute_print_printer_error_code():
     with (
         patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
         patch.object(mqtt_mod, "_mqtt_connect"),
-        patch("bambu_cli.bambu.get_command_timeout", return_value=1, create=True),
         pytest.raises(BambuError),
     ):
-        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False)
+        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
 
 
 def test_cmd_light_failure_raises():
@@ -405,9 +404,8 @@ def test_execute_print_real_accept():
     with (
         patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
         patch.object(mqtt_mod, "_mqtt_connect"),
-        patch("bambu_cli.bambu.get_command_timeout", return_value=1, create=True),
     ):
-        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False)
+        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
     # Accept path logs success and returns; publish or message handling must have run.
     assert client.on_message is not None or client.publish.called or client.loop_start.called
     client.loop_start.assert_called()

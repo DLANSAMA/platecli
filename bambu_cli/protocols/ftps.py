@@ -58,19 +58,34 @@ class _SimFtp:
 
 
 class ImplicitFTPS(ftplib.FTP_TLS):
-    """FTP_TLS subclass for implicit FTPS (Bambu printers use port 990)."""
+    """FTP_TLS subclass for implicit FTPS (Bambu printers use port 990).
 
-    def connect(self, host="", port=990, timeout=-999, source_address=None):
+    ``create_connection`` and ``ssl_context_cls`` are injectable so tests pass
+    fakes instead of patching module globals.
+    """
+
+    def connect(
+        self,
+        host="",
+        port=990,
+        timeout=-999,
+        source_address=None,
+        *,
+        create_connection=None,
+        ssl_context_cls=None,
+    ):
+        _connect = create_connection if create_connection is not None else socket.create_connection
+        _SSLContext = ssl_context_cls if ssl_context_cls is not None else ssl.SSLContext
         if host != "":
             self.host = host
         if port > 0:
             self.port = port
         if timeout != -999:
             self.timeout = timeout
-        self.sock = socket.create_connection((self.host, self.port), self.timeout)
+        self.sock = _connect((self.host, self.port), self.timeout)
         self.af = self.sock.family
         try:
-            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx = _SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             pin = getattr(self, "printer", None) and self.printer.cert_fingerprint
             if pin or (getattr(self, "printer", None) and self.printer.insecure_tls):
                 ctx.check_hostname = False

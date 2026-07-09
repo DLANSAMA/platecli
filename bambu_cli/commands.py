@@ -606,7 +606,9 @@ def cmd_print(args, ctx=None):
         from bambu_cli import utils as _utils
 
         _utils._LAST_ERROR_PAYLOAD = None
-        bambu.execute_print_command(printer, payload, basename, dry_run=dry_run)
+        from bambu_cli.protocols.mqtt import execute_print_command
+
+        execute_print_command(printer, payload, basename, dry_run=dry_run)
     except BambuError as exc:
         exit_code = getattr(exc, "exit_code", None) or bambu._exit_code_from_system_exit(exc)
         detail = bambu._last_error_for("print")

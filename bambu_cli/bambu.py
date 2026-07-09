@@ -85,8 +85,8 @@ def _redacted_serial():
 # without going through __getattr__.
 from bambu_cli.cli import main
 
-# Phase 2: download/ and camera are no longer re-exported through the facade —
-# import from bambu_cli.download.* / bambu_cli.camera (or inject collaborators).
+# Phase 2: download/, camera, and protocols/ are no longer re-exported through
+# the facade — import from those packages (or inject collaborators).
 _FACADE_MODULES = (
     "bambu_cli.constants",
     "bambu_cli.cli",
@@ -101,8 +101,6 @@ _FACADE_MODULES = (
     "bambu_cli.errors",
     "bambu_cli.context",
     "bambu_cli.printer",
-    "bambu_cli.protocols.ftps",
-    "bambu_cli.protocols.mqtt",
 )
 
 

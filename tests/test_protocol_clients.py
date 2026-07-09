@@ -2,25 +2,29 @@ from tests.bambu_test_base import *  # noqa: F401,F403
 
 
 class TestImplicitFTPS(unittest.TestCase):
-    @patch("bambu_cli.bambu.socket.create_connection")
-    @patch("bambu_cli.bambu.ssl.SSLContext")
-    def test_implicit_ftps_insecure(self, mock_ssl_context, mock_create_conn):
-        from bambu_cli.bambu import ImplicitFTPS
+    def test_implicit_ftps_insecure(self):
+        from bambu_cli.protocols.ftps import ImplicitFTPS
 
         mock_sock = MagicMock()
         mock_sock.family = 2
-        mock_create_conn.return_value = mock_sock
+        create_connection = MagicMock(return_value=mock_sock)
 
         mock_ctx = MagicMock()
         mock_ctx.wrap_socket.return_value = mock_sock
-        mock_ssl_context.return_value = mock_ctx
+        ssl_context_cls = MagicMock(return_value=mock_ctx)
 
         ftp = ImplicitFTPS()
         # TLS behavior is now driven by the printer object attached to the FTP client
         ftp.printer = _test_printer(insecure_tls=True)
         ftp.getresp = MagicMock(return_value="220 Welcome")
 
-        welcome = ftp.connect("192.168.1.1", 990, 60)
+        welcome = ftp.connect(
+            "192.168.1.1",
+            990,
+            60,
+            create_connection=create_connection,
+            ssl_context_cls=ssl_context_cls,
+        )
 
         self.assertEqual(welcome, "220 Welcome")
         self.assertEqual(mock_ctx.check_hostname, False)
@@ -29,23 +33,27 @@ class TestImplicitFTPS(unittest.TestCase):
         self.assertEqual(mock_ctx.verify_mode, ssl.CERT_NONE)
         mock_ctx.wrap_socket.assert_called_with(mock_sock, server_hostname="192.168.1.1")
 
-    @patch("bambu_cli.bambu.socket.create_connection")
-    @patch("bambu_cli.bambu.ssl.SSLContext")
-    def test_implicit_ftps_secure(self, mock_ssl_context, mock_create_conn):
-        from bambu_cli.bambu import ImplicitFTPS
+    def test_implicit_ftps_secure(self):
+        from bambu_cli.protocols.ftps import ImplicitFTPS
 
         mock_sock = MagicMock()
         mock_sock.family = 2
-        mock_create_conn.return_value = mock_sock
+        create_connection = MagicMock(return_value=mock_sock)
 
         mock_ctx = MagicMock()
         mock_ctx.wrap_socket.return_value = mock_sock
-        mock_ssl_context.return_value = mock_ctx
+        ssl_context_cls = MagicMock(return_value=mock_ctx)
 
         ftp = ImplicitFTPS()
         ftp.getresp = MagicMock(return_value="220 Welcome")
 
-        welcome = ftp.connect("192.168.1.1", 990, 60)
+        welcome = ftp.connect(
+            "192.168.1.1",
+            990,
+            60,
+            create_connection=create_connection,
+            ssl_context_cls=ssl_context_cls,
+        )
 
         self.assertEqual(welcome, "220 Welcome")
         self.assertEqual(mock_ctx.check_hostname, True)
@@ -56,12 +64,10 @@ class TestImplicitFTPS(unittest.TestCase):
 
 
 class TestSendCommand(unittest.TestCase):
-    @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
-    def test_send_command_success(self, mock_create):
-        from bambu_cli.bambu import send_command
+    def test_send_command_success(self):
+        from bambu_cli.protocols.mqtt import send_command
 
         mock_client = MagicMock()
-        mock_create.return_value = mock_client
 
         def side_effect_connect(host, port, keepalive):
             mock_client.on_connect(mock_client, None, None, 0)
@@ -70,7 +76,11 @@ class TestSendCommand(unittest.TestCase):
         mock_client.connect.side_effect = side_effect_connect
 
         printer = _test_printer(ip="192.168.1.1")
-        result = send_command(printer, '{"test": "payload"}')
+        result = send_command(
+            printer,
+            '{"test": "payload"}',
+            client_factory=lambda p, *a, **k: mock_client,
+        )
 
         self.assertTrue(result)
         mock_client.connect.assert_called_with("192.168.1.1", 8883, keepalive=10)
@@ -80,35 +90,41 @@ class TestSendCommand(unittest.TestCase):
         mock_client.loop_stop.assert_called_once()
         mock_client.disconnect.assert_called_once()
 
-    @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
-    @patch("bambu_cli.bambu.time.sleep")
-    def test_send_command_retry_timeout(self, mock_sleep, mock_create):
-        from bambu_cli.bambu import send_command
+    def test_send_command_retry_timeout(self):
+        from bambu_cli.protocols.mqtt import send_command
 
         mock_client = MagicMock()
-        mock_create.return_value = mock_client
-
         mock_client.connect.side_effect = OSError("Connection error")
+        mock_sleep = MagicMock()
 
-        result = send_command(_test_printer(), '{"test": "payload"}')
+        result = send_command(
+            _test_printer(),
+            '{"test": "payload"}',
+            client_factory=lambda p, *a, **k: mock_client,
+            sleep=mock_sleep,
+        )
 
         self.assertFalse(result)
         self.assertEqual(mock_client.connect.call_count, 3)
 
-    @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
-    @patch("bambu_cli.bambu.logger")
-    def test_send_command_on_connect_rc_error(self, mock_logger, mock_create):
-        from bambu_cli.bambu import send_command
+    def test_send_command_on_connect_rc_error(self):
+        from bambu_cli.protocols.mqtt import send_command
 
         mock_client = MagicMock()
-        mock_create.return_value = mock_client
+        mock_logger = MagicMock()
 
         def side_effect_connect(host, port, keepalive):
             mock_client.on_connect(mock_client, None, None, 5)
 
         mock_client.connect.side_effect = side_effect_connect
 
-        result = send_command(_test_printer(ip="192.168.1.1"), '{"test": "payload"}', timeout=0.1)
+        with patch("bambu_cli.protocols.mqtt.logger", mock_logger):
+            result = send_command(
+                _test_printer(ip="192.168.1.1"),
+                '{"test": "payload"}',
+                timeout=0.1,
+                client_factory=lambda p, *a, **k: mock_client,
+            )
 
         self.assertFalse(result)
         mock_logger.error.assert_called_with("Connection failed: rc=5")
@@ -168,7 +184,7 @@ class TestGetFtp(unittest.TestCase):
 
 class TestCreateMqttClient(unittest.TestCase):
     def test_create_mqtt_client_simulation(self):
-        from bambu_cli.bambu import create_mqtt_client
+        from bambu_cli.protocols.mqtt import create_mqtt_client
 
         client = create_mqtt_client(_test_printer(simulation_mode=True))
         from bambu_cli.protocols.mqtt import _SimMqttClient
