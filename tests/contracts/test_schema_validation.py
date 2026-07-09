@@ -94,6 +94,7 @@ def test_schemas_exist():
         "resume.json",
         "print.json",
         "delete.json",
+        "slice_list_settings.json",
     ):
         assert (SCHEMA_DIR / name).is_file()
 
@@ -419,6 +420,44 @@ def test_slice_success_fixture_matches_schema():
         "step_converted": False,
     }
     _validate(payload, _load_schema("slice.json"))
+
+
+def test_slice_list_settings_matches_schema(monkeypatch, tmp_path, capsys):
+    """`slice --list-settings --json` discovery envelope (agent override vocabulary)."""
+    profiles = tmp_path / "profiles"
+    (profiles / "process").mkdir(parents=True)
+    (profiles / "filament").mkdir(parents=True)
+    (profiles / "process" / "std.json").write_text(
+        json.dumps({"wall_loops": "2", "layer_height": "0.2", "name": "std"}), encoding="utf-8"
+    )
+    (profiles / "filament" / "pla.json").write_text(json.dumps({"flow_ratio": "1.0", "name": "pla"}), encoding="utf-8")
+    config_path = tmp_path / "config" / "cfg.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "printer_ip": "127.0.0.1",
+                "serial": "CONTRACTTESTSERIAL",
+                "access_code": "CONTRACTTESTCODE",
+                "model": "P1P",
+                "nozzle": "0.4",
+                "profiles_dir": str(profiles),
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--json", "slice", "--list-settings"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("slice_list_settings.json"))
+    assert payload["action"] == "list_settings"
+    assert payload["process"]["count"] >= 1
+    assert "wall_loops" in payload["process"]["settings"]
+    assert "flow_ratio" in payload["filament"]["settings"]
+    # bookkeeping keys must not leak into the settable surface
+    assert "name" not in payload["process"]["settings"]
 
 
 def test_slice_error_matches_error_envelope(monkeypatch, tmp_path, capsys):

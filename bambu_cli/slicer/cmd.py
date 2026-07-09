@@ -15,6 +15,7 @@ from bambu_cli.logging_utils import logger
 from bambu_cli.slicer.options import (
     _directory_input_message,
     _is_directory_input,
+    _known_setting_keys,
     _sliced_output_path,
     _validate_slice_options,
 )
@@ -30,11 +31,58 @@ from bambu_cli.slicer.step_convert import _convert_step_to_stl
 from bambu_cli.utils import _ensure_output_dir, emit_json_error
 
 
+def _list_settings(args: argparse.Namespace, settings) -> str:
+    """Discovery: dump every settable OrcaSlicer process/filament key + example.
+
+    This is the agent-facing surface — an agent reads this once to learn the full
+    override vocabulary, then drives it via ``--set`` / ``--set-filament``.
+    """
+    from bambu_cli.utils import emit_json
+
+    profiles_dir = settings.profiles_dir
+    process = _known_setting_keys(profiles_dir, "process")
+    filament = _known_setting_keys(profiles_dir, "filament")
+    if not process and not filament:
+        logger.warning(
+            f"⚠️  No OrcaSlicer profiles found under {_path_for_message(profiles_dir)}; "
+            "set 'profiles_dir' in config.json (see 'preflight')."
+        )
+    if bool(_namespace_get(args, "json", False)):
+        emit_json(
+            {
+                "status": "ok",
+                "command": "slice",
+                "action": "list_settings",
+                "profiles_dir": profiles_dir,
+                "process": {"count": len(process), "settings": process},
+                "filament": {"count": len(filament), "settings": filament},
+            }
+        )
+    else:
+        logger.info(f"🔧 Settable OrcaSlicer settings ({len(process)} process, {len(filament)} filament):")
+        for key in sorted(process):
+            logger.info(f"   [process]  {key} = {process[key]}")
+        for key in sorted(filament):
+            logger.info(f"   [filament] {key} = {filament[key]}")
+        logger.info("   Override any of these with --set KEY=VALUE / --set-filament KEY=VALUE.")
+    return profiles_dir
+
+
 def cmd_slice(
     args: argparse.Namespace,
 ) -> str:
     """Slice an STL/STEP file into a printable .3mf using OrcaSlicer."""
     settings = current_settings()
+    if bool(_namespace_get(args, "list_settings", False)):
+        return _list_settings(args, settings)
+    if not _namespace_get(args, "file", None):
+        # `file` is argparse-optional so `slice --list-settings` needs no model;
+        # a normal slice still requires it. Report failed_step="parse" to keep the
+        # agent contract identical to argparse's own missing-required-arg error.
+        message = "the following arguments are required: file"
+        logger.error(message)
+        emit_json_error(args, "slice", EXIT_COMMAND_ERROR, message, failed_step="parse")
+        abort("", exit_code=EXIT_COMMAND_ERROR)
     filepath = _expand_path(args.file)
     source_filepath = filepath
     if filepath.startswith("-"):

@@ -196,6 +196,73 @@ def _exit_code_from_system_exit(exc, default=EXIT_COMMAND_ERROR):
     return default
 
 
+def _add_slice_override_args(parser):
+    """Generic OrcaSlicer setting overrides shared by `slice` and `job`/`send`.
+
+    These reach the full profile surface (see `slice --list-settings`) without a
+    per-setting flag; the named tuning flags above are ergonomic shortcuts.
+    """
+    parser.add_argument(
+        "--set",
+        dest="set_process",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Override any OrcaSlicer process setting (repeatable); see 'slice --list-settings'.",
+    )
+    parser.add_argument(
+        "--set-filament",
+        dest="set_filament",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Override any OrcaSlicer filament setting (repeatable).",
+    )
+    parser.add_argument(
+        "--settings-json",
+        dest="settings_json",
+        metavar="JSON",
+        help='Bulk overrides as JSON: {"process": {...}, "filament": {...}} (agent-friendly).',
+    )
+    parser.add_argument("--layer-height", dest="layer_height", type=float, metavar="MM", help="Layer height in mm.")
+    parser.add_argument(
+        "--first-layer-height", dest="first_layer_height", type=float, metavar="MM", help="First-layer height in mm."
+    )
+    parser.add_argument(
+        "--brim", dest="brim", type=float, metavar="MM", help="Brim width in mm (0 disables; >0 adds an outer brim)."
+    )
+    parser.add_argument(
+        "--speed",
+        dest="speed",
+        type=float,
+        metavar="MM/S",
+        help="Main print speed (mm/s): sets outer/inner wall and sparse-infill speed.",
+    )
+    parser.add_argument(
+        "--seam-position",
+        dest="seam_position",
+        choices=["nearest", "aligned", "back", "random"],
+        help="Where to place layer seams.",
+    )
+    parser.add_argument(
+        "--ironing",
+        dest="ironing",
+        choices=["none", "top", "topmost", "solid"],
+        help="Ironing pass for smoother top surfaces (default none).",
+    )
+    parser.add_argument(
+        "--support-threshold",
+        dest="support_threshold",
+        type=float,
+        metavar="DEG",
+        help="Support overhang threshold angle in degrees.",
+    )
+    parser.add_argument(
+        "--fan-speed", dest="fan_speed", type=float, metavar="PCT", help="Maximum part-cooling fan speed (0-100%%)."
+    )
+    parser.add_argument(
+        "--flow-ratio", dest="flow_ratio", type=float, metavar="RATIO", help="Filament flow ratio (e.g. 0.98)."
+    )
+
+
 def _add_job_arguments(parser):
     parser.add_argument("source", help="URL or local path to .stl/.step/.stp/.obj/.3mf/.gcode/.zip")
     parser.add_argument("--confirm", action="store_true", help="Confirm print start after upload")
@@ -248,6 +315,7 @@ def _add_job_arguments(parser):
     parser.add_argument("--skip-bed-leveling", action="store_true", help="Skip bed leveling")
     parser.add_argument("--skip-flow-cali", action="store_true", help="Skip flow calibration")
     parser.add_argument("--threads", type=int, help="Limit OrcaSlicer CPU threads")
+    _add_slice_override_args(parser)
 
 
 def get_global_parser():
@@ -351,7 +419,7 @@ def build_parser():
     _add_job_arguments(p_send)
 
     p_slice = sub.add_parser("slice", parents=[get_global_parser()], help="Slice a model file into .3mf")
-    p_slice.add_argument("file", help="Path to .stl, .step, .stp, or .obj file")
+    p_slice.add_argument("file", nargs="?", help="Path to .stl, .step, .stp, or .obj file")
     p_slice.add_argument("--quality", default="standard", help="draft/standard/high (default: standard)")
     p_slice.add_argument("--filament", type=str, default="PLA Basic", help="Filament type (e.g. 'PLA Basic', 'PETG')")
     p_slice.add_argument("--infill", type=int, default=15, help="Infill density %% (default: 15)")
@@ -380,6 +448,13 @@ def build_parser():
     p_slice.add_argument("--copies", type=int, default=1, help="Number of copies to arrange on plate (default: 1)")
     p_slice.add_argument("--output", help="Output directory (default: same as input)")
     p_slice.add_argument("--threads", type=int, help="Limit OrcaSlicer CPU threads")
+    _add_slice_override_args(p_slice)
+    p_slice.add_argument(
+        "--list-settings",
+        dest="list_settings",
+        action="store_true",
+        help="List every settable OrcaSlicer process/filament setting and exit (pair with --json for agents).",
+    )
 
     p_gc = sub.add_parser("gcode", parents=[get_global_parser()], help="Send raw G-code to printer")
     p_gc.add_argument("code", help="G-code command (e.g. 'M104 S220')")

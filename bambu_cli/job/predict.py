@@ -48,6 +48,18 @@ def _slice_args_for_job(filepath, args, output_dir):
         copies=getattr(args, "copies", 1),
         output=output_dir,
         threads=getattr(args, "threads", None),
+        layer_height=getattr(args, "layer_height", None),
+        first_layer_height=getattr(args, "first_layer_height", None),
+        brim=getattr(args, "brim", None),
+        speed=getattr(args, "speed", None),
+        seam_position=getattr(args, "seam_position", None),
+        ironing=getattr(args, "ironing", None),
+        support_threshold=getattr(args, "support_threshold", None),
+        fan_speed=getattr(args, "fan_speed", None),
+        flow_ratio=getattr(args, "flow_ratio", None),
+        set_process=getattr(args, "set_process", None),
+        set_filament=getattr(args, "set_filament", None),
+        settings_json=getattr(args, "settings_json", None),
     )
 
 
