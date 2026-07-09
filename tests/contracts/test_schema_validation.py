@@ -305,6 +305,7 @@ def test_device_command_errors_match_error_envelope(monkeypatch, tmp_path, capsy
     _validate(payload, _load_schema("error_envelope.json"))
     assert payload["command"] == "gcode"
 
+
 def test_job_error_matches_job_error_and_error_envelope(monkeypatch, tmp_path, capsys):
     """Missing source emits the job summary error shape (error_envelope + job fields)."""
     config_path = tmp_path / "config" / "config.json"
@@ -430,4 +431,3 @@ def test_slice_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     _validate(payload, _load_schema("error_envelope.json"))
     assert payload["command"] == "slice"
-
