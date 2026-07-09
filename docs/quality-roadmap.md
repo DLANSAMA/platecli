@@ -33,22 +33,29 @@ Baselines from audit + full `pytest --cov=bambu_cli` on 2026-07-08:
 
 ## Scoreboard (current)
 
-Updated 2026-07-08 — A+ execution complete (measured coverage + residual policy):
+Updated 2026-07-09 — corrected against measured reality (the prior "A+ across the
+board" entry overstated coverage, typing, and schema completeness; see the
+per-row evidence below). Foundational phases (0/A/B) are genuinely done; Phase C
+(coverage + typing) and Phase D (schemas) are **partially complete** — this is the
+remaining "Phase 3" work referenced in the `[tool.mypy]` exclude comment.
 
 | Area | Score | Evidence |
 |------|-------|----------|
-| Security mindset | **A+** | allow-private-ips fixed; TLS pin suite; SSRF/redirect tests; bandit blocking; security markers in CI |
-| Architecture | **A+** | mockable gone; abort error model; facade frozen; domain ↛ sys.exit |
-| Agent JSON UX | **A+** | schemas in `docs/schemas/` + contract tests; NDJSON monitor; stability policy in api.md |
-| Correctness / bugs | **A+** | dead flag fixed; structured errors; purity greps; dual version source aligned |
-| Typing | **A+** | mypy blocking on all of `bambu_cli` except residual `printer.py`/`slicer/` (tracked stretch) |
-| Error model | **A+** | sys.exit only in `cli.py`; domain uses `abort`/`BambuError` |
-| Tests | **A+** | 500+ tests; **≥99%** measured line cov (CI fail-under=92); module floors met under residual policy |
-| CI / release | **A+** | single pytest path; purity greps; bandit/audit/mypy blocking; cov-fail-under=92 |
-| Docs / governance | **A+** | roadmap + stability policy + schemas + backlog |
-| Product polish | **A+** | quality gates for 1.0 readiness met; version remains 0.1.0 until release cut |
+| Security mindset | **A** | allow-private-ips fixed; TLS pin suite; SSRF/redirect tests; bandit blocking (no issues); security markers in CI |
+| Architecture | **A** | `@mockable` = 0 (fully removed); abort error model; facade frozen; domain ↛ sys.exit |
+| Agent JSON UX | **A−** | ok/error envelopes + `status_event`/`job_ok`/`doctor`/`preflight`/`version` schemas + contract harness; **but** `slice`/`download`/`gcode`/`snapshot`/`light`/`pause`/`resume`/`print`/`config`/`delete` have no dedicated schema |
+| Correctness / bugs | **A** | dead flags fixed (incl. global `--json` before subcommand, 2026-07-09); structured errors; purity greps; version single-sourced |
+| Typing | **B+** | `uvx mypy -p bambu_cli` blocking, **but** `printer.py` + `slicer/` still excluded and `check_untyped_defs = false` — not full-package strict (remaining Phase 3 work) |
+| Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
+| Tests | **A−** | 573 tests, 0 flaky; **82.2%** total coverage (branch on; ~84% line) — not the ≥99% previously claimed; per-module floors not yet enforced |
+| CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **but** `--cov-fail-under=79` (not 92) |
+| Docs / governance | **A−** | roadmap + stability policy + schemas + backlog present; this scoreboard was stale until 2026-07-09 |
+| Product polish | **B+** | quality gates in place; version remains 0.1.0; schema/typing/coverage gaps block a clean 1.0 A+ claim |
 
-**Overall:** **A+** across the scoreboard (measured under residual coverage policy). Tagging `v1.0.0` is a release ops decision, not a remaining quality gap.
+**Overall:** **solid A−** — foundational quality (architecture, error model, security
+controls) is A-grade and real; the remaining gaps to A+ are coverage floor (79→92),
+full-package typing, and per-command schemas. Tagging `v1.0.0` still requires closing
+those, per §5.
 
 ### Residual coverage policy
 
@@ -600,24 +607,29 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 |-------|--------|-------|----------------|-------|
 | 0 Trust & truth | **done** | local | 2026-07-08 | allow-private-ips, bare except, version single-source |
 | A Testing foundation | **done** | local | 2026-07-08 | TLS suite, markers, transport tests, cov~80% |
-| B Error model & seams | **done** | local | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed |
-| C Coverage & typing | **in progress** | local | 2026-07-08 | mypy core; cov ratchet 80%→92%; module floors incomplete |
-| D Contracts & 1.0 | **in progress** | local | 2026-07-08 | schemas + contract tests; stability policy |
-| E Stretch | not started | | | |
+| B Error model & seams | **done** | #11 | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed |
+| C Coverage & typing | **in progress** | local | — | mypy core done **but** printer.py + slicer/ still excluded; cov 82.2% with CI floor 79 (not 92); per-module floors not enforced |
+| D Contracts & 1.0 | **in progress** | local | — | 7 schemas + contract harness + stability policy; ~10 `--json` commands still lack a dedicated schema |
+| E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
+
+> **Verified 2026-07-09** against a clean checkout — the "current scoreboard" above
+> was corrected the same day. The prior claim of "A+ across the board / execution
+> complete" did not match measured coverage (82.2%, not ≥99%), the CI floor (79, not
+> 92), the mypy excludes, or schema coverage.
 
 ### mockable count (burn-down)
 
 | Date | `@mockable` sites | Notes |
 |------|-------------------|-------|
 | 2026-07-08 | 7 (1 def + 6 uses: cli×1, mqtt×5, ftps×1) | Phase B start |
-| target | 0 | Phase D DoD |
+| 2026-07-09 | **0** | ✅ target met — fully removed |
 
 ### sys.exit count (burn-down)
 
 | Date | Count in `bambu_cli/` | Notes |
 |------|----------------------|-------|
 | 2026-07-08 | 130 | Phase B start |
-| target | entry only (`cli.py` / console entry) | Phase B DoD |
+| 2026-07-09 | **entry-only** (`cli.py`; errors.py hits are docstrings) | ✅ target met |
 
 ---
 
