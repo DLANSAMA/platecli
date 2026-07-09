@@ -66,3 +66,6 @@ printer_snapshot.jpg
 mutants/
 .mutmut-cache
 
+# hypothesis property-test cache (local machine paths; never ship)
+.hypothesis/
+
