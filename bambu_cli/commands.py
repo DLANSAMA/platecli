@@ -58,7 +58,7 @@ def _offer_pin_fingerprint(
     return True
 
 
-def cmd_doctor(args, ctx=None):  # pragma: no cover -- printer health check; components unit-tested
+def cmd_doctor(args, ctx=None):
     """Health-check: auto-discover printer capabilities and verify configuration."""
     from bambu_cli import bambu
     from bambu_cli.cli import _display_path, _exception_for_message, _namespace_get, _path_for_message
@@ -207,7 +207,7 @@ def cmd_doctor(args, ctx=None):  # pragma: no cover -- printer health check; com
         )
 
 
-def cmd_light(args, ctx=None):  # pragma: no cover -- thin handler wrapper
+def cmd_light(args, ctx=None):
     """Control chamber light."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.constants import EXIT_NETWORK_ERROR
@@ -246,7 +246,7 @@ def cmd_light(args, ctx=None):  # pragma: no cover -- thin handler wrapper
         )
 
 
-def cmd_pause(args, ctx=None):  # pragma: no cover -- thin handler wrapper
+def cmd_pause(args, ctx=None):
     """Pause current print."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.constants import EXIT_NETWORK_ERROR
@@ -271,7 +271,7 @@ def cmd_pause(args, ctx=None):  # pragma: no cover -- thin handler wrapper
         )
 
 
-def cmd_resume(args, ctx=None):  # pragma: no cover -- thin handler wrapper
+def cmd_resume(args, ctx=None):
     """Resume paused print."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.constants import EXIT_NETWORK_ERROR
@@ -296,7 +296,7 @@ def cmd_resume(args, ctx=None):  # pragma: no cover -- thin handler wrapper
         )
 
 
-def cmd_stop(args, ctx=None):  # pragma: no cover -- thin handler wrapper
+def cmd_stop(args, ctx=None):
     """Stop current print."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
@@ -333,7 +333,7 @@ def cmd_stop(args, ctx=None):  # pragma: no cover -- thin handler wrapper
         )
 
 
-def cmd_upload(args, ctx=None):  # pragma: no cover -- FTPS upload orchestration; resume unit-tested
+def cmd_upload(args, ctx=None):
     """Upload a file to the printer via FTPS with binary retry/resume."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
@@ -504,7 +504,7 @@ def cmd_upload(args, ctx=None):  # pragma: no cover -- FTPS upload orchestration
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
 
-def cmd_files(args, ctx=None):  # pragma: no cover -- FTPS list command
+def cmd_files(args, ctx=None):
     """List files on the printer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
@@ -543,7 +543,7 @@ def cmd_files(args, ctx=None):  # pragma: no cover -- FTPS list command
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
 
-def cmd_print(args, ctx=None):  # pragma: no cover -- print option parsing; execute_print unit-tested
+def cmd_print(args, ctx=None):
     """Start printing a file already on the printer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
@@ -636,7 +636,7 @@ def cmd_download(args):
     return bambu._cmd_download(args)
 
 
-def cmd_delete(args, ctx=None):  # pragma: no cover -- FTPS delete command
+def cmd_delete(args, ctx=None):
     """Delete a file from the printer via FTPS."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
@@ -695,28 +695,28 @@ def cmd_snapshot(args, ctx=None):
     bambu._cmd_snapshot(args, ctx=ctx)
 
 
-def cmd_preflight(args):  # pragma: no cover -- thin dispatch to setup_cmd
+def cmd_preflight(args):
     """Check local install/config readiness without contacting printer."""
     from bambu_cli import bambu
 
     bambu._cmd_preflight(args)
 
 
-def cmd_config(args):  # pragma: no cover -- thin dispatch to setup_cmd
+def cmd_config(args):
     """Show the effective config (redacted) or validate it locally."""
     from bambu_cli import bambu
 
     bambu._cmd_config(args)
 
 
-def cmd_job(args):  # pragma: no cover -- thin dispatch to job module
+def cmd_job(args):
     """One-shot URL/local file workflow: download, slice, upload, optionally print."""
     from bambu_cli import bambu
 
     return bambu._cmd_job(args)
 
 
-def cmd_gcode(args, ctx=None):  # pragma: no cover -- thin handler wrapper
+def cmd_gcode(args, ctx=None):
     """Send raw G-code to the printer via MQTT."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
@@ -767,7 +767,7 @@ def cmd_gcode(args, ctx=None):  # pragma: no cover -- thin handler wrapper
         )
 
 
-def cmd_status(args, ctx=None):  # pragma: no cover -- thin handler wrapper
+def cmd_status(args, ctx=None):
     """Query and display the printer's current status."""
     from bambu_cli.ams import parse_ams
     from bambu_cli.cli import _namespace_get

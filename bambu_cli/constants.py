@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 
 
-def _version_from_pyproject() -> str | None:  # pragma: no cover -- version resolve
+def _version_from_pyproject() -> str | None:
     """Read project.version from the source-tree pyproject.toml, if present."""
     root = Path(__file__).resolve().parents[1]
     path = root / "pyproject.toml"
@@ -25,10 +25,10 @@ def _version_from_pyproject() -> str | None:  # pragma: no cover -- version reso
     return match.group(1) if match else None
 
 
-def _resolve_version() -> str:  # pragma: no cover -- version resolve
+def _resolve_version() -> str:
     try:
         from importlib.metadata import PackageNotFoundError, version
-    except ImportError:  # pragma: no cover - Python <3.8 only
+    except ImportError:
         from importlib_metadata import PackageNotFoundError, version  # type: ignore
 
     try:

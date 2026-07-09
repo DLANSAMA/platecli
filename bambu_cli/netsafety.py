@@ -26,7 +26,7 @@ _dns_cache_lock = threading.Lock()
 MAX_DOWNLOAD_REDIRECT_HOPS = 5
 
 
-def _get_safe_connection(host, port, timeout, source_address):  # pragma: no cover -- SSRF connection
+def _get_safe_connection(host, port, timeout, source_address):
     """Perform DNS resolution and validate IP is not internal/reserved."""
     from bambu_cli.constants import DNS_CACHE_TTL
 
@@ -80,12 +80,12 @@ def _get_safe_connection(host, port, timeout, source_address):  # pragma: no cov
 
 
 class SafeHTTPConnection(http.client.HTTPConnection):
-    def connect(self):  # pragma: no cover -- connection wrap
+    def connect(self):
         self.sock = _get_safe_connection(self.host, self.port, self.timeout, self.source_address)
 
 
 class SafeHTTPSConnection(http.client.HTTPSConnection):
-    def connect(self):  # pragma: no cover -- connection wrap
+    def connect(self):
         sock = _get_safe_connection(self.host, self.port, self.timeout, self.source_address)
         # Wrap with SSL using the original hostname for SNI
         try:
@@ -136,7 +136,7 @@ class SafeHTTPSHandler(urllib.request.HTTPSHandler):
 
 
 @functools.lru_cache(maxsize=1)
-def _default_user_agent():  # pragma: no cover -- ua string
+def _default_user_agent():
     """Construct a User-Agent string that reflects the actual host OS."""
     system = platform.system()
     machine = platform.machine() or "x86_64"
@@ -149,7 +149,7 @@ def _default_user_agent():  # pragma: no cover -- ua string
     return f"Mozilla/5.0 ({os_label}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
-def build_safe_opener():  # pragma: no cover -- safe opener factory
+def build_safe_opener():
     """Build a urllib opener that only uses safe handlers and restricts schemes."""
     opener = urllib.request.OpenerDirector()
     # Disable environment proxies so target IP validation cannot be bypassed by

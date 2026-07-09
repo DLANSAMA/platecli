@@ -19,21 +19,21 @@ from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
 
 
-def _name_for_message(value):  # pragma: no cover -- naming helper
+def _name_for_message(value):
     """Return a local/remote name for messages without URL credentials."""
     return _redact_url_credentials(value)
 
 
-def _file_extension(path):  # pragma: no cover -- naming helper
+def _file_extension(path):
     return os.path.splitext(path)[1].lower()
 
 
-def _portable_basename(path):  # pragma: no cover -- naming helper
+def _portable_basename(path):
     """Return a basename while treating both POSIX and Windows separators as separators."""
     return os.path.basename(str(path or "").replace("\\", "/"))
 
 
-def _download_source_extension(url, fallback_name=None):  # pragma: no cover -- naming helper
+def _download_source_extension(url, fallback_name=None):
     """Infer the model/print extension from a URL path or resolved filename."""
     for value in (fallback_name, unquote(urlparse(url).path)):
         ext = _file_extension(value or "")
@@ -42,7 +42,7 @@ def _download_source_extension(url, fallback_name=None):  # pragma: no cover -- 
     return ".stl"
 
 
-def _download_filename_with_extension(filename, url, fallback_name=None):  # pragma: no cover -- naming helper
+def _download_filename_with_extension(filename, url, fallback_name=None):
     source_ext = _download_source_extension(url, fallback_name=fallback_name)
     stem, ext = os.path.splitext(filename)
     if ext.lower() in DOWNLOADABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS:
@@ -52,7 +52,7 @@ def _download_filename_with_extension(filename, url, fallback_name=None):  # pra
     return filename + source_ext
 
 
-def _download_target_filename(args, url, resolved_name=None):  # pragma: no cover -- naming helper
+def _download_target_filename(args, url, resolved_name=None):
     """Choose a safe local filename for a direct model/print download."""
     if _namespace_get(args, "name"):
         filename = _sanitize_download_filename(_namespace_get(args, "name"))
@@ -64,7 +64,7 @@ def _download_target_filename(args, url, resolved_name=None):  # pragma: no cove
     return _download_filename_with_extension(filename, url, fallback_name=resolved_name)
 
 
-def _sanitize_download_filename(filename):  # pragma: no cover -- naming helper
+def _sanitize_download_filename(filename):
     filename = _portable_basename(filename)
     filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", filename).strip(" .")
     if filename in (".", "..") or not filename:
@@ -79,7 +79,7 @@ def _sanitize_download_filename(filename):  # pragma: no cover -- naming helper
     return filename
 
 
-def _filename_from_content_disposition(value):  # pragma: no cover -- naming helper
+def _filename_from_content_disposition(value):
     if not value:
         return None
     message = email.message.Message()
@@ -97,7 +97,7 @@ def _filename_from_content_disposition(value):  # pragma: no cover -- naming hel
     return _sanitize_download_filename(filename) if filename else None
 
 
-def _has_command_injection_chars(value):  # pragma: no cover -- naming helper
+def _has_command_injection_chars(value):
     """True if *value* contains CR, LF, or NUL.
 
     FTP and MQTT command lines are delimited by these characters; embedding them
@@ -107,7 +107,7 @@ def _has_command_injection_chars(value):  # pragma: no cover -- naming helper
     return any(c in (value or "") for c in ("\r", "\n", "\0"))
 
 
-def _safe_remote_name(filename):  # pragma: no cover -- naming helper
+def _safe_remote_name(filename):
     """Reject names that are unsafe for printer-side files.
 
     FTP commands are CRLF-delimited, so a NUL/CR/LF in a filename bound into a
@@ -135,16 +135,16 @@ def _safe_remote_name(filename):  # pragma: no cover -- naming helper
     return filename
 
 
-def _is_print_ready_name(filename):  # pragma: no cover -- naming helper
+def _is_print_ready_name(filename):
     return _file_extension(filename) in PRINT_READY_EXTENSIONS
 
 
-def _reject_non_print_ready(filename, action):  # pragma: no cover -- naming helper
+def _reject_non_print_ready(filename, action):
     if not _is_print_ready_name(filename):
         logger.error(_print_ready_error_message(filename, action))
         abort("", exit_code=EXIT_FILE_ERROR)
 
 
-def _print_ready_error_message(filename, action):  # pragma: no cover -- naming helper
+def _print_ready_error_message(filename, action):
     supported = ", ".join(PRINT_READY_EXTENSIONS)
     return f"Cannot {action} '{filename}': expected a printer-ready file ({supported}). Use `job` or `slice` for model files."

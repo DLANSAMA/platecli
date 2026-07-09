@@ -21,29 +21,29 @@ from bambu_cli.logging_utils import logger
 from bambu_cli.protocols.ftps import _download_partial_path, _remove_partial_file
 
 
-def _archive_member_too_large_message(filename, member_bytes, max_bytes):  # pragma: no cover -- msg
+def _archive_member_too_large_message(filename, member_bytes, max_bytes):
     limit_mb = max_bytes // (1024 * 1024)
     return f"ZIP member is too large: {filename} is {member_bytes} bytes and exceeds the {limit_mb} MB safety limit."
 
 
-def _archive_member_exceeded_limit_message(filename, max_bytes):  # pragma: no cover -- msg
+def _archive_member_exceeded_limit_message(filename, max_bytes):
     limit_mb = max_bytes // (1024 * 1024)
     return f"ZIP member exceeded the {limit_mb} MB safety limit while extracting: {filename}"
 
 
-def _is_zip_content_type(content_type):  # pragma: no cover -- zip type
+def _is_zip_content_type(content_type):
     media_type = (content_type or "").split(";", 1)[0].strip().lower()
     return media_type in ("application/zip", "application/x-zip-compressed")
 
 
-def _is_archive_download(url, filename=None, content_type=None):  # pragma: no cover -- archive detect
+def _is_archive_download(url, filename=None, content_type=None):
     values = [filename, unquote(urlparse(url).path)]
     return any(
         _file_extension(_portable_basename(value or "")) in ARCHIVE_DOWNLOAD_EXTENSIONS for value in values
     ) or _is_zip_content_type(content_type)
 
 
-def _select_zip_model_member(archive):  # pragma: no cover -- zip select
+def _select_zip_model_member(archive):
     """Pick the best supported model/print file from a ZIP without trusting paths."""
     candidates = []
     for index, info in enumerate(archive.infolist()):
@@ -62,7 +62,7 @@ def _select_zip_model_member(archive):  # pragma: no cover -- zip select
     return info, filename
 
 
-def _extract_zip_model(zip_path, outdir, args):  # pragma: no cover -- zip extract
+def _extract_zip_model(zip_path, outdir, args):
     """Extract exactly one supported model/print file from a downloaded ZIP."""
     # Collision avoidance is looked up on the package so existing
     # ``bambu_cli.download._noncolliding_path`` test patches keep working.

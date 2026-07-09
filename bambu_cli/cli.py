@@ -21,7 +21,7 @@ from .constants import (
 from .utils import emit_json, emit_json_error
 
 
-def setup_logging(verbose=False, json_mode=False):  # pragma: no cover -- cli helper
+def setup_logging(verbose=False, json_mode=False):
     logging_module = logging
     sys_module = sys
 
@@ -52,7 +52,7 @@ def setup_logging(verbose=False, json_mode=False):  # pragma: no cover -- cli he
     logging_module.getLogger("paho").setLevel(logging_module.WARNING)
 
 
-def _argv_json_requested(argv=None):  # pragma: no cover -- cli helper
+def _argv_json_requested(argv=None):
     if argv is None:
         argv = sys.argv[1:]
     parser = argparse.ArgumentParser(add_help=False, parents=[get_global_parser()])
@@ -60,7 +60,7 @@ def _argv_json_requested(argv=None):  # pragma: no cover -- cli helper
     return getattr(args, "json", False)
 
 
-def _guess_command_from_argv(argv=None):  # pragma: no cover -- cli helper
+def _guess_command_from_argv(argv=None):
     if argv is None:
         argv = sys.argv[1:]
     parser = argparse.ArgumentParser(add_help=False, parents=[get_global_parser()])
@@ -76,7 +76,7 @@ class JsonArgumentParser(argparse.ArgumentParser):
         kwargs.setdefault("conflict_handler", "resolve")
         super().__init__(*args, **kwargs)
 
-    def error(self, message):  # pragma: no cover -- argparse error path (human + JSON)
+    def error(self, message):
         if not _argv_json_requested():
             self.print_usage(sys.stderr)
             self.exit(EXIT_COMMAND_ERROR, f"{self.prog}: error: {message}\n")
@@ -92,14 +92,14 @@ class JsonArgumentParser(argparse.ArgumentParser):
         self.exit(EXIT_COMMAND_ERROR)
 
 
-def _expand_path(path):  # pragma: no cover -- cli helper
+def _expand_path(path):
     """Expand user and environment variables in local filesystem paths."""
     if path is None:
         return None
     return os.path.expandvars(os.path.expanduser(str(path)))
 
 
-def _display_path(path):  # pragma: no cover -- cli helper
+def _display_path(path):
     """Return a user-facing path with the current home directory compacted."""
     if path is None:
         return None
@@ -121,7 +121,7 @@ def _display_path(path):  # pragma: no cover -- cli helper
     return text
 
 
-def _path_for_message(path):  # pragma: no cover -- cli helper
+def _path_for_message(path):
     """Return a local path suitable for human and agent-facing messages."""
     display = _display_path(path)
     if display is None or os.sep == "/":
@@ -129,7 +129,7 @@ def _path_for_message(path):  # pragma: no cover -- cli helper
     return display.replace(os.sep, "/")
 
 
-def _exception_for_message(exc):  # pragma: no cover -- cli helper
+def _exception_for_message(exc):
     """Return exception text with local filesystem paths compacted for output."""
     message = str(exc)
     for attr in ("filename", "filename2"):
@@ -139,7 +139,7 @@ def _exception_for_message(exc):  # pragma: no cover -- cli helper
     return message
 
 
-def _looks_like_schemeless_credential_url(value):  # pragma: no cover -- cli helper
+def _looks_like_schemeless_credential_url(value):
     """Detect userinfo-bearing URLs where the user omitted https://."""
     text = str(value or "")
     if "\\" in text or any(char.isspace() for char in text):
@@ -154,7 +154,7 @@ def _looks_like_schemeless_credential_url(value):  # pragma: no cover -- cli hel
         return False
 
 
-def _redact_url_credentials(value):  # pragma: no cover -- cli helper
+def _redact_url_credentials(value):
     """Return URL text with any userinfo removed before logging or JSON output."""
     text = str(value or "")
     parsed = urlparse(text)
@@ -176,7 +176,7 @@ def _redact_url_credentials(value):  # pragma: no cover -- cli helper
     return urlunparse((parsed.scheme, host, parsed.path, parsed.params, parsed.query, parsed.fragment))
 
 
-def _namespace_get(args, name, default=None):  # pragma: no cover -- cli helper
+def _namespace_get(args, name, default=None):
     """Read argparse.Namespace values without treating MagicMock attributes as set."""
     try:
         return vars(args).get(name, default)
@@ -184,7 +184,7 @@ def _namespace_get(args, name, default=None):  # pragma: no cover -- cli helper
         return default
 
 
-def _exit_code_from_system_exit(exc, default=EXIT_COMMAND_ERROR):  # pragma: no cover -- cli helper
+def _exit_code_from_system_exit(exc, default=EXIT_COMMAND_ERROR):
     """Normalize SystemExit / BambuError codes for machine-readable summaries."""
     code = getattr(exc, "exit_code", None)
     if code is None:
@@ -196,7 +196,7 @@ def _exit_code_from_system_exit(exc, default=EXIT_COMMAND_ERROR):  # pragma: no 
     return default
 
 
-def _add_job_arguments(parser):  # pragma: no cover -- cli helper
+def _add_job_arguments(parser):
     parser.add_argument("source", help="URL or local path to .stl/.step/.stp/.obj/.3mf/.gcode/.zip")
     parser.add_argument("--confirm", action="store_true", help="Confirm print start after upload")
     parser.add_argument(
@@ -250,7 +250,7 @@ def _add_job_arguments(parser):  # pragma: no cover -- cli helper
     parser.add_argument("--threads", type=int, help="Limit OrcaSlicer CPU threads")
 
 
-def get_global_parser():  # pragma: no cover -- cli helper
+def get_global_parser():
     global_parser = argparse.ArgumentParser(add_help=False)
     global_parser.add_argument(
         "-v", "--verbose", action="store_true", default=argparse.SUPPRESS, help="Enable debug logging"
@@ -286,7 +286,7 @@ def get_global_parser():  # pragma: no cover -- cli helper
     return global_parser
 
 
-def build_parser():  # pragma: no cover -- argparse wiring; help smoke tests cover
+def build_parser():
     parser = JsonArgumentParser(description="Bambu Lab local printer control", parents=[get_global_parser()])
     parser.add_argument("--version", action="store_true", help="Print version and exit")
     sub = parser.add_subparsers(dest="cmd", parser_class=JsonArgumentParser)
@@ -449,11 +449,11 @@ def build_parser():  # pragma: no cover -- argparse wiring; help smoke tests cov
     return parser
 
 
-def _json_mode_requested(args):  # pragma: no cover -- cli helper
+def _json_mode_requested(args):
     return bool(getattr(args, "json", False))
 
 
-def _requires_printer_dns_check(args):  # pragma: no cover -- cli helper
+def _requires_printer_dns_check(args):
     if bool(getattr(args, "sim", False)):
         return False
     if args.cmd not in PRINTER_NETWORK_COMMANDS:
@@ -461,7 +461,7 @@ def _requires_printer_dns_check(args):  # pragma: no cover -- cli helper
     return not (args.cmd in ("job", "send") and bool(getattr(args, "dry_run", False)))
 
 
-def _json_setup_should_be_noninteractive(args):  # pragma: no cover -- cli helper
+def _json_setup_should_be_noninteractive(args):
     return (
         args.cmd == "setup"
         and bool(getattr(args, "json", False))
@@ -471,14 +471,14 @@ def _json_setup_should_be_noninteractive(args):  # pragma: no cover -- cli helpe
     )
 
 
-def _setup_args_provided(args):  # pragma: no cover -- cli helper
+def _setup_args_provided(args):
     return any(
         _namespace_get(args, attr) is not None
         for attr in ("printer_ip", "serial", "access_code", "access_code_env", "access_code_file", "model", "nozzle")
     )
 
 
-def _resolve_command(name):  # pragma: no cover -- cli helper
+def _resolve_command(name):
     """Look up the cmd_* handler for a command through bambu_cli.bambu so
     tests that patch bambu.cmd_* (or bambu.cmd_job) still take effect."""
     func_name = "cmd_job" if name in ("job", "send") else f"cmd_{name}"
@@ -487,7 +487,7 @@ def _resolve_command(name):  # pragma: no cover -- cli helper
     return getattr(bambu, func_name, None)
 
 
-def main():  # pragma: no cover -- process entry; handlers unit-tested
+def main():
     from bambu_cli import bambu
 
     utils._JSON_EMITTED = False

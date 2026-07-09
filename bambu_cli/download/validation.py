@@ -25,12 +25,12 @@ from bambu_cli.logging_utils import logger
 from bambu_cli.utils import emit_json_error
 
 
-def _looks_like_url(value):  # pragma: no cover -- validation helper
+def _looks_like_url(value):
     parsed = urlparse(value)
     return bool(parsed.scheme and "://" in value)
 
 
-def _normalize_url_input(value):  # pragma: no cover -- validation helper
+def _normalize_url_input(value):
     """Accept common scheme-less website inputs without mistaking model.stl for a URL."""
     if _looks_like_url(value):
         return value
@@ -47,12 +47,12 @@ def _normalize_url_input(value):  # pragma: no cover -- validation helper
     return value
 
 
-def _is_http_url(value):  # pragma: no cover -- validation helper
+def _is_http_url(value):
     parsed = urlparse(value)
     return parsed.scheme.lower() in ("http", "https") and bool(parsed.netloc)
 
 
-def _validate_http_url_or_exit(value):  # pragma: no cover -- url validate
+def _validate_http_url_or_exit(value):
     parsed = urlparse(value)
     if parsed.scheme.lower() not in ("http", "https"):
         logger.error(f"Invalid URL scheme: {parsed.scheme or 'none'}")
@@ -65,9 +65,7 @@ def _validate_http_url_or_exit(value):  # pragma: no cover -- url validate
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
 
-def _validate_download_url_or_exit(
-    args, source_url, normalized_source, url, failed_step, label
-):  # pragma: no cover -- validation helper
+def _validate_download_url_or_exit(args, source_url, normalized_source, url, failed_step, label):
     """Validate a download URL and emit structured, redacted JSON on failure."""
     try:
         _validate_http_url_or_exit(url)
@@ -85,7 +83,7 @@ def _validate_download_url_or_exit(
         raise
 
 
-def _known_unsupported_download_extension(value):  # pragma: no cover -- validation helper
+def _known_unsupported_download_extension(value):
     """Return a clearly unsupported source extension, or None when ambiguous."""
     ext = _file_extension(_portable_basename(unquote(str(value or ""))))
     if ext and ext not in DOWNLOADABLE_EXTENSIONS and ext in KNOWN_UNSUPPORTED_DOWNLOAD_EXTENSIONS:
@@ -93,7 +91,7 @@ def _known_unsupported_download_extension(value):  # pragma: no cover -- validat
     return None
 
 
-def _unsupported_download_message(ext):  # pragma: no cover -- validation helper
+def _unsupported_download_message(ext):
     supported = ", ".join(DOWNLOADABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS)
     return (
         f"Unsupported download file type '{ext}'. Supported types: {supported}. "
@@ -101,9 +99,7 @@ def _unsupported_download_message(ext):  # pragma: no cover -- validation helper
     )
 
 
-def _reject_unsupported_download_extension(
-    args, source_url, normalized_source, url, value, failed_step="validate"
-):  # pragma: no cover -- validation helper
+def _reject_unsupported_download_extension(args, source_url, normalized_source, url, value, failed_step="validate"):
     ext = _known_unsupported_download_extension(value)
     if not ext:
         return
@@ -123,7 +119,7 @@ def _reject_unsupported_download_extension(
     abort("", exit_code=EXIT_FILE_ERROR)
 
 
-def _known_unsupported_content_type(content_type):  # pragma: no cover -- validation helper
+def _known_unsupported_content_type(content_type):
     """Return a clearly unsupported response content type, or None when ambiguous."""
     media_type = (content_type or "").split(";", 1)[0].strip().lower()
     if not media_type:
@@ -135,9 +131,7 @@ def _known_unsupported_content_type(content_type):  # pragma: no cover -- valida
     return None
 
 
-def _reject_unsupported_content_type(
-    args, source_url, normalized_source, url, content_type
-):  # pragma: no cover -- validation helper
+def _reject_unsupported_content_type(args, source_url, normalized_source, url, content_type):
     media_type = _known_unsupported_content_type(content_type)
     if not media_type:
         return
@@ -157,7 +151,7 @@ def _reject_unsupported_content_type(
     abort("", exit_code=EXIT_FILE_ERROR)
 
 
-def _max_download_mb_error(args):  # pragma: no cover -- validation helper
+def _max_download_mb_error(args):
     max_download_mb = _namespace_get(args, "max_download_mb", DEFAULT_MAX_DOWNLOAD_MB)
     try:
         max_download_mb = int(max_download_mb)
@@ -168,7 +162,7 @@ def _max_download_mb_error(args):  # pragma: no cover -- validation helper
     return None
 
 
-def _validate_max_download_mb_or_exit(args, command="download"):  # pragma: no cover -- validation helper
+def _validate_max_download_mb_or_exit(args, command="download"):
     message = _max_download_mb_error(args)
     if message:
         logger.error(message)
@@ -178,7 +172,7 @@ def _validate_max_download_mb_or_exit(args, command="download"):  # pragma: no c
     return max_download_mb * 1024 * 1024
 
 
-def _reject_oversized_download(  # pragma: no cover -- validation helper
+def _reject_oversized_download(
     args, source_url, normalized_source, url, outpath, received_bytes, max_bytes, content_length=None
 ):
     limit_mb = max_bytes // (1024 * 1024)

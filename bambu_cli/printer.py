@@ -49,7 +49,7 @@ class BambuPrinter:
     @contextlib.contextmanager
     def get_ftp_client(self, timeout: Optional[float] = None):
         """Context manager to get a connected FTP client."""
-        if timeout is None:  # pragma: no cover -- default timeout branch
+        if timeout is None:
             timeout = self.ftps_timeout
         # We can implement pooling here in the future
         client = ftps_protocol._create_raw_ftp(self, timeout=timeout)
@@ -58,11 +58,11 @@ class BambuPrinter:
         finally:
             try:
                 client.quit()
-            except (*ftplib.all_errors, ssl.SSLError):  # pragma: no cover -- quiet close
+            except (*ftplib.all_errors, ssl.SSLError):
                 pass
             try:
                 client.close()
-            except (*ftplib.all_errors, ssl.SSLError):  # pragma: no cover -- quiet close
+            except (*ftplib.all_errors, ssl.SSLError):
                 pass
 
     def _probe_remote_size(self, ftp, remote_path: str) -> Optional[int]:
@@ -81,10 +81,10 @@ class BambuPrinter:
     def _delete_remote_quiet(self, ftp, remote_path: str) -> None:
         try:
             ftp.delete(remote_path)
-        except ftplib.all_errors:  # pragma: no cover -- best-effort delete
+        except ftplib.all_errors:
             pass
 
-    def upload_file(  # pragma: no cover -- FTPS resume state machine; unit tests cover paths
+    def upload_file(
         self,
         local_path: str,
         remote_path: str,

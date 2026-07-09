@@ -23,14 +23,14 @@ if TYPE_CHECKING:
     from bambu_cli.context import Settings
 
 
-def _normalize_wall_type(wall_type: str | None) -> str | None:  # pragma: no cover -- wall type alias
+def _normalize_wall_type(wall_type: str | None) -> str | None:
     """Accept the old 'archaic' spelling as an alias for Orca's classic walls."""
     if wall_type == "archaic":
         return "classic"
     return wall_type
 
 
-def _profiles_dir_diagnostic(profiles_dir):  # pragma: no cover -- slicer helper
+def _profiles_dir_diagnostic(profiles_dir):
     """Return ``(hint_or_None, detected_dir_or_None)`` for a bad profiles dir.
 
     ``detected_dir`` is a real, *different* OrcaSlicer BBL profiles directory
@@ -51,7 +51,7 @@ def _profiles_dir_diagnostic(profiles_dir):  # pragma: no cover -- slicer helper
     return None, detected
 
 
-def _slicer_executable_problem(path: str | None) -> str | None:  # pragma: no cover -- orca path check
+def _slicer_executable_problem(path: str | None) -> str | None:
     """Return a human-readable OrcaSlicer path problem, or None when usable."""
     from bambu_cli import bambu
 
@@ -68,9 +68,7 @@ def _slicer_executable_problem(path: str | None) -> str | None:  # pragma: no co
     return None
 
 
-def _sliced_output_path(
-    filepath: str, output_dir: str | None = None, copies: int = 1
-) -> str:  # pragma: no cover -- output path helper
+def _sliced_output_path(filepath: str, output_dir: str | None = None, copies: int = 1) -> str:
     from bambu_cli import bambu
 
     basename = os.path.splitext(bambu._portable_basename(filepath))[0]
@@ -79,7 +77,7 @@ def _sliced_output_path(
     return os.path.join(outdir, outfile)
 
 
-def _is_directory_input(path: str) -> bool:  # pragma: no cover -- slicer helper
+def _is_directory_input(path: str) -> bool:
     """Return True for real directory inputs without trusting broad test mocks."""
     import stat
 
@@ -89,13 +87,13 @@ def _is_directory_input(path: str) -> bool:  # pragma: no cover -- slicer helper
         return False
 
 
-def _directory_input_message(path: str) -> str:  # pragma: no cover -- slicer helper
+def _directory_input_message(path: str) -> str:
     from bambu_cli import bambu
 
     return f"Path is a directory, not a file: {bambu._path_for_message(path)}"
 
 
-def _validate_slice_options(args: argparse.Namespace) -> str | None:  # pragma: no cover -- slice option validation
+def _validate_slice_options(args: argparse.Namespace) -> str | None:
     from bambu_cli.cli import _namespace_get
     from bambu_cli.constants import (
         MAX_BED_TEMP_C,
@@ -122,9 +120,7 @@ def _validate_slice_options(args: argparse.Namespace) -> str | None:  # pragma: 
     return None
 
 
-def _safe_temp_prefix(
-    value: Any, fallback: str = "tmp", max_length: int = 48
-) -> str:  # pragma: no cover -- slicer helper
+def _safe_temp_prefix(value: Any, fallback: str = "tmp", max_length: int = 48) -> str:
     """Return a filesystem-safe, bounded tempfile prefix ending in '_'."""
     prefix = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", str(value or "")).strip(" .")
     if not prefix:
@@ -219,9 +215,7 @@ def _convert_step_to_stl(
     return stl_path, True
 
 
-def _process_profile_compatible(
-    path: str, compatible_printer: str | None
-) -> bool:  # pragma: no cover -- profile compat
+def _process_profile_compatible(path: str, compatible_printer: str | None) -> bool:
     if not compatible_printer:
         return False
     try:
@@ -235,7 +229,7 @@ def _process_profile_compatible(
     return compatible_printer in compatible
 
 
-def _discover_process_profile(  # pragma: no cover -- slicer helper
+def _discover_process_profile(
     quality_arg: str,
     quality_map: dict[str, str],
     model_code: str = "P1P",
@@ -305,9 +299,7 @@ def _discover_process_profile(  # pragma: no cover -- slicer helper
     return None
 
 
-def _create_temp_profiles(
-    process: str, filament: str, args: argparse.Namespace
-) -> tuple[IO[str], IO[str]]:  # pragma: no cover -- slicer helper
+def _create_temp_profiles(process: str, filament: str, args: argparse.Namespace) -> tuple[IO[str], IO[str]]:
     """Create temporary process and filament profiles with overrides."""
     infill = getattr(args, "infill", 15)
     pattern = getattr(args, "pattern", "3dhoneycomb")
@@ -405,7 +397,7 @@ def _create_temp_profiles(
     return tmp_process, tmp_filament
 
 
-def _build_orcaslicer_cmd(  # pragma: no cover -- orca argv builder
+def _build_orcaslicer_cmd(
     settings: Settings,
     args: argparse.Namespace,
     machine: str,
@@ -619,7 +611,7 @@ def _is_valid_sliced_3mf(path: str) -> bool:
     return has_model or has_plate
 
 
-def _finalize_slice(  # pragma: no cover -- slicer helper
+def _finalize_slice(
     result: subprocess.CompletedProcess[str] | None,
     outpath: str,
     args: argparse.Namespace,
@@ -743,7 +735,7 @@ def _finalize_slice(  # pragma: no cover -- slicer helper
 
 def cmd_slice(
     args: argparse.Namespace,
-) -> str:  # pragma: no cover -- OrcaSlicer orchestration; pure helpers + slice unit tests cover API
+) -> str:
     """Slice an STL/STEP file into a printable .3mf using OrcaSlicer."""
     from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get

@@ -46,7 +46,7 @@ from bambu_cli.protocols.ftps import _download_partial_path, _remove_partial_fil
 from bambu_cli.utils import _ensure_output_dir, _record_download_success, emit_json_error
 
 
-def _response_header(resp, name):  # pragma: no cover -- header helper
+def _response_header(resp, name):
     value = resp.getheader(name)
     return value if isinstance(value, str) else None
 
@@ -54,16 +54,16 @@ def _response_header(resp, name):  # pragma: no cover -- header helper
 def _response_url(resp):
     """Return the final response URL after redirects when urllib exposes it."""
     geturl = getattr(resp, "geturl", None)
-    if not callable(geturl):  # pragma: no cover -- non-urllib response objects
+    if not callable(geturl):
         return None
     try:
         value = geturl()
-    except Exception:  # pragma: no cover -- defensive
+    except Exception:
         return None
     return value if isinstance(value, str) and value else None
 
 
-def _cmd_download(args):  # pragma: no cover -- HTTP download orchestration
+def _cmd_download(args):
     """Download a model or printer-ready file from a URL. Auto-resolves Printables page URLs."""
     # build_safe_opener, resolve_printables_url, and _noncolliding_path are
     # called through the package namespace (imported here, not at module

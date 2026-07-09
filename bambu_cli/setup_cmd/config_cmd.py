@@ -27,7 +27,7 @@ CONFIG_CHECK_NAMES = {
 _REDACTED_CONFIG_KEYS = ("access_code",)
 
 
-def _redacted_config(config):  # pragma: no cover -- config cmd
+def _redacted_config(config):
     """Return a copy of the config dict safe to print (no secret values)."""
     redacted = dict(config)
     for key in _REDACTED_CONFIG_KEYS:
@@ -36,7 +36,7 @@ def _redacted_config(config):  # pragma: no cover -- config cmd
     return redacted
 
 
-def _cmd_config_show(args):  # pragma: no cover -- config cmd
+def _cmd_config_show(args):
     config_path = _expand_path(_config_path())
     if not os.path.exists(config_path):
         message = f"Config not found at {_display_path(config_path)}. Run `setup` first."
@@ -84,7 +84,7 @@ def _cmd_config_show(args):  # pragma: no cover -- config cmd
     print(json.dumps(redacted, indent=2))
 
 
-def _cmd_config_validate(args):  # pragma: no cover -- config cmd
+def _cmd_config_validate(args):
     checks = [check for check in collect_preflight_checks() if check["name"] in CONFIG_CHECK_NAMES]
     error_count = sum(1 for check in checks if check["status"] == "error")
     warning_count = sum(1 for check in checks if check["status"] == "warning")
@@ -129,7 +129,7 @@ def _cmd_config_validate(args):  # pragma: no cover -- config cmd
         abort("", exit_code=exit_code)
 
 
-def _cmd_config(args):  # pragma: no cover -- config cmd
+def _cmd_config(args):
     """Dispatch `config show` / `config validate`."""
     action = _namespace_get(args, "action")
     if action == "show":

@@ -7,7 +7,7 @@ from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
 
 
-def _default_config_path():  # pragma: no cover -- platform paths
+def _default_config_path():
     """Return the platform-native default config path, preferring an existing
     legacy ``~/.config/bambu/config.json`` for back-compat across installs."""
     from bambu_cli.cli import _expand_path
@@ -29,7 +29,7 @@ def _default_config_path():  # pragma: no cover -- platform paths
 CONFIG_PATH = _default_config_path()
 
 
-def load_config(exit_on_fail=True):  # pragma: no cover -- config load I/O; Settings.from_config unit-tested
+def load_config(exit_on_fail=True):
     """Load printer config from the platform-native config path."""
     from bambu_cli import bambu
     from bambu_cli.cli import _display_path, _exception_for_message
@@ -98,7 +98,7 @@ def load_config(exit_on_fail=True):  # pragma: no cover -- config load I/O; Sett
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def _first_existing_path(candidates):  # pragma: no cover -- config helper
+def _first_existing_path(candidates):
     """Return the first existing path, otherwise the first candidate expanded."""
     from bambu_cli.cli import _expand_path
 
@@ -111,7 +111,7 @@ def _first_existing_path(candidates):  # pragma: no cover -- config helper
     return expanded[0]
 
 
-def _orca_binary_candidates():  # pragma: no cover -- config helper
+def _orca_binary_candidates():
     """Likely OrcaSlicer binary locations for the current platform, best-first."""
     if sys.platform == "darwin":
         return [
@@ -148,7 +148,7 @@ def _orca_binary_candidates():  # pragma: no cover -- config helper
     return candidates
 
 
-def _profiles_dir_candidates():  # pragma: no cover -- config helper
+def _profiles_dir_candidates():
     """Likely OrcaSlicer BBL profile-directory locations, best-first."""
     if sys.platform == "darwin":
         return [
@@ -181,17 +181,17 @@ def _profiles_dir_candidates():  # pragma: no cover -- config helper
     ]
 
 
-def _default_orca_path():  # pragma: no cover -- config helper
+def _default_orca_path():
     """Return the platform-native default OrcaSlicer binary path."""
     return _first_existing_path(_orca_binary_candidates())
 
 
-def _default_profiles_path():  # pragma: no cover -- config helper
+def _default_profiles_path():
     """Return the platform-native default OrcaSlicer profiles directory."""
     return _first_existing_path(_profiles_dir_candidates())
 
 
-def detect_orca_slicer():  # pragma: no cover -- orca detect
+def detect_orca_slicer():
     """Return the first OrcaSlicer binary that actually exists, or None.
 
     Unlike :func:`_default_orca_path` this never falls back to a non-existent
@@ -205,7 +205,7 @@ def detect_orca_slicer():  # pragma: no cover -- orca detect
     return None
 
 
-def detect_profiles_dir():  # pragma: no cover -- profiles detect
+def detect_profiles_dir():
     """Return the first OrcaSlicer BBL profiles directory that exists, or None."""
     from bambu_cli.cli import _expand_path
 
@@ -238,7 +238,7 @@ MODEL_MAPPING = {
 }
 
 
-def apply_config(cfg):  # pragma: no cover -- config apply
+def apply_config(cfg):
     """Apply a configuration dictionary to the runtime state.
 
     The dict is parsed once into a typed :class:`bambu_cli.context.Settings`
@@ -277,7 +277,7 @@ INLINE_ACCESS_CODE_DEPRECATION_MESSAGE = (
 )
 
 
-def _warn_inline_access_code_once():  # pragma: no cover -- config helper
+def _warn_inline_access_code_once():
     """Emit a one-time-per-process stderr warning about inline access_code use.
 
     Never logs the access code value itself; deduplicated via a module-level flag.
@@ -289,7 +289,7 @@ def _warn_inline_access_code_once():  # pragma: no cover -- config helper
     logger.warning(INLINE_ACCESS_CODE_DEPRECATION_MESSAGE)
 
 
-def _enforce_secret_file_permissions(path, display):  # pragma: no cover -- config helper
+def _enforce_secret_file_permissions(path, display):
     """Best-effort: warn and tighten a secret-bearing file to 0600 on POSIX.
 
     Mirrors the config.json enforcement in :func:`load_config`. Never raises —
@@ -315,7 +315,7 @@ def _enforce_secret_file_permissions(path, display):  # pragma: no cover -- conf
         logger.warning(f"Could not tighten permissions on {display}: {exc}")
 
 
-def load_access_code():  # pragma: no cover -- secret load; unit-tested
+def load_access_code():
     from bambu_cli.cli import _display_path, _exception_for_message, _expand_path
     from bambu_cli.constants import EXIT_CONFIG_ERROR
     from bambu_cli.context import current_config
@@ -351,7 +351,7 @@ def load_access_code():  # pragma: no cover -- secret load; unit-tested
     abort("", exit_code=EXIT_CONFIG_ERROR)
 
 
-def _access_code_value_problem(value):  # pragma: no cover -- config helper
+def _access_code_value_problem(value):
     normalized = str(value or "").strip().upper()
     if (
         not normalized
@@ -362,14 +362,14 @@ def _access_code_value_problem(value):  # pragma: no cover -- config helper
     return None
 
 
-def load_username():  # pragma: no cover -- config helper
+def load_username():
     """Return the MQTT username from config, defaulting to 'bblp'."""
     from bambu_cli.context import current_settings
 
     return current_settings().username
 
 
-def _expected_fingerprint():  # pragma: no cover -- fp expected
+def _expected_fingerprint():
     """Return the normalized (lowercase, separator-free) pinned SHA-256, or None."""
     from bambu_cli.context import current_config
 
@@ -379,7 +379,7 @@ def _expected_fingerprint():  # pragma: no cover -- fp expected
     return fp.lower().replace(":", "").replace(" ", "")
 
 
-def fingerprint_sha256(der_cert):  # pragma: no cover -- fp hash
+def fingerprint_sha256(der_cert):
     """Hex SHA-256 of a DER-encoded certificate, or None if no cert."""
     import hashlib
 
@@ -388,7 +388,7 @@ def fingerprint_sha256(der_cert):  # pragma: no cover -- fp hash
     return hashlib.sha256(der_cert).hexdigest()
 
 
-def _timeout_from(args, key, default):  # pragma: no cover -- config helper
+def _timeout_from(args, key, default):
     """Resolve a timeout from CLI args, then config, then the default."""
     from bambu_cli.cli import _namespace_get
     from bambu_cli.context import current_config
@@ -405,25 +405,25 @@ def _timeout_from(args, key, default):  # pragma: no cover -- config helper
     return default
 
 
-def get_network_timeout(args=None):  # pragma: no cover -- config helper
+def get_network_timeout(args=None):
     from bambu_cli.constants import DEFAULT_NETWORK_TIMEOUT
 
     return _timeout_from(args, "network_timeout", DEFAULT_NETWORK_TIMEOUT)
 
 
-def get_slicer_timeout(args=None):  # pragma: no cover -- config helper
+def get_slicer_timeout(args=None):
     from bambu_cli.constants import SLICER_TIMEOUT
 
     return _timeout_from(args, "slicer_timeout", SLICER_TIMEOUT)
 
 
-def get_command_timeout(args=None):  # pragma: no cover -- config helper
+def get_command_timeout(args=None):
     from bambu_cli.constants import COMMAND_TIMEOUT
 
     return _timeout_from(args, "command_timeout", COMMAND_TIMEOUT)
 
 
-def get_upload_timeout(args=None):  # pragma: no cover -- config helper
+def get_upload_timeout(args=None):
     from bambu_cli.constants import UPLOAD_TIMEOUT
 
     return _timeout_from(args, "upload_timeout", UPLOAD_TIMEOUT)

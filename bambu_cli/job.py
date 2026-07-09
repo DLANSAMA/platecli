@@ -31,7 +31,7 @@ from bambu_cli.constants import (
 from bambu_cli.errors import BambuError, abort
 
 
-def _exit_code_from_error(exc, default=EXIT_COMMAND_ERROR):  # pragma: no cover -- job helper
+def _exit_code_from_error(exc, default=EXIT_COMMAND_ERROR):
     """Normalize BambuError / SystemExit to an integer exit code."""
     code = getattr(exc, "exit_code", None)
     if code is not None:
@@ -67,25 +67,25 @@ from bambu_cli.logging_utils import logger
 from bambu_cli.utils import _ensure_output_dir, emit_json
 
 
-def _default_download():  # pragma: no cover -- job helper
+def _default_download():
     from bambu_cli import bambu
 
     return bambu.cmd_download
 
 
-def _default_slice():  # pragma: no cover -- job helper
+def _default_slice():
     from bambu_cli import bambu
 
     return bambu.cmd_slice
 
 
-def _default_upload():  # pragma: no cover -- job helper
+def _default_upload():
     from bambu_cli import bambu
 
     return bambu.cmd_upload
 
 
-def _default_print():  # pragma: no cover -- job helper
+def _default_print():
     from bambu_cli import bambu
 
     return bambu.cmd_print
@@ -122,7 +122,7 @@ class JobSteps:
         return self._resolve(self.print_, _default_print)
 
 
-def _print_next_command(args, basename):  # pragma: no cover -- job helper
+def _print_next_command(args, basename):
     command = ["print", basename, "--confirm", "--json"]
     if _namespace_get(args, "use_ams", False):
         command.append("--use-ams")
@@ -138,7 +138,7 @@ def _print_next_command(args, basename):  # pragma: no cover -- job helper
     return command
 
 
-def generate_print_payload(  # pragma: no cover -- job helper
+def generate_print_payload(
     basename, use_ams=False, ams_mapping=None, timelapse=False, bed_leveling=True, flow_cali=True
 ):
     """Generate the JSON payload for the print command."""
@@ -170,7 +170,7 @@ def generate_print_payload(  # pragma: no cover -- job helper
     return payload
 
 
-def _slice_args_for_job(filepath, args, output_dir):  # pragma: no cover -- job helper
+def _slice_args_for_job(filepath, args, output_dir):
     """Build a slice command namespace from job-level arguments."""
     return argparse.Namespace(
         file=filepath,
@@ -199,14 +199,14 @@ def _slice_args_for_job(filepath, args, output_dir):  # pragma: no cover -- job 
     )
 
 
-def _predicted_sliced_remote_name(filepath, copies=1):  # pragma: no cover -- job helper
+def _predicted_sliced_remote_name(filepath, copies=1):
     """Return the remote filename Orca output will have after job/send slicing."""
     from bambu_cli.slicer import _sliced_output_path
 
     return _portable_basename(_sliced_output_path(filepath, ".", copies=copies))
 
 
-def _predicted_url_download_extension(url, args):  # pragma: no cover -- job helper
+def _predicted_url_download_extension(url, args):
     """Infer a direct URL dry-run extension from URL path or explicit --name."""
     source_ext = _file_extension(urlparse(url).path)
     if source_ext in DOWNLOADABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS:
@@ -216,7 +216,7 @@ def _predicted_url_download_extension(url, args):  # pragma: no cover -- job hel
     return None
 
 
-def _predicted_url_remote_name(url, args):  # pragma: no cover -- job helper
+def _predicted_url_remote_name(url, args):
     """Best-effort remote filename prediction for side-effect-free URL dry-runs.
 
     This intentionally only uses the URL path and explicit --name value. It does
@@ -238,7 +238,7 @@ def _predicted_url_remote_name(url, args):  # pragma: no cover -- job helper
     return None
 
 
-def _parse_print_options(args):  # pragma: no cover -- job helper
+def _parse_print_options(args):
     """Validate print-only options and return the parsed AMS mapping."""
     from bambu_cli.constants import MAX_AMS_SLOT_INDEX
 
@@ -269,7 +269,7 @@ def _parse_print_options(args):  # pragma: no cover -- job helper
     return mapping, None
 
 
-def _emit_job_failure(args, summary, failed_step, exit_code, error=None, detail=None):  # pragma: no cover -- job helper
+def _emit_job_failure(args, summary, failed_step, exit_code, error=None, detail=None):
     """Emit a single machine-readable failure summary for job/send --json."""
     if not bool(_namespace_get(args, "json", False)):
         return
@@ -287,15 +287,13 @@ def _emit_job_failure(args, summary, failed_step, exit_code, error=None, detail=
     emit_json(payload)
 
 
-def _job_fail(args, summary, failed_step, exit_code, message):  # pragma: no cover -- job helper
+def _job_fail(args, summary, failed_step, exit_code, message):
     logger.error(message)
     _emit_job_failure(args, summary, failed_step, exit_code, message)
     abort("", exit_code=exit_code)
 
 
-def _validate_predicted_remote_name_or_fail(
-    args, summary, remote_name, message_prefix
-):  # pragma: no cover -- job helper
+def _validate_predicted_remote_name_or_fail(args, summary, remote_name, message_prefix):
     """Fail a job before work starts if a known printer filename is unsafe."""
     if remote_name is not None and _safe_remote_name(remote_name) is None:
         _job_fail(
@@ -307,7 +305,7 @@ def _validate_predicted_remote_name_or_fail(
         )
 
 
-def _last_error_for(command, ctx=None):  # pragma: no cover -- job helper
+def _last_error_for(command, ctx=None):
     """Return the last-error payload for ``command``, dual-writing it onto
     ``ctx.last_error`` when a RuntimeContext is supplied.
 
@@ -322,7 +320,7 @@ def _last_error_for(command, ctx=None):  # pragma: no cover -- job helper
     return result
 
 
-def _prepare_job_output_dir(args, summary):  # pragma: no cover -- job helper
+def _prepare_job_output_dir(args, summary):
     """Validate job/send working directory before expensive work starts.
 
     In dry-run mode this is intentionally side-effect free: report that the
@@ -376,14 +374,14 @@ def _prepare_job_output_dir(args, summary):  # pragma: no cover -- job helper
     return workdir
 
 
-def _cmd_job(args):  # pragma: no cover -- job helper
+def _cmd_job(args):
     """Public entry point shim: builds a RuntimeContext/JobSteps and delegates."""
     from bambu_cli.context import RuntimeContext
 
     return _run_job(RuntimeContext.for_request(args), args, JobSteps())
 
 
-def _run_job(ctx, args, steps=None):  # pragma: no cover -- job orchestrator; step failure contracts unit-tested
+def _run_job(ctx, args, steps=None):
     """Agent-friendly one-shot workflow: URL/local file -> slice if needed -> upload -> optional print."""
     if steps is None:
         steps = JobSteps()
