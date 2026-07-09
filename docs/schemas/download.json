@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/download.json",
+  "title": "bambu-cli download success envelope",
+  "type": "object",
+  "required": ["status", "command", "source", "download_url", "path", "filename", "bytes"],
+  "properties": {
+    "status": {"const": "downloaded"},
+    "command": {"const": "download"},
+    "source": {"type": "string"},
+    "normalized_source": {},
+    "download_url": {"type": "string"},
+    "path": {"type": "string", "minLength": 1},
+    "filename": {"type": "string", "minLength": 1},
+    "bytes": {"type": "integer"},
+    "archive_entry": {"type": "string"}
+  },
+  "additionalProperties": true
+}

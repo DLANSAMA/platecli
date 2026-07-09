@@ -87,6 +87,72 @@ Runs a network and connectivity health check, discovers printer capabilities, an
 }
 ```
 
+Machine-checkable schema: [`docs/schemas/doctor.json`](schemas/doctor.json).
+
+### `slice`
+
+Success after OrcaSlicer produces a valid `.gcode.3mf` (schema: [`slice.json`](schemas/slice.json)):
+
+```json
+{
+  "status": "sliced",
+  "command": "slice",
+  "file": "~/models/cube.stl",
+  "path": "~/models/cube.gcode.3mf",
+  "filename": "cube.gcode.3mf",
+  "bytes": 4096,
+  "step_converted": false
+}
+```
+
+Errors use the shared [`error_envelope.json`](schemas/error_envelope.json) (`failed_step` often `slicer` / validate).
+
+### `download`
+
+Success after a model file lands on disk (schema: [`download.json`](schemas/download.json)):
+
+```json
+{
+  "status": "downloaded",
+  "command": "download",
+  "source": "https://example.com/model.stl",
+  "normalized_source": null,
+  "download_url": "https://example.com/model.stl",
+  "path": "/tmp/model.stl",
+  "filename": "model.stl",
+  "bytes": 1024
+}
+```
+
+Archive downloads may also include `archive_entry`. Errors use [`error_envelope.json`](schemas/error_envelope.json) with redacted `source` / `download_url`.
+
+### `config`
+
+`config show` and `config validate` share [`config_cmd.json`](schemas/config_cmd.json)
+(named `config_cmd` so the schema is not blocked by the repo's `config.json` gitignore).
+
+Show (secrets redacted):
+
+```json
+{
+  "status": "ok",
+  "command": "config",
+  "action": "show",
+  "config_path": "~/.config/bambu/config.json",
+  "config": {
+    "printer_ip": "192.168.1.10",
+    "access_code": "<redacted>"
+  }
+}
+```
+
+Validate includes `checks[]`, `ok`, `errors`, `warnings`, `exit_code`, and `strict`.
+
+### `job` / `send`
+
+Success / dry-run: [`job_ok.json`](schemas/job_ok.json).  
+Failure: [`job_error.json`](schemas/job_error.json) (superset of [`error_envelope.json`](schemas/error_envelope.json) with the job summary fields such as `would_slice`, `remote_name`, `printed`).
+
 ### `gcode`
 
 Without `--confirm` (schema: [`gcode.json`](schemas/gcode.json)):

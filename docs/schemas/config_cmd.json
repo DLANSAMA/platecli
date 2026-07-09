@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/config_cmd.json",
+  "title": "bambu-cli config show/validate envelope",
+  "type": "object",
+  "required": ["status", "command", "action"],
+  "properties": {
+    "status": {"type": "string"},
+    "command": {"const": "config"},
+    "action": {"enum": ["show", "validate"]},
+    "config_path": {"type": "string"},
+    "config": {"type": "object"},
+    "exit_code": {"type": "integer"},
+    "ok": {"type": "boolean"},
+    "errors": {"type": "integer"},
+    "warnings": {"type": "integer"},
+    "strict": {"type": "boolean"},
+    "checks": {"type": "array"}
+  },
+  "additionalProperties": true
+}

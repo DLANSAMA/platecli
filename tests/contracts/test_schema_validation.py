@@ -81,8 +81,12 @@ def test_schemas_exist():
         "version.json",
         "status_event.json",
         "job_ok.json",
+        "job_error.json",
         "preflight.json",
         "doctor.json",
+        "slice.json",
+        "download.json",
+        "config_cmd.json",
         "gcode.json",
         "snapshot.json",
         "light.json",
@@ -300,3 +304,130 @@ def test_device_command_errors_match_error_envelope(monkeypatch, tmp_path, capsy
     payload = json.loads(capsys.readouterr().out)
     _validate(payload, _load_schema("error_envelope.json"))
     assert payload["command"] == "gcode"
+
+
+def test_job_error_matches_job_error_and_error_envelope(monkeypatch, tmp_path, capsys):
+    """Missing source emits the job summary error shape (error_envelope + job fields)."""
+    config_path = tmp_path / "config" / "config.json"
+    _write_valid_config(config_path)
+    missing = tmp_path / "missing.stl"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["bambu-cli", "--sim", "job", str(missing), "--dry-run", "--json"],
+    )
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    with pytest.raises(SystemExit):
+        main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("job_error.json"))
+    _validate(payload, _load_schema("error_envelope.json"))
+    assert payload["command"] == "job"
+    assert payload["failed_step"] == "validate"
+    assert payload["status"] == "error"
+
+
+def test_config_show_matches_schema(monkeypatch, tmp_path, capsys):
+    config_path = tmp_path / "config" / "cfg.json"
+    _write_valid_config(config_path)
+    monkeypatch.setattr(sys, "argv", ["bambu-cli", "config", "show", "--json"])
+    # common._config_path() imports CONFIG_PATH by name — patch both bindings.
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.setup_cmd.common.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("config_cmd.json"))
+    assert payload["action"] == "show"
+    assert payload["status"] == "ok"
+    assert isinstance(payload.get("config"), dict)
+    # Secrets must never appear in cleartext.
+    assert payload["config"].get("access_code") in (None, "<redacted>")
+
+
+def test_config_validate_matches_schema(monkeypatch, tmp_path, capsys):
+    config_path = tmp_path / "config" / "cfg.json"
+    _write_valid_config(config_path)
+    monkeypatch.setattr(sys, "argv", ["bambu-cli", "config", "validate", "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.setup_cmd.common.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    # validate may exit non-zero if orca/profiles missing; still emit config envelope.
+    try:
+        main()
+    except SystemExit:
+        pass
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("config_cmd.json"))
+    assert payload["action"] == "validate"
+    assert payload["command"] == "config"
+    assert isinstance(payload.get("checks"), list)
+
+
+def test_download_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(sys, "argv", ["bambu-cli", "download", "not-a-url", "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    with pytest.raises(SystemExit):
+        main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("error_envelope.json"))
+    assert payload["command"] == "download"
+    assert payload["failed_step"] == "validate"
+
+
+def test_download_success_fixture_matches_schema():
+    """Success shape from download/downloader._record_download_success (cannot --sim network)."""
+    payload = {
+        "status": "downloaded",
+        "command": "download",
+        "source": "https://example.com/model.stl",
+        "normalized_source": None,
+        "download_url": "https://example.com/model.stl",
+        "path": "/tmp/model.stl",
+        "filename": "model.stl",
+        "bytes": 1024,
+    }
+    _validate(payload, _load_schema("download.json"))
+
+
+def test_download_archive_success_fixture_matches_schema():
+    payload = {
+        "status": "downloaded",
+        "command": "download",
+        "source": "https://example.com/pack.zip",
+        "normalized_source": None,
+        "download_url": "https://example.com/pack.zip",
+        "path": "/tmp/pack/model.stl",
+        "filename": "model.stl",
+        "archive_entry": "model.stl",
+        "bytes": 2048,
+    }
+    _validate(payload, _load_schema("download.json"))
+
+
+def test_slice_success_fixture_matches_schema():
+    """Success shape from slicer/output.py emit_json (Orca not hermetic in contract suite)."""
+    payload = {
+        "status": "sliced",
+        "command": "slice",
+        "file": "/tmp/cube.stl",
+        "path": "/tmp/cube.gcode.3mf",
+        "filename": "cube.gcode.3mf",
+        "bytes": 4096,
+        "step_converted": False,
+    }
+    _validate(payload, _load_schema("slice.json"))
+
+
+def test_slice_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
+    missing = tmp_path / "nope.stl"
+    monkeypatch.setattr(sys, "argv", ["bambu-cli", "slice", str(missing), "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    with pytest.raises(SystemExit):
+        main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("error_envelope.json"))
+    assert payload["command"] == "slice"

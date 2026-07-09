@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/slice.json",
+  "title": "bambu-cli slice success envelope",
+  "type": "object",
+  "required": ["status", "command", "file", "path", "filename", "bytes", "step_converted"],
+  "properties": {
+    "status": {"const": "sliced"},
+    "command": {"const": "slice"},
+    "file": {"type": "string", "minLength": 1},
+    "path": {"type": "string", "minLength": 1},
+    "filename": {"type": "string", "minLength": 1},
+    "bytes": {"type": "integer"},
+    "step_converted": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}

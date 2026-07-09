@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/job_error.json",
+  "title": "bambu-cli job/send error envelope (summary + error fields)",
+  "type": "object",
+  "required": ["status", "command", "exit_code", "error", "failed_step"],
+  "properties": {
+    "status": {"const": "error"},
+    "command": {"type": "string", "minLength": 1},
+    "exit_code": {"type": "integer"},
+    "error": {"type": "string"},
+    "failed_step": {"type": "string", "minLength": 1},
+    "source": {},
+    "normalized_source": {},
+    "downloaded_path": {},
+    "extracted_path": {},
+    "archive_entry": {},
+    "printable_path": {},
+    "remote_name": {},
+    "printed": {"type": "boolean"},
+    "uploaded": {"type": "boolean"},
+    "dry_run": {"type": "boolean"},
+    "upload_only": {"type": "boolean"},
+    "workdir": {},
+    "next_command": {},
+    "would_download": {"type": "boolean"},
+    "would_extract": {"type": "boolean"},
+    "would_slice": {"type": "boolean"},
+    "would_upload": {"type": "boolean"},
+    "would_print": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}
