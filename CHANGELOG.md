@@ -14,7 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `VERSION` is resolved from package metadata / `pyproject.toml` only (no duplicate string in `constants.py`).
 - MQTT status-monitor teardown no longer uses a bare `except:`.
 - Removed `@mockable` / test-awareness indirection from production code.
-- CI coverage floor enforced at **79%** (`--cov-fail-under=79`); single pytest path; blocking purity greps for `sys.exit` / `@mockable` / Mock branches. (Raising the floor toward the 92% target is tracked as remaining Phase C work in `docs/quality-roadmap.md`.)
+- CI coverage floor enforced at **81%** (`--cov-fail-under=81`, raised from 79; multi-OS minimum — Linux ~82.3% / Windows ~81.9% branch total); single pytest path; blocking purity greps for `sys.exit` / `@mockable` / Mock branches. (Further ratchet toward the 92% A+ target remains Phase C work in `docs/quality-roadmap.md`.)
 
 ### Added
 - JSON schemas under `docs/schemas/` and contract tests in `tests/contracts/`.

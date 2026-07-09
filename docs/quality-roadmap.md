@@ -47,15 +47,20 @@ remaining "Phase 3" work referenced in the `[tool.mypy]` exclude comment.
 | Correctness / bugs | **A** | dead flags fixed (incl. global `--json` before subcommand, 2026-07-09); structured errors; purity greps; version single-sourced |
 | Typing | **B+** | `uvx mypy -p bambu_cli` blocking, **but** `printer.py` + `slicer/` still excluded and `check_untyped_defs = false` — not full-package strict (remaining Phase 3 work) |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | 573 tests, 0 flaky; **82.2%** total coverage (branch on; ~84% line) — not the ≥99% previously claimed; per-module floors not yet enforced |
-| CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **but** `--cov-fail-under=79` (not 92) |
+| Tests | **A−** | 573 tests, 0 flaky; **~82.3%** Linux / **~81.9%** Windows branch total — not the ≥99% previously claimed; per-module floors not yet enforced |
+| CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=81`** (ratcheted from 79; multi-OS minimum so Windows does not flake; A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + stability policy + schemas + backlog present; this scoreboard was stale until 2026-07-09 |
 | Product polish | **B+** | quality gates in place; version remains 0.1.0; schema/typing/coverage gaps block a clean 1.0 A+ claim |
 
 **Overall:** **solid A−** — foundational quality (architecture, error model, security
-controls) is A-grade and real; the remaining gaps to A+ are coverage floor (79→92),
+controls) is A-grade and real; the remaining gaps to A+ are coverage toward 92,
 full-package typing, and per-command schemas. Tagging `v1.0.0` still requires closing
 those, per §5.
+
+**Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09).
+Measured branch total is ~82.3% on Linux and ~81.9% on Windows; the floor is set
+at the multi-OS minimum so the matrix does not flake while still denying ~2 points
+of silent rot vs the old 79 gate.
 
 ### Residual coverage policy
 
@@ -608,14 +613,15 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 | 0 Trust & truth | **done** | local | 2026-07-08 | allow-private-ips, bare except, version single-source |
 | A Testing foundation | **done** | local | 2026-07-08 | TLS suite, markers, transport tests, cov~80% |
 | B Error model & seams | **done** | #11 | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed |
-| C Coverage & typing | **in progress** | local | — | mypy core done **but** printer.py + slicer/ still excluded; cov 82.2% with CI floor 79 (not 92); per-module floors not enforced |
-| D Contracts & 1.0 | **in progress** | local | — | 7 schemas + contract harness + stability policy; ~10 `--json` commands still lack a dedicated schema |
+| C Coverage & typing | **in progress** | local | 2026-07-09 | mypy core done **but** printer.py + slicer/ still excluded; cov ~82% with CI floor **81** (not 92); per-module floors not enforced |
+| D Contracts & 1.0 | **in progress** | local | — | schemas + contract harness + stability policy; remaining agent `--json` schemas land in follow-up PRs |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
 
 > **Verified 2026-07-09** against a clean checkout — the "current scoreboard" above
-> was corrected the same day. The prior claim of "A+ across the board / execution
-> complete" did not match measured coverage (82.2%, not ≥99%), the CI floor (79, not
-> 92), the mypy excludes, or schema coverage.
+> was corrected the same day. Coverage floor raised 79→**81** (multi-OS minimum:
+> Linux ~82.3% / Windows ~81.9%). Prior claim of "A+ across the board" did not match
+> measured coverage (~82%, not ≥99%), the previous CI floor (79, not 92), the mypy
+> excludes, or schema coverage.
 
 ### mockable count (burn-down)
 

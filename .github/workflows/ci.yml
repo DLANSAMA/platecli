@@ -66,7 +66,7 @@ jobs:
       - name: Pytest with coverage
         run: |
           uv pip install '.[test]'
-          python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=79
+          python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=81
       - name: Syntax smoke
         # Auto-discovers bambu_cli/**/*.py (see scripts/syntax_smoke.py).
         run: python scripts/syntax_smoke.py
