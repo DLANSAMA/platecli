@@ -53,7 +53,7 @@ def _file_permission_check(path, name):
     return _preflight_result("ok", name, f"{display} permissions are restricted.", {"mode": oct(mode)})
 
 
-def collect_preflight_checks():  # pragma: no cover -- environment probes; core matrix unit-tested
+def collect_preflight_checks():
     """Collect local install/config checks without contacting the printer."""
     from bambu_cli.context import current_config, current_settings
     from bambu_cli.protocols import mqtt as mqtt_protocol
@@ -215,7 +215,7 @@ def collect_preflight_checks():  # pragma: no cover -- environment probes; core 
     return checks
 
 
-def _cmd_preflight(args):  # pragma: no cover -- preflight CLI emit; collect_preflight unit-tested
+def _cmd_preflight(args):
     """Check local install readiness without contacting the printer."""
     checks = collect_preflight_checks()
     error_count = sum(1 for check in checks if check["status"] == "error")

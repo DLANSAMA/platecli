@@ -225,3 +225,31 @@ def test_ftps_data_channel_pin_mismatch():
         pytest.raises(ssl.SSLError, match="fingerprint mismatch"),
     ):
         ftp.ntransfercmd("STOR /model/x.3mf")
+
+
+def test_ftps_data_channel_pin_mismatch_closes_socket():
+    """Fingerprint mismatch must close the data socket before re-raising (no FD leak)."""
+    ftp = ftps_mod.ImplicitFTPS()
+    ftp.printer = _test_printer(cert_fingerprint=_FP, insecure_tls=False)
+    ftp.host = "192.168.1.1"
+    ftp._prot_p = True
+
+    control_tls = MagicMock(spec=ssl.SSLSocket)
+    control_tls.session = object()
+    control_ctx = MagicMock()
+    control_tls.context = control_ctx
+    ftp.sock = control_tls
+
+    data_raw = MagicMock()
+    data_tls = MagicMock()
+    data_tls.getpeercert.return_value = b"\xde\xad"
+    data_tls.close = MagicMock()
+    control_ctx.wrap_socket.return_value = data_tls
+
+    with (
+        patch.object(ftps_mod.ftplib.FTP, "ntransfercmd", return_value=(data_raw, 100)),
+        pytest.raises(ssl.SSLError, match="fingerprint mismatch"),
+    ):
+        ftp.ntransfercmd("STOR /model/x.3mf")
+
+    data_tls.close.assert_called_once()

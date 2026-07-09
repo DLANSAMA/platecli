@@ -8,10 +8,11 @@ gets caught here.
 
 Ground rules followed (docs/test-backlog.md):
 - Never touch a real printer/network: use `--sim` and a scratch config path.
-- Patch runtime state (`PRINTER_IP`, `CONFIG_PATH`, ...) on `bambu_cli.bambu`.
+- Patch runtime state on real modules (`bambu_cli.config.CONFIG_PATH`, etc.).
 - Drive the real argv/parser path via `bambu_cli.cli.main()`, catch
   `SystemExit`, capture stdout with `capsys`, and assert full payload shapes.
 """
+
 import json
 import sys
 import zipfile
@@ -35,6 +36,7 @@ from bambu_cli.cli import main  # noqa: E402
 # assert_shape: a small, self-contained schema-shape checker (no jsonschema
 # dependency available/allowed).
 # ---------------------------------------------------------------------------
+
 
 def assert_shape(payload, spec, path="$"):
     """Validate `payload` against a small hand-rolled spec.
@@ -100,6 +102,7 @@ def base_error_spec(command=None, require_failed_step=True):
 # Harness
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _reset_json_state():
     utils._JSON_EMITTED = False
@@ -114,9 +117,12 @@ def _reset_json_state():
 def run_main(monkeypatch, tmp_path, argv, config_path=None):
     """Drive bambu_cli.cli.main() with a scratch config path so no real
     on-disk config is ever touched, and return the SystemExit (or None)."""
+    import bambu_cli.cli as cli_mod
+    import bambu_cli.config as config_mod
+
     monkeypatch.setattr(sys, "argv", ["bambu-cli"] + list(argv))
-    monkeypatch.setattr(bambu, "CONFIG_PATH", config_path or str(tmp_path / "no-such-config" / "config.json"))
-    monkeypatch.setattr(bambu, "setup_logging", lambda *a, **k: None)
+    monkeypatch.setattr(config_mod, "CONFIG_PATH", config_path or str(tmp_path / "no-such-config" / "config.json"))
+    monkeypatch.setattr(cli_mod, "setup_logging", lambda *a, **k: None)
     exc = None
     try:
         main()
@@ -140,19 +146,23 @@ def make_ready_file(tmp_path, name="ready.3mf", content="simulated 3mf content")
 # status
 # ---------------------------------------------------------------------------
 
+
 def test_status_success_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "status", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["ok"]},
-            "command": {"enum": ["status"]},
-            "printer": DICT,
-            "gcode_state": STR,
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["ok"]},
+                "command": {"enum": ["status"]},
+                "printer": DICT,
+                "gcode_state": STR,
+            },
         },
-    })
+    )
     assert payload["printer"].get("gcode_state") == "IDLE"
 
 
@@ -160,88 +170,109 @@ def test_status_success_shape(monkeypatch, tmp_path, capsys):
 # files
 # ---------------------------------------------------------------------------
 
+
 def test_files_success_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "files", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["ok"]},
-            "command": {"enum": ["files"]},
-            "count": INT,
-            "files": {"type": list, "items": {
-                "type": dict,
-                "required": {"name": STR, "path": STR},
-            }},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["ok"]},
+                "command": {"enum": ["files"]},
+                "count": INT,
+                "files": {
+                    "type": list,
+                    "items": {
+                        "type": dict,
+                        "required": {"name": STR, "path": STR},
+                    },
+                },
+            },
         },
-    })
+    )
 
 
 # ---------------------------------------------------------------------------
 # light / pause / resume
 # ---------------------------------------------------------------------------
 
+
 def test_light_success_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "light", "on", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["light_changed"]},
-            "command": {"enum": ["light"]},
-            "action": {"enum": ["on"]},
-            "changed": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["light_changed"]},
+                "command": {"enum": ["light"]},
+                "action": {"enum": ["on"]},
+                "changed": {"enum": [True]},
+            },
         },
-    })
+    )
 
 
 def test_pause_success_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "pause", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["paused"]},
-            "command": {"enum": ["pause"]},
-            "paused": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["paused"]},
+                "command": {"enum": ["pause"]},
+                "paused": {"enum": [True]},
+            },
         },
-    })
+    )
 
 
 def test_resume_success_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "resume", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["resumed"]},
-            "command": {"enum": ["resume"]},
-            "resumed": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["resumed"]},
+                "command": {"enum": ["resume"]},
+                "resumed": {"enum": [True]},
+            },
         },
-    })
+    )
 
 
 # ---------------------------------------------------------------------------
 # stop / delete: confirmation-required contract (no --confirm)
 # ---------------------------------------------------------------------------
 
+
 def test_stop_confirmation_required_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "stop", "--json"])
     assert exc is not None and exc.code == 5
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["confirmation_required"]},
-            "command": {"enum": ["stop"]},
-            "stopped": {"enum": [False]},
-            "next_command": {"type": list, "items": STR},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["confirmation_required"]},
+                "command": {"enum": ["stop"]},
+                "stopped": {"enum": [False]},
+                "next_command": {"type": list, "items": STR},
+            },
         },
-    })
+    )
     assert payload["next_command"] == ["stop", "--confirm", "--json"]
 
 
@@ -249,30 +280,36 @@ def test_stop_confirmed_success_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "stop", "--confirm", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["stopped"]},
-            "command": {"enum": ["stop"]},
-            "stopped": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["stopped"]},
+                "command": {"enum": ["stop"]},
+                "stopped": {"enum": [True]},
+            },
         },
-    })
+    )
 
 
 def test_delete_confirmation_required_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "delete", "old.3mf", "--json"])
     assert exc is not None and exc.code == 5
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["confirmation_required"]},
-            "command": {"enum": ["delete"]},
-            "file": {"enum": ["old.3mf"]},
-            "deleted": {"enum": [False]},
-            "next_command": {"type": list, "items": STR},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["confirmation_required"]},
+                "command": {"enum": ["delete"]},
+                "file": {"enum": ["old.3mf"]},
+                "deleted": {"enum": [False]},
+                "next_command": {"type": list, "items": STR},
+            },
         },
-    })
+    )
     assert payload["next_command"] == ["delete", "old.3mf", "--confirm", "--json"]
 
 
@@ -280,15 +317,18 @@ def test_delete_confirmed_success_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "delete", "old.3mf", "--confirm", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["deleted"]},
-            "command": {"enum": ["delete"]},
-            "file": STR,
-            "deleted": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["deleted"]},
+                "command": {"enum": ["delete"]},
+                "file": STR,
+                "deleted": {"enum": [True]},
+            },
         },
-    })
+    )
 
 
 def test_delete_unsafe_name_error_shape(monkeypatch, tmp_path, capsys):
@@ -303,20 +343,24 @@ def test_delete_unsafe_name_error_shape(monkeypatch, tmp_path, capsys):
 # print
 # ---------------------------------------------------------------------------
 
+
 def test_print_confirmation_required_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "print", "ready.3mf", "--json"])
     assert exc is None  # cmd_print returns (no sys.exit) in the confirmation branch
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["confirmation_required"]},
-            "command": {"enum": ["print"]},
-            "file": STR,
-            "printed": {"enum": [False]},
-            "next_command": {"type": list, "items": STR},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["confirmation_required"]},
+                "command": {"enum": ["print"]},
+                "file": STR,
+                "printed": {"enum": [False]},
+                "next_command": {"type": list, "items": STR},
+            },
         },
-    })
+    )
 
 
 def test_print_started_success_shape(monkeypatch, tmp_path, capsys):
@@ -329,16 +373,19 @@ def test_print_started_success_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "print", "ready.3mf", "--confirm", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["print_started"]},
-            "command": {"enum": ["print"]},
-            "file": STR,
-            "printed": {"enum": [True]},
-            "dry_run": {"enum": [False]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["print_started"]},
+                "command": {"enum": ["print"]},
+                "file": STR,
+                "printed": {"enum": [True]},
+                "dry_run": {"enum": [False]},
+            },
         },
-    })
+    )
 
 
 def test_print_unsafe_name_error_shape(monkeypatch, tmp_path, capsys):
@@ -362,22 +409,26 @@ def test_print_non_print_ready_extension_error_shape(monkeypatch, tmp_path, caps
 # upload
 # ---------------------------------------------------------------------------
 
+
 def test_upload_success_shape(monkeypatch, tmp_path, capsys):
     ready = make_ready_file(tmp_path)
     exc = run_main(monkeypatch, tmp_path, ["--sim", "upload", str(ready), "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["uploaded"]},
-            "command": {"enum": ["upload"]},
-            "file": STR,
-            "remote_name": STR,
-            "bytes": INT,
-            "uploaded": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["uploaded"]},
+                "command": {"enum": ["upload"]},
+                "file": STR,
+                "remote_name": STR,
+                "bytes": INT,
+                "uploaded": {"enum": [True]},
+            },
         },
-    })
+    )
 
 
 def test_upload_dry_run_shape(monkeypatch, tmp_path, capsys):
@@ -385,17 +436,20 @@ def test_upload_dry_run_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "upload", str(ready), "--dry-run", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["dry_run_ok"]},
-            "command": {"enum": ["upload"]},
-            "file": STR,
-            "remote_name": STR,
-            "bytes": INT,
-            "uploaded": {"enum": [False]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["dry_run_ok"]},
+                "command": {"enum": ["upload"]},
+                "file": STR,
+                "remote_name": STR,
+                "bytes": INT,
+                "uploaded": {"enum": [False]},
+            },
         },
-    })
+    )
 
 
 def test_upload_missing_file_error_shape(monkeypatch, tmp_path, capsys):
@@ -411,73 +465,108 @@ def test_upload_missing_file_error_shape(monkeypatch, tmp_path, capsys):
 # gcode
 # ---------------------------------------------------------------------------
 
+
 def test_gcode_success_shape(monkeypatch, tmp_path, capsys):
-    exc = run_main(monkeypatch, tmp_path, ["--sim", "gcode", "M104 S220", "--json"])
+    exc = run_main(monkeypatch, tmp_path, ["--sim", "gcode", "M104 S220", "--confirm", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["sent"]},
-            "command": {"enum": ["gcode"]},
-            "gcode": {"enum": ["M104 S220"]},
-            "sent": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["sent"]},
+                "command": {"enum": ["gcode"]},
+                "gcode": {"enum": ["M104 S220"]},
+                "sent": {"enum": [True]},
+            },
         },
-    })
+    )
+
+
+def test_gcode_confirmation_required_shape(monkeypatch, tmp_path, capsys):
+    exc = run_main(monkeypatch, tmp_path, ["--sim", "gcode", "M104 S220", "--json"])
+    assert exc is not None and exc.code == 5
+    payload = read_json(capsys)
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["confirmation_required"]},
+                "command": {"enum": ["gcode"]},
+                "gcode": {"enum": ["M104 S220"]},
+                "sent": {"enum": [False]},
+                "next_command": {"type": list, "items": STR},
+            },
+        },
+    )
+    assert payload["next_command"] == ["gcode", "M104 S220", "--confirm", "--json"]
 
 
 # ---------------------------------------------------------------------------
 # doctor
 # ---------------------------------------------------------------------------
 
+
 def _write_valid_config(config_path):
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(json.dumps({
-        "printer_ip": "127.0.0.1",
-        "serial": "CONTRACTTESTSERIAL",
-        "access_code": "CONTRACTTESTCODE",
-        "model": "P1P",
-        "nozzle": "0.4",
-    }), encoding="utf-8")
+    config_path.write_text(
+        json.dumps(
+            {
+                "printer_ip": "127.0.0.1",
+                "serial": "CONTRACTTESTSERIAL",
+                "access_code": "CONTRACTTESTCODE",
+                "model": "P1P",
+                "nozzle": "0.4",
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_doctor_success_shape(monkeypatch, tmp_path, capsys):
     out_path = tmp_path / "caps.json"
     config_path = tmp_path / "config" / "config.json"
     _write_valid_config(config_path)
-    exc = run_main(monkeypatch, tmp_path, ["--sim", "doctor", "--output", str(out_path), "--json"], config_path=str(config_path))
+    exc = run_main(
+        monkeypatch, tmp_path, ["--sim", "doctor", "--output", str(out_path), "--json"], config_path=str(config_path)
+    )
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["ok"]},
-            "command": {"enum": ["doctor"]},
-            "ok": {"enum": [True]},
-            "output": STR,
-            "printer_ip": STR,
-            "capabilities": {
-                "type": dict,
-                "required": {
-                    "model": STR,
-                    "firmware": STR,
-                    "serial": STR,
-                    "capabilities": {
-                        "type": dict,
-                        "required": {
-                            "ams": BOOL,
-                            "chamber_light": BOOL,
-                            "camera_snapshot": BOOL,
-                            "camera_snapshot_note": STR,
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["ok"]},
+                "command": {"enum": ["doctor"]},
+                "ok": {"enum": [True]},
+                "output": STR,
+                "printer_ip": STR,
+                "capabilities": {
+                    "type": dict,
+                    "required": {
+                        "model": STR,
+                        "firmware": STR,
+                        "serial": STR,
+                        "capabilities": {
+                            "type": dict,
+                            "required": {
+                                "ams": BOOL,
+                                "chamber_light": BOOL,
+                                "camera_snapshot": BOOL,
+                                "camera_snapshot_note": STR,
+                            },
                         },
                     },
                 },
             },
+            "optional": {"certificate_fingerprint": {"type": (str, type(None))}},
         },
-        "optional": {"certificate_fingerprint": {"type": (str, type(None))}},
-    })
+    )
     # docs/api.md shows printer_ip: "<redacted>" always; actual behavior redacts
-    # unless --verbose is passed (see bambu_cli/commands.py cmd_doctor). We are
+    # unless --verbose is passed (see bambu_cli/commands/doctor.py cmd_doctor). We are
     # not passing --verbose here, so this locks the documented redaction.
     assert payload["printer_ip"] == "<redacted>"
 
@@ -486,26 +575,33 @@ def test_doctor_success_shape(monkeypatch, tmp_path, capsys):
 # preflight
 # ---------------------------------------------------------------------------
 
+
 def test_preflight_error_shape_no_config(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["preflight", "--json"])
     assert exc is not None and exc.code == 1
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["error"]},
-            "command": {"enum": ["preflight"]},
-            "exit_code": INT,
-            "ok": {"enum": [False]},
-            "errors": INT,
-            "warnings": INT,
-            "strict": BOOL,
-            "checks": {"type": list, "items": {
-                "type": dict,
-                "required": {"name": STR, "status": {"enum": ["ok", "warning", "error"]}, "message": STR},
-            }},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["error"]},
+                "command": {"enum": ["preflight"]},
+                "exit_code": INT,
+                "ok": {"enum": [False]},
+                "errors": INT,
+                "warnings": INT,
+                "strict": BOOL,
+                "checks": {
+                    "type": list,
+                    "items": {
+                        "type": dict,
+                        "required": {"name": STR, "status": {"enum": ["ok", "warning", "error"]}, "message": STR},
+                    },
+                },
+            },
         },
-    })
+    )
     check_names = {c["name"] for c in payload["checks"]}
     assert "config" in check_names
 
@@ -514,28 +610,42 @@ def test_preflight_error_shape_no_config(monkeypatch, tmp_path, capsys):
 # setup (non-interactive)
 # ---------------------------------------------------------------------------
 
+
 def test_setup_success_shape(monkeypatch, tmp_path, capsys):
     access_code_file = tmp_path / "secrets" / "access_code"
     monkeypatch.setenv("BAMBU_SETUP_ACCESS_CODE", "contract-test-secret")
-    exc = run_main(monkeypatch, tmp_path, [
-        "setup",
-        "--printer-ip", "printer.local",
-        "--serial", "CONTRACTTESTSERIAL",
-        "--access-code-env", "BAMBU_SETUP_ACCESS_CODE",
-        "--access-code-file", str(access_code_file),
-        "--model", "P1P",
-        "--nozzle", "0.4",
-        "--json",
-    ])
+    exc = run_main(
+        monkeypatch,
+        tmp_path,
+        [
+            "setup",
+            "--printer-ip",
+            "printer.local",
+            "--serial",
+            "CONTRACTTESTSERIAL",
+            "--access-code-env",
+            "BAMBU_SETUP_ACCESS_CODE",
+            "--access-code-file",
+            str(access_code_file),
+            "--model",
+            "P1P",
+            "--nozzle",
+            "0.4",
+            "--json",
+        ],
+    )
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["configured"]},
-            "command": {"enum": ["setup"]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["configured"]},
+                "command": {"enum": ["setup"]},
+            },
         },
-    })
+    )
     assert "CONTRACTTESTSERIAL" not in json.dumps(payload)
     assert "contract-test-secret" not in json.dumps(payload)
 
@@ -545,36 +655,43 @@ def test_setup_missing_values_error_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["setup", "--json"])
     assert exc is not None and exc.code == 1
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["error"]},
-            "command": {"enum": ["setup"]},
-            "failed_step": {"enum": ["validate"]},
-            "exit_code": {"enum": [1]},
-            "missing": {"type": list, "items": STR},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["error"]},
+                "command": {"enum": ["setup"]},
+                "failed_step": {"enum": ["validate"]},
+                "exit_code": {"enum": [1]},
+                "missing": {"type": list, "items": STR},
+            },
         },
-    })
+    )
 
 
 # ---------------------------------------------------------------------------
 # job / send
 # ---------------------------------------------------------------------------
 
+
 def test_job_dry_run_local_shape(monkeypatch, tmp_path, capsys):
     ready = make_ready_file(tmp_path)
     exc = run_main(monkeypatch, tmp_path, ["job", str(ready), "--confirm", "--dry-run", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["dry_run_local_skipped"]},
-            "command": {"enum": ["job"]},
-            "would_upload": {"enum": [True]},
-            "would_print": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["dry_run_local_skipped"]},
+                "command": {"enum": ["job"]},
+                "would_upload": {"enum": [True]},
+                "would_print": {"enum": [True]},
+            },
         },
-    })
+    )
     assert not payload.get("uploaded") and not payload.get("printed")
 
 
@@ -583,15 +700,18 @@ def test_job_sim_printed_success_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "job", str(ready), "--confirm", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["printed"]},
-            "command": {"enum": ["job"]},
-            "uploaded": {"enum": [True]},
-            "printed": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["printed"]},
+                "command": {"enum": ["job"]},
+                "uploaded": {"enum": [True]},
+                "printed": {"enum": [True]},
+            },
         },
-    })
+    )
 
 
 def test_job_sim_uploaded_not_printed_shape(monkeypatch, tmp_path, capsys):
@@ -599,16 +719,19 @@ def test_job_sim_uploaded_not_printed_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "job", str(ready), "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["uploaded_not_printed"]},
-            "command": {"enum": ["job"]},
-            "uploaded": {"enum": [True]},
-            "printed": {"enum": [False]},
-            "next_command": {"type": list, "items": STR},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["uploaded_not_printed"]},
+                "command": {"enum": ["job"]},
+                "uploaded": {"enum": [True]},
+                "printed": {"enum": [False]},
+                "next_command": {"type": list, "items": STR},
+            },
         },
-    })
+    )
     assert payload["next_command"][0] == "print"
 
 
@@ -617,30 +740,36 @@ def test_send_alias_uploaded_only_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "send", str(ready), "--upload-only", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["uploaded"]},
-            "command": {"enum": ["send"]},
-            "uploaded": {"enum": [True]},
-            "printed": {"enum": [False]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["uploaded"]},
+                "command": {"enum": ["send"]},
+                "uploaded": {"enum": [True]},
+                "printed": {"enum": [False]},
+            },
         },
-    })
+    )
 
 
 def test_job_url_dry_run_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["job", "printables.com/model/12345-contract", "--dry-run", "--json"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["dry_run_url_skipped"]},
-            "command": {"enum": ["job"]},
-            "normalized_source": STR,
-            "would_download": {"enum": [True]},
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["dry_run_url_skipped"]},
+                "command": {"enum": ["job"]},
+                "normalized_source": STR,
+                "would_download": {"enum": [True]},
+            },
         },
-    })
+    )
 
 
 def test_job_download_rejection_error_shape(monkeypatch, tmp_path, capsys):
@@ -667,6 +796,7 @@ def test_job_local_zip_extract_error_shape(monkeypatch, tmp_path, capsys):
 # slice
 # ---------------------------------------------------------------------------
 
+
 def test_slice_missing_file_error_shape(monkeypatch, tmp_path, capsys):
     missing = tmp_path / "missing.stl"
     exc = run_main(monkeypatch, tmp_path, ["slice", str(missing), "--json"])
@@ -679,6 +809,7 @@ def test_slice_missing_file_error_shape(monkeypatch, tmp_path, capsys):
 # ---------------------------------------------------------------------------
 # download
 # ---------------------------------------------------------------------------
+
 
 def test_download_rejects_non_model_error_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["download", "https://example.com/archive.rar", "--json"])
@@ -706,22 +837,26 @@ def test_download_credential_url_rejected_and_redacted_shape(monkeypatch, tmp_pa
 # JsonArgumentParser bad-argument contract
 # ---------------------------------------------------------------------------
 
+
 def test_bad_argument_parse_error_shape(monkeypatch, tmp_path, capsys):
     # slice requires a positional "file"; omit it under --json to trigger
     # argparse's own error() path (JsonArgumentParser.error).
     exc = run_main(monkeypatch, tmp_path, ["slice", "--json"])
     assert exc is not None and exc.code == 5
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["error"]},
-            "command": {"enum": ["slice"]},
-            "failed_step": {"enum": ["parse"]},
-            "exit_code": {"enum": [5]},
-            "error": STR,
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["error"]},
+                "command": {"enum": ["slice"]},
+                "failed_step": {"enum": ["parse"]},
+                "exit_code": {"enum": [5]},
+                "error": STR,
+            },
         },
-    })
+    )
     assert capsys.readouterr().err.strip() == ""
 
 
@@ -738,20 +873,24 @@ def test_bad_argument_parse_error_shape_global_json_flag(monkeypatch, tmp_path, 
 # main(): missing-subcommand contract
 # ---------------------------------------------------------------------------
 
+
 def test_missing_subcommand_json_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--json"])
     assert exc is not None and exc.code == 5
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["error"]},
-            "command": {"enum": ["main"]},
-            "failed_step": {"enum": ["parse"]},
-            "exit_code": {"enum": [5]},
-            "error": STR,
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["error"]},
+                "command": {"enum": ["main"]},
+                "failed_step": {"enum": ["parse"]},
+                "exit_code": {"enum": [5]},
+                "error": STR,
+            },
         },
-    })
+    )
 
 
 def test_missing_subcommand_without_json_prints_usage_not_json(monkeypatch, tmp_path, capsys):
@@ -766,30 +905,36 @@ def test_missing_subcommand_without_json_prints_usage_not_json(monkeypatch, tmp_
 # --version
 # ---------------------------------------------------------------------------
 
+
 def test_version_json_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--json", "--version"])
     assert exc is None
     payload = read_json(capsys)
-    assert_shape(payload, {
-        "type": dict,
-        "required": {
-            "status": {"enum": ["ok"]},
-            "command": {"enum": ["version"]},
-            "version": STR,
+    assert_shape(
+        payload,
+        {
+            "type": dict,
+            "required": {
+                "status": {"enum": ["ok"]},
+                "command": {"enum": ["version"]},
+                "version": STR,
+            },
         },
-    })
-    assert payload["version"] == bambu.VERSION
+    )
+    assert payload["version"] == __import__("bambu_cli.constants", fromlist=["VERSION"]).VERSION
 
 
 # ---------------------------------------------------------------------------
 # config-error contract (printer-network command, no config, no --sim)
 # ---------------------------------------------------------------------------
 
+
 def test_config_error_shape_for_network_command(monkeypatch, tmp_path, capsys):
     # Force the "never configured" state (default printer_ip 0.0.0.0)
     # explicitly so this test doesn't depend on run order.
     from bambu_cli import context
     from bambu_cli.context import RuntimeContext
+
     context.set_current(RuntimeContext())
     exc = run_main(monkeypatch, tmp_path, ["status", "--json"])
     assert exc is not None and exc.code == 1

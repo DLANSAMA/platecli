@@ -6,7 +6,6 @@ import json
 import socket
 import sys
 from argparse import Namespace
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -119,13 +118,14 @@ def test_noninteractive_access_code_env(monkeypatch, tmp_path):
         cert_fingerprint=None,
         insecure_tls=False,
     )
-    with patch("bambu_cli.setup_cmd.wizard._config_path", return_value=str(cfg)), patch(
-        "bambu_cli.setup_cmd.common._config_path", return_value=str(cfg)
+    with (
+        patch("bambu_cli.setup_cmd.wizard._config_path", return_value=str(cfg)),
+        patch("bambu_cli.setup_cmd.common._config_path", return_value=str(cfg)),
     ):
-        try:
-            wizard_mod._cmd_setup_noninteractive(args)
-        except BambuError:
-            pass
+        wizard_mod._cmd_setup_noninteractive(args)
+    assert cfg.is_file()
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    assert data["printer_ip"] == "10.0.0.3"
 
 
 def test_noninteractive_access_code_file(tmp_path, monkeypatch):
@@ -147,8 +147,9 @@ def test_noninteractive_access_code_file(tmp_path, monkeypatch):
         cert_fingerprint=None,
         insecure_tls=False,
     )
-    with patch("bambu_cli.setup_cmd.wizard._config_path", return_value=str(cfg)), patch(
-        "bambu_cli.setup_cmd.common._config_path", return_value=str(cfg)
+    with (
+        patch("bambu_cli.setup_cmd.wizard._config_path", return_value=str(cfg)),
+        patch("bambu_cli.setup_cmd.common._config_path", return_value=str(cfg)),
     ):
         wizard_mod._cmd_setup_noninteractive(args)
     assert cfg.is_file()
@@ -156,8 +157,10 @@ def test_noninteractive_access_code_file(tmp_path, monkeypatch):
 
 def test_service_info_parsed_addresses_raises():
     info = MagicMock()
+
     def boom():
         raise ValueError("x")
+
     info.parsed_addresses = boom
     info.addresses = [socket.inet_aton("10.0.0.1")]
     assert wizard_mod._service_info_address(info) == "10.0.0.1"

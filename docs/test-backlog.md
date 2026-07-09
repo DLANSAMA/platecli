@@ -21,14 +21,14 @@ This file is a short **remaining-gaps** list. Refresh after each phase.
 - Don't add `isinstance(..., Mock)` / `"unittest" in sys.modules` branches to production code.
 - Don't reintroduce `@mockable`. Domain code raises `BambuError`/`abort`; `sys.exit` only in `cli.py`.
 
-## Remaining stretch (post-A+ gates)
+## Remaining stretch (post-Phase 3)
 
 | Gap | Notes |
 |-----|-------|
-| mypy on `printer.py` / `slicer.py` | Exception-group / optional-type residuals |
-| Hermetic fake Orca binary in CI | Slicer process paths still `# pragma: no cover` |
-| Per-module cov-fail-under | Optional; total 92% + residual policy is the gate |
-| Live printer scheduled lab | Optional A+ stretch |
+| mypy on `printer.py` / `slicer/` (blocklisted until residual typing fixed) | Exception-group / optional-type residuals |
+| Hermetic fake Orca binary in CI | Would raise mutation kill rate on `slicer/output._finalize_slice` |
+| Mutation score on `predict` / `validation` emit paths | Honest ~30–33%; cosmetic/equivalent survivors accepted |
+| Live printer lab (manual pre-release) | Documented: `docs/live-printer-smoke.md` (`BAMBU_LIVE=1`) |
 | 1.0 release tag | Support matrix + stability promise publish |
 
 ## Priority if coverage regresses

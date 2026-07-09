@@ -125,10 +125,10 @@ class RuntimeContext:
         if self._printer is not None:
             return self._printer
 
-        from bambu_cli import bambu
+        from bambu_cli.config import load_access_code
         from bambu_cli.printer import BambuPrinter
 
-        access_code = "" if self.simulation else bambu.load_access_code()
+        access_code = "" if self.simulation else load_access_code()
         self._printer = BambuPrinter(
             ip=self.settings.printer_ip,
             serial=self.settings.serial,

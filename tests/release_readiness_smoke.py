@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Guard the objective-level release checks for the Bambu CLI skill."""
+
 from pathlib import Path
 
 
@@ -71,25 +72,15 @@ FORBIDDEN_GENERATED_NAMES = {
 OBJECTIVE_SNIPPETS = {
     "README.md": {
         "Runs on **Linux, macOS, and Windows**",
-        "Use `job` when an agent or user gives either a website URL or a local file path"
+        "Use `job` when an agent or user gives either a website URL or a local file path",
     },
-    "AGENTS.md": {
-        "Runs on Linux, macOS, and Windows."
-    },
-    "pyproject.toml": {
-        "bambu-cli = \"bambu_cli.bambu:main\""
-    }
+    "AGENTS.md": {"Runs on Linux, macOS, and Windows."},
+    "pyproject.toml": {'bambu-cli = "bambu_cli.bambu:main"'},
 }
 
 FORBIDDEN_SNIPPETS = {
-    "AGENTS.md": {
-        "/tmp/",
-        "~/.bambu-cli"
-    },
-    "README.md": {
-        "python %USERPROFILE%",
-        "python3 ~/.bambu-cli/workspace/skills/bambu-cli/scripts/bambu.py"
-    }
+    "AGENTS.md": {"/tmp/", "~/.bambu-cli"},
+    "README.md": {"python %USERPROFILE%", "python3 ~/.bambu-cli/workspace/skills/bambu-cli/scripts/bambu.py"},
 }
 
 
@@ -99,6 +90,7 @@ def read_relpath(relpath):
 
 def iter_generated_paths():
     import os
+
     is_ci = bool(os.environ.get("GITHUB_ACTIONS"))
     for path in ROOT.rglob("*"):
         if ".git" in path.parts or ".venv" in path.parts or "venv" in path.parts or ".claude" in path.parts:
@@ -123,7 +115,9 @@ def main():
     missing_files = sorted(relpath for relpath in REQUIRED_FILES if not (ROOT / relpath).is_file())
     if missing_files:
         print(f"Missing required files: {missing_files}")
-        import sys; sys.exit(1)
+        import sys
+
+        sys.exit(1)
     forbidden_files = sorted(relpath for relpath in FORBIDDEN_RELEASE_FILES if (ROOT / relpath).exists())
     generated_paths = sorted(set(iter_generated_paths()))
     missing_snippets = []

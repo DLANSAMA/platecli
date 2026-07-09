@@ -1,5 +1,10 @@
 """Camera snapshot capture: direct P1/A1 port-6000 TLS grab with a
-BambuP1Streamer Docker fallback for X1-series printers."""
+BambuP1Streamer Docker fallback for X1-series printers.
+
+Collaborators (socket connect, SSL context factory, frame grabber, docker
+runner, docker-which, access-code loader) are injectable so tests pass fakes
+instead of patching module globals.
+"""
 
 import os
 import shutil
@@ -19,6 +24,7 @@ from bambu_cli.cli import (
     _namespace_get,
     _path_for_message,
 )
+from bambu_cli.config import load_access_code
 from bambu_cli.constants import (
     DEFAULT_NETWORK_TIMEOUT,
     EXIT_COMMAND_ERROR,
@@ -33,12 +39,23 @@ from bambu_cli.utils import _ensure_parent_dir, emit_json, emit_json_error
 
 
 def _grab_camera_frame_direct(
-    printer, timeout=12
-):  # pragma: no cover -- native TLS frame protocol; pin mismatch unit-tested
+    printer,
+    timeout=12,
+    *,
+    create_connection=None,
+    ssl_context_factory=None,
+):
     """Grab one JPEG frame from a P1/A1 printer camera using Bambu's native TLS
     port-6000 protocol (the same one Bambu Studio uses). Returns JPEG bytes, or
     None if no frame is obtained. Requires no Docker. X1-series use RTSP instead,
-    so callers should fall back to the Docker/RTSP streamer when this returns None."""
+    so callers should fall back to the Docker/RTSP streamer when this returns None.
+
+    ``create_connection`` and ``ssl_context_factory`` default to the real
+    ``socket.create_connection`` / ``ssl.create_default_context``; tests inject
+    fakes instead of patching module globals.
+    """
+    _connect = create_connection if create_connection is not None else socket.create_connection
+    _ssl_factory = ssl_context_factory if ssl_context_factory is not None else ssl.create_default_context
     if not printer.ip or not printer.access_code:
         return None
     auth = bytearray()
@@ -48,7 +65,7 @@ def _grab_camera_frame_direct(
     auth += struct.pack("<I", 0x0)
     auth += "bblp".encode("ascii").ljust(32, b"\x00")
     auth += printer.access_code.encode("ascii").ljust(32, b"\x00")
-    ctx = ssl.create_default_context()
+    ctx = _ssl_factory()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
 
@@ -61,7 +78,7 @@ def _grab_camera_frame_direct(
             buf += c
         return buf
 
-    sock = socket.create_connection((printer.ip, 6000), timeout=timeout)
+    sock = _connect((printer.ip, 6000), timeout=timeout)
     try:
         tls = ctx.wrap_socket(sock, server_hostname=printer.ip)
         tls.settimeout(timeout)
@@ -136,9 +153,28 @@ def _write_snapshot_atomic(outpath, data):
         raise
 
 
-def _cmd_snapshot(args, ctx=None):  # pragma: no cover -- docker+direct hybrid; pin paths unit-tested
-    """Capture a snapshot from the printer camera via BambuP1Streamer."""
-    from bambu_cli import bambu
+def _cmd_snapshot(
+    args,
+    ctx=None,
+    *,
+    grab_frame=None,
+    which=None,
+    subprocess_run=None,
+    access_code_loader=None,
+    urlopen=None,
+    sleep=None,
+):
+    """Capture a snapshot from the printer camera via BambuP1Streamer.
+
+    Collaborators are injectable so tests pass fakes instead of patching
+    module globals. Defaults are the real production implementations.
+    """
+    _grab = grab_frame if grab_frame is not None else _grab_camera_frame_direct
+    _which = which if which is not None else shutil.which
+    _run = subprocess_run if subprocess_run is not None else subprocess.run
+    _load_code = access_code_loader if access_code_loader is not None else load_access_code
+    _urlopen = urlopen if urlopen is not None else urllib.request.urlopen
+    _sleep = sleep if sleep is not None else time.sleep
 
     ctx = ctx or RuntimeContext.for_request(args)
     outpath = _expand_path(args.output or "printer_snapshot.jpg")
@@ -165,7 +201,7 @@ def _cmd_snapshot(args, ctx=None):  # pragma: no cover -- docker+direct hybrid; 
     #     Docker/RTSP streamer below for X1-series or if no frame is obtained. ---
     try:
         printer = ctx.printer()
-        _frame = bambu._grab_camera_frame_direct(printer)
+        _frame = _grab(printer)
     except Exception as _exc:
         _frame = None
         logger.debug(f"Direct camera grab unavailable ({_exc}); trying Docker streamer.")
@@ -194,13 +230,13 @@ def _cmd_snapshot(args, ctx=None):  # pragma: no cover -- docker+direct hybrid; 
     _require_localhost_streamer_url(args, streamer_url, outpath)
 
     # Check if streamer container is running, start if needed
-    if not shutil.which("docker"):
+    if not _which("docker"):
         message = "Docker not found in PATH. Install Docker Desktop (Windows/macOS) or docker-ce (Linux) and retry."
         logger.error(message)
         emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="docker", output=outpath)
         abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
-        check = subprocess.run(
+        check = _run(
             ["docker", "inspect", "-f", "{{.State.Running}}", ctx.settings.camera_container_name],
             capture_output=True,
             text=True,
@@ -213,14 +249,14 @@ def _cmd_snapshot(args, ctx=None):  # pragma: no cover -- docker+direct hybrid; 
         abort("", exit_code=EXIT_CONFIG_ERROR)
     if check.returncode != 0 or "true" not in check.stdout:
         logger.info("🔄 Starting camera streamer...")
-        access_code = bambu.load_access_code()
+        access_code = _load_code()
         # Pass the access code via the child environment (the `-e NAME` form with
         # no value tells docker to read it from our env) rather than embedding it
         # in argv, so the secret never appears in the process list (`ps`).
         docker_env = {**os.environ, "PRINTER_ACCESS_CODE": access_code}
         try:
-            subprocess.run(["docker", "rm", "-f", ctx.settings.camera_container_name], capture_output=True, timeout=5)
-            run = subprocess.run(
+            _run(["docker", "rm", "-f", ctx.settings.camera_container_name], capture_output=True, timeout=5)
+            run = _run(
                 [
                     "docker",
                     "run",
@@ -278,19 +314,19 @@ def _cmd_snapshot(args, ctx=None):  # pragma: no cover -- docker+direct hybrid; 
         req = urllib.request.Request(streamer_url, headers={"User-Agent": "Mozilla/5.0"})
         for _ in range(30):
             try:
-                with urllib.request.urlopen(req, timeout=1) as resp:
+                with _urlopen(req, timeout=1) as resp:
                     if resp.status == 200:
                         break
             except urllib.error.URLError:
                 pass
-            time.sleep(0.5)
+            _sleep(0.5)
 
     logger.info("📸 Capturing snapshot...")
     try:
         # streamer_url was already validated as localhost-only before polling.
         req = urllib.request.Request(streamer_url, headers={"User-Agent": "Mozilla/5.0"})
         # Use standard urlopen for localhost streamer to bypass SSRF protections
-        with urllib.request.urlopen(req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
+        with _urlopen(req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
             data = resp.read()
             _write_snapshot_atomic(outpath, data)
         size = os.path.getsize(outpath)

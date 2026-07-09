@@ -14,14 +14,12 @@ from bambu_cli.logging_utils import logger
 from bambu_cli.utils import _secure_makedirs, emit_json_error
 
 
-def _config_path():  # pragma: no cover -- config path
-    """Read the config path through the bambu module so tests can patch it."""
-    from bambu_cli import bambu
-
-    return getattr(bambu, "CONFIG_PATH", CONFIG_PATH)
+def _config_path():
+    """Return the active config path (patch ``CONFIG_PATH`` or this helper in tests)."""
+    return CONFIG_PATH
 
 
-def _normalize_model(model, default="P1P"):  # pragma: no cover -- model normalize
+def _normalize_model(model, default="P1P"):
     model = (model or default or "P1P").strip().upper()
     if model not in MODEL_MAPPING:
         logger.warning(f"⚠️  Unknown model '{model}'. Defaulting to 'P1P'.")
@@ -29,7 +27,7 @@ def _normalize_model(model, default="P1P"):  # pragma: no cover -- model normali
     return model
 
 
-def _normalize_nozzle(nozzle):  # pragma: no cover -- nozzle normalize
+def _normalize_nozzle(nozzle):
     nozzle = str(nozzle or "0.4").strip()
     if nozzle not in ["0.2", "0.4", "0.6", "0.8"]:
         logger.warning("⚠️  Standard nozzle size should be one of 0.2, 0.4, 0.6, or 0.8. Using standard '0.4'.")
@@ -37,7 +35,7 @@ def _normalize_nozzle(nozzle):  # pragma: no cover -- nozzle normalize
     return nozzle
 
 
-def _secure_write_json(path, data):  # pragma: no cover -- secure write
+def _secure_write_json(path, data):
     expanded = _expand_path(path)
     directory = os.path.dirname(expanded)
     if directory:
@@ -55,7 +53,7 @@ def _secure_write_json(path, data):  # pragma: no cover -- secure write
         pass
 
 
-def _secure_write_text(path, text):  # pragma: no cover -- secure write
+def _secure_write_text(path, text):
     expanded = _expand_path(path)
     directory = os.path.dirname(expanded)
     if directory:
@@ -73,7 +71,7 @@ def _secure_write_text(path, text):  # pragma: no cover -- secure write
         pass
 
 
-def _default_access_code_file_path():  # pragma: no cover -- default path
+def _default_access_code_file_path():
     """Store guided-setup secrets next to config.json instead of inside it."""
     config_dir = os.path.dirname(_expand_path(_config_path()))
     if config_dir:
@@ -128,7 +126,7 @@ def _prompt_access_code_file_path(args=None):  # pragma: no cover -- interactive
     return default_path
 
 
-def _build_setup_config(  # pragma: no cover -- build config
+def _build_setup_config(
     ip,
     serial,
     model,
@@ -165,7 +163,7 @@ def _build_setup_config(  # pragma: no cover -- build config
     return config
 
 
-def _write_setup_config(config, access_code_file_secret=None):  # pragma: no cover -- write config
+def _write_setup_config(config, access_code_file_secret=None):
     if access_code_file_secret is not None:
         _secure_write_text(config["access_code_file"], access_code_file_secret.rstrip("\n") + "\n")
     _secure_write_json(_config_path(), config)
@@ -182,7 +180,7 @@ def _write_setup_config(config, access_code_file_secret=None):  # pragma: no cov
     }
 
 
-def _setup_summary(config):  # pragma: no cover -- setup summary
+def _setup_summary(config):
     access_code_file = config.get("access_code_file")
     payload = {
         "status": "configured",
@@ -203,19 +201,19 @@ def _setup_summary(config):  # pragma: no cover -- setup summary
     return payload
 
 
-def _setup_path_details(**paths):  # pragma: no cover -- path details
+def _setup_path_details(**paths):
     return {key: _display_path(value) for key, value in paths.items()}
 
 
-def _setup_json_error(args, message, **extra):  # pragma: no cover -- json error
+def _setup_json_error(args, message, **extra):
     emit_json_error(args, "setup", EXIT_CONFIG_ERROR, message, failed_step="validate", **extra)
 
 
-def _setup_file_error(args, message, **extra):  # pragma: no cover -- file error
+def _setup_file_error(args, message, **extra):
     emit_json_error(args, "setup", EXIT_FILE_ERROR, message, failed_step="write", **extra)
 
 
-def _validate_setup_access_code_file(args, access_code_file):  # pragma: no cover -- validate ac file
+def _validate_setup_access_code_file(args, access_code_file):
     """Validate access-code file path before setup writes or records it."""
     if not access_code_file:
         return None
@@ -242,6 +240,6 @@ def _validate_setup_access_code_file(args, access_code_file):  # pragma: no cove
     return expanded
 
 
-def _looks_like_placeholder(value, placeholders):  # pragma: no cover -- placeholder
+def _looks_like_placeholder(value, placeholders):
     normalized = str(value or "").strip().upper()
     return not normalized or normalized in placeholders or normalized.startswith("YOUR_")

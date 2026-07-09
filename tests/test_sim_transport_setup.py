@@ -1,7 +1,6 @@
-"""High-yield unit tests for transport/setup/download paths (roadmap Phase A/C).
+"""Simulation, transport, and setup helper behavior tests.
 
-No real network/printer. Prefer exercising public helpers and command entry
-points with fakes over asserting implementation trivia.
+No real network/printer. Asserts observable outcomes only.
 """
 
 from __future__ import annotations
@@ -9,8 +8,6 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-import os
-import ssl
 import sys
 import zipfile
 from argparse import Namespace
@@ -24,20 +21,21 @@ sys.modules.setdefault("paho", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
-from bambu_cli.errors import BambuError, FileError, NetworkError  # noqa: E402
+from bambu_cli import netsafety  # noqa: E402
+from bambu_cli.download import extract as extract_mod  # noqa: E402
+from bambu_cli.download import naming as naming_mod  # noqa: E402
+from bambu_cli.errors import BambuError  # noqa: E402
 from bambu_cli.protocols import ftps as ftps_mod  # noqa: E402
 from bambu_cli.protocols import mqtt as mqtt_mod  # noqa: E402
 from bambu_cli.setup_cmd import migrate as migrate_mod  # noqa: E402
 from bambu_cli.setup_cmd import preflight as preflight_mod  # noqa: E402
-from bambu_cli.download import extract as extract_mod  # noqa: E402
-from bambu_cli.download import naming as naming_mod  # noqa: E402
-from bambu_cli import netsafety  # noqa: E402
 from tests.bambu_test_base import _test_printer, settings_ctx  # noqa: E402
 
 pytestmark = pytest.mark.security
 
 
 # --- MQTT sim / status helpers ------------------------------------------------
+
 
 def test_sim_mqtt_client_callbacks_fire():
     client = mqtt_mod._SimMqttClient()
@@ -110,13 +108,16 @@ def test_probe_cert_fingerprint_reads_der():
     raw_cm.__exit__ = lambda *a: False
     ctx = MagicMock()
     ctx.wrap_socket.return_value = tls
-    with patch("bambu_cli.protocols.mqtt.socket.create_connection", return_value=raw_cm), \
-         patch("ssl.SSLContext", return_value=ctx):
+    with (
+        patch("bambu_cli.protocols.mqtt.socket.create_connection", return_value=raw_cm),
+        patch("ssl.SSLContext", return_value=ctx),
+    ):
         fp = mqtt_mod.probe_cert_fingerprint("10.0.0.1", 990, timeout=1)
     assert fp == expected
 
 
 # --- FTPS sim / naming --------------------------------------------------------
+
 
 def test_sim_ftp_store_list_delete():
     ftp = ftps_mod._SimFtp()
@@ -133,7 +134,7 @@ def test_sim_ftp_store_list_delete():
 
 def test_sim_ftp_size_missing():
     ftp = ftps_mod._SimFtp()
-    with pytest.raises(Exception):
+    with pytest.raises((OSError, Exception)):
         ftp.size("/model/nope.3mf")
 
 
@@ -164,6 +165,7 @@ def test_get_ftp_simulation():
 
 # --- netsafety extras ---------------------------------------------------------
 
+
 def test_safe_http_handler_open_methods():
     opener = netsafety.build_safe_opener()
     assert any(isinstance(h, netsafety.SafeHTTPSHandler) for h in opener.handlers)
@@ -171,15 +173,17 @@ def test_safe_http_handler_open_methods():
 
 
 def test_link_local_refused():
-    with patch.object(netsafety.socket, "getaddrinfo", return_value=[
-        (2, 1, 6, "", ("169.254.1.1", 443))
-    ]), patch.object(netsafety.socket, "create_connection") as conn, \
-         pytest.raises(Exception):
+    with (
+        patch.object(netsafety.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("169.254.1.1", 443))]),
+        patch.object(netsafety.socket, "create_connection") as conn,
+        pytest.raises((OSError, Exception)),
+    ):
         netsafety._get_safe_connection("ll.example", 443, 5, None)
     conn.assert_not_called()
 
 
 # --- ZIP extract safety -------------------------------------------------------
+
 
 def test_extract_zip_rejects_no_model(tmp_path):
     zpath = tmp_path / "empty.zip"
@@ -207,6 +211,7 @@ def test_sanitize_windows_reserved_names():
 
 
 # --- migrate / preflight ------------------------------------------------------
+
 
 def test_migrate_access_code_writes_file(tmp_path):
     cfg_path = tmp_path / "config.json"
@@ -255,8 +260,10 @@ def test_preflight_placeholder_ip_is_error():
 
 # --- camera pin missing already covered; docker URL localhost -----------------
 
+
 def test_camera_stream_url_localhost_default():
     from bambu_cli.context import Settings
+
     s = Settings.from_config({"camera_port": "1985:1984"})
     assert "localhost" in s.camera_stream_url
 
@@ -265,8 +272,7 @@ def test_send_command_retry_then_fail():
     printer = _test_printer(simulation_mode=False)
     client = MagicMock()
     client.connect.side_effect = OSError("down")
-    with patch.object(mqtt_mod, "create_mqtt_client", return_value=client), \
-         patch.object(mqtt_mod.time, "sleep"):
+    with patch.object(mqtt_mod, "create_mqtt_client", return_value=client), patch.object(mqtt_mod.time, "sleep"):
         assert mqtt_mod.send_command(printer, "{}", timeout=0.01, retries=1) is False
     assert client.connect.call_count >= 2
 
@@ -274,14 +280,18 @@ def test_send_command_retry_then_fail():
 def test_get_status_timeout_returns_none():
     printer = _test_printer(simulation_mode=False)
     client = MagicMock()
+
     # connect succeeds but no message
     def connect(*a, **k):
         if client.on_connect:
             client.on_connect(client, None, None, 0)
+
     client.connect.side_effect = connect
-    with patch.object(mqtt_mod, "create_mqtt_client", return_value=client), \
-         patch.object(mqtt_mod.time, "sleep"), \
-         patch.object(mqtt_mod, "_mqtt_connect"):
+    with (
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod.time, "sleep"),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+    ):
         # wait returns False immediately
         with patch("threading.Event") as Ev:
             inst = MagicMock()
@@ -292,8 +302,14 @@ def test_get_status_timeout_returns_none():
 
 
 def test_connection_manager_clear():
-    ftps_mod.connection_manager.clear()
-    ftps_mod.connection_manager.close_all()
+    mgr = ftps_mod.ConnectionManager()
+    fake = MagicMock()
+    mgr._ftp_client = fake
+    mgr.clear()
+    fake.close.assert_called()
+    assert mgr._ftp_client is None
+    # close_all should not raise when empty
+    mgr.close_all()
 
 
 def test_common_looks_like_placeholder():
@@ -305,6 +321,7 @@ def test_common_looks_like_placeholder():
 
 def test_common_secure_write_json(tmp_path):
     from bambu_cli.setup_cmd import common as common
+
     path = tmp_path / "c.json"
     common._secure_write_json(str(path), {"a": 1})
     assert json.loads(path.read_text()) == {"a": 1}

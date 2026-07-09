@@ -40,13 +40,13 @@ from bambu_cli.download.validation import (
 )
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
-from bambu_cli.netsafety import _default_user_agent
-from bambu_cli.printables import _is_printables_model_url
-from bambu_cli.protocols.ftps import _download_partial_path, _remove_partial_file
+from bambu_cli.netsafety import _default_user_agent, build_safe_opener
+from bambu_cli.printables import _is_printables_model_url, resolve_printables_url
+from bambu_cli.protocols.ftps import _download_partial_path, _noncolliding_path, _remove_partial_file
 from bambu_cli.utils import _ensure_output_dir, _record_download_success, emit_json_error
 
 
-def _response_header(resp, name):  # pragma: no cover -- header helper
+def _response_header(resp, name):
     value = resp.getheader(name)
     return value if isinstance(value, str) else None
 
@@ -54,24 +54,33 @@ def _response_header(resp, name):  # pragma: no cover -- header helper
 def _response_url(resp):
     """Return the final response URL after redirects when urllib exposes it."""
     geturl = getattr(resp, "geturl", None)
-    if not callable(geturl):  # pragma: no cover -- non-urllib response objects
+    if not callable(geturl):
         return None
     try:
         value = geturl()
-    except Exception:  # pragma: no cover -- defensive
+    except Exception:
         return None
     return value if isinstance(value, str) and value else None
 
 
-def _cmd_download(args):  # pragma: no cover -- HTTP download orchestration
-    """Download a model or printer-ready file from a URL. Auto-resolves Printables page URLs."""
-    # build_safe_opener, resolve_printables_url, and _noncolliding_path are
-    # called through the package namespace (imported here, not at module
-    # level, to avoid touching the partially-initialized package during
-    # import) so existing test patches on ``bambu_cli.download.<name>`` keep
-    # working after the package split.
-    from bambu_cli import download as _download_pkg
+def _cmd_download(
+    args,
+    *,
+    opener_factory=None,
+    resolve_printables=None,
+    noncolliding_path=None,
+):
+    """Download a model or printer-ready file from a URL. Auto-resolves Printables page URLs.
+
+    Collaborators (opener factory, Printables resolver, collision path helper)
+    are injectable so tests pass fakes instead of patching module globals.
+    Defaults are the real production implementations.
+    """
     from bambu_cli import utils
+
+    _openers = opener_factory if opener_factory is not None else build_safe_opener
+    _resolve = resolve_printables if resolve_printables is not None else resolve_printables_url
+    _noncolliding = noncolliding_path if noncolliding_path is not None else _noncolliding_path
 
     utils._LAST_DOWNLOAD_PAYLOAD = None
     source_url = args.url
@@ -119,7 +128,7 @@ def _cmd_download(args):  # pragma: no cover -- HTTP download orchestration
         "Accept": "*/*",
     }
 
-    resolved_url, stl_name = _download_pkg.resolve_printables_url(url)
+    resolved_url, stl_name = _resolve(url)
 
     # If the URL was a Printables page, it may have been resolved successfully.
     # If it was a Printables page and failed, we should return to match original behavior.
@@ -147,7 +156,7 @@ def _cmd_download(args):  # pragma: no cover -- HTTP download orchestration
     partial_path = None
     replace_on_success = False
     outpath = None
-    safe_opener = _download_pkg.build_safe_opener()
+    safe_opener = _openers()
     try:
         for _html_resolution_attempt in range(3):
             archive_download = _is_archive_download(url, stl_name)
@@ -163,7 +172,7 @@ def _cmd_download(args):  # pragma: no cover -- HTTP download orchestration
             else:
                 filename = _download_target_filename(args, url, stl_name)
                 outpath = os.path.join(outdir, filename)
-                outpath = _download_pkg._noncolliding_path(outpath)
+                outpath = _noncolliding(outpath)
                 filename = _portable_basename(outpath)
             req = urllib.request.Request(url, headers=headers)
             with safe_opener.open(req, timeout=DOWNLOAD_TIMEOUT) as resp:
@@ -197,7 +206,7 @@ def _cmd_download(args):  # pragma: no cover -- HTTP download orchestration
                     if not stl_name and not _namespace_get(args, "name") and not archive_download:
                         filename = _download_target_filename(args, url, stl_name)
                         outpath = os.path.join(outdir, filename)
-                        outpath = _download_pkg._noncolliding_path(outpath)
+                        outpath = _noncolliding(outpath)
                         filename = _portable_basename(outpath)
                 content_type = _response_header(resp, "Content-Type")
                 archive_download = archive_download or _is_archive_download(url, stl_name, content_type)
@@ -288,7 +297,7 @@ def _cmd_download(args):  # pragma: no cover -- HTTP download orchestration
                                 header_filename, url, fallback_name=header_filename
                             )
                         outpath = os.path.join(outdir, filename)
-                        outpath = _download_pkg._noncolliding_path(outpath)
+                        outpath = _noncolliding(outpath)
                         filename = _portable_basename(outpath)
 
                 logger.info(f"⬇️  Downloading {filename}...")
@@ -428,7 +437,7 @@ def _cmd_download(args):  # pragma: no cover -- HTTP download orchestration
                 archive_path = outpath
                 try:
                     extracted_path, extracted_filename, archive_entry, size = _extract_zip_model(
-                        archive_path, outdir, args
+                        archive_path, outdir, args, noncolliding_path=_noncolliding
                     )
                 except OSError as exc:
                     _remove_partial_file(archive_path)

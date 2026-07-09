@@ -1,0 +1,56 @@
+name: Mutation baseline
+
+# Mutation testing is minutes-to-tens-of-minutes long. It is a regression gate
+# on its own cadence — NOT a per-PR blocker (see docs/mutation-baseline.md).
+on:
+  workflow_dispatch:
+  schedule:
+    # 06:15 UTC daily
+    - cron: "15 6 * * *"
+
+concurrency:
+  group: mutation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    name: Safety-module mutation baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          # mutmut 3.x requires Python ≥ 3.10
+          python-version: "3.12"
+
+      - name: Install package + test extras
+        run: |
+          uv sync --frozen
+          uv pip install '.[test]'
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Run mutation baseline (floor from docs/mutation-baseline.md)
+        env:
+          # Keep in sync with docs/mutation-baseline.md "CI floor".
+          MUTATION_SCORE_FLOOR: "40"
+          FORCE_CLEAN: "1"
+          CI: "true"
+        run: ./scripts/run_mutation_baseline.sh
+
+      - name: Upload mutmut artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutmut-results
+          path: |
+            mutants/mutmut-cicd-stats.json
+            mutants/mutmut-stats.json
+          if-no-files-found: ignore

@@ -49,7 +49,7 @@ class BambuPrinter:
     @contextlib.contextmanager
     def get_ftp_client(self, timeout: Optional[float] = None):
         """Context manager to get a connected FTP client."""
-        if timeout is None:  # pragma: no cover -- default timeout branch
+        if timeout is None:
             timeout = self.ftps_timeout
         # We can implement pooling here in the future
         client = ftps_protocol._create_raw_ftp(self, timeout=timeout)
@@ -58,11 +58,11 @@ class BambuPrinter:
         finally:
             try:
                 client.quit()
-            except (*ftplib.all_errors, ssl.SSLError):  # pragma: no cover -- quiet close
+            except (*ftplib.all_errors, ssl.SSLError):
                 pass
             try:
                 client.close()
-            except (*ftplib.all_errors, ssl.SSLError):  # pragma: no cover -- quiet close
+            except (*ftplib.all_errors, ssl.SSLError):
                 pass
 
     def _probe_remote_size(self, ftp, remote_path: str) -> Optional[int]:
@@ -81,10 +81,10 @@ class BambuPrinter:
     def _delete_remote_quiet(self, ftp, remote_path: str) -> None:
         try:
             ftp.delete(remote_path)
-        except ftplib.all_errors:  # pragma: no cover -- best-effort delete
+        except ftplib.all_errors:
             pass
 
-    def upload_file(  # pragma: no cover -- FTPS resume state machine; unit tests cover paths
+    def upload_file(
         self,
         local_path: str,
         remote_path: str,
@@ -198,7 +198,13 @@ class BambuPrinter:
     ) -> bool:
         """Download a file via FTPS into a temp sibling, then atomically replace
         ``local_path``. A dropped/failed transfer therefore never truncates or
-        corrupts an existing file at ``local_path``."""
+        corrupts an existing file at ``local_path``.
+
+        After RETR, probe remote SIZE and compare to bytes written. Bambu's FTPS
+        data channel skips TLS close-notify, so retrbinary can return after a
+        truncated transfer; size mismatch must fail without replacing the
+        destination (mirrors upload_file's post-STOR verification).
+        """
         import tempfile
 
         directory = os.path.dirname(os.path.abspath(local_path)) or "."
@@ -209,9 +215,23 @@ class BambuPrinter:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp, os.fdopen(partial_fd, "wb") as f:
                 partial_fd = None  # ownership transferred to the file object
                 ftp.retrbinary(f"RETR {remote_path}", f.write, blocksize=1048576)
+                # Flush before sizing so getsize reflects all written bytes.
+                f.flush()
+                remote_size = self._probe_remote_size(ftp, remote_path)
+
+            written = os.path.getsize(partial_path)
+            if remote_size is None:
+                # Server doesn't support SIZE; don't invent a new failure mode.
+                logger.warning(f"⚠️ Could not verify remote size for {remote_path}; assuming download succeeded.")
+            elif written != remote_size:
+                logger.error(f"Download failed: size mismatch (local {written}, remote {remote_size})")
+                with contextlib.suppress(OSError):
+                    os.remove(partial_path)
+                return False
+
             os.replace(partial_path, local_path)
             return True
-        except (*ftplib.all_errors, ssl.SSLError) as e:
+        except (*ftplib.all_errors, ssl.SSLError, OSError) as e:
             logger.error(f"Download failed: {e}")
             if partial_fd is not None:  # pragma: no cover -- fd not yet transferred
                 with contextlib.suppress(OSError):
@@ -244,11 +264,16 @@ class BambuPrinter:
         return mqtt_protocol.get_version(self, timeout=timeout, retries=retries)
 
 
-def get_printer() -> BambuPrinter:
-    """Factory: build a BambuPrinter from the active run's settings."""
-    from bambu_cli import bambu
+def get_printer(*, access_code_loader=None) -> BambuPrinter:
+    """Factory: build a BambuPrinter from the active run's settings.
+
+    ``access_code_loader`` defaults to ``config.load_access_code``; tests may
+    inject a fake instead of patching module globals.
+    """
+    from bambu_cli.config import load_access_code
     from bambu_cli.context import _normalize_fingerprint, current_settings, current_simulation
 
+    _load = access_code_loader if access_code_loader is not None else load_access_code
     settings = current_settings()
     simulation_mode = current_simulation()
     return BambuPrinter(
@@ -256,7 +281,7 @@ def get_printer() -> BambuPrinter:
         serial=settings.serial,
         # Simulation mode never talks to a real printer, so it must not
         # require credentials (load_access_code exits when unconfigured).
-        access_code="" if simulation_mode else bambu.load_access_code(),
+        access_code="" if simulation_mode else _load(),
         insecure_tls=settings.insecure_tls,
         cert_fingerprint=_normalize_fingerprint(settings.cert_fingerprint),
         simulation_mode=simulation_mode,

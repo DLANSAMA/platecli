@@ -17,7 +17,7 @@ from bambu_cli.setup_cmd.common import (
 from bambu_cli.utils import emit_json
 
 
-def migrate_access_code(config_path=None, access_code_file_path=None):  # pragma: no cover -- access code migrate
+def migrate_access_code(config_path=None, access_code_file_path=None):
     """Move an inline ``access_code`` in config.json into a separate,
     0600-protected ``access_code_file`` and remove the inline value.
 
@@ -66,7 +66,7 @@ def migrate_access_code(config_path=None, access_code_file_path=None):  # pragma
     }
 
 
-def _cmd_migrate_access_code(args):  # pragma: no cover -- migrate cmd
+def _cmd_migrate_access_code(args):
     """Non-interactive: move inline access_code into access_code_file.
 
     Wired up via the (planned) ``bambu setup --migrate-access-code`` flag.

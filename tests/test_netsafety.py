@@ -98,9 +98,9 @@ def test_main_allow_private_ips_flag_enables_settings(monkeypatch, tmp_path):
         seen["allow"] = current_settings().allow_private_ips
 
     monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "--allow-private-ips", "status", "--json"])
-    monkeypatch.setattr(bambu, "CONFIG_PATH", str(tmp_path / "no-config" / "config.json"))
-    monkeypatch.setattr(bambu, "setup_logging", lambda *a, **k: None)
-    monkeypatch.setattr(bambu, "cmd_status", capture)
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no-config" / "config.json"))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    monkeypatch.setattr("bambu_cli.commands.cmd_status", capture)
     main()
     assert seen.get("allow") is True
 
@@ -116,9 +116,9 @@ def test_main_default_denies_private_ips(monkeypatch, tmp_path):
         seen["allow"] = current_settings().allow_private_ips
 
     monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "status", "--json"])
-    monkeypatch.setattr(bambu, "CONFIG_PATH", str(tmp_path / "no-config" / "config.json"))
-    monkeypatch.setattr(bambu, "setup_logging", lambda *a, **k: None)
-    monkeypatch.setattr(bambu, "cmd_status", capture)
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no-config" / "config.json"))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    monkeypatch.setattr("bambu_cli.commands.cmd_status", capture)
     main()
     assert seen.get("allow") is False
 
@@ -140,9 +140,9 @@ def test_main_allow_private_ips_reaches_get_safe_connection(monkeypatch, tmp_pat
             outcomes["connected"] = conn.called
 
     monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "--allow-private-ips", "status", "--json"])
-    monkeypatch.setattr(bambu, "CONFIG_PATH", str(tmp_path / "no-config" / "config.json"))
-    monkeypatch.setattr(bambu, "setup_logging", lambda *a, **k: None)
-    monkeypatch.setattr(bambu, "cmd_status", capture)
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no-config" / "config.json"))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    monkeypatch.setattr("bambu_cli.commands.cmd_status", capture)
     main()
     assert outcomes.get("result") is sentinel
     assert outcomes.get("connected") is True

@@ -4,14 +4,14 @@ legacy `scripts.bambu` copy that the main suite imports.
 These pin four real bugs that shipped because CI only tested `scripts.bambu`:
 
   (a) Slicer must accept a valid .3mf when OrcaSlicer exits non-zero ONLY because
-      of headless GL / thumbnail noise (`_benign_rc` near bambu_cli/slicer.py:585),
+      of headless GL / thumbnail noise (`_benign_rc` in bambu_cli/slicer/output.py),
       but must still FAIL on a genuine error ("nothing to be sliced", no .3mf).
   (b) FTPS teardown must use close(), never the hanging quit()
       (bambu_cli/protocols/ftps.py ConnectionManager.clear / PooledFTPWrapper.__exit__).
   (c) The download success path must be able to resolve `_record_download_success`
-      (it was a NameError) -- bambu_cli/bambu.py _cmd_download.
+      (it was a NameError) -- bambu_cli/download/downloader.py `_cmd_download`.
   (d) snapshot must prefer the direct camera grab and NOT shell out to Docker when
-      a frame is obtained -- bambu_cli/bambu.py _cmd_snapshot + _grab_camera_frame_direct.
+      a frame is obtained -- bambu_cli/camera.py `_cmd_snapshot` + `_grab_camera_frame_direct`.
 """
 
 import os
@@ -102,6 +102,20 @@ def _write_profiles(tmpdir):
 # (a) benign GL/thumbnail non-zero exit is treated as success; real errors fail
 # ---------------------------------------------------------------------------
 
+
+def _write_valid_3mf(path):
+    """Write a minimal non-corrupt Bambu-style .3mf (zip with expected members)."""
+    import zipfile
+
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr(
+            "[Content_Types].xml",
+            '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>',
+        )
+        zf.writestr("3D/3dmodel.model", '<?xml version="1.0"?><model></model>')
+        zf.writestr("Metadata/plate_1.gcode", "; plate\nG28\n")
+
+
 def test_a_benign_gl_noise_nonzero_is_success():
     """rc=1 with GLFW/skip-thumbnail noise + a valid non-empty .3mf -> returns path."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -109,8 +123,8 @@ def test_a_benign_gl_noise_nonzero_is_success():
         with open(infile, "wb") as fh:
             fh.write(b"solid x\nendsolid x\n")
         outpath = slicer._sliced_output_path(infile, tmpdir, 1)
-        with open(outpath, "wb") as fh:  # non-empty fake .3mf "produced" by Orca
-            fh.write(b"PK\x03\x04" + b"\x00" * 4096)
+        _write_valid_3mf(outpath)
+        real_size = os.path.getsize(outpath)
 
         profiles = _write_profiles(tmpdir)
         tmp_proc = types.SimpleNamespace(name=profiles["process.json"])
@@ -123,16 +137,57 @@ def test_a_benign_gl_noise_nonzero_is_success():
         # Force every os.path.exists check True: the profile paths cmd_slice
         # constructs under PROFILES_DIR don't exist on disk, and the produced
         # output .3mf (which we DID write) must read as present.
-        with patch.object(slicer.subprocess, "Popen", FakePopen), \
-             patch.object(slicer, "_slicer_executable_problem", return_value=None), \
-             patch.object(slicer, "_create_temp_profiles", return_value=(tmp_proc, tmp_fil)), \
-             patch.object(slicer, "_validate_slice_options", return_value=None), \
-             patch.object(slicer.os.path, "exists", return_value=True), \
-             patch.object(slicer.os.path, "getsize", return_value=4100), \
-             settings_ctx(orca_slicer="/usr/bin/true", profiles_dir=tmpdir):
+        with (
+            patch.object(slicer.orca.subprocess, "Popen", FakePopen),
+            patch.object(slicer.cmd, "_slicer_executable_problem", return_value=None),
+            patch.object(slicer.cmd, "_create_temp_profiles", return_value=(tmp_proc, tmp_fil)),
+            patch.object(slicer.cmd, "_validate_slice_options", return_value=None),
+            patch("bambu_cli.slicer.cmd.os.path.exists", return_value=True),
+            patch("bambu_cli.slicer.output.os.path.exists", return_value=True),
+            patch("bambu_cli.slicer.cmd.os.path.getsize", return_value=real_size),
+            patch("bambu_cli.slicer.output.os.path.getsize", return_value=real_size),
+            settings_ctx(orca_slicer="/usr/bin/true", profiles_dir=tmpdir),
+        ):
             result = slicer.cmd_slice(args)
 
         assert result == outpath, "benign GL-noise non-zero exit should be treated as success"
+
+
+def test_a_corrupt_3mf_rejected_despite_benign_gl_noise():
+    """Non-empty but corrupt/truncated .3mf must fail even with GLFW noise present."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        infile = os.path.join(tmpdir, "part.stl")
+        with open(infile, "wb") as fh:
+            fh.write(b"solid x\nendsolid x\n")
+        outpath = slicer._sliced_output_path(infile, tmpdir, 1)
+        # Looks like a zip local-file header but is truncated garbage — not a real 3mf.
+        with open(outpath, "wb") as fh:
+            fh.write(b"PK\x03\x04" + b"\x00" * 4096)
+
+        profiles = _write_profiles(tmpdir)
+        tmp_proc = types.SimpleNamespace(name=profiles["process.json"])
+        tmp_fil = types.SimpleNamespace(name=profiles["filament.json"])
+        args = _slice_args(tmpdir, infile)
+
+        stderr = "Failed to create GLFW window ... skip thumbnail"
+        FakePopen = _fake_popen_factory(1, stdout="", stderr=stderr)
+
+        with (
+            patch.object(slicer.orca.subprocess, "Popen", FakePopen),
+            patch.object(slicer.cmd, "_slicer_executable_problem", return_value=None),
+            patch.object(slicer.cmd, "_create_temp_profiles", return_value=(tmp_proc, tmp_fil)),
+            patch.object(slicer.cmd, "_validate_slice_options", return_value=None),
+            patch("bambu_cli.slicer.cmd.os.path.exists", return_value=True),
+            patch("bambu_cli.slicer.output.os.path.exists", return_value=True),
+            patch("bambu_cli.slicer.cmd.os.path.getsize", return_value=4100),
+            patch("bambu_cli.slicer.output.os.path.getsize", return_value=4100),
+            settings_ctx(orca_slicer="/usr/bin/true", profiles_dir=tmpdir),
+        ):
+            with pytest.raises((SystemExit, BambuError)) as excinfo:
+                slicer.cmd_slice(args)
+
+        code = getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None))
+        assert code not in (0, None), f"corrupt .3mf must exit non-zero, got {code!r}"
 
 
 def test_a_real_error_still_fails():
@@ -157,12 +212,15 @@ def test_a_real_error_still_fails():
         def exists_side_effect(path):
             return path != outpath
 
-        with patch.object(slicer.subprocess, "Popen", FakePopen), \
-             patch.object(slicer, "_slicer_executable_problem", return_value=None), \
-             patch.object(slicer, "_create_temp_profiles", return_value=(tmp_proc, tmp_fil)), \
-             patch.object(slicer, "_validate_slice_options", return_value=None), \
-             patch.object(slicer.os.path, "exists", side_effect=exists_side_effect), \
-             settings_ctx(orca_slicer="/usr/bin/true", profiles_dir=tmpdir):
+        with (
+            patch.object(slicer.orca.subprocess, "Popen", FakePopen),
+            patch.object(slicer.cmd, "_slicer_executable_problem", return_value=None),
+            patch.object(slicer.cmd, "_create_temp_profiles", return_value=(tmp_proc, tmp_fil)),
+            patch.object(slicer.cmd, "_validate_slice_options", return_value=None),
+            patch("bambu_cli.slicer.cmd.os.path.exists", side_effect=exists_side_effect),
+            patch("bambu_cli.slicer.output.os.path.exists", side_effect=exists_side_effect),
+            settings_ctx(orca_slicer="/usr/bin/true", profiles_dir=tmpdir),
+        ):
             with pytest.raises((SystemExit, BambuError)) as excinfo:
                 slicer.cmd_slice(args)
 
@@ -173,6 +231,7 @@ def test_a_real_error_still_fails():
 # ---------------------------------------------------------------------------
 # (b) FTPS teardown uses close(), never quit()
 # ---------------------------------------------------------------------------
+
 
 class _RecordingFtp:
     """Fake ftp object that records which teardown methods were called."""
@@ -215,8 +274,10 @@ def test_b_pooled_wrapper_exit_on_error_uses_close_not_quit():
 # (c) download path can resolve _record_download_success (was a NameError)
 # ---------------------------------------------------------------------------
 
+
 def test_c_record_download_success_importable():
     from bambu_cli.utils import _record_download_success
+
     assert callable(_record_download_success)
 
 
@@ -226,7 +287,9 @@ def test_c_cmd_download_references_record_download_success_without_nameerror():
     The original bug was a bare NameError on `_record_download_success` at runtime.
     Assert (1) the symbol appears in the function source and (2) it is importable
     exactly the way the fix imports it (function-scope import)."""
-    src = inspect.getsource(bambu._cmd_download)
+    from bambu_cli.download import downloader as downloader_mod
+
+    src = inspect.getsource(downloader_mod._cmd_download)
     assert "_record_download_success" in src, "download path should call _record_download_success"
     ns = {}
     exec("from bambu_cli.utils import _record_download_success", ns)
@@ -237,17 +300,23 @@ def test_c_cmd_download_references_record_download_success_without_nameerror():
 # (d) snapshot prefers the direct camera grab and does NOT use Docker
 # ---------------------------------------------------------------------------
 
+
 def test_d_snapshot_uses_direct_grab_not_docker():
+    from bambu_cli.camera import _cmd_snapshot
+
     jpeg = b"\xff\xd8" + b"\x00" * 256 + b"\xff\xd9"
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "snap.jpg")
         args = types.SimpleNamespace(output=outpath, json=False)
 
-        with patch.object(bambu, "_grab_camera_frame_direct", return_value=jpeg), \
-             patch.object(bambu, "load_access_code", return_value="ACODE"), \
-             patch.object(bambu.subprocess, "run") as mock_run, \
-             patch.object(bambu.shutil, "which", return_value="/usr/bin/docker"):
-            bambu._cmd_snapshot(args)
+        mock_run = MagicMock()
+        _cmd_snapshot(
+            args,
+            grab_frame=lambda printer: jpeg,
+            which=lambda name: "/usr/bin/docker",
+            subprocess_run=mock_run,
+            access_code_loader=lambda: "ACODE",
+        )
 
         # File written with the direct-grab bytes
         assert os.path.exists(outpath)
@@ -266,6 +335,7 @@ def test_d_snapshot_uses_direct_grab_not_docker():
 # Download hardening regressions (SSRF + size limits)
 # ---------------------------------------------------------------------------
 
+
 def test_get_safe_connection_blocks_private_ip():
     """DNS resolving to a private address must be refused (SSRF guard)."""
     import socket
@@ -273,7 +343,7 @@ def test_get_safe_connection_blocks_private_ip():
     from bambu_cli import download
 
     addr_info = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.5", 80))]
-    with patch.object(download.socket, "getaddrinfo", return_value=addr_info):
+    with patch("socket.getaddrinfo", return_value=addr_info):
         download._dns_cache.clear()
         with pytest.raises(urllib.error.URLError):
             download._get_safe_connection("evil.example.com", 80, 5, None)
@@ -308,18 +378,17 @@ def test_download_enforces_size_limit_mid_stream(tmp_path):
     url = "https://example.com/model.stl"
     mock_resp = MagicMock()
     mock_resp.read.side_effect = lambda n: b"x" * n  # endless stream
-    mock_resp.getheader.return_value = None          # no Content-Length
+    mock_resp.getheader.return_value = None  # no Content-Length
     mock_resp.geturl.return_value = url
     mock_opener = MagicMock()
     mock_opener.open.return_value.__enter__.return_value = mock_resp
 
     args = types.SimpleNamespace(
-        url=url, output=str(tmp_path), name=None, max_download_mb=1, json=False,
-        progress=False)
+        url=url, output=str(tmp_path), name=None, max_download_mb=1, json=False, progress=False
+    )
 
-    with patch.object(download, "build_safe_opener", return_value=mock_opener):
-        with pytest.raises((SystemExit, BambuError)) as excinfo:
-            download._cmd_download(args)
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        download._cmd_download(args, opener_factory=lambda: mock_opener)
 
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]

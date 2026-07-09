@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Fail release checks if local personal identifiers leak into source or release archives."""
+
 import argparse
 import getpass
 import os
@@ -15,7 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE_EXCLUDED_DIRS = {
     ".claude",
     ".git",
+    ".hypothesis",
     ".mypy_cache",
+    ".mutmut-cache",
     ".pytest_cache",
     ".ruff_cache",
     ".venv",
@@ -23,6 +26,7 @@ BASE_EXCLUDED_DIRS = {
     "bambu_cli.egg-info",
     "build",
     "dist",
+    "mutants",
     "wheelhouse",
 }
 
@@ -98,7 +102,8 @@ def local_identity_patterns():
     names = {
         name.strip()
         for name in names
-        if name and len(name.strip()) >= 4
+        if name
+        and len(name.strip()) >= 4
         and name.strip().lower() not in GENERIC_LOCAL_NAMES
         and name.strip().lower() not in excluded_names
     }
@@ -113,11 +118,7 @@ def local_identity_patterns():
     if names:
         patterns["local account name"] = re.compile("|".join(re.escape(name) for name in names), re.IGNORECASE)
         patterns["absolute local home path"] = re.compile(
-            "|".join(
-                re.escape(prefix + name)
-                for name in names
-                for prefix in ("/home/", "/Users/", "\\Users\\")
-            ),
+            "|".join(re.escape(prefix + name) for name in names for prefix in ("/home/", "/Users/", "\\Users\\")),
             re.IGNORECASE,
         )
     return patterns

@@ -8,11 +8,11 @@ from .constants import (
 )
 
 
-def _secure_makedirs(path, exist_ok=True):  # pragma: no cover -- json/path util
+def _secure_makedirs(path, exist_ok=True):
     os.makedirs(path, mode=0o700, exist_ok=exist_ok)
 
 
-def _ensure_output_dir(path):  # pragma: no cover -- mkdir helper
+def _ensure_output_dir(path):
     """Create an output directory before expensive work starts."""
 
     from bambu_cli.logging_utils import logger
@@ -26,7 +26,7 @@ def _ensure_output_dir(path):  # pragma: no cover -- mkdir helper
         abort("", exit_code=EXIT_FILE_ERROR)
 
 
-def _ensure_parent_dir(path):  # pragma: no cover -- parent mkdir
+def _ensure_parent_dir(path):
     """Create the parent directory for an output file when one was supplied."""
     from bambu_cli.cli import _expand_path
 
@@ -58,7 +58,7 @@ _LAST_ERROR_PAYLOAD = None
 _LAST_DOWNLOAD_PAYLOAD = None
 
 
-def _redact_url_credentials(url):  # pragma: no cover -- json/path util
+def _redact_url_credentials(url):
     from urllib.parse import urlparse, urlunparse
 
     try:
@@ -74,7 +74,7 @@ def _redact_url_credentials(url):  # pragma: no cover -- json/path util
     return url
 
 
-def _display_path(path):  # pragma: no cover -- json/path util
+def _display_path(path):
     if not path:
         return path
     home = os.path.expanduser("~")
@@ -83,7 +83,7 @@ def _display_path(path):  # pragma: no cover -- json/path util
     return path
 
 
-def _compact_all_strings(val):  # pragma: no cover -- json/path util
+def _compact_all_strings(val):
     if isinstance(val, dict):
         return {k: _compact_all_strings(v) for k, v in val.items()}
     if isinstance(val, list):
@@ -94,7 +94,7 @@ def _compact_all_strings(val):  # pragma: no cover -- json/path util
     return val
 
 
-def _json_display_paths(value):  # pragma: no cover -- json/path util
+def _json_display_paths(value):
     if isinstance(value, dict):
         result = {}
         for key, item in value.items():
@@ -113,13 +113,13 @@ def _json_display_paths(value):  # pragma: no cover -- json/path util
     return value
 
 
-def emit_json(data):  # pragma: no cover -- json/path util
+def emit_json(data):
     global _JSON_EMITTED
     _JSON_EMITTED = True
     print(json.dumps(_json_display_paths(data), indent=2))
 
 
-def emit_json_line(data):  # pragma: no cover -- json/path util
+def emit_json_line(data):
     """Emit one compact JSON object on its own line (NDJSON).
 
     Used for streaming output (e.g. ``status --monitor --json``) where an agent
@@ -131,11 +131,11 @@ def emit_json_line(data):  # pragma: no cover -- json/path util
     print(json.dumps(_json_display_paths(data), separators=(",", ":")), flush=True)
 
 
-def _namespace_get(args, key, default=None):  # pragma: no cover -- json/path util
+def _namespace_get(args, key, default=None):
     return getattr(args, key, default)
 
 
-def emit_json_error(args, command, exit_code, error, failed_step=None, **extra):  # pragma: no cover -- json/path util
+def emit_json_error(args, command, exit_code, error, failed_step=None, **extra):
     global _JSON_EMITTED
     _JSON_EMITTED = True
     global _LAST_ERROR_PAYLOAD
@@ -154,7 +154,7 @@ def emit_json_error(args, command, exit_code, error, failed_step=None, **extra):
     emit_json(payload)
 
 
-def record_error_detail(command, exit_code, error, failed_step=None, **extra):  # pragma: no cover -- json/path util
+def record_error_detail(command, exit_code, error, failed_step=None, **extra):
     global _LAST_ERROR_PAYLOAD
     payload = {
         "status": "error",
@@ -168,7 +168,7 @@ def record_error_detail(command, exit_code, error, failed_step=None, **extra):  
     _LAST_ERROR_PAYLOAD = payload
 
 
-def _record_download_success(args, payload):  # pragma: no cover -- json/path util
+def _record_download_success(args, payload):
     global _LAST_DOWNLOAD_PAYLOAD
     _LAST_DOWNLOAD_PAYLOAD = payload
     if bool(_namespace_get(args, "json", False)):
@@ -179,7 +179,7 @@ import socket
 import threading
 
 
-def _resolve_ip(host, timeout=5.0):  # pragma: no cover -- dns resolve
+def _resolve_ip(host, timeout=5.0):
     """Resolve a hostname to an IP address (supporting IPv4 and IPv6) exactly once.
     Includes a timeout to prevent DNS resolution deadlocks.
     """
@@ -206,7 +206,15 @@ def _resolve_ip(host, timeout=5.0):  # pragma: no cover -- dns resolve
 _sequence_counter = 0
 
 
-def get_sequence_id():  # pragma: no cover -- json/path util
+def get_sequence_id():
     global _sequence_counter
     _sequence_counter += 1
     return str(_sequence_counter)
+
+
+def _redacted_serial():
+    """Return a non-identifying serial placeholder for reports written to disk."""
+    from bambu_cli.context import current_settings
+
+    serial = current_settings().serial
+    return "UNKNOWN" if not serial or serial == "UNKNOWN" else "<redacted>"

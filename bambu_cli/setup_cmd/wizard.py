@@ -35,7 +35,7 @@ from bambu_cli.setup_cmd.common import (
 from bambu_cli.utils import emit_json, emit_json_error
 
 
-def _service_info_address(info):  # pragma: no cover -- mdns address extract
+def _service_info_address(info):
     """Extract the first usable IP address from zeroconf service info."""
     parsed_addresses = getattr(info, "parsed_addresses", None)
     if callable(parsed_addresses):
@@ -58,7 +58,7 @@ def _service_info_address(info):  # pragma: no cover -- mdns address extract
     raise ValueError("service did not advertise a usable IP address")
 
 
-def _parse_mdns_printer_identity(name):  # pragma: no cover -- mdns identity
+def _parse_mdns_printer_identity(name):
     """Return (serial, model) from a Bambu mDNS service name."""
     match = re.search(r"BBLP-([^._]+)", name, re.IGNORECASE)
     service_id = match.group(1).upper() if match else ""
@@ -78,7 +78,7 @@ def _parse_mdns_printer_identity(name):  # pragma: no cover -- mdns identity
     return serial, detected_model
 
 
-def _cmd_setup_noninteractive(args):  # pragma: no cover -- noninteractive; builders unit-tested
+def _cmd_setup_noninteractive(args):
     from bambu_cli.config import _DEFAULT_ORCA, _DEFAULT_PROFILES
 
     ip = _namespace_get(args, "printer_ip")
@@ -191,12 +191,12 @@ def _cmd_setup_noninteractive(args):  # pragma: no cover -- noninteractive; buil
         emit_json(_setup_summary(config))
 
 
-def _cmd_setup_interactive(args):  # pragma: no cover
+def _cmd_setup_interactive(args):
     """TTY-only guided setup (mDNS + prompts). Unit-tested via headless rejection + noninteractive."""
     from bambu_cli.config import _DEFAULT_ORCA, _DEFAULT_PROFILES
 
-    discovered = []  # pragma: no cover -- interactive discovery start
-    use_manual = False  # pragma: no cover
+    discovered = []
+    use_manual = False
 
     try:
         from zeroconf import ServiceBrowser, Zeroconf
@@ -375,7 +375,7 @@ def _cmd_setup_interactive(args):  # pragma: no cover
         emit_json(_setup_summary(config))
 
 
-def _cmd_setup(args):  # pragma: no cover -- setup routing; noninteractive+headless unit-tested
+def _cmd_setup(args):
     """Guided setup to discover printer and generate config."""
     from bambu_cli.setup_cmd.migrate import _cmd_migrate_access_code
 

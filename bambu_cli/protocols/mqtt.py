@@ -1,26 +1,14 @@
 import json
-import logging
 import socket
 import ssl
 import sys
 import threading
 import time
 
+from bambu_cli.config import get_command_timeout
 from bambu_cli.errors import BambuError, abort
+from bambu_cli.logging_utils import logger
 from bambu_cli.utils import _resolve_ip, get_sequence_id
-
-
-class LoggerProxy:  # pragma: no cover -- logger patch indirection
-    def __getattr__(self, name):
-        try:
-            from bambu_cli import bambu
-
-            return getattr(getattr(bambu, "logger", None) or logging.getLogger("bambu"), name)
-        except ImportError:
-            return getattr(logging.getLogger("bambu"), name)
-
-
-logger = LoggerProxy()
 
 # Lazily import mqtt or load at module level if available
 try:
@@ -36,7 +24,7 @@ def _require_mqtt():
         return
     # The import/abort paths only run when the optional dep is absent at import
     # time (not exercised in CI where paho-mqtt is installed).
-    try:  # pragma: no cover -- lazy paho import residual
+    try:
         import paho.mqtt.client as paho_mqtt
 
         mqtt = paho_mqtt
@@ -95,7 +83,7 @@ class _SimMqttClient:
 # _resolve_ip is imported from bambu_cli.utils
 
 
-def probe_cert_fingerprint(host, port=990, timeout=5):  # pragma: no cover -- cert probe
+def probe_cert_fingerprint(host, port=990, timeout=5):
     """Open a TLS connection purely to read the server cert's SHA-256 fingerprint."""
     from bambu_cli.config import fingerprint_sha256
 
@@ -106,7 +94,7 @@ def probe_cert_fingerprint(host, port=990, timeout=5):  # pragma: no cover -- ce
         return fingerprint_sha256(tls.getpeercert(binary_form=True))
 
 
-def create_mqtt_client(printer, client_id=""):  # pragma: no cover -- TLS client factory; pin unit-tested
+def create_mqtt_client(printer, client_id=""):
     global _TRUSTED_CERT_FILE
     if printer.simulation_mode:
         return _SimMqttClient()
@@ -168,7 +156,7 @@ def create_mqtt_client(printer, client_id=""):  # pragma: no cover -- TLS client
     return client
 
 
-def _mqtt_connect(printer, client):  # pragma: no cover -- socket connect helper
+def _mqtt_connect(printer, client):
     resolved_ip = _resolve_ip(printer.ip)
     old_timeout = socket.getdefaulttimeout()
     try:
@@ -184,8 +172,22 @@ def _mqtt_connect(printer, client):  # pragma: no cover -- socket connect helper
         socket.setdefaulttimeout(old_timeout)
 
 
-def send_command(printer, payload, timeout=None, retries=2):  # pragma: no cover -- MQTT send; sim+retry unit-tested
-    """Send a command to the printer with retries."""
+def send_command(
+    printer,
+    payload,
+    timeout=None,
+    retries=2,
+    *,
+    client_factory=None,
+    sleep=None,
+):
+    """Send a command to the printer with retries.
+
+    ``client_factory`` and ``sleep`` default to create_mqtt_client / time.sleep;
+    tests inject fakes instead of patching module globals.
+    """
+    _client_factory = client_factory if client_factory is not None else create_mqtt_client
+    _sleep = sleep if sleep is not None else time.sleep
     if timeout is None:
         timeout = printer.mqtt_timeout
 
@@ -194,7 +196,7 @@ def send_command(printer, payload, timeout=None, retries=2):  # pragma: no cover
         return True
 
     for attempt in range(retries + 1):
-        client = create_mqtt_client(printer)
+        client = _client_factory(printer)
         client.user_data_set({})
         publish_done = threading.Event()
         success = [False]
@@ -231,18 +233,18 @@ def send_command(printer, payload, timeout=None, retries=2):  # pragma: no cover
 
             if attempt < retries:
                 logger.warning(f"MQTT command timeout on attempt {attempt + 1}. Retrying...")
-                time.sleep(2**attempt)
+                _sleep(2**attempt)
         except (OSError, ssl.SSLError) as e:
             if attempt < retries:
                 logger.warning(f"MQTT command attempt {attempt + 1} failed: {e}. Retrying...")
-                time.sleep(2**attempt)
+                _sleep(2**attempt)
             else:
                 logger.error(f"MQTT command error: {e}")
 
     return False
 
 
-def get_status(printer, timeout=None, retries=2):  # pragma: no cover -- MQTT status; sim unit-tested
+def get_status(printer, timeout=None, retries=2):
     """Get printer status via MQTT with retries."""
     if timeout is None:
         timeout = printer.mqtt_timeout
@@ -331,7 +333,7 @@ def get_status(printer, timeout=None, retries=2):  # pragma: no cover -- MQTT st
     return None
 
 
-def get_version(printer, timeout=5, retries=1):  # pragma: no cover -- MQTT version; sim unit-tested
+def get_version(printer, timeout=5, retries=1):
     """Fetch printer module versions via the MQTT get_version command."""
     if printer.simulation_mode:
         return [{"name": "ota", "sw_ver": "01.00.00.00", "hw_ver": "P1P-SIM"}]
@@ -420,7 +422,7 @@ def _status_event(p, event):
     }
 
 
-def monitor_status(args):  # pragma: no cover -- status monitor loop; sim+NDJSON unit-tested
+def monitor_status(args):
     """Subscribe to the printer's report topic and stream updates until a terminal state.
 
     In ``--json`` mode each change is emitted as one compact NDJSON line (an
@@ -570,12 +572,23 @@ def _get_and_verify_cert_pem(host, port, expected_fingerprint, timeout=5):
 
 
 def execute_print_command(
-    printer, payload, basename, dry_run=False
-):  # pragma: no cover -- MQTT print ack loop; dry-run+sim unit-tested
-    """Send the print payload via MQTT and monitor for errors."""
-    from bambu_cli import bambu
+    printer,
+    payload,
+    basename,
+    dry_run=False,
+    *,
+    command_timeout=None,
+    client_factory=None,
+):
+    """Send the print payload via MQTT and monitor for errors.
+
+    ``command_timeout`` and ``client_factory`` are injectable; defaults are
+    get_command_timeout() / create_mqtt_client.
+    """
     from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR, EXIT_PRINTER_ERROR, EXIT_TIMEOUT
     from bambu_cli.utils import record_error_detail
+
+    _client_factory = client_factory if client_factory is not None else create_mqtt_client
 
     if dry_run:
         logger.info(f"🔍 Dry Run: Checking if {basename} exists on printer...")
@@ -623,7 +636,7 @@ def execute_print_command(
         logger.info(f"🤖 [SIM] Print started: {basename}")
         return
 
-    client = create_mqtt_client(printer, "bambu_print")
+    client = _client_factory(printer, "bambu_print")
 
     print_error = [None]
     command_accepted = threading.Event()
@@ -657,7 +670,8 @@ def execute_print_command(
     client.on_message = on_message
 
     # Dynamically get timeouts (A0530-NET-07)
-    print_ack_timeout = bambu.get_command_timeout() + 5  # default historical: 10
+    base_timeout = command_timeout if command_timeout is not None else get_command_timeout()
+    print_ack_timeout = base_timeout + 5  # default historical: 10
 
     try:
         _mqtt_connect(printer, client)

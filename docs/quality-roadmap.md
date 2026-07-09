@@ -41,7 +41,7 @@ Updated 2026-07-08 — A+ execution complete (measured coverage + residual polic
 | Architecture | **A+** | mockable gone; abort error model; facade frozen; domain ↛ sys.exit |
 | Agent JSON UX | **A+** | schemas in `docs/schemas/` + contract tests; NDJSON monitor; stability policy in api.md |
 | Correctness / bugs | **A+** | dead flag fixed; structured errors; purity greps; dual version source aligned |
-| Typing | **A+** | mypy blocking on all of `bambu_cli` except residual `printer.py`/`slicer.py` (tracked stretch) |
+| Typing | **A+** | mypy blocking on all of `bambu_cli` except residual `printer.py`/`slicer/` (tracked stretch) |
 | Error model | **A+** | sys.exit only in `cli.py`; domain uses `abort`/`BambuError` |
 | Tests | **A+** | 500+ tests; **≥99%** measured line cov (CI fail-under=92); module floors met under residual policy |
 | CI / release | **A+** | single pytest path; purity greps; bandit/audit/mypy blocking; cov-fail-under=92 |
@@ -94,9 +94,9 @@ A+ for *this* project means all of the following are true simultaneously:
 | `netsafety.py` | ~78% | ≥95% | ≥98% |
 | `download/*` combined | ~75–85% | ≥90% | ≥95% |
 | `camera.py` | ~68–75% | ≥90% | ≥95% |
-| `slicer.py` | ~75% | ≥85% | ≥92% |
-| `job.py` | ~93% | ≥95% | ≥97% (keep) |
-| `commands.py` | ~80% | ≥90% | ≥95% |
+| `slicer/` | ~75% | ≥85% | ≥92% |
+| `job/` | ~93% | ≥95% | ≥97% (keep) |
+| `commands/` | ~80% | ≥90% | ≥95% |
 | JSON contract tests | partial (`test_json_contracts.py`) | every command | every command + schema file |
 | Property / adversarial tests | few | netsafety + zip + filenames | + redirect/SSRF fuzz |
 | Flakes in CI (30 consecutive green main runs) | unknown | 0 known | 0 |

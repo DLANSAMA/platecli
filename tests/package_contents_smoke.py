@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Verify release archives contain the files agents and users need."""
+
 import re
 import tarfile
 import zipfile
@@ -16,8 +17,12 @@ REQUIRED_SDIST_FILES = {
     "bambu_cli/bambu.py",
     "bambu_cli/cli.py",
     "bambu_cli/config.py",
-    "bambu_cli/slicer.py",
-    "bambu_cli/commands.py",
+    "bambu_cli/slicer/__init__.py",
+    "bambu_cli/slicer/cmd.py",
+    "bambu_cli/commands/__init__.py",
+    "bambu_cli/commands/status.py",
+    "bambu_cli/job/__init__.py",
+    "bambu_cli/job/orchestrate.py",
     "bambu_cli/protocols/ftps.py",
     "bambu_cli/protocols/mqtt.py",
     "scripts/__init__.py",
@@ -46,8 +51,12 @@ REQUIRED_WHEEL_FILES = {
     "bambu_cli/bambu.py",
     "bambu_cli/cli.py",
     "bambu_cli/config.py",
-    "bambu_cli/slicer.py",
-    "bambu_cli/commands.py",
+    "bambu_cli/slicer/__init__.py",
+    "bambu_cli/slicer/cmd.py",
+    "bambu_cli/commands/__init__.py",
+    "bambu_cli/commands/status.py",
+    "bambu_cli/job/__init__.py",
+    "bambu_cli/job/orchestrate.py",
     "bambu_cli/protocols/ftps.py",
     "bambu_cli/protocols/mqtt.py",
 }
@@ -125,7 +134,7 @@ REQUIRED_DOC_SNIPPETS = {
 LICENSE_SNIPPETS = {
     "MIT License",
     "bambu-cli contributors",
-    "THE SOFTWARE IS PROVIDED \"AS IS\"",
+    'THE SOFTWARE IS PROVIDED "AS IS"',
 }
 
 
@@ -154,7 +163,7 @@ def _cli_version():
 
 def _project_script_entry():
     text = Path("pyproject.toml").read_text(encoding="utf-8")
-    section = re.search(r'^\[project\.scripts\]\s*$(.*?)(?:^\[|\Z)', text, re.MULTILINE | re.DOTALL)
+    section = re.search(r"^\[project\.scripts\]\s*$(.*?)(?:^\[|\Z)", text, re.MULTILINE | re.DOTALL)
     if not section:
         raise SystemExit("pyproject.toml is missing [project.scripts]")
     match = re.search(r'^([A-Za-z0-9_.-]+)\s*=\s*"([^"]+)"', section.group(1), re.MULTILINE)
@@ -169,8 +178,7 @@ def check_version_consistency():
     cli_version = _cli_version()
     if metadata_version != cli_version:
         raise SystemExit(
-            "version mismatch: "
-            f"pyproject.toml has {metadata_version}, bambu_cli.constants.VERSION is {cli_version}"
+            f"version mismatch: pyproject.toml has {metadata_version}, bambu_cli.constants.VERSION is {cli_version}"
         )
 
 
@@ -210,11 +218,7 @@ def check_agent_docs_current():
 def _archive_file_names(archive_path):
     try:
         with tarfile.open(archive_path) as tf:
-            return {
-                Path(name).as_posix().split("/", 1)[1]
-                for name in tf.getnames()
-                if "/" in name
-            }
+            return {Path(name).as_posix().split("/", 1)[1] for name in tf.getnames() if "/" in name}
     except tarfile.ReadError:
         return set()
 
@@ -264,9 +268,9 @@ def check_wheel(dist_dir):
             # (setuptools >= 77 writes license files under .dist-info/licenses/).
             license_name = next(
                 (
-                    name for name in names
-                    if name.endswith(".dist-info/LICENSE")
-                    or name.endswith(".dist-info/licenses/LICENSE")
+                    name
+                    for name in names
+                    if name.endswith(".dist-info/LICENSE") or name.endswith(".dist-info/licenses/LICENSE")
                 ),
                 None,
             )
@@ -282,9 +286,7 @@ def check_wheel(dist_dir):
                 metadata = zf.read(metadata_name).decode("utf-8")
                 entry_points = zf.read(entry_points_name).decode("utf-8")
                 top_level = {
-                    line.strip()
-                    for line in zf.read(top_level_name).decode("utf-8").splitlines()
-                    if line.strip()
+                    line.strip() for line in zf.read(top_level_name).decode("utf-8").splitlines() if line.strip()
                 }
                 license_text = zf.read(license_name).decode("utf-8")
             except UnicodeDecodeError:
@@ -298,8 +300,7 @@ def check_wheel(dist_dir):
     if forbidden:
         raise SystemExit(f"wheel contains source-only compatibility files: {forbidden}")
     forbidden_data = sorted(
-        suffix for suffix in FORBIDDEN_WHEEL_DATA_SUFFIXES
-        if any(name.endswith(suffix) for name in names)
+        suffix for suffix in FORBIDDEN_WHEEL_DATA_SUFFIXES if any(name.endswith(suffix) for name in names)
     )
     if forbidden_data:
         raise SystemExit(f"wheel contains non-runtime data files: {forbidden_data}")

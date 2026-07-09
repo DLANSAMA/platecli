@@ -58,19 +58,34 @@ class _SimFtp:
 
 
 class ImplicitFTPS(ftplib.FTP_TLS):
-    """FTP_TLS subclass for implicit FTPS (Bambu printers use port 990)."""
+    """FTP_TLS subclass for implicit FTPS (Bambu printers use port 990).
 
-    def connect(self, host="", port=990, timeout=-999, source_address=None):
+    ``create_connection`` and ``ssl_context_cls`` are injectable so tests pass
+    fakes instead of patching module globals.
+    """
+
+    def connect(
+        self,
+        host="",
+        port=990,
+        timeout=-999,
+        source_address=None,
+        *,
+        create_connection=None,
+        ssl_context_cls=None,
+    ):
+        _connect = create_connection if create_connection is not None else socket.create_connection
+        _SSLContext = ssl_context_cls if ssl_context_cls is not None else ssl.SSLContext
         if host != "":
             self.host = host
         if port > 0:
             self.port = port
         if timeout != -999:
             self.timeout = timeout
-        self.sock = socket.create_connection((self.host, self.port), self.timeout)
+        self.sock = _connect((self.host, self.port), self.timeout)
         self.af = self.sock.family
         try:
-            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx = _SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             pin = getattr(self, "printer", None) and self.printer.cert_fingerprint
             if pin or (getattr(self, "printer", None) and self.printer.insecure_tls):
                 ctx.check_hostname = False
@@ -109,6 +124,12 @@ class ImplicitFTPS(ftplib.FTP_TLS):
             if pin:
                 actual = hashlib.sha256(conn.getpeercert(binary_form=True)).hexdigest().lower()
                 if actual != pin.lower():
+                    # Close the data socket before re-raising so a pin mismatch
+                    # does not leak the FD (no try/finally around wrap otherwise).
+                    try:
+                        conn.close()
+                    except OSError:
+                        pass
                     raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {pin.lower()}, got {actual}")
             # Bambu firmware never answers the TLS close-notify on the data
             # channel, so ftplib's storbinary/retrbinary hang in
@@ -119,7 +140,7 @@ class ImplicitFTPS(ftplib.FTP_TLS):
         return conn, size
 
 
-def _remove_partial_file(path):  # pragma: no cover -- best-effort cleanup helper
+def _remove_partial_file(path):
     try:
         if path and os.path.exists(path):
             os.unlink(path)
@@ -151,7 +172,7 @@ def _noncolliding_path(path):
     basename = os.path.basename(path)
     stem, ext = os.path.splitext(basename)
     stem = stem or "download"
-    for index in range(1, 1000):  # pragma: no cover -- collision loop; first free name unit-tested
+    for index in range(1, 1000):
         candidate = os.path.join(directory, f"{stem}-{index}{ext}")
         try:
             fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -159,9 +180,7 @@ def _noncolliding_path(path):
             return candidate
         except FileExistsError:
             continue
-    raise FileExistsError(  # pragma: no cover -- exhausted collision space
-        f"Could not find an unused filename near {_path_for_message(path)}"
-    )
+    raise FileExistsError(f"Could not find an unused filename near {_path_for_message(path)}")
 
 
 class PooledFTPWrapper:
@@ -169,7 +188,7 @@ class PooledFTPWrapper:
         self._ftp = ftp
         self._manager = manager
 
-    def __getattr__(self, name):  # pragma: no cover -- attribute proxy
+    def __getattr__(self, name):
         return getattr(self._ftp, name)
 
     def __enter__(self):
@@ -178,7 +197,7 @@ class PooledFTPWrapper:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
-            if exc_type is not None:  # pragma: no cover -- drop pooled client on error
+            if exc_type is not None:
                 with self._manager._lock:
                     if self._manager._ftp_client is self._ftp:
                         self._manager._ftp_client = None
@@ -199,7 +218,7 @@ class ConnectionManager:
         self._lock = threading.Lock()
         self._ftp_usage_lock = threading.Lock()
 
-    def get_ftp(self, printer=None, timeout=60):  # pragma: no cover -- pool recovery
+    def get_ftp(self, printer=None, timeout=60):
         if printer is None:
             from bambu_cli.printer import get_printer
 
@@ -228,7 +247,7 @@ class ConnectionManager:
     def close_all(self):
         self.clear()
 
-    def clear(self):  # pragma: no cover -- pool teardown residual
+    def clear(self):
         with self._lock:
             if self._mqtt_client is not None:
                 try:
@@ -258,12 +277,12 @@ def _create_raw_ftp(printer, timeout=60):
 
     # Real FTPS handshake is covered by TLS pin unit tests via ImplicitFTPS mocks.
     resolved_ip = _resolve_ip(printer.ip)  # pragma: no cover -- live FTPS connect
-    ftp = ImplicitFTPS()  # pragma: no cover
-    ftp.printer = printer  # pragma: no cover
-    ftp.connect(resolved_ip, 990, timeout=timeout)  # pragma: no cover
-    ftp.login("bblp", printer.access_code)  # pragma: no cover
-    ftp.prot_p()  # pragma: no cover
-    return ftp  # pragma: no cover
+    ftp = ImplicitFTPS()
+    ftp.printer = printer
+    ftp.connect(resolved_ip, 990, timeout=timeout)
+    ftp.login("bblp", printer.access_code)
+    ftp.prot_p()
+    return ftp
 
 
 def get_ftp(printer=None, timeout=60):

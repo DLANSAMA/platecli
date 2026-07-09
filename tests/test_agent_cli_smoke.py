@@ -21,8 +21,9 @@ from tests.agent_cli_smoke import (
     smoke_local_zip_extract_error_json,
     smoke_sim_job_json,
     smoke_send_alias_json,
-    smoke_sim_lower_level_json
+    smoke_sim_lower_level_json,
 )
+
 
 class TestAgentCliSmoke(unittest.TestCase):
     def test_smoke_help_surface(self):
@@ -100,4 +101,3 @@ class TestAgentCliSmoke(unittest.TestCase):
     def test_smoke_sim_lower_level_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             smoke_sim_lower_level_json(pathlib.Path(tmp))
-

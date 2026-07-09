@@ -3,13 +3,11 @@ from bambu_cli.errors import BambuError
 
 
 class TestBambuDoctor(unittest.TestCase):
-
-
-    @patch('bambu_cli.bambu.load_config')
-    @patch('sys.exit')
-    @patch('bambu_cli.bambu.logger')
+    @patch("bambu_cli.commands.doctor.load_config")
+    @patch("sys.exit")
+    @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_config_load_fail(self, mock_logger, mock_exit, mock_load):
-        from bambu_cli.bambu import cmd_doctor
+        from bambu_cli.commands import cmd_doctor
         from bambu_cli.errors import ConfigError
 
         mock_load.side_effect = ConfigError("config missing")
@@ -20,13 +18,14 @@ class TestBambuDoctor(unittest.TestCase):
         self.assertEqual(cm.exception.exit_code, 1)
         mock_logger.error.assert_any_call("   ❌ Config check failed.")
 
-    @patch('bambu_cli.bambu.load_config')
-    @patch('bambu_cli.protocols.mqtt.get_status')
-    @patch('sys.exit')
-    @patch('bambu_cli.bambu.logger')
+    @patch("bambu_cli.commands.doctor.load_config")
+    @patch("bambu_cli.protocols.mqtt.get_status")
+    @patch("sys.exit")
+    @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_mqtt_fail(self, mock_logger, mock_exit, mock_get_status, mock_load):
-        from bambu_cli.bambu import cmd_doctor
+        from bambu_cli.commands import cmd_doctor
         from bambu_cli.context import current_settings
+
         mock_load.return_value = {"printer_ip": "1.2.3.4"}
         mock_get_status.return_value = None
 
@@ -35,15 +34,18 @@ class TestBambuDoctor(unittest.TestCase):
             cmd_doctor(MagicMock())
 
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
-        mock_logger.error.assert_any_call(f"   ❌ MQTT connection failed. Ensure printer at {current_settings().printer_ip} is on and access code is correct.")
+        mock_logger.error.assert_any_call(
+            f"   ❌ MQTT connection failed. Ensure printer at {current_settings().printer_ip} is on and access code is correct."
+        )
 
-    @patch('bambu_cli.bambu.load_config')
-    @patch('bambu_cli.protocols.mqtt.get_status')
-    @patch('bambu_cli.protocols.ftps.get_ftp')
-    @patch('sys.exit')
-    @patch('bambu_cli.bambu.logger')
+    @patch("bambu_cli.commands.doctor.load_config")
+    @patch("bambu_cli.protocols.mqtt.get_status")
+    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("sys.exit")
+    @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_ftps_fail(self, mock_logger, mock_exit, mock_get_ftp, mock_get_status, mock_load):
-        from bambu_cli.bambu import cmd_doctor
+        from bambu_cli.commands import cmd_doctor
+
         mock_load.return_value = {"printer_ip": "1.2.3.4"}
         mock_get_status.return_value = {"hw_ver": "P1P"}
 
@@ -55,22 +57,27 @@ class TestBambuDoctor(unittest.TestCase):
 
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_any_call("   ❌ FTPS connection failed: FTPS Fail")
-    @patch('bambu_cli.protocols.mqtt.get_status')
-    @patch('bambu_cli.protocols.ftps.get_ftp')
-    @patch('bambu_cli.bambu.logger')
-    @patch('builtins.open')
+
+    @patch("bambu_cli.protocols.mqtt.get_status")
+    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    @patch("builtins.open")
     def test_cmd_doctor_success(self, mock_file_open, mock_logger, mock_get_ftp, mock_get_status):
-        from bambu_cli.bambu import cmd_doctor
+        from bambu_cli.commands import cmd_doctor
         import tempfile
+
         args = MagicMock()
         args.output = None  # let the command fall back to its system-temp default
 
         import io
+
         original_open = io.open
+
         def custom_open(file, *args, **kwargs):
             if "config.json" in str(file):
                 return original_open(file, *args, **kwargs)
             return MagicMock()
+
         mock_file_open.side_effect = custom_open
 
         mock_get_status.return_value = {"hw_ver": "P1P", "sw_ver": "01.05.00.00", "ams": {}}
@@ -80,10 +87,7 @@ class TestBambuDoctor(unittest.TestCase):
 
         self.assertTrue(any("✅ All checks passed!" in call[0][0] for call in mock_logger.info.call_args_list))
         expected_path = os.path.join(tempfile.gettempdir(), "printer_capabilities.json")
-        any_caps_open = any(
-            call[0][0] == expected_path and call[0][1] == 'w'
-            for call in mock_file_open.call_args_list
-        )
+        any_caps_open = any(call[0][0] == expected_path and call[0][1] == "w" for call in mock_file_open.call_args_list)
         self.assertTrue(any_caps_open, f"Expected {expected_path} to be opened for writing")
 
 
@@ -94,6 +98,7 @@ class TestOfferPinFingerprint(unittest.TestCase):
 
     def setUp(self):
         import tempfile
+
         self.tmpdir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.tmpdir, "config.json")
         with open(self.config_path, "w", encoding="utf-8") as f:
@@ -105,6 +110,7 @@ class TestOfferPinFingerprint(unittest.TestCase):
 
     def test_json_mode_never_prompts_or_writes(self):
         from bambu_cli.commands import _offer_pin_fingerprint
+
         with patch("builtins.input") as mock_input:
             result = _offer_pin_fingerprint(self.FP, self.config_path, json_mode=True, interactive=True)
         self.assertFalse(result)
@@ -113,6 +119,7 @@ class TestOfferPinFingerprint(unittest.TestCase):
 
     def test_non_interactive_never_prompts_or_writes(self):
         from bambu_cli.commands import _offer_pin_fingerprint
+
         with patch("builtins.input") as mock_input:
             result = _offer_pin_fingerprint(self.FP, self.config_path, json_mode=False, interactive=False)
         self.assertFalse(result)
@@ -121,6 +128,7 @@ class TestOfferPinFingerprint(unittest.TestCase):
 
     def test_decline_leaves_config_untouched(self):
         from bambu_cli.commands import _offer_pin_fingerprint
+
         with patch("builtins.input", return_value="n"):
             result = _offer_pin_fingerprint(self.FP, self.config_path, json_mode=False, interactive=True)
         self.assertFalse(result)
@@ -128,6 +136,7 @@ class TestOfferPinFingerprint(unittest.TestCase):
 
     def test_accept_pins_fingerprint_and_preserves_config(self):
         from bambu_cli.commands import _offer_pin_fingerprint
+
         with patch("builtins.input", return_value="y"):
             result = _offer_pin_fingerprint(self.FP, self.config_path, json_mode=False, interactive=True)
         self.assertTrue(result)
@@ -137,15 +146,17 @@ class TestOfferPinFingerprint(unittest.TestCase):
         self.assertEqual(cfg["printer_ip"], "1.2.3.4")
         if os.name != "nt":
             import stat
+
             mode = stat.S_IMODE(os.stat(self.config_path).st_mode)
             self.assertEqual(mode, 0o600)
 
 
 class TestBambuDryRun(unittest.TestCase):
-    @patch('bambu_cli.printer.get_printer')
-    @patch('bambu_cli.protocols.mqtt.get_status')
+    @patch("bambu_cli.printer.get_printer")
+    @patch("bambu_cli.protocols.mqtt.get_status")
     def test_cmd_print_dry_run_success(self, mock_get_status, mock_get_printer):
-        from bambu_cli.bambu import cmd_print
+        from bambu_cli.commands import cmd_print
+
         args = MagicMock()
         args.file = "test.3mf"
         args.confirm = False
@@ -168,32 +179,36 @@ class TestBambuDryRun(unittest.TestCase):
         # Should not raise SystemExit
         cmd_print(args)
 
-        mock_ftp.nlst.assert_called_once_with('/model/')
+        mock_ftp.nlst.assert_called_once_with("/model/")
         mock_get_status.assert_called_once()
 
 
 class TestBambuSimulation(unittest.TestCase):
-    @patch('bambu_cli.bambu.logger')
-    @patch('bambu_cli.bambu.ImplicitFTPS')
-    def test_simulation_mode_status(self, mock_ftps, mock_logger):
-        from bambu_cli.bambu import cmd_status
-        import bambu_cli.bambu as bambu
+    def test_simulation_mode_status(self):
+        from bambu_cli.commands import cmd_status
 
+        mock_logger = MagicMock()
         args = MagicMock()
         args.json = False
         args.verbose = False
         args.sim = True
 
         # Enable sim mode via the runtime context for the test
-        with settings_ctx(simulation=True):
+        with (
+            settings_ctx(simulation=True),
+            patch("bambu_cli.commands.status.logger", mock_logger),
+            patch("bambu_cli.protocols.mqtt.logger", mock_logger),
+        ):
             cmd_status(args)
-            self.assertTrue(any("Fetching simulated printer status" in call[0][0] for call in mock_logger.info.call_args_list))
+            self.assertTrue(
+                any("Fetching simulated printer status" in call[0][0] for call in mock_logger.info.call_args_list)
+            )
             self.assertTrue(any("State: IDLE" in call[0][0] for call in mock_logger.info.call_args_list))
 
-    @patch('bambu_cli.logging_utils.logger')
-    @patch('bambu_cli.commands.logger')
+    @patch("bambu_cli.logging_utils.logger")
+    @patch("bambu_cli.logging_utils._BACKEND")
     def test_simulation_mode_upload(self, mock_commands_logger, mock_ftps_logger):
-        from bambu_cli.bambu import cmd_upload
+        from bambu_cli.commands import cmd_upload
         import bambu_cli.bambu as bambu
 
         args = MagicMock()
@@ -202,6 +217,7 @@ class TestBambuSimulation(unittest.TestCase):
         args.sim = True
 
         from bambu_cli.protocols.ftps import connection_manager
+
         connection_manager.clear()
 
         with settings_ctx(simulation=True):
@@ -217,16 +233,27 @@ class TestBambuSimulation(unittest.TestCase):
                 finally:
                     os.unlink(local_path)
 
-                self.assertTrue(any("Connecting to simulated FTPS server" in call[0][0] for call in mock_ftps_logger.info.call_args_list))
-                self.assertTrue(any("Uploaded test.3mf to printer" in call[0][0] for call in mock_commands_logger.info.call_args_list))
+                self.assertTrue(
+                    any(
+                        "Connecting to simulated FTPS server" in call[0][0]
+                        for call in mock_ftps_logger.info.call_args_list
+                    )
+                )
+                self.assertTrue(
+                    any(
+                        "Uploaded test.3mf to printer" in call[0][0]
+                        for call in mock_commands_logger.info.call_args_list
+                    )
+                )
             finally:
                 connection_manager.clear()
 
 
 class TestBambuSecurity(unittest.TestCase):
-    @patch('bambu_cli.bambu.logger')
+    @patch("bambu_cli.download.downloader.logger")
     def test_cmd_download_path_traversal_evasion(self, mock_logger):
-        from bambu_cli.bambu import cmd_download
+        from bambu_cli.commands import cmd_download
+
         args = MagicMock()
         args.url = "https://example.com/file.stl%00../../../../etc/passwd"
         args.output = "/tmp"
@@ -236,23 +263,25 @@ class TestBambuSecurity(unittest.TestCase):
         mock_resp.read.side_effect = [b"data", b""]
         mock_opener = MagicMock()
         mock_opener.open.return_value.__enter__.return_value = mock_resp
-        with patch('bambu_cli.download.build_safe_opener', return_value=mock_opener), \
-             patch('builtins.open', mock_open()), \
-             patch('bambu_cli.download._noncolliding_path', side_effect=lambda p: p), \
-             patch('os.path.getsize', return_value=1024):
-            cmd_download(args)
+        with patch("builtins.open", mock_open()), patch("os.path.getsize", return_value=1024):
+            cmd_download(
+                args,
+                opener_factory=lambda: mock_opener,
+                noncolliding_path=lambda p: p,
+            )
 
         self.assertTrue(any("/tmp/passwd.stl" in call[0][0] for call in mock_logger.info.call_args_list))
 
-    @patch('bambu_cli.bambu.logger')
-    @patch('json.dump')
+    @patch("bambu_cli.logging_utils._BACKEND")
+    @patch("json.dump")
     def test_slice_parameter_injection_safety(self, mock_json_dump, mock_logger):
-        from bambu_cli.bambu import cmd_slice
+        from bambu_cli.slicer import cmd_slice
+
         args = MagicMock()
         args.file = "test.stl"
         args.quality = "standard"
         args.output = "."
-        args.copies = 1 # Ensure copies is an int
+        args.copies = 1  # Ensure copies is an int
         # Inject malicious string into a parameter that gets dumped to JSON
         args.support_interface_pattern = 'rectilinear", "malicious": "injected'
 
@@ -264,33 +293,36 @@ class TestBambuSecurity(unittest.TestCase):
         def custom_open(file, *args, **kwargs):
             if "config.json" in str(file):
                 return original_open(file, *args, **kwargs)
-            m = mock_open(read_data='{}')
+            m = mock_open(read_data="{}")
             return m(file, *args, **kwargs)
 
         def custom_load(fp, *args, **kwargs):
             try:
-                if hasattr(fp, 'name') and "config.json" in str(fp.name):
+                if hasattr(fp, "name") and "config.json" in str(fp.name):
                     return original_load(fp, *args, **kwargs)
             except Exception:
                 pass
             return {}
 
-        with patch('os.path.exists', return_value=True), \
-             patch('os.access', return_value=True), \
-             patch('os.path.isdir', return_value=True), \
-             patch('os.listdir', return_value=["0.20mm Standard @BBL P1P.json"]), \
-             patch('builtins.open', side_effect=custom_open), \
-             patch('json.load', side_effect=custom_load), \
-             patch('tempfile.NamedTemporaryFile'), \
-             patch('subprocess.Popen', return_value=mock_proc), \
-             patch('os.unlink'), \
-             patch('os.path.getsize', return_value=1024):
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("os.access", return_value=True),
+            patch("os.path.isdir", return_value=True),
+            patch("os.listdir", return_value=["0.20mm Standard @BBL P1P.json"]),
+            patch("builtins.open", side_effect=custom_open),
+            patch("json.load", side_effect=custom_load),
+            patch("tempfile.NamedTemporaryFile"),
+            patch("subprocess.Popen", return_value=mock_proc),
+            patch("os.unlink"),
+            patch("os.path.getsize", return_value=1024),
+            patch("bambu_cli.slicer.output._is_valid_sliced_3mf", return_value=True),
+        ):
             cmd_slice(args)
 
         # Verify that json.dump was called and it escaped the quotes
         process_data = mock_json_dump.call_args_list[0][0][0]
-        self.assertEqual(process_data['support_interface_pattern'], 'rectilinear", "malicious": "injected')
+        self.assertEqual(process_data["support_interface_pattern"], 'rectilinear", "malicious": "injected')
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

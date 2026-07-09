@@ -1,14 +1,15 @@
-"""Cover platform/config/camera/slicer branches with monkeypatches (no hardware)."""
+"""Platform/config/camera/slicer branch behavior (no hardware).
+
+Renamed historically from coverage padding; every test asserts an outcome.
+"""
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
 from argparse import Namespace
-from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -17,18 +18,17 @@ sys.modules.setdefault("paho", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
-from bambu_cli import config as config_mod  # noqa: E402
 from bambu_cli import camera as camera_mod  # noqa: E402
-from bambu_cli import slicer as slicer_mod  # noqa: E402
 from bambu_cli import commands as commands_mod  # noqa: E402
-from bambu_cli.errors import BambuError  # noqa: E402
-from bambu_cli.protocols import mqtt as mqtt_mod  # noqa: E402
-from bambu_cli.protocols import ftps as ftps_mod  # noqa: E402
-from bambu_cli.setup_cmd import preflight as preflight_mod  # noqa: E402
-from bambu_cli.setup_cmd import common as common_mod  # noqa: E402
+from bambu_cli import config as config_mod  # noqa: E402
+from bambu_cli import slicer as slicer_mod  # noqa: E402
 from bambu_cli.download import downloader as downloader_mod  # noqa: E402
-from bambu_cli.download import validation as validation_mod  # noqa: E402
-from tests.bambu_test_base import _test_printer, settings_ctx  # noqa: E402
+from bambu_cli.errors import BambuError  # noqa: E402
+from bambu_cli.protocols import ftps as ftps_mod  # noqa: E402
+from bambu_cli.protocols import mqtt as mqtt_mod  # noqa: E402
+from bambu_cli.setup_cmd import common as common_mod  # noqa: E402
+from bambu_cli.setup_cmd import preflight as preflight_mod  # noqa: E402
+from tests.bambu_test_base import _test_printer  # noqa: E402
 
 
 @pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
@@ -46,59 +46,37 @@ def test_default_config_path_platforms(platform, monkeypatch, tmp_path):
 
 
 def test_convert_step_gmsh_missing(monkeypatch):
-    monkeypatch.setattr(slicer_mod.shutil, "which", lambda *_a, **_k: None)
-    with patch.object(slicer_mod.platform, "system", return_value="Linux"):
+    monkeypatch.setattr(slicer_mod.step_convert.shutil, "which", lambda *_a, **_k: None)
+    with patch.object(slicer_mod.step_convert.sys, "platform", "linux"):
         path, created = slicer_mod._convert_step_to_stl("/tmp/x.step")
-    assert path is None or created is False or path is not None
-
-
-def test_slicer_build_cmd_minimal():
-    args = Namespace(
-        threads=2,
-        infill=20,
-        pattern="grid",
-        supports=False,
-        nozzle_temp=210,
-        bed_temp=60,
-        support_type=None,
-        support_interface_density=None,
-        walls=None,
-        wall_type=None,
-        top_layers=None,
-        bottom_layers=None,
-        support_interface_pattern=None,
-        accel_wall=None,
-        accel_wall_outer=None,
-        accel_infill=None,
-        accel_travel=None,
-        accel_first_layer=None,
-    )
-    # find a function that builds CLI args
-    for name in dir(slicer_mod):
-        if "build" in name.lower() and "cmd" in name.lower() and callable(getattr(slicer_mod, name)):
-            try:
-                getattr(slicer_mod, name)(args)
-            except Exception:
-                pass
+    assert path is None
+    assert created is False
 
 
 def test_camera_simulation_snapshot(tmp_path, capsys):
     out = tmp_path / "snap.jpg"
     args = Namespace(output=str(out), json=True, direct=True)
     printer = _test_printer(simulation_mode=True, insecure_tls=True)
-    with patch("bambu_cli.camera.get_printer", return_value=printer, create=True), patch(
-        "bambu_cli.printer.get_printer", return_value=printer
-    ), patch.object(camera_mod, "_grab_camera_frame_direct", return_value=b"\xff\xd8\xfffakejpeg"):
-        try:
-            camera_mod._cmd_snapshot(args)
-        except Exception:
-            pass
+    with (
+        patch("bambu_cli.camera.get_printer", return_value=printer, create=True),
+        patch("bambu_cli.printer.get_printer", return_value=printer),
+        patch.object(camera_mod, "_grab_camera_frame_direct", return_value=b"\xff\xd8\xfffakejpeg"),
+    ):
+        camera_mod._cmd_snapshot(args)
+    assert out.is_file()
+    assert out.read_bytes().startswith(b"\xff\xd8\xff")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload.get("status") == "saved"
+    assert payload.get("command") == "snapshot"
+    assert payload.get("size_bytes", 0) > 0
 
 
 def test_preflight_permission_check(tmp_path):
     f = tmp_path / "secret"
     f.write_text("x", encoding="utf-8")
-    if sys.platform != "win32":
+    if sys.platform == "win32":
+        assert preflight_mod._file_permission_check(str(f), "secret-file") is None
+    else:
         os.chmod(f, 0o644)
         res = preflight_mod._file_permission_check(str(f), "secret-file")
         assert res["status"] in ("ok", "warning", "error")
@@ -120,30 +98,32 @@ def test_ftps_connection_error_path_cleanup():
 
 
 def test_mqtt_require_missing_dependency():
-    with patch.object(mqtt_mod, "mqtt", None), patch.dict("sys.modules", {"paho.mqtt.client": None}):
-        # re-import path
-        try:
+    prev = mqtt_mod.mqtt
+    try:
+        mqtt_mod.mqtt = None
+        with patch.dict("sys.modules", {"paho.mqtt.client": None}), pytest.raises(BambuError):
             mqtt_mod._require_mqtt()
-        except (BambuError, SystemExit, Exception):
-            pass
+    finally:
+        mqtt_mod.mqtt = prev
 
 
 def test_cmd_gcode_success():
-    args = Namespace(code="G28", json=False)
+    args = Namespace(code="G28", json=False, confirm=True)
     printer = MagicMock()
     printer.send_command.return_value = True
-    with patch("bambu_cli.commands.RuntimeContext.for_request") as fr, patch(
-        "bambu_cli.commands.get_sequence_id", return_value="9"
+    with (
+        patch("bambu_cli.commands.gcode.RuntimeContext.for_request") as fr,
+        patch("bambu_cli.commands.gcode.get_sequence_id", return_value="9"),
     ):
         ctx = MagicMock()
         ctx.printer.return_value = printer
         fr.return_value = ctx
-        try:
-            commands_mod.cmd_gcode(args)
-        except BambuError:
-            pass
+        commands_mod.cmd_gcode(args)
+    printer.send_command.assert_called_once()
+    payload = printer.send_command.call_args[0][0]
+    assert "G28" in payload
+    assert "gcode_line" in payload
 
 
-def test_downloader_namespace_helpers():
-    # exercise module-level constants/helpers via validation bridge
-    assert hasattr(downloader_mod, "cmd_download") or hasattr(downloader_mod, "_cmd_download") or True
+def test_downloader_exposes_cmd_download():
+    assert callable(getattr(downloader_mod, "cmd_download", None) or getattr(downloader_mod, "_cmd_download", None))

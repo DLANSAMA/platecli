@@ -1,21 +1,15 @@
 [run]
-branch = False
+branch = True
 source = bambu_cli
 
 [report]
 precision = 1
+# Honest coverage: do not hide except Exception/pass/continue.
+# Only exclude lines that are definitionally unmeasurable or non-executable.
 exclude_lines =
     pragma: no cover
     def __repr__
     if TYPE_CHECKING:
-    raise AssertionError
     raise NotImplementedError
-    if 0:
     if __name__ == .__main__.:
-    except ImportError:
-    except Exception:
-        pass
-    except \(.+\):
-        pass
-    continue
     \.\.\.

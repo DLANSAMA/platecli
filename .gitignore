@@ -61,3 +61,11 @@ printer_snapshot.jpg
 *.3mf
 *.gcode
 *.step
+
+# mutmut mutation testing artifacts
+mutants/
+.mutmut-cache
+
+# hypothesis property-test cache (local machine paths; never ship)
+.hypothesis/
+

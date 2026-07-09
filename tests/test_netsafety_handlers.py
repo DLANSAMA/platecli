@@ -1,11 +1,13 @@
-"""Residual A+ coverage for measured lines still missed after Phase C."""
+"""Behavior tests salvaged from former coverage-padding modules.
+
+These assert observable outcomes for netsafety handlers, MQTT cert PEM,
+and preflight edge cases.
+"""
 
 from __future__ import annotations
 
 import base64
 import hashlib
-import ssl
-import urllib.error
 import urllib.request
 from unittest.mock import MagicMock, patch
 
@@ -14,7 +16,6 @@ import pytest
 from bambu_cli import netsafety
 from bambu_cli.errors import BambuError
 from bambu_cli.netsafety import (
-    MAX_DOWNLOAD_REDIRECT_HOPS,
     SafeHTTPHandler,
     SafeHTTPRedirectHandler,
     SafeHTTPSHandler,
@@ -75,7 +76,6 @@ def test_require_mqtt_import_error_aborts():
     try:
         mqtt_mod.mqtt = None
         with patch.dict("sys.modules", {"paho": None, "paho.mqtt": None, "paho.mqtt.client": None}):
-            # Force import failure by shadowing import
             import builtins
 
             real_import = builtins.__import__
@@ -105,8 +105,9 @@ def test_get_and_verify_cert_pem_success():
     raw_cm.__exit__ = lambda *a: False
     ctx = MagicMock()
     ctx.wrap_socket.return_value = tls
-    with patch("bambu_cli.protocols.mqtt.socket.create_connection", return_value=raw_cm), patch(
-        "ssl.SSLContext", return_value=ctx
+    with (
+        patch("bambu_cli.protocols.mqtt.socket.create_connection", return_value=raw_cm),
+        patch("ssl.SSLContext", return_value=ctx),
     ):
         pem = mqtt_mod._get_and_verify_cert_pem("host", 990, expected, timeout=1)
     assert "BEGIN CERTIFICATE" in pem
@@ -123,5 +124,4 @@ def test_preflight_module_available_exception(monkeypatch):
         raise ValueError("bad")
 
     monkeypatch.setattr(preflight_mod.importlib.util, "find_spec", boom)
-    # Falls through to sys.modules check
     assert preflight_mod._module_available("nonexistent_module_xyz") is False

@@ -6,6 +6,7 @@
 - preflight warning-severity check surfaces the same remediation hint
 - the --migrate-access-code helper moves an inline code into a file
 """
+
 import json
 import os
 import stat
@@ -41,9 +42,11 @@ class TestInlineAccessCodeWarning(ResetWarnFlagMixin, unittest.TestCase):
         self.assertNotIn("SECRET123", "\n".join(cm.output))
 
     def test_no_warning_when_access_code_file_used(self):
-        with config_ctx({"access_code_file": "/tmp/does-not-matter"}), \
-             patch("bambu_cli.cli._expand_path", return_value="/tmp/does-not-matter"), \
-             patch("builtins.open", side_effect=lambda *a, **k: _fake_file("filecode\n")):
+        with (
+            config_ctx({"access_code_file": "/tmp/does-not-matter"}),
+            patch("bambu_cli.cli._expand_path", return_value="/tmp/does-not-matter"),
+            patch("builtins.open", side_effect=lambda *a, **k: _fake_file("filecode\n")),
+        ):
             # assertNoLogs needs Python 3.10+; assert via the logger mock instead.
             with patch.object(config.logger, "warning") as mock_warn:
                 config.load_access_code()
@@ -69,6 +72,7 @@ class TestInlineAccessCodeWarning(ResetWarnFlagMixin, unittest.TestCase):
 
 def _fake_file(contents):
     import io
+
     return io.StringIO(contents)
 
 
@@ -115,12 +119,14 @@ class TestPreflightAccessCodeCheck(unittest.TestCase):
             "serial": "MOCK",
             "access_code": "SECRET123",
         }
-        with patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg), \
-             patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"), \
-             patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p), \
-             patch("bambu_cli.slicer._slicer_executable_problem", return_value=None), \
-             patch("os.path.isdir", return_value=True), \
-             patch("shutil.which", return_value=None):
+        with (
+            patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg),
+            patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"),
+            patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p),
+            patch("bambu_cli.slicer.cmd._slicer_executable_problem", return_value=None),
+            patch("os.path.isdir", return_value=True),
+            patch("shutil.which", return_value=None),
+        ):
             checks = setup_cmd.collect_preflight_checks()
         access_checks = [c for c in checks if c["name"] == "access-code"]
         self.assertEqual(len(access_checks), 1)
@@ -137,6 +143,7 @@ class TestPreflightAccessCodeCheck(unittest.TestCase):
 class TestMigrateAccessCode(unittest.TestCase):
     def setUp(self):
         import tempfile
+
         self.tmpdir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.tmpdir, "config.json")
         self.access_code_file = os.path.join(self.tmpdir, "access_code")
@@ -146,11 +153,13 @@ class TestMigrateAccessCode(unittest.TestCase):
             json.dump(data, f)
 
     def test_happy_path_moves_inline_code_to_file(self):
-        self._write_config({
-            "printer_ip": "127.0.0.1",
-            "serial": "MOCK",
-            "access_code": "SECRET123",
-        })
+        self._write_config(
+            {
+                "printer_ip": "127.0.0.1",
+                "serial": "MOCK",
+                "access_code": "SECRET123",
+            }
+        )
         result = setup_cmd.migrate_access_code(
             config_path=self.config_path,
             access_code_file_path=self.access_code_file,
@@ -170,10 +179,12 @@ class TestMigrateAccessCode(unittest.TestCase):
             self.assertEqual(mode, 0o600)
 
     def test_noop_when_no_inline_code_present(self):
-        self._write_config({
-            "printer_ip": "127.0.0.1",
-            "serial": "MOCK",
-        })
+        self._write_config(
+            {
+                "printer_ip": "127.0.0.1",
+                "serial": "MOCK",
+            }
+        )
         result = setup_cmd.migrate_access_code(
             config_path=self.config_path,
             access_code_file_path=self.access_code_file,
@@ -188,12 +199,14 @@ class TestMigrateAccessCode(unittest.TestCase):
         existing_file = os.path.join(self.tmpdir, "existing_secret")
         with open(existing_file, "w", encoding="utf-8") as f:
             f.write("already-there\n")
-        self._write_config({
-            "printer_ip": "127.0.0.1",
-            "serial": "MOCK",
-            "access_code": "SECRET123",
-            "access_code_file": existing_file,
-        })
+        self._write_config(
+            {
+                "printer_ip": "127.0.0.1",
+                "serial": "MOCK",
+                "access_code": "SECRET123",
+                "access_code_file": existing_file,
+            }
+        )
         result = setup_cmd.migrate_access_code(
             config_path=self.config_path,
             access_code_file_path=self.access_code_file,
@@ -206,11 +219,13 @@ class TestMigrateAccessCode(unittest.TestCase):
         self.assertEqual(cfg["access_code_file"], existing_file)
 
     def test_error_when_target_file_already_exists(self):
-        self._write_config({
-            "printer_ip": "127.0.0.1",
-            "serial": "MOCK",
-            "access_code": "SECRET123",
-        })
+        self._write_config(
+            {
+                "printer_ip": "127.0.0.1",
+                "serial": "MOCK",
+                "access_code": "SECRET123",
+            }
+        )
         with open(self.access_code_file, "w", encoding="utf-8") as f:
             f.write("pre-existing\n")
         result = setup_cmd.migrate_access_code(

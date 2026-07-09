@@ -1,15 +1,13 @@
-"""One-shot job orchestration: URL/local file -> download -> slice -> upload
--> optional print, plus print payload generation and dry-run prediction."""
+"""Job/send command entry and pipeline orchestration."""
+
+from __future__ import annotations
 
 import argparse
-import json
 import os
 import shutil
 import tempfile
 import zipfile
-from dataclasses import dataclass
-from typing import Callable, Optional
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 
 from bambu_cli import utils
 from bambu_cli.cli import (
@@ -22,31 +20,14 @@ from bambu_cli.cli import (
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DEFAULT_MAX_DOWNLOAD_MB,
-    DOWNLOADABLE_EXTENSIONS,
     EXIT_COMMAND_ERROR,
     EXIT_FILE_ERROR,
     PRINT_READY_EXTENSIONS,
     SLICEABLE_EXTENSIONS,
 )
-from bambu_cli.errors import BambuError, abort
-
-
-def _exit_code_from_error(exc, default=EXIT_COMMAND_ERROR):  # pragma: no cover -- job helper
-    """Normalize BambuError / SystemExit to an integer exit code."""
-    code = getattr(exc, "exit_code", None)
-    if code is not None:
-        return code
-    code = getattr(exc, "code", None)
-    if isinstance(code, int):
-        return code
-    if code is None:
-        return 0
-    return default
-
-
+from bambu_cli.context import RuntimeContext
 from bambu_cli.download import (
     _archive_member_too_large_message,
-    _download_target_filename,
     _extract_zip_model,
     _file_extension,
     _is_http_url,
@@ -58,324 +39,42 @@ from bambu_cli.download import (
     _normalize_url_input,
     _portable_basename,
     _safe_remote_name,
-    _sanitize_download_filename,
     _select_zip_model_member,
     _unsupported_download_message,
     _validate_http_url_or_exit,
 )
+from bambu_cli.errors import BambuError
+from bambu_cli.job.payload import _parse_print_options, _print_next_command
+from bambu_cli.job.predict import (
+    _predicted_sliced_remote_name,
+    _predicted_url_download_extension,
+    _predicted_url_remote_name,
+    _slice_args_for_job,
+)
+from bambu_cli.job.steps import JobSteps
+from bambu_cli.job.support import (
+    _emit_job_failure,
+    _exit_code_from_error,
+    _job_fail,
+    _last_error_for,
+    _prepare_job_output_dir,
+    _validate_predicted_remote_name_or_fail,
+)
 from bambu_cli.logging_utils import logger
-from bambu_cli.utils import _ensure_output_dir, emit_json
+from bambu_cli.slicer import _directory_input_message, _is_directory_input, _validate_slice_options
+from bambu_cli.utils import emit_json
 
 
-def _default_download():  # pragma: no cover -- job helper
-    from bambu_cli import bambu
-
-    return bambu.cmd_download
-
-
-def _default_slice():  # pragma: no cover -- job helper
-    from bambu_cli import bambu
-
-    return bambu.cmd_slice
-
-
-def _default_upload():  # pragma: no cover -- job helper
-    from bambu_cli import bambu
-
-    return bambu.cmd_upload
-
-
-def _default_print():  # pragma: no cover -- job helper
-    from bambu_cli import bambu
-
-    return bambu.cmd_print
-
-
-@dataclass
-class JobSteps:
-    """Injectable step callables for the job/send orchestrator.
-
-    Each field defaults to a zero-arg factory that late-binds to the real
-    implementation through the ``bambu`` facade at call time, so existing
-    tests/callers that patch ``bambu.cmd_download`` (etc.) keep working even
-    when a caller doesn't supply its own ``JobSteps``.
-    """
-
-    download: Optional[Callable] = None
-    slice: Optional[Callable] = None
-    upload: Optional[Callable] = None
-    print_: Optional[Callable] = None
-
-    def _resolve(self, value, default_factory):
-        return value if value is not None else default_factory()
-
-    def get_download(self):
-        return self._resolve(self.download, _default_download)
-
-    def get_slice(self):
-        return self._resolve(self.slice, _default_slice)
-
-    def get_upload(self):
-        return self._resolve(self.upload, _default_upload)
-
-    def get_print(self):
-        return self._resolve(self.print_, _default_print)
-
-
-def _print_next_command(args, basename):  # pragma: no cover -- job helper
-    command = ["print", basename, "--confirm", "--json"]
-    if _namespace_get(args, "use_ams", False):
-        command.append("--use-ams")
-    ams_mapping = _namespace_get(args, "ams_mapping")
-    if ams_mapping:
-        command.extend(["--ams-mapping", str(ams_mapping)])
-    if _namespace_get(args, "timelapse", False):
-        command.append("--timelapse")
-    if _namespace_get(args, "skip_bed_leveling", False):
-        command.append("--skip-bed-leveling")
-    if _namespace_get(args, "skip_flow_cali", False):
-        command.append("--skip-flow-cali")
-    return command
-
-
-def generate_print_payload(  # pragma: no cover -- job helper
-    basename, use_ams=False, ams_mapping=None, timelapse=False, bed_leveling=True, flow_cali=True
-):
-    """Generate the JSON payload for the print command."""
-    # Files are stored in /sdcard/model/ on the printer (referenced via the url field below).
-    encoded_basename = quote(basename, safe="")
-    print_cmd = {
-        "sequence_id": "0",
-        "command": "project_file",
-        "param": "Metadata/plate_1.gcode",
-        "subtask_name": basename,
-        "url": f"file:///sdcard/model/{encoded_basename}",
-        "bed_type": "auto",
-        "timelapse": timelapse,
-        "bed_leveling": bed_leveling,
-        "flow_cali": flow_cali,
-        "vibration_cali": True,
-        "layer_inspect": False,
-        "use_ams": use_ams,
-        "profile_id": "0",
-        "project_id": "0",
-        "subtask_id": "0",
-        "task_id": "0",
-    }
-
-    if use_ams and ams_mapping is not None:
-        print_cmd["ams_mapping"] = ams_mapping
-
-    payload = json.dumps({"print": print_cmd})
-    return payload
-
-
-def _slice_args_for_job(filepath, args, output_dir):  # pragma: no cover -- job helper
-    """Build a slice command namespace from job-level arguments."""
-    return argparse.Namespace(
-        file=filepath,
-        quality=getattr(args, "quality", "standard"),
-        filament=getattr(args, "filament", "PLA Basic"),
-        infill=getattr(args, "infill", 15),
-        pattern=getattr(args, "pattern", "3dhoneycomb"),
-        nozzle_temp=getattr(args, "nozzle_temp", 220),
-        bed_temp=getattr(args, "bed_temp", 60),
-        supports=getattr(args, "supports", False),
-        support_type=getattr(args, "support_type", None),
-        support_interface_density=getattr(args, "support_interface_density", None),
-        support_interface_pattern=getattr(args, "support_interface_pattern", None),
-        walls=getattr(args, "walls", None),
-        wall_type=getattr(args, "wall_type", None),
-        top_layers=getattr(args, "top_layers", None),
-        bottom_layers=getattr(args, "bottom_layers", None),
-        accel_wall=getattr(args, "accel_wall", None),
-        accel_wall_outer=getattr(args, "accel_wall_outer", None),
-        accel_infill=getattr(args, "accel_infill", None),
-        accel_travel=getattr(args, "accel_travel", None),
-        accel_first_layer=getattr(args, "accel_first_layer", None),
-        copies=getattr(args, "copies", 1),
-        output=output_dir,
-        threads=getattr(args, "threads", None),
-    )
-
-
-def _predicted_sliced_remote_name(filepath, copies=1):  # pragma: no cover -- job helper
-    """Return the remote filename Orca output will have after job/send slicing."""
-    from bambu_cli.slicer import _sliced_output_path
-
-    return _portable_basename(_sliced_output_path(filepath, ".", copies=copies))
-
-
-def _predicted_url_download_extension(url, args):  # pragma: no cover -- job helper
-    """Infer a direct URL dry-run extension from URL path or explicit --name."""
-    source_ext = _file_extension(urlparse(url).path)
-    if source_ext in DOWNLOADABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS:
-        return source_ext
-    if _namespace_get(args, "name"):
-        return _file_extension(_sanitize_download_filename(_namespace_get(args, "name")))
-    return None
-
-
-def _predicted_url_remote_name(url, args):  # pragma: no cover -- job helper
-    """Best-effort remote filename prediction for side-effect-free URL dry-runs.
-
-    This intentionally only uses the URL path and explicit --name value. It does
-    not resolve Printables pages, HTML pages, redirects, or ZIP members because
-    doing so would require network I/O or archive extraction.
-    """
-    if _is_printables_model_url(url):
-        return None
-    predicted_ext = _predicted_url_download_extension(url, args)
-    if predicted_ext in ARCHIVE_DOWNLOAD_EXTENSIONS:
-        return None
-    if predicted_ext not in DOWNLOADABLE_EXTENSIONS:
-        return None
-    filename = _download_target_filename(args, url)
-    if predicted_ext in SLICEABLE_EXTENSIONS:
-        return _predicted_sliced_remote_name(filename, getattr(args, "copies", 1))
-    if predicted_ext in PRINT_READY_EXTENSIONS:
-        return filename
-    return None
-
-
-def _parse_print_options(args):  # pragma: no cover -- job helper
-    """Validate print-only options and return the parsed AMS mapping."""
-    raw_mapping = getattr(args, "ams_mapping", None)
-    if not raw_mapping:
-        return None, None
-    if not getattr(args, "use_ams", False):
-        return None, "--ams-mapping requires --use-ams"
-    try:
-        clean_mapping = raw_mapping.strip("[]")
-        mapping = [int(x.strip()) for x in clean_mapping.split(",")]
-    except ValueError:
-        return None, "Invalid AMS mapping format. Use comma-separated integers like '0' or '0,1,2'"
-    if not mapping:
-        return None, "Invalid AMS mapping format. Use comma-separated integers like '0' or '0,1,2'"
-    if any(slot < 0 for slot in mapping):
-        return None, "Invalid AMS mapping format. Slot indexes must be zero or positive integers like '0' or '0,1,2'"
-    return mapping, None
-
-
-def _emit_job_failure(args, summary, failed_step, exit_code, error=None, detail=None):  # pragma: no cover -- job helper
-    """Emit a single machine-readable failure summary for job/send --json."""
-    if not bool(_namespace_get(args, "json", False)):
-        return
-    payload = dict(summary)
-    payload.update(
-        {
-            "status": "error",
-            "failed_step": failed_step,
-            "exit_code": exit_code,
-            "error": error or f"{failed_step} failed; see stderr for details",
-        }
-    )
-    if detail:
-        payload[f"{failed_step}_error"] = detail
-    emit_json(payload)
-
-
-def _job_fail(args, summary, failed_step, exit_code, message):  # pragma: no cover -- job helper
-    logger.error(message)
-    _emit_job_failure(args, summary, failed_step, exit_code, message)
-    abort("", exit_code=exit_code)
-
-
-def _validate_predicted_remote_name_or_fail(
-    args, summary, remote_name, message_prefix
-):  # pragma: no cover -- job helper
-    """Fail a job before work starts if a known printer filename is unsafe."""
-    if remote_name is not None and _safe_remote_name(remote_name) is None:
-        _job_fail(
-            args,
-            summary,
-            "validate",
-            EXIT_FILE_ERROR,
-            f"{message_prefix}: {remote_name!r}",
-        )
-
-
-def _last_error_for(command, ctx=None):  # pragma: no cover -- job helper
-    """Return the last-error payload for ``command``, dual-writing it onto
-    ``ctx.last_error`` when a RuntimeContext is supplied.
-
-    The legacy global (``utils._LAST_ERROR_PAYLOAD``) remains the source of
-    truth that step implementations write to; ``ctx.last_error`` is a typed
-    mirror for callers migrating away from the module global.
-    """
-    payload = utils._LAST_ERROR_PAYLOAD
-    result = payload if isinstance(payload, dict) and payload.get("command") == command else None
-    if ctx is not None:
-        ctx.last_error = result
-    return result
-
-
-def _prepare_job_output_dir(args, summary):  # pragma: no cover -- job helper
-    """Validate job/send working directory before expensive work starts.
-
-    In dry-run mode this is intentionally side-effect free: report that the
-    directory would be created instead of creating it.
-    """
-    if not getattr(args, "output", None):
-        return None
-    workdir = _expand_path(args.output)
-    if workdir.startswith("-"):
-        _job_fail(
-            args, summary, "validate", EXIT_COMMAND_ERROR, f"Invalid output directory: {_path_for_message(workdir)}"
-        )
-    if getattr(args, "dry_run", False):
-        if os.path.exists(workdir):
-            if not os.path.isdir(workdir):
-                _job_fail(
-                    args,
-                    summary,
-                    "validate",
-                    EXIT_FILE_ERROR,
-                    f"Output path is not a directory: {_path_for_message(workdir)}",
-                )
-        else:
-            parent = os.path.abspath(workdir)
-            while parent and not os.path.exists(parent):
-                next_parent = os.path.dirname(parent)
-                if next_parent == parent:
-                    break
-                parent = next_parent
-            if not parent or not os.path.isdir(parent) or not os.access(parent, os.W_OK):
-                _job_fail(
-                    args,
-                    summary,
-                    "validate",
-                    EXIT_FILE_ERROR,
-                    f"Could not prepare output directory: {_path_for_message(workdir)}",
-                )
-            summary["would_create_output_dir"] = True
-        return workdir
-    try:
-        _ensure_output_dir(workdir)
-    except BambuError as exc:
-        _emit_job_failure(
-            args,
-            summary,
-            "validate",
-            (getattr(exc, "exit_code", None) or EXIT_FILE_ERROR),
-            f"Could not prepare output directory: {_path_for_message(workdir)}",
-        )
-        raise
-    return workdir
-
-
-def _cmd_job(args):  # pragma: no cover -- job helper
+def _cmd_job(args):
     """Public entry point shim: builds a RuntimeContext/JobSteps and delegates."""
-    from bambu_cli.context import RuntimeContext
 
     return _run_job(RuntimeContext.for_request(args), args, JobSteps())
 
 
-def _run_job(ctx, args, steps=None):  # pragma: no cover -- job orchestrator; step failure contracts unit-tested
+def _run_job(ctx, args, steps=None):
     """Agent-friendly one-shot workflow: URL/local file -> slice if needed -> upload -> optional print."""
     if steps is None:
         steps = JobSteps()
-    from bambu_cli.slicer import _directory_input_message, _is_directory_input, _validate_slice_options
 
     source_arg = args.source
     source = _normalize_url_input(source_arg)
