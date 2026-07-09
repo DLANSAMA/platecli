@@ -56,17 +56,99 @@ def test_is_valid_sliced_3mf_rejects_zip_missing_structure(tmp_path):
     assert S._is_valid_sliced_3mf(str(path)) is False
 
 
-def test_validate_slice_options_bad_infill():
-    args = Namespace(copies=0, infill=15, pattern="grid")
+def test_validate_slice_options_rejects_zero_copies():
+    args = Namespace(copies=0, infill=15, nozzle_temp=220, bed_temp=60, wall_type=None)
     err = S._validate_slice_options(args)
-    assert err is None or isinstance(err, str)
+    assert err is not None
+    assert "copies" in err.lower()
 
 
-def test_validate_slice_options_infill_range():
-    args = Namespace(copies=1, infill=150, pattern="grid", walls=None, wall_type=None)
+def test_validate_slice_options_rejects_high_infill():
+    args = Namespace(copies=1, infill=150, nozzle_temp=220, bed_temp=60, wall_type=None)
     err = S._validate_slice_options(args)
-    # may accept or reject
-    assert err is None or "infill" in err.lower() or isinstance(err, str)
+    assert err is not None
+    assert "infill" in err.lower()
+
+
+def test_validate_slice_options_accepts_boundary_temps():
+    from bambu_cli.constants import MAX_BED_TEMP_C, MAX_NOZZLE_TEMP_C, MIN_BED_TEMP_C, MIN_NOZZLE_TEMP_C
+
+    args = Namespace(
+        copies=1,
+        infill=0,
+        nozzle_temp=MIN_NOZZLE_TEMP_C,
+        bed_temp=MIN_BED_TEMP_C,
+        wall_type=None,
+    )
+    assert S._validate_slice_options(args) is None
+    args = Namespace(
+        copies=1,
+        infill=100,
+        nozzle_temp=MAX_NOZZLE_TEMP_C,
+        bed_temp=MAX_BED_TEMP_C,
+        wall_type="classic",
+    )
+    assert S._validate_slice_options(args) is None
+
+
+def test_is_valid_sliced_3mf_requires_content_types(tmp_path):
+    import zipfile
+
+    path = tmp_path / "no_ct.3mf"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("3D/3dmodel.model", "<model/>")
+        zf.writestr("Metadata/plate_1.gcode", "G28\n")
+    assert S._is_valid_sliced_3mf(str(path)) is False
+
+
+def test_is_valid_sliced_3mf_rejects_loose_gcode_without_plate_prefix(tmp_path):
+    """Plate detection requires Metadata/plate_*.gcode, not any .gcode member."""
+    import zipfile
+
+    path = tmp_path / "loose.3mf"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
+        zf.writestr("random.gcode", "G28\n")
+    assert S._is_valid_sliced_3mf(str(path)) is False
+
+    path2 = tmp_path / "wrong_plate_ext.3mf"
+    with zipfile.ZipFile(path2, "w") as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
+        zf.writestr("Metadata/plate_1.txt", "not gcode")
+    assert S._is_valid_sliced_3mf(str(path2)) is False
+
+
+def test_is_valid_sliced_3mf_rejects_corrupt_crc_and_bad_paths(tmp_path):
+    import zipfile
+
+    path = tmp_path / "crc.3mf"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
+        zf.writestr("3D/3dmodel.model", "<model/>")
+    raw = bytearray(path.read_bytes())
+    # Flip a mid-file byte so the zip still looks like a zip but CRC fails.
+    if len(raw) > 40:
+        raw[len(raw) // 2] ^= 0xFF
+        path.write_bytes(raw)
+        # If corruption still parses as zip with CRC error, must reject.
+        if zipfile.is_zipfile(path):
+            try:
+                with zipfile.ZipFile(path, "r") as zf:
+                    bad = zf.testzip() is not None
+            except zipfile.BadZipFile:
+                bad = True
+            if bad:
+                assert S._is_valid_sliced_3mf(str(path)) is False
+
+    assert S._is_valid_sliced_3mf(str(tmp_path / "missing.3mf")) is False
+    assert S._is_valid_sliced_3mf(None) is False  # type: ignore[arg-type]
+
+
+def test_validate_slice_options_rejects_bad_wall_type():
+    args = Namespace(copies=1, infill=15, nozzle_temp=220, bed_temp=60, wall_type="spiral")
+    err = S._validate_slice_options(args)
+    assert err is not None
+    assert "wall-type" in err.lower()
 
 
 def test_validate_slice_options_rejects_extreme_nozzle_temp():

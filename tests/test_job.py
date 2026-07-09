@@ -797,9 +797,63 @@ def test_generate_print_payload_includes_ams_mapping():
     payload = json.loads(job.generate_print_payload("m.3mf", use_ams=True, ams_mapping=[0, 1]))
     assert payload["print"]["use_ams"] is True
     assert payload["print"]["ams_mapping"] == [0, 1]
+    assert payload["print"]["param"] == "Metadata/plate_1.gcode"
+    assert "m.3mf" in payload["print"]["url"]
+    assert payload["print"]["bed_leveling"] is True
+    assert payload["print"]["flow_cali"] is True
+
+
+def test_generate_print_payload_flags_and_url_encoding():
+    payload = json.loads(
+        job.generate_print_payload(
+            "part name.3mf",
+            use_ams=False,
+            timelapse=True,
+            bed_leveling=False,
+            flow_cali=False,
+        )
+    )
+    print_cmd = payload["print"]
+    assert print_cmd["timelapse"] is True
+    assert print_cmd["bed_leveling"] is False
+    assert print_cmd["flow_cali"] is False
+    assert " " not in print_cmd["url"]  # basename is percent-encoded
+    assert print_cmd["subtask_name"] == "part name.3mf"
 
 
 def test_generate_print_payload_omits_ams_mapping_without_use_ams():
     payload = json.loads(job.generate_print_payload("m.3mf", use_ams=False, ams_mapping=[0, 1]))
     assert payload["print"]["use_ams"] is False
     assert "ams_mapping" not in payload["print"]
+
+
+def test_parse_print_options_requires_use_ams_pairing():
+    from argparse import Namespace
+
+    from bambu_cli.constants import MAX_AMS_SLOT_INDEX
+
+    mapping, err = job._parse_print_options(Namespace(use_ams=True, ams_mapping=None))
+    assert mapping is None and err is not None and "ams-mapping" in err.lower()
+
+    mapping, err = job._parse_print_options(Namespace(use_ams=False, ams_mapping="0,1"))
+    assert mapping is None and err is not None and "use-ams" in err.lower()
+
+    mapping, err = job._parse_print_options(Namespace(use_ams=True, ams_mapping="0,1,2"))
+    assert err is None and mapping == [0, 1, 2]
+
+    mapping, err = job._parse_print_options(Namespace(use_ams=True, ams_mapping=f"{MAX_AMS_SLOT_INDEX + 1}"))
+    assert mapping is None and err is not None
+
+    mapping, err = job._parse_print_options(Namespace(use_ams=True, ams_mapping="-1"))
+    assert mapping is None and err is not None
+
+    mapping, err = job._parse_print_options(Namespace(use_ams=True, ams_mapping="nope"))
+    assert mapping is None and err is not None
+
+
+def test_predicted_sliced_remote_name_copies():
+    name = job._predicted_sliced_remote_name("model.stl", copies=1)
+    assert name.endswith("_sliced.3mf")
+    assert "model" in name
+    name3 = job._predicted_sliced_remote_name("/tmp/foo.stl", copies=3)
+    assert "x3" in name3 or "foo" in name3

@@ -33,6 +33,11 @@ def test_safe_remote_name_rejects_controls_and_paths():
     assert N._safe_remote_name("evil\n.3mf") is None
     assert N._safe_remote_name("") is None
     assert N._safe_remote_name("..") is None
+    assert N._safe_remote_name(".") is None
+    assert N._safe_remote_name(" model.3mf") is None  # leading space
+    assert N._safe_remote_name("model.3mf ") is None
+    assert N._safe_remote_name("CON.3mf") is None
+    assert N._safe_remote_name("a" * 200 + ".3mf") is None
 
 
 def test_sanitize_download_filename_reserved_and_controls():
