@@ -94,10 +94,7 @@ def main():
             lines.append(f"forbidden CI patterns present: {', '.join(forbidden)}")
         raise SystemExit("; ".join(lines))
 
-    print(
-        f"ci workflow smoke ok "
-        f"({len(commands)} CLI commands from parser, {len(modules)} package modules discovered)"
-    )
+    print(f"ci workflow smoke ok ({len(commands)} CLI commands from parser, {len(modules)} package modules discovered)")
 
 
 if __name__ == "__main__":

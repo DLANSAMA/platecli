@@ -107,7 +107,7 @@ def test_main_converts_bambu_error_to_json_payload(capsys):
         patch("bambu_cli.commands.cmd_status", side_effect=raise_it, create=True),
     ):
         with pytest.raises(SystemExit) as excinfo:
-            __import__('bambu_cli.cli', fromlist=['main']).main()
+            __import__("bambu_cli.cli", fromlist=["main"]).main()
 
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     output = capsys.readouterr().out
@@ -130,6 +130,6 @@ def test_main_non_json_mode_exits_with_code():
         patch("bambu_cli.commands.cmd_status", side_effect=raise_it, create=True),
     ):
         with pytest.raises(SystemExit) as excinfo:
-            __import__('bambu_cli.cli', fromlist=['main']).main()
+            __import__("bambu_cli.cli", fromlist=["main"]).main()
 
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_CONFIG_ERROR

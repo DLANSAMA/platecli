@@ -102,7 +102,7 @@ def test_get_current_lazy_builds_and_set_current_overrides():
 @patch("bambu_cli.cli.setup_logging")
 def test_main_populates_current_context(mock_setup_logging, mock_cmd_status):
     context.set_current(None)
-    __import__('bambu_cli.cli', fromlist=['main']).main()
+    __import__("bambu_cli.cli", fromlist=["main"]).main()
     ctx = context.get_current()
     assert ctx.simulation is True
     context.set_current(None)
