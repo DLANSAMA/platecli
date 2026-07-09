@@ -696,12 +696,16 @@ def cmd_delete(args, ctx=None):
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
 
-def cmd_snapshot(args, ctx=None):
-    """Capture a camera snapshot using the RTSP Streamer Docker container."""
-    from bambu_cli import bambu
+def cmd_snapshot(args, ctx=None, **collaborators):
+    """Capture a camera snapshot using the RTSP Streamer Docker container.
+
+    Extra keyword args are forwarded to ``camera._cmd_snapshot`` (injectable
+    collaborators: grab_frame, which, subprocess_run, access_code_loader, …).
+    """
+    from bambu_cli.camera import _cmd_snapshot
 
     ctx = ctx or RuntimeContext.for_request(args)
-    bambu._cmd_snapshot(args, ctx=ctx)
+    _cmd_snapshot(args, ctx=ctx, **collaborators)
 
 
 def cmd_preflight(args):

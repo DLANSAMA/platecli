@@ -11,7 +11,7 @@ These pin four real bugs that shipped because CI only tested `scripts.bambu`:
   (c) The download success path must be able to resolve `_record_download_success`
       (it was a NameError) -- bambu_cli/bambu.py _cmd_download.
   (d) snapshot must prefer the direct camera grab and NOT shell out to Docker when
-      a frame is obtained -- bambu_cli/bambu.py _cmd_snapshot + _grab_camera_frame_direct.
+      a frame is obtained -- bambu_cli/camera.py _cmd_snapshot + _grab_camera_frame_direct.
 """
 
 import os
@@ -297,18 +297,21 @@ def test_c_cmd_download_references_record_download_success_without_nameerror():
 
 
 def test_d_snapshot_uses_direct_grab_not_docker():
+    from bambu_cli.camera import _cmd_snapshot
+
     jpeg = b"\xff\xd8" + b"\x00" * 256 + b"\xff\xd9"
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "snap.jpg")
         args = types.SimpleNamespace(output=outpath, json=False)
 
-        with (
-            patch.object(bambu, "_grab_camera_frame_direct", return_value=jpeg),
-            patch.object(bambu, "load_access_code", return_value="ACODE"),
-            patch.object(bambu.subprocess, "run") as mock_run,
-            patch.object(bambu.shutil, "which", return_value="/usr/bin/docker"),
-        ):
-            bambu._cmd_snapshot(args)
+        mock_run = MagicMock()
+        _cmd_snapshot(
+            args,
+            grab_frame=lambda printer: jpeg,
+            which=lambda name: "/usr/bin/docker",
+            subprocess_run=mock_run,
+            access_code_loader=lambda: "ACODE",
+        )
 
         # File written with the direct-grab bytes
         assert os.path.exists(outpath)
