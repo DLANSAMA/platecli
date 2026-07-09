@@ -143,8 +143,8 @@ jobs:
         run: >
           uvx mypy
           bambu_cli/ams.py bambu_cli/bambu.py bambu_cli/camera.py bambu_cli/cli.py
-          bambu_cli/commands.py bambu_cli/config.py bambu_cli/constants.py bambu_cli/context.py
-          bambu_cli/errors.py bambu_cli/job.py bambu_cli/logging_utils.py bambu_cli/netsafety.py
+          bambu_cli/commands bambu_cli/config.py bambu_cli/constants.py bambu_cli/context.py
+          bambu_cli/errors.py bambu_cli/job bambu_cli/logging_utils.py bambu_cli/netsafety.py
           bambu_cli/printables.py bambu_cli/utils.py
           bambu_cli/download bambu_cli/protocols bambu_cli/setup_cmd
       - name: no test-awareness in production code (blocking)
