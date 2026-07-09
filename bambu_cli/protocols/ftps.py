@@ -6,10 +6,21 @@ import socket
 import ssl
 import tempfile
 import threading
+from typing import Any
 
 from bambu_cli.utils import _resolve_ip
 
 _SIM_FTP_FILES = {"simulated_file.3mf": 1000}
+
+# Module-level so mypy accepts these in `except` clauses (star-unpack of
+# ftplib.all_errors inline is rejected as non-exception-type).
+_FTP_ERRORS: tuple[type[BaseException], ...] = ftplib.all_errors
+_FTP_SSL_ERRORS: tuple[type[BaseException], ...] = ftplib.all_errors + (ssl.SSLError,)
+_FTP_POOL_ERRORS: tuple[type[BaseException], ...] = ftplib.all_errors + (
+    ssl.SSLError,
+    OSError,
+    AttributeError,
+)
 
 
 class _SimFtp:
@@ -64,6 +75,9 @@ class ImplicitFTPS(ftplib.FTP_TLS):
     fakes instead of patching module globals.
     """
 
+    # Attached after construction by _create_raw_ftp for pin / insecure_tls.
+    printer: Any = None
+
     def connect(
         self,
         host="",
@@ -86,8 +100,9 @@ class ImplicitFTPS(ftplib.FTP_TLS):
         self.af = self.sock.family
         try:
             ctx = _SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            pin = getattr(self, "printer", None) and self.printer.cert_fingerprint
-            if pin or (getattr(self, "printer", None) and self.printer.insecure_tls):
+            printer = self.printer
+            pin = printer.cert_fingerprint if printer is not None else None
+            if pin or (printer is not None and printer.insecure_tls):
                 ctx.check_hostname = False
                 ctx.verify_mode = ssl.CERT_NONE
             else:
@@ -96,7 +111,10 @@ class ImplicitFTPS(ftplib.FTP_TLS):
                 ctx.load_default_certs()
             self.sock = ctx.wrap_socket(self.sock, server_hostname=self.host)
             if pin:
-                actual = hashlib.sha256(self.sock.getpeercert(binary_form=True)).hexdigest().lower()
+                peer_der = self.sock.getpeercert(binary_form=True)
+                if peer_der is None:
+                    raise ssl.SSLError("No peer certificate to verify fingerprint against")
+                actual = hashlib.sha256(peer_der).hexdigest().lower()
                 if actual != pin.lower():
                     raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {pin.lower()}, got {actual}")
             self.file = self.sock.makefile("r", encoding=self.encoding)
@@ -120,9 +138,13 @@ class ImplicitFTPS(ftplib.FTP_TLS):
         if secure and isinstance(self.sock, ssl.SSLSocket):
             session = self.sock.session
             conn = self.sock.context.wrap_socket(conn, server_hostname=self.host, session=session)
-            pin = getattr(self, "printer", None) and self.printer.cert_fingerprint
+            printer = self.printer
+            pin = printer.cert_fingerprint if printer is not None else None
             if pin:
-                actual = hashlib.sha256(conn.getpeercert(binary_form=True)).hexdigest().lower()
+                peer_der = conn.getpeercert(binary_form=True)
+                if peer_der is None:
+                    raise ssl.SSLError("No peer certificate to verify fingerprint against")
+                actual = hashlib.sha256(peer_der).hexdigest().lower()
                 if actual != pin.lower():
                     # Close the data socket before re-raising so a pin mismatch
                     # does not leak the FD (no try/finally around wrap otherwise).
@@ -136,7 +158,7 @@ class ImplicitFTPS(ftplib.FTP_TLS):
             # conn.unwrap() until the socket times out (and then treat the
             # completed transfer as failed). Skip the shutdown handshake;
             # the control-channel 226 already confirms the transfer.
-            conn.unwrap = lambda: conn
+            conn.unwrap = lambda: conn  # type: ignore[method-assign]
         return conn, size
 
 
@@ -230,9 +252,9 @@ class ConnectionManager:
                 with self._ftp_usage_lock:
                     client.voidcmd("NOOP")
                 return PooledFTPWrapper(client, self)
-            except (*ftplib.all_errors, ssl.SSLError, OSError, AttributeError):
+            except _FTP_POOL_ERRORS:
                 with self._lock:
-                    if self._ftp_client is client:
+                    if self._ftp_client is client and client is not None:
                         try:
                             client.close()
                         except Exception:

@@ -145,10 +145,10 @@ def create_mqtt_client(printer, client_id=""):
                     orig_handshake(*hs_args, **hs_kwargs)
                     _verify_pin()
 
-                tls_sock.do_handshake = do_handshake_with_pinning
+                tls_sock.do_handshake = do_handshake_with_pinning  # type: ignore[method-assign]
             return tls_sock
 
-        ctx.wrap_socket = wrap_socket_with_pinning
+        ctx.wrap_socket = wrap_socket_with_pinning  # type: ignore[method-assign]
         client.tls_set_context(ctx)
         client.tls_insecure_set(True)
     else:
@@ -455,7 +455,7 @@ def monitor_status(args):
     received_terminal = threading.Event()
     show_progress_bar = not json_mode and sys.stdout.isatty()
     client = create_mqtt_client(printer)
-    userdata = {}
+    userdata: dict = {}
     client.user_data_set(userdata)
 
     def on_connect(client, userdata, flags, rc, properties=None):
@@ -560,6 +560,8 @@ def _get_and_verify_cert_pem(host, port, expected_fingerprint, timeout=5):
         der = tls.getpeercert(binary_form=True)
         from bambu_cli.config import fingerprint_sha256
 
+        if der is None:
+            raise ssl.SSLError("No peer certificate to export as PEM")
         actual = fingerprint_sha256(der)
         if actual.lower() != expected_fingerprint.lower():
             raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {expected_fingerprint}, got {actual}")

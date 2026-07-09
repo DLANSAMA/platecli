@@ -213,6 +213,7 @@ def cmd_slice(
                     detected_profiles_dir=detected_profiles,
                 )
                 abort("", exit_code=EXIT_CONFIG_ERROR)
+            assert discovered_process is not None  # for type checkers; abort is NoReturn above
             process = discovered_process
 
         for path, name in [(machine, "machine"), (filament, "filament")]:

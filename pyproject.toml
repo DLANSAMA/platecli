@@ -81,14 +81,8 @@ python_version = "3.10"
 follow_imports = "silent"
 ignore_missing_imports = true
 warn_unused_ignores = true
-check_untyped_defs = false
-# Blocklist (not allowlist): everything in bambu_cli is checked except these.
-# - printer.py: exception-group / ftplib error typing residuals
-# - slicer/: assignment / optional IO residuals after the package split
-exclude = [
-    "bambu_cli/printer\\.py$",
-    "bambu_cli/slicer/",
-]
+check_untyped_defs = true
+# Full-package typing: no residual excludes (printer.py + slicer/ included).
 
 [tool.bandit]
 exclude_dirs = ["tests", ".claude", "scripts"]

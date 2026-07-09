@@ -15,9 +15,14 @@ _BACKEND: Any = logging.getLogger("bambu")
 
 
 class LoggerProxy:
-    """Attribute-forwarding proxy to the current process logger backend."""
+    """Attribute-forwarding proxy to the current process logger backend.
 
-    def __getattr__(self, name: str):
+    Only ``__getattr__`` is forwarded so ``patch.object(logger, "warning")`` and
+    attribute assignment (e.g. ``logger.propagate = False`` in setup_logging)
+    stay on the proxy instance and do not rebind the real logging.Logger.
+    """
+
+    def __getattr__(self, name: str) -> Any:
         return getattr(_BACKEND, name)
 
 

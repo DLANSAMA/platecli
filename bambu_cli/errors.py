@@ -6,6 +6,8 @@ translates them into process exit codes and the standard ``--json`` error payloa
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 from bambu_cli.constants import (
     EXIT_COMMAND_ERROR,
     EXIT_CONFIG_ERROR,
@@ -129,7 +131,14 @@ _EXIT_TO_EXC = {
 }
 
 
-def abort(message: str = "", *, exit_code: int = EXIT_COMMAND_ERROR, failed_step=None, detail=None, next_command=None):
+def abort(
+    message: str = "",
+    *,
+    exit_code: int = EXIT_COMMAND_ERROR,
+    failed_step=None,
+    detail=None,
+    next_command=None,
+) -> NoReturn:
     """Raise the appropriate structured error for ``exit_code`` (domain code never calls ``sys.exit``)."""
     cls = _EXIT_TO_EXC.get(exit_code, BambuError)
     raise cls(

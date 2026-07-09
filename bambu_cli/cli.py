@@ -46,7 +46,7 @@ def setup_logging(verbose=False, json_mode=False):
     for h in logger.handlers[:]:
         logger.removeHandler(h)
 
-    logger.propagate = False
+    logger.propagate = False  # type: ignore[attr-defined]  # LoggerProxy accepts instance attrs
     logger.setLevel(level)
     logger.addHandler(handler)
     logging_module.getLogger("paho").setLevel(logging_module.WARNING)

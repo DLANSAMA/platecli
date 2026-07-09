@@ -68,7 +68,8 @@ def _get_safe_connection(host, port, timeout, source_address):
 
         # Connect directly to the validated IP to prevent TOCTOU/DNS rebinding
         try:
-            return socket.create_connection((ip, port), timeout, source_address)
+            connect_port = int(port) if port is not None else 0
+            return socket.create_connection((str(ip), connect_port), timeout, source_address)
         except OSError:
             continue
 
@@ -81,15 +82,25 @@ def _get_safe_connection(host, port, timeout, source_address):
 
 class SafeHTTPConnection(http.client.HTTPConnection):
     def connect(self):
-        self.sock = _get_safe_connection(self.host, self.port, self.timeout, self.source_address)
+        self.sock = _get_safe_connection(
+            self.host,
+            self.port,
+            self.timeout,
+            self.source_address,  # type: ignore[attr-defined]
+        )
 
 
 class SafeHTTPSConnection(http.client.HTTPSConnection):
     def connect(self):
-        sock = _get_safe_connection(self.host, self.port, self.timeout, self.source_address)
-        # Wrap with SSL using the original hostname for SNI
+        sock = _get_safe_connection(
+            self.host,
+            self.port,
+            self.timeout,
+            self.source_address,  # type: ignore[attr-defined]
+        )
+        # Wrap with SSL using the original hostname for SNI.
         try:
-            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)  # type: ignore[attr-defined]
         except Exception:
             try:
                 sock.close()
@@ -116,7 +127,7 @@ class SafeHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
             )
         new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new_req is not None:
-            new_req._bambu_redirect_hops = hop_count
+            new_req._bambu_redirect_hops = hop_count  # type: ignore[attr-defined]
         return new_req
 
 

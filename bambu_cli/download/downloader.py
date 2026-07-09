@@ -4,6 +4,7 @@ import os
 import tempfile
 import urllib.error
 import urllib.request
+from typing import cast
 from urllib.parse import urlparse
 
 from bambu_cli.cli import (
@@ -356,8 +357,11 @@ def _cmd_download(
                 except ImportError:
                     pass
 
+                # partial_path is always set before the transfer body (archive or
+                # _download_partial_path); cast keeps mypy happy without a runtime branch.
+                download_path = cast(str, partial_path)
                 try:
-                    with open(partial_path, "wb") as f:
+                    with open(download_path, "wb") as f:
                         while True:
                             chunk = resp.read(chunk_size)
                             if not chunk:
@@ -382,7 +386,7 @@ def _cmd_download(
                         progress.stop()
 
                 if download_exceeded_limit:
-                    _remove_partial_file(partial_path)
+                    _remove_partial_file(download_path)
                     _reject_oversized_download(
                         args,
                         source_url,
@@ -394,7 +398,7 @@ def _cmd_download(
                     )
 
                 if total_size is not None and downloaded < total_size:
-                    _remove_partial_file(partial_path)
+                    _remove_partial_file(download_path)
                     message = f"Download ended early: received {downloaded} of {total_size} bytes."
                     logger.error(message)
                     emit_json_error(
@@ -412,9 +416,10 @@ def _cmd_download(
                     )
                     abort("", exit_code=EXIT_NETWORK_ERROR)
 
-            size = os.path.getsize(partial_path)
+            finished_path = cast(str, partial_path)
+            size = os.path.getsize(finished_path)
             if size <= 0:
-                _remove_partial_file(partial_path)
+                _remove_partial_file(finished_path)
                 message = "Downloaded file is empty; refusing to use it."
                 logger.error(message)
                 emit_json_error(
@@ -431,7 +436,7 @@ def _cmd_download(
                 )
                 abort("", exit_code=EXIT_FILE_ERROR)
             if replace_on_success:
-                os.replace(partial_path, outpath)
+                os.replace(finished_path, outpath)
                 partial_path = None
             if archive_download:
                 archive_path = outpath

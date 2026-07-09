@@ -25,7 +25,7 @@ This file is a short **remaining-gaps** list. Refresh after each phase.
 
 | Gap | Notes |
 |-----|-------|
-| mypy on `printer.py` / `slicer/` (blocklisted until residual typing fixed) | Exception-group / optional-type residuals |
+| mypy on `printer.py` / `slicer/` | Done — full package + `check_untyped_defs` (Phase 3 typing PR) |
 | Hermetic fake Orca binary in CI | Would raise mutation kill rate on `slicer/output._finalize_slice` |
 | Mutation score on `predict` / `validation` emit paths | Honest ~30–33%; cosmetic/equivalent survivors accepted |
 | Live printer lab (manual pre-release) | Documented: `docs/live-printer-smoke.md` (`BAMBU_LIVE=1`) |

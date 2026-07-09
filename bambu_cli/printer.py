@@ -12,6 +12,15 @@ from bambu_cli.protocols import mqtt as mqtt_protocol
 
 logger = logging.getLogger("bambu.printer")
 
+# mypy-friendly exception tuples (star-unpack of ftplib.all_errors is rejected).
+_FTP_SSL_ERRORS: tuple[type[BaseException], ...] = ftplib.all_errors + (ssl.SSLError,)
+_FTP_SSL_OS_ERRORS: tuple[type[BaseException], ...] = ftplib.all_errors + (ssl.SSLError, OSError)
+_FTP_SIZE_ERRORS: tuple[type[BaseException], ...] = ftplib.all_errors + (
+    ssl.SSLError,
+    TypeError,
+    ValueError,
+)
+
 
 class BambuPrinter:
     """
@@ -58,11 +67,11 @@ class BambuPrinter:
         finally:
             try:
                 client.quit()
-            except (*ftplib.all_errors, ssl.SSLError):
+            except _FTP_SSL_ERRORS:
                 pass
             try:
                 client.close()
-            except (*ftplib.all_errors, ssl.SSLError):
+            except _FTP_SSL_ERRORS:
                 pass
 
     def _probe_remote_size(self, ftp, remote_path: str) -> Optional[int]:
@@ -70,7 +79,7 @@ class BambuPrinter:
         try:
             size = ftp.size(remote_path)
             return int(size) if size is not None else None
-        except (*ftplib.all_errors, ssl.SSLError, TypeError, ValueError):
+        except _FTP_SIZE_ERRORS:
             return None
 
     def _backoff_delay(self, attempt: int) -> float:
@@ -157,7 +166,7 @@ class BambuPrinter:
                 else:
                     logger.error(f"Upload failed: {e}")
                 return False
-            except (*ftplib.all_errors, ssl.SSLError) as e:
+            except _FTP_SSL_ERRORS as e:
                 if attempt < max_retries:
                     logger.warning(f"⚠️ Upload attempt {attempt + 1} failed: {e}")
                     # Probe remote size to decide whether to resume, restart, or shortcut.
@@ -183,7 +192,7 @@ class BambuPrinter:
                                     uploaded_bytes = 0
                                 else:
                                     uploaded_bytes = remote_size
-                    except (*ftplib.all_errors, ssl.SSLError):
+                    except _FTP_SSL_ERRORS:
                         pass
                     delay = self._backoff_delay(attempt)
                     logger.info(f"   Retrying in {delay:.1f}s...")
@@ -208,6 +217,7 @@ class BambuPrinter:
         import tempfile
 
         directory = os.path.dirname(os.path.abspath(local_path)) or "."
+        partial_fd: Optional[int]
         partial_fd, partial_path = tempfile.mkstemp(
             prefix=f".{os.path.basename(local_path) or 'download'}.", suffix=".part", dir=directory
         )
@@ -231,7 +241,7 @@ class BambuPrinter:
 
             os.replace(partial_path, local_path)
             return True
-        except (*ftplib.all_errors, ssl.SSLError, OSError) as e:
+        except _FTP_SSL_OS_ERRORS as e:
             logger.error(f"Download failed: {e}")
             if partial_fd is not None:  # pragma: no cover -- fd not yet transferred
                 with contextlib.suppress(OSError):
@@ -246,7 +256,7 @@ class BambuPrinter:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp:
                 ftp.delete(remote_path)
             return True
-        except (*ftplib.all_errors, ssl.SSLError) as e:
+        except _FTP_SSL_ERRORS as e:
             logger.error(f"Delete failed: {e}")
             return False
 
@@ -255,7 +265,7 @@ class BambuPrinter:
         try:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp:
                 return ftp.nlst(remote_dir)
-        except (*ftplib.all_errors, ssl.SSLError) as e:
+        except _FTP_SSL_ERRORS as e:
             logger.error(f"List files failed: {e}")
             return None
 

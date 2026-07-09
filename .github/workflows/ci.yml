@@ -139,7 +139,7 @@ jobs:
         run: |
           uv export --frozen --no-emit-project --format requirements-txt > audit-requirements.txt
           uvx pip-audit -r audit-requirements.txt
-      - name: mypy (blocking; whole package, exclude residual printer/slicer via pyproject)
+      - name: mypy (blocking; full bambu_cli package, check_untyped_defs)
         run: uvx mypy -p bambu_cli
       - name: no test-awareness in production code (blocking)
         run: |
