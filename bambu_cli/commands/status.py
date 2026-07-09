@@ -29,7 +29,7 @@ def cmd_status(args, ctx=None):
 
     ams = parse_ams(data)
 
-    if args.json:
+    if bool(_namespace_get(args, "json", False)):
         payload = {
             "status": "ok",
             "command": "status",

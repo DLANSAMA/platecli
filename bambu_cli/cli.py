@@ -295,6 +295,7 @@ def build_parser():
     p_status.add_argument(
         "--json",
         action="store_true",
+        default=argparse.SUPPRESS,
         help="Emit machine-readable status summary with raw printer data under \x27printer\x27",
     )
     p_status.add_argument(
@@ -303,12 +304,18 @@ def build_parser():
 
     p_light = sub.add_parser("light", parents=[get_global_parser()], help="Control chamber light")
     p_light.add_argument("action", choices=["on", "off"])
-    p_light.add_argument("--json", action="store_true", help="Emit machine-readable light summary")
+    p_light.add_argument(
+        "--json", action="store_true", default=argparse.SUPPRESS, help="Emit machine-readable light summary"
+    )
 
     p_pause = sub.add_parser("pause", parents=[get_global_parser()], help="Pause current print")
-    p_pause.add_argument("--json", action="store_true", help="Emit machine-readable pause summary")
+    p_pause.add_argument(
+        "--json", action="store_true", default=argparse.SUPPRESS, help="Emit machine-readable pause summary"
+    )
     p_resume = sub.add_parser("resume", parents=[get_global_parser()], help="Resume paused print")
-    p_resume.add_argument("--json", action="store_true", help="Emit machine-readable resume summary")
+    p_resume.add_argument(
+        "--json", action="store_true", default=argparse.SUPPRESS, help="Emit machine-readable resume summary"
+    )
 
     p_stop = sub.add_parser("stop", parents=[get_global_parser()], help="Stop current print")
     p_stop.add_argument("--confirm", action="store_true", help="Confirm stop")

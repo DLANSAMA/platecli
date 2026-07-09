@@ -21,6 +21,26 @@ class TestMain(unittest.TestCase):
         mock_cmd_status.assert_called_once()
         mock_setup_logging.assert_called_once_with(False)
 
+    def test_global_json_before_subcommand_survives_override(self):
+        # Regression: subcommands that re-declare --json (status/light/pause/resume)
+        # must not clobber the global `--json` placed before the subcommand back to
+        # False — the re-declared flag must share the global's argparse.SUPPRESS default.
+        import bambu_cli.cli
+
+        parser = bambu_cli.cli.build_parser()
+        for argv in (
+            ["--json", "status"],
+            ["--json", "light", "on"],
+            ["--json", "pause"],
+            ["--json", "resume"],
+            ["--json", "files"],
+        ):
+            with self.subTest(argv=argv):
+                args = parser.parse_args(argv)
+                self.assertTrue(getattr(args, "json", False), argv)
+        # …and absent when not requested (SUPPRESS default, no clobbering to False).
+        self.assertFalse(hasattr(parser.parse_args(["status"]), "json"))
+
     @patch("sys.argv", ["bambu.py", "--sim", "status"])
     @patch("bambu_cli.commands.cmd_status")
     @patch("bambu_cli.cli.setup_logging")
