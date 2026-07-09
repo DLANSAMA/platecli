@@ -28,7 +28,7 @@ Remaining gap scratch list: [docs/test-backlog.md](docs/test-backlog.md).
 
 ## Code conventions
 
-- New command logic goes in `bambu_cli/commands.py` (or a new focused module) using `get_printer()` / `RuntimeContext` — do not add new module globals to `bambu_cli/bambu.py`.
+- New command logic goes in `bambu_cli/commands/` (or a new focused module) using `get_printer()` / `RuntimeContext` — do not add new module globals to `bambu_cli/bambu.py`.
 - Lint with `uvx ruff check bambu_cli`; typed modules are checked with mypy (see the CI mypy step for the current list — add fully annotated modules there).
 - Follow `docs/quality-roadmap.md` and `docs/test-backlog.md` conventions when adding tests.
 

@@ -32,5 +32,3 @@ from bambu_cli.commands.setup_wrappers import (  # noqa: F401
     cmd_snapshot,
 )
 from bambu_cli.commands.status import cmd_status  # noqa: F401
-from bambu_cli.job import generate_print_payload  # noqa: F401 — used by print; re-export for import stability
-from bambu_cli.utils import get_sequence_id  # noqa: F401 — re-export for import stability

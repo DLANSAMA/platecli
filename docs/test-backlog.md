@@ -25,7 +25,7 @@ This file is a short **remaining-gaps** list. Refresh after each phase.
 
 | Gap | Notes |
 |-----|-------|
-| mypy on `printer.py` / `slicer.py` | Exception-group / optional-type residuals |
+| mypy on `printer.py` / `slicer/` (blocklisted until residual typing fixed) | Exception-group / optional-type residuals |
 | Hermetic fake Orca binary in CI | Slicer process paths still `# pragma: no cover` |
 | Per-module cov-fail-under | Optional; total 92% + residual policy is the gate |
 | Live printer scheduled lab | Optional A+ stretch |

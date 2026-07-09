@@ -42,6 +42,8 @@ REQUIRED_SNIPPETS = {
     "installed version smoke": "bambu-cli --version",
     "wheel no-deps reinstall": "--force-reinstall --no-deps --no-index --find-links wheelhouse",
     "sdist and wheel package smoke": "python -m build --sdist --wheel --outdir dist",
+    # Typing: whole-package mypy (blocklist of residuals lives in pyproject.toml).
+    "mypy whole-package blocklist gate": "uvx mypy -p bambu_cli",
 }
 
 FORBIDDEN_SNIPPETS = {

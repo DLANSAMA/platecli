@@ -1,5 +1,6 @@
 """Start a print of a file already on the printer."""
 
+from bambu_cli import utils
 from bambu_cli.cli import _exit_code_from_system_exit, _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
 from bambu_cli.context import RuntimeContext
@@ -65,9 +66,7 @@ def cmd_print(args, ctx=None):
         from bambu_cli.printer import get_printer
 
         printer = get_printer()
-        from bambu_cli import utils as _utils
-
-        _utils._LAST_ERROR_PAYLOAD = None
+        utils._LAST_ERROR_PAYLOAD = None
         from bambu_cli.protocols.mqtt import execute_print_command
 
         execute_print_command(printer, payload, basename, dry_run=dry_run)

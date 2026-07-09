@@ -3,7 +3,7 @@
 **Date:** 2026-07-08  
 **Tool:** mutmut 3.6.0  
 **Scope (baseline):** `bambu_cli/download/naming.py`, `bambu_cli/download/validation.py`, `bambu_cli/netsafety.py`  
-**Not in this baseline (too large for a quick run; expand later):** `bambu_cli/slicer.py`, `bambu_cli/job.py`, rest of `bambu_cli/download/`
+**Not in this baseline (too large for a quick run; expand later):** `bambu_cli/slicer/`, `bambu_cli/job/`, rest of `bambu_cli/download/`
 
 ## Score
 
@@ -64,7 +64,7 @@ Safety-critical gates that *do* kill mutants well:
 
 ## Expanding scope
 
-To include `slicer.py` / `job.py` / full `download/`:
+To include `slicer/` / `job/` / full `download/`:
 
 1. Edit `[tool.mutmut].only_mutate` in `pyproject.toml` to add those paths.
 2. Expect multi-hour runs and high RAM during mutant generation.

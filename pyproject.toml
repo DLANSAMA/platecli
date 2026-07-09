@@ -72,13 +72,22 @@ ignore = ["SIM105"]
 "bambu_cli/protocols/mqtt.py" = ["B023"]
 
 [tool.mypy]
-# Gradual typing: only the modules listed in CI's mypy step are checked.
-# Add a module here + to the CI list once it is fully annotated.
+# Rot-proof gate: check the whole bambu_cli package by default (`uvx mypy -p bambu_cli`).
+# New modules under bambu_cli/ are type-checked automatically — no CI allowlist to keep
+# in sync. Exclude only residual modules that are not yet fully typed (Phase 3 work);
+# remove a path from `exclude` once it is clean rather than adding files to an allowlist.
 python_version = "3.10"
 follow_imports = "silent"
 ignore_missing_imports = true
 warn_unused_ignores = true
 check_untyped_defs = false
+# Blocklist (not allowlist): everything in bambu_cli is checked except these.
+# - printer.py: exception-group / ftplib error typing residuals
+# - slicer/: assignment / optional IO residuals after the package split
+exclude = [
+    "bambu_cli/printer\\.py$",
+    "bambu_cli/slicer/",
+]
 
 [tool.bandit]
 exclude_dirs = ["tests", ".claude", "scripts"]
@@ -88,7 +97,7 @@ exclude_dirs = ["tests", ".claude", "scripts"]
 skips = ["B101", "B310", "B104", "B402", "B321"]
 
 # Mutation testing (Phase 1 baseline; not CI-gated — see docs/mutation-baseline.md).
-# Full slicer.py/job.py mutation is too large for a quick baseline; the reproduce
+# Full slicer/ / job/ mutation is too large for a quick baseline; the reproduce
 # script can widen only_mutate later. Baseline targets pure safety gates first.
 [tool.mutmut]
 source_paths = ["bambu_cli"]
@@ -96,7 +105,7 @@ only_mutate = [
     "bambu_cli/download/naming.py",
     "bambu_cli/download/validation.py",
     "bambu_cli/netsafety.py",
-    # slicer.py / job.py / download/downloader.py are large; include via:
+    # slicer/ / job/ / download/downloader.py are large; include via:
     #   mutmut run   after temporarily expanding only_mutate (see docs/mutation-baseline.md)
 ]
 # Focused suite for mutation speed (not the full 500+ suite).

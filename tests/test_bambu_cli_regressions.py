@@ -4,14 +4,14 @@ legacy `scripts.bambu` copy that the main suite imports.
 These pin four real bugs that shipped because CI only tested `scripts.bambu`:
 
   (a) Slicer must accept a valid .3mf when OrcaSlicer exits non-zero ONLY because
-      of headless GL / thumbnail noise (`_benign_rc` near bambu_cli/slicer.py:585),
+      of headless GL / thumbnail noise (`_benign_rc` in bambu_cli/slicer/output.py),
       but must still FAIL on a genuine error ("nothing to be sliced", no .3mf).
   (b) FTPS teardown must use close(), never the hanging quit()
       (bambu_cli/protocols/ftps.py ConnectionManager.clear / PooledFTPWrapper.__exit__).
   (c) The download success path must be able to resolve `_record_download_success`
-      (it was a NameError) -- bambu_cli/bambu.py _cmd_download.
+      (it was a NameError) -- bambu_cli/download/downloader.py `_cmd_download`.
   (d) snapshot must prefer the direct camera grab and NOT shell out to Docker when
-      a frame is obtained -- bambu_cli/camera.py _cmd_snapshot + _grab_camera_frame_direct.
+      a frame is obtained -- bambu_cli/camera.py `_cmd_snapshot` + `_grab_camera_frame_direct`.
 """
 
 import os

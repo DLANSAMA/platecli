@@ -43,6 +43,12 @@ CLI help smoke auto-discover modules/commands (`scripts/syntax_smoke.py`,
 `scripts/cli_help_smoke.py`). Adding a module under `bambu_cli/` or a subcommand
 in `cli.py` is enough — no triplicated lists.
 
+**Typing (mypy):** CI runs `uvx mypy -p bambu_cli` over the whole package. Scope
+is configured in `pyproject.toml` as a **blocklist** (`[tool.mypy].exclude`):
+only residual modules (`printer.py`, `slicer/`) are skipped until typed. A new
+module under `bambu_cli/` is checked automatically — do not maintain a CI file
+allowlist.
+
 New command logic goes in `commands/` (or a new focused package) using
 `get_printer()` / `RuntimeContext` and injectable collaborators.
 

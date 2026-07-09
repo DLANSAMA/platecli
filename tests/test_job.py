@@ -1,4 +1,4 @@
-"""Tests for bambu_cli/job.py: the job/send download->slice->upload->print
+"""Tests for bambu_cli/job/: the job/send download->slice->upload->print
 orchestrator. Covers docs/test-backlog.md P1.
 
 Ground rules (docs/test-backlog.md): never touch a real printer or the

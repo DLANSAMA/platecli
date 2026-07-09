@@ -568,7 +568,7 @@ def test_doctor_success_shape(monkeypatch, tmp_path, capsys):
         },
     )
     # docs/api.md shows printer_ip: "<redacted>" always; actual behavior redacts
-    # unless --verbose is passed (see bambu_cli/commands.py cmd_doctor). We are
+    # unless --verbose is passed (see bambu_cli/commands/doctor.py cmd_doctor). We are
     # not passing --verbose here, so this locks the documented redaction.
     assert payload["printer_ip"] == "<redacted>"
 
