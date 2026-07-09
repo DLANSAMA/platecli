@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/print.json",
+  "title": "bambu-cli print success or confirmation envelope",
+  "type": "object",
+  "required": ["status", "command", "file"],
+  "properties": {
+    "status": {"type": "string"},
+    "command": {"const": "print"},
+    "file": {"type": "string"},
+    "printed": {"type": "boolean"},
+    "dry_run": {"type": "boolean"},
+    "next_command": {"type": "array"}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/snapshot.json",
+  "title": "bambu-cli snapshot success envelope",
+  "type": "object",
+  "required": ["status", "command", "output", "size_bytes"],
+  "properties": {
+    "status": {"const": "saved"},
+    "command": {"const": "snapshot"},
+    "output": {"type": "string", "minLength": 1},
+    "size_bytes": {"type": "integer"},
+    "method": {"type": "string"},
+    "camera_image": {"type": "string"},
+    "docker_container": {"type": "string"}
+  },
+  "additionalProperties": true
+}

@@ -83,6 +83,13 @@ def test_schemas_exist():
         "job_ok.json",
         "preflight.json",
         "doctor.json",
+        "gcode.json",
+        "snapshot.json",
+        "light.json",
+        "pause.json",
+        "resume.json",
+        "print.json",
+        "delete.json",
     ):
         assert (SCHEMA_DIR / name).is_file()
 
@@ -182,3 +189,114 @@ def test_job_dry_run_matches_schema(monkeypatch, tmp_path, capsys):
     main()
     payload = json.loads(capsys.readouterr().out)
     _validate(payload, _load_schema("job_ok.json"))
+
+
+def test_gcode_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
+    config_path = tmp_path / "config" / "cfg.json"
+    _write_valid_config(config_path)
+    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "gcode", "G28", "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    with pytest.raises(SystemExit):
+        main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("gcode.json"))
+    assert payload["status"] == "confirmation_required"
+    assert payload["sent"] is False
+
+
+def test_gcode_sent_fixture_matches_schema():
+    payload = {"status": "sent", "command": "gcode", "gcode": "G28", "sent": True}
+    _validate(payload, _load_schema("gcode.json"))
+
+
+def test_print_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
+    config_path = tmp_path / "config" / "cfg.json"
+    _write_valid_config(config_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["bambu-cli", "--sim", "print", "cube.gcode.3mf", "--json"],
+    )
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    main()  # print without --confirm returns without SystemExit
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("print.json"))
+    assert payload["status"] == "confirmation_required"
+    assert payload["printed"] is False
+
+
+def test_print_started_fixture_matches_schema():
+    payload = {
+        "status": "print_started",
+        "command": "print",
+        "file": "cube.gcode.3mf",
+        "printed": True,
+        "dry_run": False,
+    }
+    _validate(payload, _load_schema("print.json"))
+
+
+def test_delete_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
+    config_path = tmp_path / "config" / "cfg.json"
+    _write_valid_config(config_path)
+    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "delete", "cube.gcode.3mf", "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    with pytest.raises(SystemExit):
+        main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("delete.json"))
+    assert payload["status"] == "confirmation_required"
+    assert payload["deleted"] is False
+
+
+def test_delete_success_fixture_matches_schema():
+    payload = {
+        "status": "deleted",
+        "command": "delete",
+        "file": "cube.gcode.3mf",
+        "deleted": True,
+    }
+    _validate(payload, _load_schema("delete.json"))
+
+
+def test_light_success_fixture_matches_schema():
+    payload = {"status": "light_changed", "command": "light", "action": "on", "changed": True}
+    _validate(payload, _load_schema("light.json"))
+
+
+def test_pause_success_fixture_matches_schema():
+    payload = {"status": "paused", "command": "pause", "paused": True}
+    _validate(payload, _load_schema("pause.json"))
+
+
+def test_resume_success_fixture_matches_schema():
+    payload = {"status": "resumed", "command": "resume", "resumed": True}
+    _validate(payload, _load_schema("resume.json"))
+
+
+def test_snapshot_success_fixture_matches_schema():
+    payload = {
+        "status": "saved",
+        "command": "snapshot",
+        "output": "/tmp/snap.png",
+        "size_bytes": 12000,
+        "method": "direct",
+    }
+    _validate(payload, _load_schema("snapshot.json"))
+
+
+def test_device_command_errors_match_error_envelope(monkeypatch, tmp_path, capsys):
+    """Invalid gcode still uses the shared error envelope."""
+    config_path = tmp_path / "config" / "cfg.json"
+    _write_valid_config(config_path)
+    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "gcode", "", "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    with pytest.raises(SystemExit):
+        main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("error_envelope.json"))
+    assert payload["command"] == "gcode"

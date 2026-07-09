@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/gcode.json",
+  "title": "bambu-cli gcode success or confirmation envelope",
+  "type": "object",
+  "required": ["status", "command", "gcode", "sent"],
+  "properties": {
+    "status": {"type": "string"},
+    "command": {"const": "gcode"},
+    "gcode": {"type": "string"},
+    "sent": {"type": "boolean"},
+    "next_command": {"type": "array"}
+  },
+  "additionalProperties": true
+}

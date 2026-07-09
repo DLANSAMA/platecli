@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/resume.json",
+  "title": "bambu-cli resume success envelope",
+  "type": "object",
+  "required": ["status", "command", "resumed"],
+  "properties": {
+    "status": {"const": "resumed"},
+    "command": {"const": "resume"},
+    "resumed": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}
