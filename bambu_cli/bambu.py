@@ -85,12 +85,13 @@ def _redacted_serial():
 # without going through __getattr__.
 from bambu_cli.cli import main
 
+# Phase 2 Stage B: bambu_cli.download is no longer re-exported through the
+# facade — import download helpers from bambu_cli.download.* (or inject them).
 _FACADE_MODULES = (
     "bambu_cli.constants",
     "bambu_cli.cli",
     "bambu_cli.config",
     "bambu_cli.slicer",
-    "bambu_cli.download",
     "bambu_cli.netsafety",
     "bambu_cli.printables",
     "bambu_cli.job",

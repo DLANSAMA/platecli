@@ -6,7 +6,7 @@ short-read detection, empty-file rejection, and Content-Disposition
 filename hardening (RFC 2231 decoding + extension re-check).
 
 Ground rules (docs/test-backlog.md): patch functions in the module that
-calls them (bambu_cli.download.*), patch runtime state on bambu_cli.bambu,
+injects collaborators into _cmd_download, patch runtime state via settings_ctx,
 never touch the network.
 """
 
@@ -109,7 +109,7 @@ def test_redirect_to_private_ip_blocked(tmp_path):
     same as the initial hop (per-hop SSRF check via _get_safe_connection)."""
     addr_info = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 443))]
     download._dns_cache.clear()
-    with patch.object(download.socket, "getaddrinfo", return_value=addr_info):
+    with patch("socket.getaddrinfo", return_value=addr_info):
         with pytest.raises(urllib.error.URLError):
             download._get_safe_connection("internal.example.com", 443, 5, None)
     download._dns_cache.clear()
@@ -125,9 +125,8 @@ def test_redirected_url_with_unsupported_extension_rejected(tmp_path):
     opener = _mock_opener(resp)
     args = _args(tmp_path, original_url)
 
-    with patch.object(download, "build_safe_opener", return_value=opener):
-        with pytest.raises((SystemExit, BambuError)) as excinfo:
-            download._cmd_download(args)
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        download._cmd_download(args, opener_factory=lambda: opener)
 
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
@@ -150,9 +149,8 @@ def test_mid_stream_oversize_deletes_partial_file(tmp_path):
     opener = _mock_opener(resp)
     args = _args(tmp_path, url, max_download_mb=1)
 
-    with patch.object(download, "build_safe_opener", return_value=opener):
-        with pytest.raises((SystemExit, BambuError)) as excinfo:
-            download._cmd_download(args)
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        download._cmd_download(args, opener_factory=lambda: opener)
 
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
@@ -184,9 +182,8 @@ def test_short_read_detected_and_partial_removed(tmp_path):
     opener = _mock_opener(resp)
     args = _args(tmp_path, url, max_download_mb=100)
 
-    with patch.object(download, "build_safe_opener", return_value=opener):
-        with pytest.raises((SystemExit, BambuError)) as excinfo:
-            download._cmd_download(args)
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        download._cmd_download(args, opener_factory=lambda: opener)
 
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_NETWORK_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
@@ -205,9 +202,8 @@ def test_empty_download_rejected(tmp_path):
     opener = _mock_opener(resp)
     args = _args(tmp_path, url, max_download_mb=100)
 
-    with patch.object(download, "build_safe_opener", return_value=opener):
-        with pytest.raises((SystemExit, BambuError)) as excinfo:
-            download._cmd_download(args)
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        download._cmd_download(args, opener_factory=lambda: opener)
 
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
@@ -246,8 +242,7 @@ def test_content_disposition_disallowed_extension_not_smuggled(tmp_path):
     opener = _mock_opener(resp)
     args = _args(tmp_path, url, max_download_mb=100)
 
-    with patch.object(download, "build_safe_opener", return_value=opener):
-        outpath = download._cmd_download(args)
+    outpath = download._cmd_download(args, opener_factory=lambda: opener)
 
     assert not outpath.endswith(".exe")
     assert os.path.splitext(outpath)[1].lower() in DOWNLOADABLE_EXTENSIONS

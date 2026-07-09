@@ -4,6 +4,13 @@ import sys
 import tempfile
 
 from bambu_cli.context import RuntimeContext
+from bambu_cli.download.naming import (
+    _is_print_ready_name,
+    _name_for_message,
+    _portable_basename,
+    _print_ready_error_message,
+    _safe_remote_name,
+)
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
 
@@ -359,16 +366,16 @@ def cmd_upload(args, ctx=None):
         emit_json_error(args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
         abort("", exit_code=EXIT_FILE_ERROR)
 
-    filename = bambu._portable_basename(filepath)
-    if bambu._safe_remote_name(filename) is None:
-        message = f"Refusing to upload file with unsafe name: {bambu._name_for_message(filename)!r}"
+    filename = _portable_basename(filepath)
+    if _safe_remote_name(filename) is None:
+        message = f"Refusing to upload file with unsafe name: {_name_for_message(filename)!r}"
         logger.error(message)
         emit_json_error(
             args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath, remote_name=filename
         )
         abort("", exit_code=EXIT_FILE_ERROR)
-    if not bambu._is_print_ready_name(filename):
-        message = bambu._print_ready_error_message(filename, "upload")
+    if not _is_print_ready_name(filename):
+        message = _print_ready_error_message(filename, "upload")
         logger.error(message)
         emit_json_error(
             args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath, remote_name=filename
@@ -506,7 +513,6 @@ def cmd_upload(args, ctx=None):
 
 def cmd_files(args, ctx=None):
     """List files on the printer."""
-    from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
     from bambu_cli.constants import EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
@@ -519,7 +525,7 @@ def cmd_files(args, ctx=None):
         files = printer.list_files("/model/")
         if files is None:
             raise Exception("Failed to list files via printer API")
-        remote_files = [{"name": bambu._portable_basename(path), "path": path} for path in files]
+        remote_files = [{"name": _portable_basename(path), "path": path} for path in files]
         if json_mode:
             emit_json(
                 {
@@ -554,13 +560,13 @@ def cmd_print(args, ctx=None):
     dry_run = getattr(args, "dry_run", False)
     basename = str(args.file or "")
 
-    if bambu._safe_remote_name(basename) is None:
-        message = f"Refusing to print file with unsafe name: {bambu._name_for_message(basename)!r}"
+    if _safe_remote_name(basename) is None:
+        message = f"Refusing to print file with unsafe name: {_name_for_message(basename)!r}"
         logger.error(message)
         emit_json_error(args, "print", EXIT_FILE_ERROR, message, failed_step="validate", file=basename)
         abort("", exit_code=EXIT_FILE_ERROR)
-    if not bambu._is_print_ready_name(basename):
-        message = bambu._print_ready_error_message(basename, "print")
+    if not _is_print_ready_name(basename):
+        message = _print_ready_error_message(basename, "print")
         logger.error(message)
         emit_json_error(args, "print", EXIT_FILE_ERROR, message, failed_step="validate", file=basename)
         abort("", exit_code=EXIT_FILE_ERROR)
@@ -629,16 +635,19 @@ def cmd_print(args, ctx=None):
     return basename
 
 
-def cmd_download(args):
-    """Download a model file from a remote URL."""
-    from bambu_cli import bambu
+def cmd_download(args, **collaborators):
+    """Download a model file from a remote URL.
 
-    return bambu._cmd_download(args)
+    Optional keyword collaborators (``opener_factory``, ``resolve_printables``,
+    ``noncolliding_path``) are forwarded to the download implementation for tests.
+    """
+    from bambu_cli.download.downloader import _cmd_download
+
+    return _cmd_download(args, **collaborators)
 
 
 def cmd_delete(args, ctx=None):
     """Delete a file from the printer via FTPS."""
-    from bambu_cli import bambu
     from bambu_cli.cli import _namespace_get
     from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
     from bambu_cli.printer import get_printer
@@ -646,8 +655,8 @@ def cmd_delete(args, ctx=None):
 
     ctx = ctx or RuntimeContext.for_request(args)
     filename = str(args.file or "")
-    if bambu._safe_remote_name(filename) is None:
-        message = f"Refusing to delete file with unsafe name: {bambu._name_for_message(filename)!r}"
+    if _safe_remote_name(filename) is None:
+        message = f"Refusing to delete file with unsafe name: {_name_for_message(filename)!r}"
         logger.error(message)
         emit_json_error(args, "delete", EXIT_FILE_ERROR, message, failed_step="validate", file=filename, deleted=False)
         abort("", exit_code=EXIT_FILE_ERROR)

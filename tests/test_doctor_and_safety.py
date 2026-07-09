@@ -261,13 +261,12 @@ class TestBambuSecurity(unittest.TestCase):
         mock_resp.read.side_effect = [b"data", b""]
         mock_opener = MagicMock()
         mock_opener.open.return_value.__enter__.return_value = mock_resp
-        with (
-            patch("bambu_cli.download.build_safe_opener", return_value=mock_opener),
-            patch("builtins.open", mock_open()),
-            patch("bambu_cli.download._noncolliding_path", side_effect=lambda p: p),
-            patch("os.path.getsize", return_value=1024),
-        ):
-            cmd_download(args)
+        with patch("builtins.open", mock_open()), patch("os.path.getsize", return_value=1024):
+            cmd_download(
+                args,
+                opener_factory=lambda: mock_opener,
+                noncolliding_path=lambda p: p,
+            )
 
         self.assertTrue(any("/tmp/passwd.stl" in call[0][0] for call in mock_logger.info.call_args_list))
 

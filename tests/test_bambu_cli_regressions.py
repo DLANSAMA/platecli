@@ -282,7 +282,9 @@ def test_c_cmd_download_references_record_download_success_without_nameerror():
     The original bug was a bare NameError on `_record_download_success` at runtime.
     Assert (1) the symbol appears in the function source and (2) it is importable
     exactly the way the fix imports it (function-scope import)."""
-    src = inspect.getsource(bambu._cmd_download)
+    from bambu_cli.download import downloader as downloader_mod
+
+    src = inspect.getsource(downloader_mod._cmd_download)
     assert "_record_download_success" in src, "download path should call _record_download_success"
     ns = {}
     exec("from bambu_cli.utils import _record_download_success", ns)
@@ -333,7 +335,7 @@ def test_get_safe_connection_blocks_private_ip():
     from bambu_cli import download
 
     addr_info = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.5", 80))]
-    with patch.object(download.socket, "getaddrinfo", return_value=addr_info):
+    with patch("socket.getaddrinfo", return_value=addr_info):
         download._dns_cache.clear()
         with pytest.raises(urllib.error.URLError):
             download._get_safe_connection("evil.example.com", 80, 5, None)
@@ -377,9 +379,8 @@ def test_download_enforces_size_limit_mid_stream(tmp_path):
         url=url, output=str(tmp_path), name=None, max_download_mb=1, json=False, progress=False
     )
 
-    with patch.object(download, "build_safe_opener", return_value=mock_opener):
-        with pytest.raises((SystemExit, BambuError)) as excinfo:
-            download._cmd_download(args)
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        download._cmd_download(args, opener_factory=lambda: mock_opener)
 
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]

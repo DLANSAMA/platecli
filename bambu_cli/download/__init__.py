@@ -1,15 +1,11 @@
 """Model download pipeline: SSRF-safe HTTP, URL/filename validation, ZIP
 extraction, HTML link scraping, and Printables GraphQL resolution.
 
-This package replaces the former ``bambu_cli/download.py`` monolith. Every
-name the old module exposed is re-exported here, so imports and test patch
-targets like ``bambu_cli.download._noncolliding_path`` keep working;
-``downloader.py``/``extract.py`` deliberately call the patchable trio
-(``build_safe_opener``, ``resolve_printables_url``, ``_noncolliding_path``)
-through this namespace.
+Collaborators used by the download command (HTTP opener, Printables resolver,
+collision-safe paths) are **injected** into ``_cmd_download`` /
+``_extract_zip_model`` — tests pass fakes rather than patching this package
+namespace. Re-exports below are for convenient imports, not for mock targets.
 """
-
-import socket  # noqa: F401 -- re-exported for test compat (download.socket patching)
 
 from bambu_cli.download.downloader import (  # noqa: F401
     _cmd_download,
@@ -59,11 +55,6 @@ from bambu_cli.download.validation import (  # noqa: F401
     _validate_http_url_or_exit,
     _validate_max_download_mb_or_exit,
 )
-
-# MAX_DOWNLOAD_REDIRECT_HOPS, _dns_cache, _get_safe_connection, and the Safe*
-# handler classes are re-exported so tests that patch/inspect them via
-# ``bambu_cli.download.<name>`` keep working after the SSRF-safety layer
-# moved to netsafety.py.
 from bambu_cli.netsafety import (  # noqa: F401
     MAX_DOWNLOAD_REDIRECT_HOPS,
     SafeHTTPHandler,

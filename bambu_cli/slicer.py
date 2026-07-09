@@ -17,6 +17,7 @@ import shutil
 import subprocess
 from typing import IO, TYPE_CHECKING, Any
 
+from bambu_cli.download.naming import _portable_basename
 from bambu_cli.logging_utils import logger
 
 if TYPE_CHECKING:
@@ -69,9 +70,8 @@ def _slicer_executable_problem(path: str | None) -> str | None:
 
 
 def _sliced_output_path(filepath: str, output_dir: str | None = None, copies: int = 1) -> str:
-    from bambu_cli import bambu
 
-    basename = os.path.splitext(bambu._portable_basename(filepath))[0]
+    basename = os.path.splitext(_portable_basename(filepath))[0]
     outdir = output_dir or os.path.dirname(os.path.abspath(filepath))
     outfile = f"{basename}_x{copies}_sliced.3mf" if copies > 1 else f"{basename}_sliced.3mf"
     return os.path.join(outdir, outfile)

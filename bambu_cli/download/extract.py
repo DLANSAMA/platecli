@@ -18,7 +18,7 @@ from bambu_cli.download.naming import (
     _sanitize_download_filename,
 )
 from bambu_cli.logging_utils import logger
-from bambu_cli.protocols.ftps import _download_partial_path, _remove_partial_file
+from bambu_cli.protocols.ftps import _download_partial_path, _noncolliding_path, _remove_partial_file
 
 
 def _archive_member_too_large_message(filename, member_bytes, max_bytes):
@@ -62,11 +62,12 @@ def _select_zip_model_member(archive):
     return info, filename
 
 
-def _extract_zip_model(zip_path, outdir, args):
-    """Extract exactly one supported model/print file from a downloaded ZIP."""
-    # Collision avoidance is looked up on the package so existing
-    # ``bambu_cli.download._noncolliding_path`` test patches keep working.
-    from bambu_cli import download as _download_pkg
+def _extract_zip_model(zip_path, outdir, args, *, noncolliding_path=None):
+    """Extract exactly one supported model/print file from a downloaded ZIP.
+
+    ``noncolliding_path`` is injectable for tests (defaults to the real helper).
+    """
+    _noncolliding = noncolliding_path if noncolliding_path is not None else _noncolliding_path
 
     try:
         with zipfile.ZipFile(zip_path) as archive:
@@ -85,7 +86,7 @@ def _extract_zip_model(zip_path, outdir, args):
             else:
                 filename = member_filename
             outpath = os.path.join(outdir, filename)
-            outpath = _download_pkg._noncolliding_path(outpath)
+            outpath = _noncolliding(outpath)
             filename = _portable_basename(outpath)
             partial_path, replace_on_success = _download_partial_path(outpath)
             try:

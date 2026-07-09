@@ -25,7 +25,7 @@ Logic lives in focused modules; `bambu_cli/bambu.py` is the console entrypoint
 factory params) over patching module globals.
 - `cli.py` — argparse setup, `main()` dispatch, path/JSON message helpers
 - `commands.py` — printer subcommand handlers (status, upload, print, doctor, ...)
-- `download/` — package: URL/filename validation, HTML link scraping, ZIP extraction, the `download` command
+- `download/` — package: URL/filename validation, HTML link scraping, ZIP extraction, the `download` command. Collaborators (`opener_factory`, `resolve_printables`, `noncolliding_path`) are injectable on `_cmd_download` / `cmd_download` — do not package-self-import for mock targets.
 - `job.py` — one-shot `job`/`send` orchestration, dry-run prediction, print payloads
 - `setup_cmd/` — package: guided/non-interactive setup, mDNS discovery, config show/validate, preflight
 - `camera.py` — snapshot capture (direct port-6000 grab + Docker streamer fallback)
