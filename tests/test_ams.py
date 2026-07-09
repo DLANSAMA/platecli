@@ -1,4 +1,5 @@
 """Tests for AMS status parsing and its exposure through `status --json`."""
+
 import json
 import types
 from unittest.mock import MagicMock, patch
@@ -43,13 +44,13 @@ def test_parse_ams_normalizes_units_and_trays():
 
     pla = trays[0]
     assert pla["type"] == "PLA"
-    assert pla["color"] == "F2F2F2"   # alpha dropped, upper-cased
+    assert pla["color"] == "F2F2F2"  # alpha dropped, upper-cased
     assert pla["remain"] == 80
     assert pla["empty"] is False
     assert pla["active"] is False
 
     petg = trays[1]
-    assert petg["active"] is True     # absolute index 1 == tray_now
+    assert petg["active"] is True  # absolute index 1 == tray_now
 
     empty = trays[2]
     assert empty["type"] is None
@@ -59,7 +60,7 @@ def test_parse_ams_normalizes_units_and_trays():
     assert empty["active"] is False
 
     abs_tray = trays[3]
-    assert abs_tray["remain"] == -1   # printer reports -1 when it can't measure
+    assert abs_tray["remain"] == -1  # printer reports -1 when it can't measure
 
 
 def test_active_tray_across_second_unit():
@@ -68,10 +69,13 @@ def test_active_tray_across_second_unit():
             "tray_now": "5",  # unit 1, slot 1 -> 1*4 + 1
             "ams": [
                 {"id": "0", "tray": [{"id": "0", "tray_type": "PLA"}]},
-                {"id": "1", "tray": [
-                    {"id": "0", "tray_type": "PLA"},
-                    {"id": "1", "tray_type": "TPU"},
-                ]},
+                {
+                    "id": "1",
+                    "tray": [
+                        {"id": "0", "tray_type": "PLA"},
+                        {"id": "1", "tray_type": "TPU"},
+                    ],
+                },
             ],
         }
     }
@@ -85,8 +89,8 @@ def test_active_tray_across_second_unit():
 def test_parse_ams_returns_none_without_ams():
     assert parse_ams(None) is None
     assert parse_ams({}) is None
-    assert parse_ams({"ams": {}}) is None           # no units list
-    assert parse_ams({"ams": {"ams": []}}) is None   # empty units list
+    assert parse_ams({"ams": {}}) is None  # no units list
+    assert parse_ams({"ams": {"ams": []}}) is None  # empty units list
     # A simulated status (no ams key) yields None.
     assert parse_ams({"gcode_state": "IDLE", "mc_percent": 0}) is None
 

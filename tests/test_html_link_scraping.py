@@ -6,6 +6,7 @@ that scrapes a direct model/print link out of an arbitrary HTML page when a
 URL is not a recognized Printables model page. Pure parsing logic, no
 network. Ground rules (docs/test-backlog.md): never touch the network.
 """
+
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -64,29 +65,19 @@ def test_root_relative_link_resolved_against_base():
 # Extension-priority selection
 # ---------------------------------------------------------------------------
 def test_prefers_stl_over_zip_by_priority():
-    html = (
-        '<a href="/a/bundle.zip">zip</a>'
-        '<a href="/a/mesh.stl">stl</a>'
-    )
+    html = '<a href="/a/bundle.zip">zip</a><a href="/a/mesh.stl">stl</a>'
     url, name = _resolve(html)
     assert name == "mesh.stl"
 
 
 def test_prefers_3mf_over_gcode_and_zip():
-    html = (
-        '<a href="/x/print.gcode">g</a>'
-        '<a href="/x/model.3mf">m</a>'
-        '<a href="/x/archive.zip">z</a>'
-    )
+    html = '<a href="/x/print.gcode">g</a><a href="/x/model.3mf">m</a><a href="/x/archive.zip">z</a>'
     _, name = _resolve(html)
     assert name == "model.3mf"
 
 
 def test_first_seen_breaks_priority_tie():
-    html = (
-        '<a href="/one/first.stl">1</a>'
-        '<a href="/two/second.stl">2</a>'
-    )
+    html = '<a href="/one/first.stl">1</a><a href="/two/second.stl">2</a>'
     url, name = _resolve(html)
     assert url == "https://example.com/one/first.stl"
     assert name == "first.stl"
@@ -152,10 +143,7 @@ def test_no_candidates_returns_none():
 # Dedup + scan-limit truncation
 # ---------------------------------------------------------------------------
 def test_identical_links_deduped_still_resolve():
-    html = (
-        '<a href="/dup/part.stl">1</a>'
-        '<a href="/dup/part.stl">2</a>'
-    )
+    html = '<a href="/dup/part.stl">1</a><a href="/dup/part.stl">2</a>'
     url, name = _resolve(html)
     assert url == "https://example.com/dup/part.stl"
     assert name == "part.stl"

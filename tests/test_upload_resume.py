@@ -4,6 +4,7 @@ Covers the (fresh|probe) -> (resume|restart) -> transfer -> verify phases,
 including the fix for the stale-file shortcut (a same-size remote file must
 not be trusted as "success" unless this run actually attempted a transfer).
 """
+
 import ftplib
 import os
 
@@ -93,6 +94,7 @@ def local_file(tmp_path):
         path = tmp_path / "job.gcode"
         path.write_bytes(byte * size)
         return str(path)
+
     return _make
 
 

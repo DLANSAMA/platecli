@@ -7,6 +7,7 @@ Set BAMBU_CLI explicitly when validating an installed command. It requires the
 user's real config to already be set up. Printing is disabled unless
 BAMBU_LIVE_PRINT_CONFIRM is an explicit truthy value such as 1, true, or yes.
 """
+
 import json
 import os
 import pathlib
@@ -21,7 +22,10 @@ PRINT_READY_EXTENSIONS = {".3mf", ".gcode"}
 SLICEABLE_EXTENSIONS = {".stl", ".step", ".stp", ".obj"}
 ARCHIVE_EXTENSIONS = {".zip"}
 WINDOWS_RESERVED_FILENAMES = {
-    "CON", "PRN", "AUX", "NUL",
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
     *(f"COM{i}" for i in range(1, 10)),
     *(f"LPT{i}" for i in range(1, 10)),
 }
@@ -91,9 +95,7 @@ def run_cli(args, expected_returncode=0, timeout=180):
         )
     except subprocess.TimeoutExpired as exc:
         redacted_command = redact_sequence(command)
-        assert False, (
-            f"{subprocess.list2cmdline(redacted_command)} timed out after {exc.timeout} seconds"
-        )
+        assert False, f"{subprocess.list2cmdline(redacted_command)} timed out after {exc.timeout} seconds"
     except FileNotFoundError as exc:
         redacted_command = redact_sequence(command)
         assert False, (
@@ -117,11 +119,9 @@ def json_stdout(result):
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         sys.stderr.write(redact_url_credentials(result.stderr))
-        assert False, (
-            f"stdout was not a single JSON document: {redact_url_credentials(result.stdout)!r}"
-        )
+        assert False, f"stdout was not a single JSON document: {redact_url_credentials(result.stdout)!r}"
     if not isinstance(payload, dict):
-        assert False, (f"expected JSON object on stdout, got {type(payload).__name__}")
+        assert False, f"expected JSON object on stdout, got {type(payload).__name__}"
     return payload
 
 
@@ -166,7 +166,7 @@ def is_safe_remote_name(remote_name):
 
 def validate_reported_remote_name(remote_name):
     if not is_safe_remote_name(remote_name):
-        assert False, (f"upload-only job reported unsafe remote_name: {remote_name!r}")
+        assert False, f"upload-only job reported unsafe remote_name: {remote_name!r}"
     return remote_name
 
 
@@ -176,9 +176,9 @@ def predicted_remote_name(source):
     expected = expected_value.strip()
     if expected_value:
         if expected != expected_value:
-            assert False, (f"BAMBU_LIVE_EXPECT_REMOTE_NAME is not printer-safe portable: {expected_value!r}")
+            assert False, f"BAMBU_LIVE_EXPECT_REMOTE_NAME is not printer-safe portable: {expected_value!r}"
         if not is_safe_remote_name(expected):
-            assert False, (f"BAMBU_LIVE_EXPECT_REMOTE_NAME is not printer-safe portable: {expected!r}")
+            assert False, f"BAMBU_LIVE_EXPECT_REMOTE_NAME is not printer-safe portable: {expected!r}"
         return expected
     if looks_like_url(source):
         parsed = urlparse(source if urlparse(source).scheme else "https://" + source)
@@ -202,6 +202,7 @@ def predicted_remote_name(source):
     if suffix in ARCHIVE_EXTENSIONS:
         if path.exists():
             import zipfile
+
             try:
                 with zipfile.ZipFile(path) as archive:
                     member_filename = None
@@ -244,7 +245,7 @@ def validate_preflight():
     result = run_cli(["preflight", "--strict", "--json"])
     payload = json_stdout(result)
     if payload.get("command") != "preflight" or payload.get("status") != "ok":
-        assert False, (f"preflight failed: {payload}")
+        assert False, f"preflight failed: {payload}"
     print("preflight-strict-json live smoke ok")
 
 
@@ -252,13 +253,13 @@ def validate_doctor():
     result = run_cli(["doctor", "--json"], timeout=60)
     payload = json_stdout(result)
     if payload.get("command") != "doctor" or payload.get("status") != "ok":
-        assert False, (f"doctor failed: {payload}")
+        assert False, f"doctor failed: {payload}"
     capabilities = payload.get("capabilities")
     if not isinstance(capabilities, dict):
-        assert False, (f"doctor JSON did not include capabilities: {payload}")
+        assert False, f"doctor JSON did not include capabilities: {payload}"
     serial = capabilities.get("serial")
     if serial not in ("<redacted>", "UNKNOWN", None):
-        assert False, ("doctor JSON exposed an unredacted printer serial")
+        assert False, "doctor JSON exposed an unredacted printer serial"
     print("doctor-json live smoke ok")
 
 
@@ -266,9 +267,9 @@ def validate_upload_only(source):
     result = run_cli(["job", source, "--upload-only", "--json"], timeout=300)
     payload = json_stdout(result)
     if payload.get("command") != "job" or payload.get("status") != "uploaded" or payload.get("uploaded") is not True:
-        assert False, (f"upload-only job failed: {payload}")
+        assert False, f"upload-only job failed: {payload}"
     if payload.get("printed"):
-        assert False, (f"upload-only job unexpectedly printed: {payload}")
+        assert False, f"upload-only job unexpectedly printed: {payload}"
     remote_name = validate_reported_remote_name(payload.get("remote_name"))
     print("job-upload-only-json live smoke ok")
     return remote_name
@@ -278,21 +279,17 @@ def listed_remote_names(context):
     result = run_cli(["files", "--json"], timeout=60)
     payload = json_stdout(result)
     if payload.get("command") != "files" or payload.get("status") != "ok":
-        assert False, (f"files listing failed {context}: {payload}")
+        assert False, f"files listing failed {context}: {payload}"
     files = payload.get("files")
     if not isinstance(files, list):
-        assert False, (f"files JSON did not include a file list: {payload}")
-    return {
-        item.get("name")
-        for item in files
-        if isinstance(item, dict)
-    }
+        assert False, f"files JSON did not include a file list: {payload}"
+    return {item.get("name") for item in files if isinstance(item, dict)}
 
 
 def validate_uploaded_file_visible(remote_name):
     names = listed_remote_names("after upload")
     if remote_name not in names:
-        assert False, (f"uploaded file {remote_name!r} was not visible in files --json")
+        assert False, f"uploaded file {remote_name!r} was not visible in files --json"
     print("files-json-upload-visible live smoke ok")
 
 
@@ -308,7 +305,7 @@ def validate_uploaded_file_was_new(remote_name, before_names):
 def validate_uploaded_file_absent(remote_name):
     names = listed_remote_names("after cleanup")
     if remote_name in names:
-        assert False, (f"cleanup delete reported success but {remote_name!r} is still visible in files --json")
+        assert False, f"cleanup delete reported success but {remote_name!r} is still visible in files --json"
     print("files-json-cleanup-absent live smoke ok")
 
 
@@ -319,8 +316,12 @@ def validate_print(remote_name):
         return False
     result = run_cli(["print", remote_name, "--confirm", "--json"], timeout=120)
     payload = json_stdout(result)
-    if payload.get("command") != "print" or payload.get("status") != "print_started" or payload.get("printed") is not True:
-        assert False, (f"print ACK validation failed: {payload}")
+    if (
+        payload.get("command") != "print"
+        or payload.get("status") != "print_started"
+        or payload.get("printed") is not True
+    ):
+        assert False, f"print ACK validation failed: {payload}"
     print("print-ack-json live smoke ok")
     return True
 
@@ -336,7 +337,7 @@ def cleanup_uploaded_file(remote_name, printed):
     result = run_cli(["delete", remote_name, "--confirm", "--json"], timeout=60)
     payload = json_stdout(result)
     if payload.get("command") != "delete" or payload.get("status") != "deleted" or payload.get("deleted") is not True:
-        assert False, (f"cleanup delete failed: {payload}")
+        assert False, f"cleanup delete failed: {payload}"
     print("cleanup-delete-json live smoke ok")
     validate_uploaded_file_absent(remote_name)
 
@@ -349,7 +350,7 @@ def main():
     predicted_name = validate_remote_name_not_preexisting(source, before_names)
     remote_name = validate_upload_only(source)
     if predicted_name and remote_name != predicted_name:
-        assert False, (f"upload reported remote_name {remote_name!r}, expected {predicted_name!r}")
+        assert False, f"upload reported remote_name {remote_name!r}, expected {predicted_name!r}"
     validate_uploaded_file_was_new(remote_name, before_names)
     validate_uploaded_file_visible(remote_name)
     printed = validate_print(remote_name)

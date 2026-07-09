@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Guard the advertised Python 3.9+ support from the current interpreter."""
+
 import ast
 from pathlib import Path
 

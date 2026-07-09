@@ -4,6 +4,7 @@ Import-time side effects (paho-mqtt mock, isolated temp config) must run
 before bambu_cli.bambu is imported, so every test module in this suite
 starts with `from tests.bambu_test_base import *`.
 """
+
 import unittest
 import sys
 import io
@@ -45,6 +46,7 @@ with open(mock_config_path, "w", encoding="utf-8") as f:
     json.dump(_BASELINE_CONFIG, f)
 
 import bambu_cli.bambu as bambu
+
 bambu.CONFIG_PATH = mock_config_path
 
 from bambu_cli import context as _context
@@ -83,9 +85,7 @@ def config_ctx(cfg):
     """
     prev = _context.get_current()
     try:
-        _context.set_current(
-            _RuntimeContext(settings=_Settings.from_config(cfg), config=dict(cfg))
-        )
+        _context.set_current(_RuntimeContext(settings=_Settings.from_config(cfg), config=dict(cfg)))
         yield
     finally:
         _context.set_current(prev)
@@ -102,22 +102,31 @@ def settings_ctx(simulation=None, **setting_overrides):
     new_settings = _replace(prev.settings, **setting_overrides) if setting_overrides else prev.settings
     sim = prev.simulation if simulation is None else simulation
     try:
-        _context.set_current(
-            _RuntimeContext(settings=new_settings, config=prev.config, simulation=sim)
-        )
+        _context.set_current(_RuntimeContext(settings=new_settings, config=prev.config, simulation=sim))
         yield
     finally:
         _context.set_current(prev)
 
+
 def cleanup_mock_config():
     shutil.rmtree(mock_config_dir, ignore_errors=True)
+
 
 atexit.register(cleanup_mock_config)
 
 try:
-    from bambu_cli.bambu import cmd_stop, get_ftp, load_config, create_mqtt_client, cmd_light, execute_print_command, setup_logging
+    from bambu_cli.bambu import (
+        cmd_stop,
+        get_ftp,
+        load_config,
+        create_mqtt_client,
+        cmd_light,
+        execute_print_command,
+        setup_logging,
+    )
     import ssl
     import urllib.error
+
     setup_logging(verbose=True)
 except ImportError:
     pass
@@ -128,7 +137,7 @@ from bambu_cli.printer import BambuPrinter
 from bambu_cli.errors import BambuError
 
 
-def _test_printer(ip='192.168.1.1', serial=None, access_code='MOCK_CODE', **kwargs):
+def _test_printer(ip="192.168.1.1", serial=None, access_code="MOCK_CODE", **kwargs):
     """Build a BambuPrinter matching the mocked global config for direct protocol calls."""
     return BambuPrinter(ip=ip, serial=serial or _context.current_settings().serial, access_code=access_code, **kwargs)
 
@@ -147,5 +156,44 @@ def _setup_slice_proc(mock_proc, returncode=0, stdout=b"", stderr=b""):
     return mock_proc
 
 
-
-__all__ = [name for name in ('BambuError', 'unittest', 'sys', 'io', 'json', 'os', 'platform', 'patch', 'MagicMock', 'mock_open', 'ANY', '_HOST_SYSTEM', 'mock_mqtt', 'tempfile', 'atexit', 'shutil', 'mock_config_dir', 'mock_config_path', 'bambu', 'cmd_stop', 'get_ftp', 'load_config', 'create_mqtt_client', 'cmd_light', 'execute_print_command', 'setup_logging', 'ssl', 'socket', 'urllib', 'BambuPrinter', '_test_printer', '_setup_slice_proc', 'install_baseline_context', 'config_ctx', 'settings_ctx') if name in globals()]
+__all__ = [
+    name
+    for name in (
+        "BambuError",
+        "unittest",
+        "sys",
+        "io",
+        "json",
+        "os",
+        "platform",
+        "patch",
+        "MagicMock",
+        "mock_open",
+        "ANY",
+        "_HOST_SYSTEM",
+        "mock_mqtt",
+        "tempfile",
+        "atexit",
+        "shutil",
+        "mock_config_dir",
+        "mock_config_path",
+        "bambu",
+        "cmd_stop",
+        "get_ftp",
+        "load_config",
+        "create_mqtt_client",
+        "cmd_light",
+        "execute_print_command",
+        "setup_logging",
+        "ssl",
+        "socket",
+        "urllib",
+        "BambuPrinter",
+        "_test_printer",
+        "_setup_slice_proc",
+        "install_baseline_context",
+        "config_ctx",
+        "settings_ctx",
+    )
+    if name in globals()
+]

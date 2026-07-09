@@ -9,6 +9,7 @@ Ground rules (docs/test-backlog.md): patch functions in the module that
 calls them (bambu_cli.download.*), patch runtime state on bambu_cli.bambu,
 never touch the network.
 """
+
 import os
 import socket
 import sys
@@ -30,8 +31,12 @@ from bambu_cli.errors import BambuError
 
 def _args(tmp_path, url, **overrides):
     base = dict(
-        url=url, output=str(tmp_path), name=None, max_download_mb=1,
-        json=False, progress=False,
+        url=url,
+        output=str(tmp_path),
+        name=None,
+        max_download_mb=1,
+        json=False,
+        progress=False,
     )
     base.update(overrides)
     return types.SimpleNamespace(**base)
@@ -72,9 +77,12 @@ def _base_resp(url, body=b"x" * 100, content_type="model/stl", content_dispositi
 # Redirect hop cap
 # ---------------------------------------------------------------------------
 
+
 def test_redirect_hop_cap_enforced():
     """More than MAX_DOWNLOAD_REDIRECT_HOPS hops must raise a clear URLError."""
-    req = types.SimpleNamespace(full_url="https://example.com/start", _bambu_redirect_hops=download.MAX_DOWNLOAD_REDIRECT_HOPS)
+    req = types.SimpleNamespace(
+        full_url="https://example.com/start", _bambu_redirect_hops=download.MAX_DOWNLOAD_REDIRECT_HOPS
+    )
     handler = download.SafeHTTPRedirectHandler()
     with pytest.raises(urllib.error.URLError) as excinfo:
         handler.redirect_request(req, None, 302, "Found", {}, "https://example.com/next")
@@ -94,6 +102,7 @@ def test_safe_opener_uses_capped_redirect_handler():
 # ---------------------------------------------------------------------------
 # Redirect revalidation: SSRF + extension
 # ---------------------------------------------------------------------------
+
 
 def test_redirect_to_private_ip_blocked(tmp_path):
     """A redirected connection resolving to a private IP must be refused,
@@ -128,6 +137,7 @@ def test_redirected_url_with_unsupported_extension_rejected(tmp_path):
 # ---------------------------------------------------------------------------
 # Mid-stream size enforcement / short reads / empty files
 # ---------------------------------------------------------------------------
+
 
 def test_mid_stream_oversize_deletes_partial_file(tmp_path):
     """Even without a Content-Length header, exceeding max_download_mb mid
@@ -208,6 +218,7 @@ def test_empty_download_rejected(tmp_path):
 # Content-Disposition filename hardening
 # ---------------------------------------------------------------------------
 
+
 def test_rfc2231_filename_star_decoded_and_sanitized():
     """filename* (RFC 2231/5987) must be decoded and then sanitized just like
     a plain filename (path separators / traversal stripped)."""
@@ -228,7 +239,8 @@ def test_content_disposition_disallowed_extension_not_smuggled(tmp_path):
 
     url = "https://example.com/download?id=1"  # no extension in URL itself
     resp = _base_resp(
-        url, content_type="application/octet-stream",
+        url,
+        content_type="application/octet-stream",
         content_disposition='attachment; filename="payload.exe"',
     )
     opener = _mock_opener(resp)

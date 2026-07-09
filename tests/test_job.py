@@ -6,6 +6,7 @@ network; inject fake step callables via JobSteps instead of monkeypatching
 bambu.cmd_* where injection suffices; assert full JSON payload shapes, not
 just exit codes.
 """
+
 import contextlib
 import json
 import logging
@@ -33,6 +34,7 @@ def _capture_bambu_warnings():
         yield records
     finally:
         log.removeHandler(handler)
+
 
 _mock_mqtt = MagicMock()
 sys.modules.setdefault("paho", _mock_mqtt)
@@ -116,11 +118,11 @@ def _reset_last_error():
 # Delegated-step failure payloads
 # ---------------------------------------------------------------------------
 
+
 def test_download_failure_detail_flows_through(tmp_path, capsys):
     url = "https://example.com/model.stl"
     args = _parse(["job", url, "--json"])
-    steps = JobSteps(download=failing_step(
-        "download", 2, "Could not connect", failed_step="http", url=url))
+    steps = JobSteps(download=failing_step("download", 2, "Could not connect", failed_step="http", url=url))
     ctx = _ctx()
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(ctx, args, steps)
@@ -140,11 +142,11 @@ def test_slice_failure_detail_flows_through(tmp_path):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
     args = _parse(["job", str(stl), "--json"])
-    steps = JobSteps(slice=failing_step(
-        "slice", 3, "Slicer crashed", failed_step="orca"))
+    steps = JobSteps(slice=failing_step("slice", 3, "Slicer crashed", failed_step="orca"))
     ctx = _ctx()
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         import io
+
         old_stdout = sys.stdout
         sys.stdout = io.StringIO()
         try:
@@ -164,8 +166,7 @@ def test_upload_failure_detail_flows_through(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--json"])
-    steps = JobSteps(upload=failing_step(
-        "upload", 2, "FTPS connection refused", failed_step="ftps"))
+    steps = JobSteps(upload=failing_step("upload", 2, "FTPS connection refused", failed_step="ftps"))
     ctx = _ctx()
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(ctx, args, steps)
@@ -200,6 +201,7 @@ def test_print_failure_detail_flows_through(tmp_path, capsys):
 # next_command payloads
 # ---------------------------------------------------------------------------
 
+
 def test_uploaded_only_next_command(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -227,18 +229,34 @@ def test_uploaded_not_printed_next_command(tmp_path, capsys):
 def test_uploaded_next_command_includes_ams_and_flags(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
-    args = _parse([
-        "job", str(ready), "--upload-only", "--json",
-        "--use-ams", "--ams-mapping", "0,1", "--timelapse",
-        "--skip-bed-leveling", "--skip-flow-cali",
-    ])
+    args = _parse(
+        [
+            "job",
+            str(ready),
+            "--upload-only",
+            "--json",
+            "--use-ams",
+            "--ams-mapping",
+            "0,1",
+            "--timelapse",
+            "--skip-bed-leveling",
+            "--skip-flow-cali",
+        ]
+    )
     steps = JobSteps(upload=fake_upload("model.3mf"))
     _run_job(_ctx(), args, steps)
     payload = _read_json(capsys)
     assert payload["next_command"] == [
-        "print", "model.3mf", "--confirm", "--json",
-        "--use-ams", "--ams-mapping", "0,1", "--timelapse",
-        "--skip-bed-leveling", "--skip-flow-cali",
+        "print",
+        "model.3mf",
+        "--confirm",
+        "--json",
+        "--use-ams",
+        "--ams-mapping",
+        "0,1",
+        "--timelapse",
+        "--skip-bed-leveling",
+        "--skip-flow-cali",
     ]
 
 
@@ -258,11 +276,15 @@ def test_printed_success(tmp_path, capsys):
 # Dry-run matrix
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("ext,would_slice,would_extract", [
-    (".stl", True, False),
-    (".zip", False, True),
-    (".3mf", False, False),
-])
+
+@pytest.mark.parametrize(
+    "ext,would_slice,would_extract",
+    [
+        (".stl", True, False),
+        (".zip", False, True),
+        (".3mf", False, False),
+    ],
+)
 def test_dry_run_direct_url(ext, would_slice, would_extract, capsys):
     url = f"https://example.com/model{ext}"
     args = _parse(["job", url, "--dry-run", "--json"])
@@ -340,6 +362,7 @@ def test_dry_run_would_create_output_dir(tmp_path, capsys):
 # ZIP paths
 # ---------------------------------------------------------------------------
 
+
 def test_zip_bad_archive_fails(tmp_path):
     bad_zip = tmp_path / "bad.zip"
     bad_zip.write_bytes(b"not a zip")
@@ -409,6 +432,7 @@ def test_zip_archive_entry_propagates_to_summary(tmp_path, capsys):
 # --output handling
 # ---------------------------------------------------------------------------
 
+
 def test_output_created_when_needed(tmp_path, capsys):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
@@ -471,6 +495,7 @@ def test_temp_workdir_cleanup_when_no_output_given(tmp_path, monkeypatch):
 # Late-binding default JobSteps still delegate through the bambu facade.
 # ---------------------------------------------------------------------------
 
+
 def test_default_job_steps_delegate_through_bambu_facade(tmp_path, capsys, monkeypatch):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -496,6 +521,7 @@ def test_cmd_job_shim_builds_context_and_default_steps(tmp_path, capsys, monkeyp
 # ---------------------------------------------------------------------------
 # Source-validation failures (fail before any step runs, so no steps needed)
 # ---------------------------------------------------------------------------
+
 
 def test_non_http_url_scheme_rejected(capsys):
     args = _parse(["job", "ftp://example.com/model.stl", "--json"])
@@ -594,6 +620,7 @@ def test_unsafe_printer_ready_local_name_rejected_before_upload(tmp_path, capsys
 # Slice- and print-option validation
 # ---------------------------------------------------------------------------
 
+
 def test_invalid_slice_option_fails(tmp_path, capsys):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
@@ -668,6 +695,7 @@ def test_use_ams_without_mapping_fails(tmp_path, capsys):
 # --name is URL-only; warn and ignore for a local source
 # ---------------------------------------------------------------------------
 
+
 def test_name_ignored_for_local_file_warns(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -677,9 +705,9 @@ def test_name_ignored_for_local_file_warns(tmp_path, capsys):
         _run_job(_ctx(), args, steps)
     payload = _read_json(capsys)
     assert payload["status"] == "uploaded"
-    assert any("--name is only used for URL downloads" in r.getMessage() for r in records), (
-        [r.getMessage() for r in records]
-    )
+    assert any("--name is only used for URL downloads" in r.getMessage() for r in records), [
+        r.getMessage() for r in records
+    ]
     # The remote name comes from the file, not --name.
     assert payload["remote_name"] == "model.3mf"
 
@@ -687,6 +715,7 @@ def test_name_ignored_for_local_file_warns(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 # Successful URL download -> continue (the archive-detection branch)
 # ---------------------------------------------------------------------------
+
 
 def test_url_download_success_flows_into_slice_and_upload(tmp_path, capsys):
     downloaded = tmp_path / "model.stl"
@@ -762,6 +791,7 @@ def test_run_job_defaults_steps_when_omitted(tmp_path, capsys, monkeypatch):
 # ---------------------------------------------------------------------------
 # generate_print_payload
 # ---------------------------------------------------------------------------
+
 
 def test_generate_print_payload_includes_ams_mapping():
     payload = json.loads(job.generate_print_payload("m.3mf", use_ams=True, ams_mapping=[0, 1]))

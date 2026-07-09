@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Verify advertised Python support can resolve install dependencies from pyproject.toml."""
+
 import shutil
 import subprocess
 import sys
@@ -33,15 +34,14 @@ def check_output_contains_dependencies(output):
 
 def _project_dependencies():
     text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    section = re.search(r'^\[project\]\s*$(.*?)(?:^\[|\Z)', text, re.MULTILINE | re.DOTALL)
+    section = re.search(r"^\[project\]\s*$(.*?)(?:^\[|\Z)", text, re.MULTILINE | re.DOTALL)
     if not section:
         raise SystemExit("pyproject.toml is missing [project]")
-    dependencies = re.search(r'^dependencies\s*=\s*\[(.*?)^\]', section.group(1), re.MULTILINE | re.DOTALL)
+    dependencies = re.search(r"^dependencies\s*=\s*\[(.*?)^\]", section.group(1), re.MULTILINE | re.DOTALL)
     if not dependencies:
         raise SystemExit("pyproject.toml is missing project dependencies")
     return {
-        match.group(1).strip()
-        for match in re.finditer(r'^\s*"([^"]+)"\s*,?\s*$', dependencies.group(1), re.MULTILINE)
+        match.group(1).strip() for match in re.finditer(r'^\s*"([^"]+)"\s*,?\s*$', dependencies.group(1), re.MULTILINE)
     }
 
 
@@ -60,21 +60,23 @@ def check_with_uv():
     # is not held open, so uv can write it freely on every platform.
     with tempfile.TemporaryDirectory(prefix="bambu-deps-py38-") as tmpdir:
         output_path = Path(tmpdir) / "requirements.txt"
-        result = run_command([
-            "uv",
-            "pip",
-            "compile",
-            "pyproject.toml",
-            "--python-version",
-            PYTHON_FLOOR,
-            "--universal",
-            "--no-emit-package",
-            "bambu-local-cli",
-            "--no-header",
-            "--no-annotate",
-            "--output-file",
-            str(output_path),
-        ])
+        result = run_command(
+            [
+                "uv",
+                "pip",
+                "compile",
+                "pyproject.toml",
+                "--python-version",
+                PYTHON_FLOOR,
+                "--universal",
+                "--no-emit-package",
+                "bambu-local-cli",
+                "--no-header",
+                "--no-annotate",
+                "--output-file",
+                str(output_path),
+            ]
+        )
         if result.returncode != 0:
             raise SystemExit(result.stderr + result.stdout)
         text = output_path.read_text(encoding="utf-8")
@@ -82,18 +84,20 @@ def check_with_uv():
 
 
 def check_with_pip():
-    result = run_command([
-        sys.executable,
-        "-m",
-        "pip",
-        "install",
-        "--dry-run",
-        "--ignore-installed",
-        "--python-version",
-        PYTHON_FLOOR,
-        "--only-binary=:all:",
-        ".",
-    ])
+    result = run_command(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--dry-run",
+            "--ignore-installed",
+            "--python-version",
+            PYTHON_FLOOR,
+            "--only-binary=:all:",
+            ".",
+        ]
+    )
     if result.returncode != 0:
         raise SystemExit(result.stderr + result.stdout)
     check_output_contains_dependencies(result.stderr + result.stdout)

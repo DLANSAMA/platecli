@@ -1,4 +1,5 @@
 """Pure-function coverage for slicer helpers without invoking real Orca."""
+
 from __future__ import annotations
 
 import json
@@ -69,18 +70,14 @@ def test_validate_slice_options_infill_range():
 
 
 def test_validate_slice_options_rejects_extreme_nozzle_temp():
-    args = Namespace(
-        copies=1, infill=15, nozzle_temp=999, bed_temp=60, wall_type=None
-    )
+    args = Namespace(copies=1, infill=15, nozzle_temp=999, bed_temp=60, wall_type=None)
     err = S._validate_slice_options(args)
     assert err is not None
     assert "nozzle" in err.lower()
 
 
 def test_validate_slice_options_rejects_negative_bed_temp():
-    args = Namespace(
-        copies=1, infill=15, nozzle_temp=220, bed_temp=-50, wall_type=None
-    )
+    args = Namespace(copies=1, infill=15, nozzle_temp=220, bed_temp=-50, wall_type=None)
     err = S._validate_slice_options(args)
     assert err is not None
     assert "bed" in err.lower()

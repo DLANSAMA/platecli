@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Verify CI keeps the release-critical cross-platform checks."""
+
 from pathlib import Path
 
 
@@ -13,7 +14,7 @@ REQUIRED_SNIPPETS = {
     "windows runner": "windows-latest",
     "oldest supported python": '"3.9"',
     "current smoke python": '"3.14"',
-    "unit tests": "python -W error::ResourceWarning -m pytest tests/ -m \"not live\" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=92",
+    "unit tests": 'python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=92',
     "runtime package syntax": "bambu_cli/bambu.py",
     "release readiness smoke": "python tests/release_readiness_smoke.py",
     "python compatibility smoke": "python tests/python_compat_smoke.py",
@@ -64,8 +65,7 @@ def main():
     text = WORKFLOW.read_text(encoding="utf-8")
     missing = [label for label, snippet in REQUIRED_SNIPPETS.items() if snippet not in text]
     missing_help = [
-        command for command in sorted(REQUIRED_HELP_COMMANDS)
-        if f"python scripts/bambu.py {command} --help" not in text
+        command for command in sorted(REQUIRED_HELP_COMMANDS) if f"python scripts/bambu.py {command} --help" not in text
     ]
     forbidden = [label for label, snippet in FORBIDDEN_SNIPPETS.items() if snippet in text]
     if missing or missing_help or forbidden:
