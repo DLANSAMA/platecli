@@ -37,7 +37,8 @@ classifiers = [
 test = [
     "pytest",
     "pytest-cov",
-    "pytest-mock"
+    "pytest-mock",
+    "mutmut>=3.0",
 ]
 
 [project.urls]
@@ -82,3 +83,27 @@ exclude_dirs = ["tests", ".claude", "scripts"]
 # B104 "0.0.0.0" is the unconfigured-printer-IP sentinel, never a bind address;
 # B402/B321 the printer only speaks FTPS -- that is the tool's purpose.
 skips = ["B101", "B310", "B104", "B402", "B321"]
+
+# Mutation testing (Phase 1 baseline; not CI-gated — see docs/mutation-baseline.md).
+# Full slicer.py/job.py mutation is too large for a quick baseline; the reproduce
+# script can widen only_mutate later. Baseline targets pure safety gates first.
+[tool.mutmut]
+source_paths = ["bambu_cli"]
+only_mutate = [
+    "bambu_cli/download/naming.py",
+    "bambu_cli/download/validation.py",
+    "bambu_cli/netsafety.py",
+    # slicer.py / job.py / download/downloader.py are large; include via:
+    #   mutmut run   after temporarily expanding only_mutate (see docs/mutation-baseline.md)
+]
+# Focused suite for mutation speed (not the full 500+ suite).
+pytest_add_cli_args_test_selection = [
+    "tests/test_naming_and_validation.py",
+    "tests/test_slicer_pure.py",
+    "tests/test_job.py",
+    "tests/test_netsafety.py",
+    "tests/test_netsafety_handlers.py",
+    "tests/test_download_hardening_p0.py",
+    "tests/test_bambu_cli_regressions.py",
+]
+pytest_add_cli_args = ["-q", "--tb=no", "-p", "no:cacheprovider"]
