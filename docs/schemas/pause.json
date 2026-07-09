@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/pause.json",
+  "title": "bambu-cli pause success envelope",
+  "type": "object",
+  "required": ["status", "command", "paused"],
+  "properties": {
+    "status": {"const": "paused"},
+    "command": {"const": "pause"},
+    "paused": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}

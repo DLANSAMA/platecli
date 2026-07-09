@@ -87,9 +87,51 @@ Runs a network and connectivity health check, discovers printer capabilities, an
 }
 ```
 
-## Global API Flags
+### `gcode`
 
-In addition to `--json`, several flags provide strict API guarantees for programmatic environments:
+Without `--confirm` (schema: [`gcode.json`](schemas/gcode.json)):
+
+```json
+{
+  "status": "confirmation_required",
+  "command": "gcode",
+  "gcode": "G28",
+  "sent": false,
+  "next_command": ["gcode", "G28", "--confirm", "--json"]
+}
+```
+
+After send: `"status": "sent", "sent": true`.
+
+### `print`
+
+Without `--confirm` (schema: [`print.json`](schemas/print.json)):
+
+```json
+{
+  "status": "confirmation_required",
+  "command": "print",
+  "file": "cube.gcode.3mf",
+  "printed": false,
+  "next_command": ["print", "cube.gcode.3mf", "--confirm", "--json"]
+}
+```
+
+### `delete`
+
+Without `--confirm` (schema: [`delete.json`](schemas/delete.json)): `"status": "confirmation_required"`, `"deleted": false`.
+
+### `light` / `pause` / `resume`
+
+- [`light.json`](schemas/light.json): `"status": "light_changed"`, `"action": "on"|"off"`, `"changed": true`
+- [`pause.json`](schemas/pause.json): `"status": "paused"`, `"paused": true`
+- [`resume.json`](schemas/resume.json): `"status": "resumed"`, `"resumed": true`
+
+### `snapshot`
+
+Schema: [`snapshot.json`](schemas/snapshot.json) — `"status": "saved"`, `"output"`, `"size_bytes"`, plus `method` (direct) or Docker fields.
+
+## Global API Flags
 
 - **Timeouts**: Define strict boundaries for CI/CD or Agent pipelines.
   - `--network-timeout <seconds>`: Global network resolution timeout.

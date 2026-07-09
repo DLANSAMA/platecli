@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/delete.json",
+  "title": "bambu-cli delete success or confirmation envelope",
+  "type": "object",
+  "required": ["status", "command", "file", "deleted"],
+  "properties": {
+    "status": {"type": "string"},
+    "command": {"const": "delete"},
+    "file": {"type": "string"},
+    "deleted": {"type": "boolean"},
+    "next_command": {"type": "array"}
+  },
+  "additionalProperties": true
+}

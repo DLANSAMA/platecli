@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bambu-local-cli.local/schemas/light.json",
+  "title": "bambu-cli light success envelope",
+  "type": "object",
+  "required": ["status", "command", "action", "changed"],
+  "properties": {
+    "status": {"const": "light_changed"},
+    "command": {"const": "light"},
+    "action": {"enum": ["on", "off"]},
+    "changed": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}
