@@ -317,6 +317,99 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         self.assertIn("-e", run_call[0][0])
         self.assertIn("PRINTER_ACCESS_CODE", run_call[0][0])
 
+    def test_cmd_snapshot_invalid_camera_port_aborts(self):
+        """A malformed camera_port must be rejected with a clear config error
+        before any docker command runs."""
+        from bambu_cli.commands import cmd_snapshot
+
+        mock_logger = MagicMock()
+        mock_run = MagicMock()
+        args = MagicMock()
+        args.output = "snap.jpg"
+        with (
+            patch("bambu_cli.camera.logger", mock_logger),
+            settings_ctx(camera_port="not-a-port"),
+            self.assertRaises((SystemExit, BambuError)) as cm,
+        ):
+            cmd_snapshot(
+                args,
+                grab_frame=lambda printer: None,
+                which=lambda name: "/usr/bin/docker",
+                subprocess_run=mock_run,
+                urlopen=MagicMock(),
+            )
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
+        mock_run.assert_not_called()
+        self.assertTrue(any("Invalid camera_port" in c[0][0] for c in mock_logger.error.call_args_list))
+
+    def test_cmd_snapshot_non_loopback_bind_warns(self):
+        """A camera_port that publishes on a non-loopback interface warns the
+        user that the printer camera is exposed to the network."""
+        from bambu_cli.commands import cmd_snapshot
+
+        mock_logger = MagicMock()
+        mock_run = MagicMock(return_value=MagicMock(returncode=0, stdout="true"))  # already running
+        mock_response = MagicMock()
+        mock_response.read.return_value = b"img"
+        mock_urlopen = MagicMock()
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        args = MagicMock()
+        args.output = "snap.jpg"
+        with (
+            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("os.path.getsize", return_value=1024),
+            settings_ctx(camera_port="0.0.0.0:1985:1984"),
+        ):
+            cmd_snapshot(
+                args,
+                grab_frame=lambda printer: None,
+                which=lambda name: "/usr/bin/docker",
+                subprocess_run=mock_run,
+                urlopen=mock_urlopen,
+                sleep=MagicMock(),
+            )
+        self.assertTrue(any("non-loopback" in c[0][0] for c in mock_logger.warning.call_args_list))
+
+    def test_cmd_snapshot_running_container_exposed_warns(self):
+        """When the configured port is loopback but a *pre-existing* container is
+        still bound to a non-loopback interface, warn to recreate it."""
+        from bambu_cli.commands import cmd_snapshot
+
+        mock_logger = MagicMock()
+        mock_run = MagicMock(
+            side_effect=[
+                MagicMock(returncode=0, stdout="true"),  # running check
+                MagicMock(  # NetworkSettings.Ports inspect
+                    returncode=0,
+                    stdout='{"1984/tcp":[{"HostIp":"0.0.0.0","HostPort":"1985"}]}',
+                ),
+            ]
+        )
+        mock_response = MagicMock()
+        mock_response.read.return_value = b"img"
+        mock_urlopen = MagicMock()
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        args = MagicMock()
+        args.output = "snap.jpg"
+        with (
+            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("os.path.getsize", return_value=1024),
+            settings_ctx(camera_port="127.0.0.1:1985:1984"),  # config is safe
+        ):
+            cmd_snapshot(
+                args,
+                grab_frame=lambda printer: None,
+                which=lambda name: "/usr/bin/docker",
+                subprocess_run=mock_run,
+                urlopen=mock_urlopen,
+                sleep=MagicMock(),
+            )
+        self.assertTrue(
+            any("docker rm -f" in c[0][0] for c in mock_logger.warning.call_args_list)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

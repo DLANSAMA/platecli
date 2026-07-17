@@ -153,7 +153,7 @@ or manually.
 | `profiles_dir` | for slice | auto-detect | Path to OrcaSlicer `profiles/BBL` directory |
 | `camera_image` | no | `bambu_p1_streamer` | Docker image for X1-style streamer fallback |
 | `camera_container_name` | no | `bambu_camera` | Docker container name |
-| `camera_port` | no | `1985:1984` | Docker publish mapping. Prefer `127.0.0.1:1985:1984` on shared hosts (see [SECURITY.md](SECURITY.md)) |
+| `camera_port` | no | `127.0.0.1:1985:1984` | Docker publish mapping; loopback-only by default. Set to `0.0.0.0:1985:1984` to expose on the LAN (see [SECURITY.md](SECURITY.md)) |
 | `camera_stream_url` | no | derived | Must be localhost if set; used for Docker frame fetch |
 | Timeouts | no | package defaults | Optional `network_timeout`, `slicer_timeout`, `command_timeout`, `upload_timeout` (seconds) |
 

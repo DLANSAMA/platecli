@@ -18,6 +18,23 @@ if TYPE_CHECKING:
     from bambu_cli.printer import BambuPrinter
 
 
+def _stream_host_port(camera_port: str, default: str = "1985") -> str:
+    """Extract the published host port from a docker ``-p`` spec for building the
+    localhost streamer URL.
+
+    Docker's form is ``[HOST:]HOSTPORT:CONTAINERPORT``: the container port is
+    always the last colon field and the host port the one before it (this holds
+    even for bracketed IPv6 hosts). Forms with no fixed host port — a bare
+    container port (``"1984"``), an empty host port (``"127.0.0.1::1984"``), or a
+    range (``"1985-1990:1984-1989"``) — are not derivable, so fall back to the
+    documented default; users with such specs should set ``camera_stream_url``.
+    """
+    parts = camera_port.split(":")
+    if len(parts) >= 2 and parts[-2].isdigit():
+        return parts[-2]
+    return default
+
+
 def _normalize_fingerprint(fp: str | None) -> str | None:
     """Normalize a pinned SHA-256 fingerprint (lowercase, separator-free).
 
@@ -47,7 +64,7 @@ class Settings:
     nozzle_size: str = "0.4"
     camera_image: str = "bambu_p1_streamer"
     camera_container_name: str = "bambu_camera"
-    camera_port: str = "1985:1984"
+    camera_port: str = "127.0.0.1:1985:1984"  # mirrors config.DEFAULT_CAMERA_PORT
     camera_stream_url: str = ""
     allow_private_ips: bool = False
 
@@ -62,11 +79,13 @@ class Settings:
 
         default_orca = ""
         default_profiles = ""
+        default_camera_port = "127.0.0.1:1985:1984"
         try:
             from bambu_cli import config as _config_mod
 
             default_orca = _config_mod._DEFAULT_ORCA or ""
             default_profiles = _config_mod._DEFAULT_PROFILES or ""
+            default_camera_port = _config_mod.DEFAULT_CAMERA_PORT
         except Exception:
             pass
 
@@ -74,8 +93,8 @@ class Settings:
         profiles_dir = _expand_path(cfg.get("profiles_dir", default_profiles))
         printer_model = cfg.get("model", cfg.get("printer_model", "P1P")).upper()
         nozzle_size = str(cfg.get("nozzle", cfg.get("nozzle_size", "0.4")))
-        camera_port = cfg.get("camera_port", "1985:1984")
-        host_port = camera_port.split(":")[0]
+        camera_port = cfg.get("camera_port", default_camera_port)
+        host_port = _stream_host_port(camera_port)
         camera_stream_url = cfg.get("camera_stream_url", f"http://localhost:{host_port}/api/frame.jpeg?src=p1s")
 
         return cls(

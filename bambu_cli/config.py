@@ -227,7 +227,11 @@ DEFAULT_PRINTER_MODEL = "P1P"
 DEFAULT_NOZZLE_SIZE = "0.4"
 DEFAULT_CAMERA_IMAGE = "bambu_p1_streamer"
 DEFAULT_CAMERA_CONTAINER_NAME = "bambu_camera"
-DEFAULT_CAMERA_PORT = "1985:1984"
+# Bind the camera streamer's published port to loopback by default so the
+# printer feed (the streamer's HTTP endpoint has no auth) is not exposed to the
+# whole LAN. Users who deliberately want LAN access can set camera_port to
+# "0.0.0.0:1985:1984". Form is docker's [HOST:]HOSTPORT:CONTAINERPORT.
+DEFAULT_CAMERA_PORT = "127.0.0.1:1985:1984"
 
 
 MODEL_MAPPING = {

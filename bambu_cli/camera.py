@@ -6,7 +6,9 @@ runner, docker-which, access-code loader) are injectable so tests pass fakes
 instead of patching module globals.
 """
 
+import json
 import os
+import re
 import shutil
 import socket
 import ssl
@@ -54,6 +56,74 @@ class _CameraPinMismatch(BambuError):
 
     exit_code = EXIT_NETWORK_ERROR
     failed_step = "grab"
+
+
+# Container-port token of a docker ``-p`` spec: a port (or range) plus optional
+# protocol suffix, e.g. ``1984``, ``1984/tcp``, ``1984-1989/udp``.
+_CONTAINER_PORT_RE = re.compile(r"^\d{1,5}(-\d{1,5})?(/(tcp|udp|sctp))?$", re.IGNORECASE)
+
+
+def _camera_port_is_valid(camera_port):
+    """True if ``camera_port`` is a usable docker ``-p`` value. Only the
+    container port (the last colon field) is strictly checked; the optional host
+    IP/port fields are left for docker to validate (and go list-form into argv,
+    so there is no injection risk). Turns a confusing docker error into a clear
+    config error for the common typo cases (empty value, missing container port).
+    """
+    if not camera_port:
+        return False
+    return bool(_CONTAINER_PORT_RE.match(camera_port.split(":")[-1]))
+
+
+def _camera_bind_host(camera_port):
+    """Host/IP a docker ``-p`` spec binds to; ``""`` means all interfaces.
+
+    Form is ``[HOST:]HOSTPORT:CONTAINERPORT``, so the host is everything before
+    the last two colon fields (handles bracketed IPv6, which is then unbracketed).
+    """
+    parts = camera_port.split(":")
+    if len(parts) >= 3:
+        return ":".join(parts[:-2]).strip("[]")
+    return ""
+
+
+def _bind_is_loopback(host):
+    return host.startswith("127.") or host in ("localhost", "::1")
+
+
+def _warn_if_running_bind_exposed(ctx, run):
+    """Warn if an already-running streamer container publishes the camera on a
+    non-loopback interface — e.g. a container created before the loopback-only
+    default, whose binding only changes when the container is recreated. Purely
+    best-effort: any inspect/parse failure is ignored (it is only a warning).
+    """
+    try:
+        out = run(
+            ["docker", "inspect", "-f", "{{json .NetworkSettings.Ports}}", ctx.settings.camera_container_name],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if out.returncode != 0:
+            return
+        ports = json.loads((out.stdout or "").strip() or "null")
+    except (FileNotFoundError, subprocess.SubprocessError, ValueError, TypeError):
+        return
+    if not isinstance(ports, dict):
+        return
+    exposed = set()
+    for binds in ports.values():
+        for bind in binds or []:
+            host_ip = (bind or {}).get("HostIp", "") if isinstance(bind, dict) else ""
+            if not _bind_is_loopback(host_ip.strip("[]")):
+                exposed.add(host_ip or "0.0.0.0")
+    if exposed:
+        name = ctx.settings.camera_container_name
+        logger.warning(
+            f"The running '{name}' container publishes the camera on non-loopback "
+            f"interface(s) {', '.join(sorted(exposed))}; anyone on the network can view it. "
+            f"Run 'docker rm -f {name}' to recreate it with the loopback-only camera_port default."
+        )
 
 
 def _grab_camera_frame_direct(
@@ -278,6 +348,24 @@ def _cmd_snapshot(
         logger.error(message)
         emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="docker", output=outpath)
         abort("", exit_code=EXIT_CONFIG_ERROR)
+
+    camera_port = ctx.settings.camera_port
+    if not _camera_port_is_valid(camera_port):
+        message = (
+            f"Invalid camera_port {camera_port!r}: expected docker port form "
+            "[HOST:]HOSTPORT:CONTAINERPORT (e.g. 127.0.0.1:1985:1984)."
+        )
+        logger.error(message)
+        emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="docker", output=outpath)
+        abort("", exit_code=EXIT_CONFIG_ERROR)
+    config_exposed = not _bind_is_loopback(_camera_bind_host(camera_port))
+    if config_exposed:
+        logger.warning(
+            f"camera_port {camera_port!r} publishes the printer camera on a non-loopback "
+            f"interface ({_camera_bind_host(camera_port) or 'all interfaces (0.0.0.0)'}); "
+            "anyone on the network can view it. Set camera_port to '127.0.0.1:1985:1984' "
+            "to restrict it to this machine."
+        )
     try:
         check = _run(
             ["docker", "inspect", "-f", "{{.State.Running}}", ctx.settings.camera_container_name],
@@ -363,6 +451,12 @@ def _cmd_snapshot(
             except urllib.error.URLError:
                 pass
             _sleep(0.5)
+    elif not config_exposed:
+        # Container already running: its published port was fixed at creation
+        # time, so the loopback-only default only takes effect on recreation.
+        # Warn if a pre-existing container is still exposed. Skipped when the
+        # configured value already warned above (avoid duplicate noise).
+        _warn_if_running_bind_exposed(ctx, _run)
 
     logger.info("📸 Capturing snapshot...")
     try:

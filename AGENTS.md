@@ -94,4 +94,4 @@ Full threat model: [SECURITY.md](SECURITY.md).
 - Prefer `access_code_file` over inline `access_code`.
 - Downloads block private/loopback targets unless `--allow-private-ips` (CLI-only, not sticky config).
 - Destructive actions need `--confirm`: print, job print step, stop, delete, gcode. Pause/resume do **not** currently require it.
-- Camera Docker streamer (when used) publishes via `camera_port` (default `1985:1984`); treat as LAN-sensitive until bound to loopback by default (see SECURITY known limitations).
+- Camera Docker streamer (when used) publishes via `camera_port`, now loopback-only by default (`127.0.0.1:1985:1984`); the feed is unauthenticated, so only expose it on the LAN (`0.0.0.0:...`) deliberately (see SECURITY.md).

@@ -82,7 +82,7 @@ Tracked for hardening; not all are “bugs” in the sense of broken claims.
 
 | Topic | Detail | Status |
 |-------|--------|--------|
-| **Camera Docker port bind** | Default `camera_port` is `1985:1984`, which Docker publishes on **all interfaces** (`0.0.0.0`). The CLI only requires the *client* streamer URL to be localhost. On multi-user or untrusted-LAN hosts, prefer `127.0.0.1:1985:1984` and set `camera_stream_url` explicitly if needed. Parsing of host-qualified port specs is incomplete today. | Open hardening |
+| **Camera Docker port bind** | Default `camera_port` is now `127.0.0.1:1985:1984`, so the streamer publishes the (unauthenticated) camera feed on **loopback only**. Set `camera_port` to `0.0.0.0:1985:1984` to deliberately expose it on the LAN. Host-qualified specs now parse correctly, `camera_port` is validated, and the CLI warns if a *pre-existing* container is still bound to a non-loopback interface (recreate with `docker rm -f bambu_camera`). | Fixed |
 | **Camera pin fallback** | A pinned-fingerprint **mismatch** during the direct camera grab now hard-aborts the snapshot instead of silently falling back to the Docker streamer (which would ignore the pin). A *missing* pin (no `cert_fingerprint`, no `insecure_tls`) still falls through to the streamer, since there is no configured control to downgrade. | Fixed |
 | **HTTP downloads** | `http://` and `https://` are both accepted. SSRF controls apply; **content integrity** over cleartext HTTP does not (a network attacker can substitute a model). Prefer HTTPS sources. | Residual |
 | **pause / resume** | Do not require `--confirm` (unlike stop/print/delete/gcode). | Residual / product choice |
