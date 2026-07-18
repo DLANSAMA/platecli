@@ -1,8 +1,34 @@
+# Source distribution contents for bambu-local-cli.
+#
+# Ship only user/agent-facing docs + runtime + tests/scripts needed to develop
+# from an sdist. Contributor-only planning docs stay on GitHub (not listed here).
+#
+# SHIP (sdist): README, AGENTS, SECURITY, CHANGELOG, docs/api.md, docs/schemas/*
+# DO NOT SHIP (repo-only): CONTRIBUTING.md, docs/quality-roadmap.md,
+#   docs/test-backlog.md, docs/mutation-baseline.md, docs/live-printer-smoke.md,
+#   CLAUDE.md (local exclude), and any other unlisted markdown under docs/.
+# Wheel: runtime package only (setuptools packages.find); no docs in package-data.
+
 include LICENSE
 include README.md
 include AGENTS.md
+include SECURITY.md
+include CHANGELOG.md
 include MANIFEST.in
 include pyproject.toml
+
+# Agent JSON contracts (machine + human). Not the quality/planning docs.
+include docs/api.md
+recursive-include docs/schemas *.json
+
 recursive-include bambu_cli *.py
 recursive-include scripts *.py
 recursive-include tests *.py
+
+# Defense in depth: never pull contributor-only docs if a future recursive rule expands.
+global-exclude CLAUDE.md
+global-exclude docs/quality-roadmap.md
+global-exclude docs/test-backlog.md
+global-exclude docs/mutation-baseline.md
+global-exclude docs/live-printer-smoke.md
+global-exclude CONTRIBUTING.md

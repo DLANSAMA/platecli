@@ -1,10 +1,13 @@
 # Mutation testing baseline (Phase 3)
 
-**Date:** 2026-07-09  
+**Baseline date:** 2026-07-09 (scores below; re-run before changing the floor)  
+**Doc refresh:** 2026-07-17 (scope/floor unchanged)  
 **Tool:** mutmut 3.6.0  
 **Reproduce:** `./scripts/run_mutation_baseline.sh`  
 **CI:** `.github/workflows/mutation.yml` — `workflow_dispatch` + nightly `schedule` only  
   (**not** on every `pull_request`; full runs are minutes-long and would slow PR feedback)
+
+Related: [quality-roadmap.md](quality-roadmap.md), [test-backlog.md](test-backlog.md).
 
 ## Scope (blocklist-style purity)
 

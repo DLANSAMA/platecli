@@ -10,6 +10,8 @@ Fully local 3D printing pipeline for Bambu Lab printers. Runs on **Linux, macOS,
 
 > **Disclaimer:** bambu-cli is an unofficial, community-developed tool. It is not affiliated with, endorsed by, or supported by Bambu Lab. "Bambu Lab" and product names are trademarks of their respective owners, used here only to describe compatibility. The printer protocols (MQTT/FTPS) are reverse-engineered; a firmware update may break functionality without warning — run `bambu-cli doctor` after printer updates.
 
+**Status:** Beta (`0.1.0`). Pre-1.0 — APIs and config keys follow the stability policy in [docs/api.md](docs/api.md).
+
 ## Installation
 
 The examples below use the installed `bambu-cli` command.
@@ -24,15 +26,19 @@ Or from source:
 
 ```bash
 pip install .
+# or: uv sync
 ```
 
 ## Features
 
-- **Jobs & URL Support** — Use `job` when an agent or user gives either a website URL or a local file path. It handles everything in one shot.
-- **Safe Extraction** — ZIP archives containing model files are fully supported. Existing files are kept safe by creating a numbered sibling such as `model-1.stl`. URL downloads and ZIP extraction have a 2048 MB safety limit, adjustable via `--max-download-mb`.
+- **Jobs & URL support** — Use `job` when an agent or user gives either a website URL or a local file path. It handles everything in one shot.
+- **Safe extraction** — ZIP archives containing model files are fully supported. Existing files are kept safe by creating a numbered sibling such as `model-1.stl`. URL downloads and ZIP extraction have a 2048 MB safety limit, adjustable via `--max-download-mb`.
 - **Modularity** — Run steps individually using `download`, `slice`, `upload`, or `print`.
-- **Safety First** — The one-shot command will not start a print unless `--confirm` is present.
+- **Safety first** — One-shot and print flows will not start a physical print unless `--confirm` is present. Stop, delete, and raw gcode also require `--confirm`.
+- **TLS pinning** — Pin the printer’s self-signed cert with `cert_fingerprint` (setup/doctor can capture it). Prefer this over `insecure_tls`.
+- **SSRF-hardened downloads** — Private/loopback targets are refused unless you pass `--allow-private-ips` for that invocation.
 - **Diagnostics** — Network, FTPS, and MQTT health checking with `doctor` and `preflight`.
+- **Agent JSON** — Structured `--json` output with published schemas under `docs/schemas/`.
 
 ## Setup
 
@@ -47,6 +53,7 @@ Inspect or check the resulting config at any time:
 ```bash
 bambu-cli config show       # print config path + contents (access code redacted)
 bambu-cli config validate   # check config values without contacting the printer
+bambu-cli doctor            # connectivity + live cert fingerprint
 ```
 
 ### OrcaSlicer
@@ -79,6 +86,7 @@ JSON** (NDJSON) — one compact object per change as the print advances:
 ```bash
 bambu-cli status --monitor --json
 ```
+
 ```json
 {"event":"update","command":"status","gcode_state":"RUNNING","mc_percent":42,"layer_num":50,"total_layer_num":200,"mc_remaining_time":33,"nozzle_temper":220,"nozzle_target_temper":220,"bed_temper":60,"bed_target_temper":60,"gcode_file":"model.gcode"}
 {"event":"terminal","command":"status","gcode_state":"FINISH","mc_percent":100,"layer_num":200,"total_layer_num":200,"mc_remaining_time":0,"nozzle_temper":38,"nozzle_target_temper":0,"bed_temper":31,"bed_target_temper":0,"gcode_file":"model.gcode"}
@@ -86,14 +94,17 @@ bambu-cli status --monitor --json
 
 Each line is a self-contained JSON object, so an agent can consume the stream
 incrementally and stop once it sees `"event":"terminal"`. Pair with `--sim` to
-exercise the exact event shape without a printer.
+exercise the exact event shape without a printer. Schema: [`docs/schemas/status_event.json`](docs/schemas/status_event.json).
 
 ### Global flags
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Emit JSON for commands that support it; may appear before the subcommand |
+| `--json` | Emit JSON for commands that support it; may appear before or after the subcommand |
+| `--sim` | Simulation mode (no real printer) |
 | `--max-download-mb` | Cap URL download and ZIP extraction size (default 2048 MB); accepted by `job`, `send`, and `download` |
+| `--allow-private-ips` | Allow downloads that resolve to private/loopback addresses (default: deny). CLI-only, not sticky config |
+| `--network-timeout` / `--slicer-timeout` / `--command-timeout` / `--upload-timeout` | Bound long operations (see [docs/api.md](docs/api.md)) |
 
 ### Slicing & AMS
 
@@ -120,22 +131,66 @@ shows each AMS unit's trays (filament type, colour, and remaining %), and
 tray (absolute index `unit * 4 + slot`); feed the `slot` indexes to
 `--ams-mapping` when printing with `--use-ams`.
 
-## Project layout
+## Config reference
 
-- `bambu_cli/` — Runtime package used by installed command (`bambu-cli`).
-- `scripts/bambu.py` — Compatibility wrapper for direct script usage without installing.
-- `tests/` — Smoke and unit tests, including `ci_workflow_smoke.py`, `python_compat_smoke.py`, and `release_readiness_smoke.py`.
-
-## Config Reference
+Config file location is platform-standard under the user config directory
+(e.g. `~/.config/bambu/config.json` on Linux). Create/edit via `bambu-cli setup`
+or manually.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | `printer_ip` | ✅ | — | Printer's LAN IP address |
 | `serial` | ✅ | — | Printer serial number |
-| `access_code_file` | ✅* | — | Path to file containing access code (recommended) |
-| `access_code` | ✅* | — | Printer access code inline in config (**deprecated**; migrate with `bambu setup --migrate-access-code`) |
+| `access_code_file` | ✅* | — | Path to file containing access code (**recommended**) |
+| `access_code` | ✅* | — | Inline access code (**deprecated**; migrate with `bambu-cli setup --migrate-access-code`) |
+| `cert_fingerprint` | recommended | — | SHA-256 of the printer TLS cert (no separators or colon form both accepted) |
+| `insecure_tls` | no | `false` | Disable TLS verification (last resort; CLI warns when true) |
+| `username` | no | `bblp` | MQTT username |
+| `mqtt_port` | no | `8883` | MQTTS port |
+| `model` / `printer_model` | no | `P1P` | Printer model token for slicing |
+| `nozzle` / `nozzle_size` | no | `0.4` | Nozzle diameter string |
+| `orca_slicer` | for slice | auto-detect | Path to OrcaSlicer binary |
+| `profiles_dir` | for slice | auto-detect | Path to OrcaSlicer `profiles/BBL` directory |
+| `camera_image` | no | `bambu_p1_streamer` | Docker image for X1-style streamer fallback |
+| `camera_container_name` | no | `bambu_camera` | Docker container name |
+| `camera_port` | no | `127.0.0.1:1985:1984` | Docker publish mapping; loopback-only by default. Set to `0.0.0.0:1985:1984` to expose on the LAN (see [SECURITY.md](SECURITY.md)) |
+| `camera_stream_url` | no | derived | Must be localhost if set; used for Docker frame fetch |
+| Timeouts | no | package defaults | Optional `network_timeout`, `slicer_timeout`, `command_timeout`, `upload_timeout` (seconds) |
 
-*Either `access_code_file` or `access_code` is required, but inline `access_code` is deprecated and will be removed in a future release. See the packaged [bambu_cli/README.md](bambu_cli/README.md) for the full key reference (`cert_fingerprint`, `orca_slicer`, `profiles_dir`, etc.).
+\* Either `access_code_file` or `access_code` is required. Inline `access_code` is deprecated and will be removed in a future release.
+
+`allow_private_ips` is **not** a config key — use the CLI flag `--allow-private-ips` per invocation.
+
+## Project layout
+
+- `bambu_cli/` — Runtime package used by the installed command (`bambu-cli`).
+- `scripts/bambu.py` — Compatibility wrapper for direct script usage without installing.
+- `tests/` — Unit, contract, security-marker, and smoke tests.
+- `docs/` — API, schemas, quality roadmap, test backlog, mutation baseline, live smoke.
+
+## Documentation
+
+### Ships with the PyPI sdist (and on GitHub)
+
+| Doc | Audience |
+|-----|----------|
+| [AGENTS.md](AGENTS.md) | Agents and automation (architecture, safety) |
+| [docs/api.md](docs/api.md) | JSON contracts + stability policy |
+| [docs/schemas/](docs/schemas/) | Machine-checkable JSON Schema files |
+| [SECURITY.md](SECURITY.md) | Threat model, reporting, known limitations |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes |
+
+Wheels contain **runtime code only** (no docs).
+
+### GitHub / contributor only (not in PyPI packages)
+
+| Doc | Audience |
+|-----|----------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, tests, releases |
+| [docs/quality-roadmap.md](docs/quality-roadmap.md) | Quality scoreboard and phased plan |
+| [docs/test-backlog.md](docs/test-backlog.md) | Remaining test / coverage gaps |
+| [docs/live-printer-smoke.md](docs/live-printer-smoke.md) | Opt-in real-printer harness |
+| [docs/mutation-baseline.md](docs/mutation-baseline.md) | Mutation testing scope and floor |
 
 ## License
 

@@ -1,7 +1,11 @@
 # Live-printer smoke (pre-release harness)
 
-Opt-in checks that exercise Phase 0 safety fixes against a **real** Bambu printer
-and local slicer install. They never run in CI or in the default local suite.
+Opt-in checks that exercise safety-critical paths against a **real** Bambu printer
+and local slicer install. They never run in CI or in the default local suite
+(`-m "not live"`).
+
+**Agents:** never enable `BAMBU_LIVE=1`, `BAMBU_LIVE_PRINT_CONFIRM`, or any
+`--confirm` live run without explicit user approval ([AGENTS.md](../AGENTS.md)).
 
 ## Hard gates (must all be true)
 
@@ -85,7 +89,10 @@ export BAMBU_LIVE_CLEANUP=1
 Before tagging a release that touches FTPS, gcode confirm, slice validation, or
 job upload paths:
 
-1. Unit suite green (`-m "not live"`).
+1. Unit suite green (`-m "not live"`) plus the usual CI lint/type/security gates
+   ([CONTRIBUTING.md](../CONTRIBUTING.md)).
 2. Run this live harness with `BAMBU_LIVE=1` (upload-only path at minimum).
 3. Optionally enable `BAMBU_LIVE_CLEANUP=1` after success.
 4. Record the run date/host in the release notes if useful (no secrets).
+5. For 1.0 readiness criteria beyond this harness, see
+   [quality-roadmap.md](quality-roadmap.md) §5.

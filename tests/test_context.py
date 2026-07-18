@@ -37,6 +37,28 @@ def test_settings_from_config_maps_all_keys():
     assert settings.allow_private_ips is False
 
 
+def test_stream_host_port_derivation():
+    # Container port is always the last colon field; host port the one before it,
+    # across every docker -p form (including bracketed IPv6). Non-derivable forms
+    # (bare container port, empty host port, ranges) fall back to the default.
+    d = context._stream_host_port
+    assert d("1985:1984") == "1985"
+    assert d("127.0.0.1:1985:1984") == "1985"
+    assert d("0.0.0.0:1985:1984") == "1985"
+    assert d("[::1]:1985:1984") == "1985"
+    assert d("1985:1984/tcp") == "1985"
+    assert d("1984") == "1985"  # bare container port -> random host port -> fallback
+    assert d("127.0.0.1::1984") == "1985"  # empty host port -> random -> fallback
+    assert d("1985-1990:1984-1989") == "1985"  # range -> fallback
+
+
+def test_settings_from_config_host_qualified_camera_port_url():
+    # Regression: a host-qualified port spec must still derive the correct host
+    # port for the localhost stream URL (previously took the IP field).
+    settings = context.Settings.from_config({"camera_port": "127.0.0.1:1985:1984"})
+    assert settings.camera_stream_url == "http://localhost:1985/api/frame.jpeg?src=p1s"
+
+
 def test_settings_from_config_defaults_for_missing_keys():
     settings = context.Settings.from_config({})
     assert settings.printer_ip == "0.0.0.0"
@@ -48,7 +70,7 @@ def test_settings_from_config_defaults_for_missing_keys():
     assert settings.nozzle_size == "0.4"
     assert settings.camera_image == "bambu_p1_streamer"
     assert settings.camera_container_name == "bambu_camera"
-    assert settings.camera_port == "1985:1984"
+    assert settings.camera_port == "127.0.0.1:1985:1984"
     assert settings.camera_stream_url == "http://localhost:1985/api/frame.jpeg?src=p1s"
 
 

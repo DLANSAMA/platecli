@@ -33,28 +33,36 @@ Baselines from audit + full `pytest --cov=bambu_cli` on 2026-07-08:
 
 ## Scoreboard (current)
 
-Updated 2026-07-09 — corrected against measured reality (the prior "A+ across the
-board" entry overstated coverage, typing, and schema completeness; see the
-per-row evidence below). Foundational phases (0/A/B) are done. Phase C **typing is
-done** (full package + `check_untyped_defs`); coverage floor is **81** (target 92).
-Phase D schemas largely landed. Remaining 1.0 A+ gap is mainly coverage ratchet.
+Updated **2026-07-17** (full codebase audit + doc truth pass). Foundational phases
+(0/A/B) are done. Phase C **typing is done** (full package + `check_untyped_defs`);
+coverage floor is **81** (target 92). Phase D schemas largely landed but not
+complete for every command. The camera Docker bind default and camera pin
+soft-fallback hardenings are now **fixed** (loopback-only default bind,
+fail-closed on pin mismatch and on `ssl.SSLError` during the handshake when a
+pin is configured); see [SECURITY.md](../SECURITY.md) for the remaining
+residuals (the no-pin-configured Docker streamer path is unverified by design,
+and even with a pin a TCP-level failure on port 6000 still falls back to the
+streamer, since X1-series printers legitimately refuse that port).
+Those residuals do not lower the security *mindset* grade but are one reason
+security is not yet **A+**.
 
 | Area | Score | Evidence |
 |------|-------|----------|
-| Security mindset | **A** | allow-private-ips fixed; TLS pin suite; SSRF/redirect tests; bandit blocking (no issues); security markers in CI |
-| Architecture | **A** | `@mockable` = 0 (fully removed); abort error model; facade frozen; domain ↛ sys.exit |
-| Agent JSON UX | **A** | ok/error envelopes + per-command schemas (slice/download/config/job/gcode/print/…) + contract harness |
-| Correctness / bugs | **A** | dead flags fixed (incl. global `--json` before subcommand, 2026-07-09); structured errors; purity greps; version single-sourced |
-| Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes (`printer.py` / `slicer/` included) |
+| Security mindset | **A** | allow-private-ips fixed; TLS pin suite (mismatch + handshake SSLError both fail closed); SSRF/redirect tests; bandit blocking; security markers; honest known-limitations table in SECURITY.md. A+ needs single pin helper |
+| Architecture | **A−** | `@mockable` = 0; abort error model; thin entrypoint; domain ↛ `sys.exit`. **Still open:** domain→`cli` private helper imports (~40 sites); Phase B.4 extract not done; pin verify not single-sourced (B.5) |
+| Agent JSON UX | **A** | ok/error envelopes + many per-command schemas + contract harness. Gaps: dedicated `status` success schema, upload/files/stop/setup |
+| Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
+| Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | 573 tests, 0 flaky; **~82.3%** Linux / **~81.9%** Windows branch total — not the ≥99% previously claimed; per-module floors not yet enforced |
-| CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=81`** (multi-OS minimum; A+ target remains 92) |
-| Docs / governance | **A−** | roadmap + stability policy + schemas + backlog present; scoreboard kept honest |
-| Product polish | **B+** | quality gates in place; version remains 0.1.0; coverage ratchet toward 92 remains for 1.0 A+ |
+| Tests | **A−** | **~618** non-live tests collected; **~82%** coverage; floor **81**; per-module floors not enforced |
+| CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=81`** (A+ target remains 92) |
+| Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-17); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
+| Product polish | **B+** | quality gates in place; version remains **0.1.0** Beta; coverage ratchet + camera defaults remain for 1.0 A+ |
 
-**Overall:** **solid A− / A** — architecture, error model, security, and **full-package typing** are A-grade;
-agent schemas largely landed. Remaining gap to A+ is mainly coverage toward 92. Tagging
-`v1.0.0` still requires closing that, per §5.
+**Overall:** **solid A− / A** — error model, typing, and security *controls* are strong;
+architecture is A− until domain helpers leave `cli.py`. Remaining gap to A+ / `v1.0.0`
+is coverage toward 92, schema completeness, B.4/B.5 layering, and documented camera
+hardenings. Tagging `v1.0.0` still requires §5.
 
 **Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09).
 Measured branch total is ~82.3% on Linux and ~81.9% on Windows; the floor is set
@@ -611,16 +619,21 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 |-------|--------|-------|----------------|-------|
 | 0 Trust & truth | **done** | local | 2026-07-08 | allow-private-ips, bare except, version single-source |
 | A Testing foundation | **done** | local | 2026-07-08 | TLS suite, markers, transport tests, cov~80% |
-| B Error model & seams | **done** | #11 | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed |
+| B Error model & seams | **partial** | #11 | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed. **B.4** paths/jsonio/argutils extract and **B.5** single pin helper still open (2026-07-17 audit) |
 | C Coverage & typing | **in progress** | #18 | 2026-07-09 | full-package mypy + `check_untyped_defs` done; cov ~82% with CI floor **81** (target 92); per-module floors not enforced |
 | D Contracts & 1.0 | **in progress** | local | — | schemas + contract harness + stability policy; remaining agent `--json` schemas land in follow-up PRs |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
+| Doc truth pass | **done** | local | 2026-07-17 | AGENTS/CONTRIBUTING/SECURITY/README/api/backlog/roadmap aligned with audit; no code changes required for docs-only pass |
 
 > **Verified 2026-07-09** against a clean checkout — the "current scoreboard" above
 > was corrected the same day. Coverage floor raised 79→**81** (multi-OS minimum:
 > Linux ~82.3% / Windows ~81.9%). Prior claim of "A+ across the board" did not match
 > measured coverage (~82%, not ≥99%), the previous CI floor (79, not 92), the mypy
 > excludes, or schema coverage.
+>
+> **Re-verified 2026-07-17** (full audit): typing excludes remain **gone**; architecture
+> grade corrected to **A−** (domain→cli coupling); test count ~618 collected; SECURITY
+> known-limitations expanded (camera Docker bind, pin soft-fallback, HTTP downloads).
 
 ### mockable count (burn-down)
 
@@ -643,11 +656,12 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 | Doc | Role after this roadmap |
 |-----|-------------------------|
 | `docs/test-backlog.md` | Short **remaining** test gaps only; refreshed each phase; no stale % |
-| `docs/api.md` | Human API reference; eventually schema-backed |
-| `docs/schemas/` | *(new)* Machine contracts |
-| `SECURITY.md` | Threat model; update when controls change |
-| `CONTRIBUTING.md` | Point at this roadmap + single test command |
-| `AGENTS.md` | Agent/runtime rules; keep thin |
+| `docs/api.md` | Human API reference + stability policy; links schemas |
+| `docs/schemas/` | Machine contracts |
+| `SECURITY.md` | Threat model + known limitations; update when controls change |
+| `CONTRIBUTING.md` | Point at this roadmap + single test command + full gate list |
+| `AGENTS.md` | Agent/runtime rules; architecture debt called out honestly |
+| `README.md` | User-facing features + full config reference + doc index |
 
 ---
 

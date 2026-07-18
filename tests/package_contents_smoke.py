@@ -12,6 +12,12 @@ REQUIRED_SDIST_FILES = {
     "MANIFEST.in",
     "README.md",
     "AGENTS.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "docs/api.md",
+    "docs/schemas/error_envelope.json",
+    "docs/schemas/job_ok.json",
+    "docs/schemas/version.json",
     "pyproject.toml",
     "bambu_cli/__init__.py",
     "bambu_cli/bambu.py",
@@ -44,6 +50,19 @@ REQUIRED_SDIST_FILES = {
     "tests/test_download_cmd.py",
     "tests/test_camera_cmd.py",
     "tests/test_doctor_and_safety.py",
+    "tests/contracts/test_schema_validation.py",
+}
+
+# Contributor/CI planning docs and local agent notes stay on GitHub (or local
+# exclude) — never in the PyPI sdist. Enforced so a recursive MANIFEST rule
+# cannot accidentally ship them.
+FORBIDDEN_SDIST_FILES = {
+    "CONTRIBUTING.md",
+    "CLAUDE.md",
+    "docs/quality-roadmap.md",
+    "docs/test-backlog.md",
+    "docs/mutation-baseline.md",
+    "docs/live-printer-smoke.md",
 }
 
 REQUIRED_WHEEL_FILES = {
@@ -70,6 +89,10 @@ FORBIDDEN_WHEEL_FILES = {
 FORBIDDEN_WHEEL_DATA_SUFFIXES = {
     "bambu_cli/README.md",
     "bambu_cli/AGENTS.md",
+    "AGENTS.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "docs/",
 }
 
 STATIC_METADATA_SNIPPETS = {
@@ -111,16 +134,15 @@ REQUIRED_GITIGNORE_SNIPPETS = {
 
 REQUIRED_DOC_SNIPPETS = {
     "README.md": {
-        "`--json` | Emit JSON for commands that support it; may appear before the subcommand",
+        "`--json` | Emit JSON for commands that support it; may appear before or after the subcommand",
         "`bambu-cli --json --version` emits",
         "STL > STEP > OBJ > 3MF > G-code",
         "--max-download-mb",
         "zero-or-positive slot indexes",
-        "Runtime package used by installed command",
+        "Runtime package used by the installed command",
         "Compatibility wrapper for direct script usage",
-        "ci_workflow_smoke.py",
-        "python_compat_smoke.py",
-        "release_readiness_smoke.py",
+        "docs/schemas/",
+        "SECURITY.md",
     },
     "AGENTS.md": {
         "STL > STEP/STP > OBJ > 3MF > G-code",
@@ -238,6 +260,9 @@ def check_sdist(dist_dir):
     missing = sorted(REQUIRED_SDIST_FILES - names)
     if missing:
         raise SystemExit(f"sdist missing required files: {missing}")
+    forbidden = sorted(FORBIDDEN_SDIST_FILES & names)
+    if forbidden:
+        raise SystemExit(f"sdist contains repo-only / non-ship docs: {forbidden}")
     try:
         with tarfile.open(archive_path) as tf:
             license_name = next((name for name in tf.getnames() if name.endswith("/LICENSE")), None)
@@ -300,7 +325,9 @@ def check_wheel(dist_dir):
     if forbidden:
         raise SystemExit(f"wheel contains source-only compatibility files: {forbidden}")
     forbidden_data = sorted(
-        suffix for suffix in FORBIDDEN_WHEEL_DATA_SUFFIXES if any(name.endswith(suffix) for name in names)
+        suffix
+        for suffix in FORBIDDEN_WHEEL_DATA_SUFFIXES
+        if any(name.endswith(suffix) or suffix in name for name in names)
     )
     if forbidden_data:
         raise SystemExit(f"wheel contains non-runtime data files: {forbidden_data}")
