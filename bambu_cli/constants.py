@@ -38,7 +38,23 @@ def _resolve_version() -> str:
     return _version_from_pyproject() or "0.0.0+dev"
 
 
-VERSION = _resolve_version()
+def __getattr__(name: str) -> str:
+    """Lazily resolve and cache ``VERSION`` on first access (PEP 562).
+
+    ``_resolve_version`` costs a real importlib.metadata lookup (or a
+    pyproject.toml read/regex fallback), which is unnecessary work for the
+    vast majority of invocations that never touch ``VERSION`` (only the
+    ``--version`` CLI path does). Resolving lazily via module ``__getattr__``
+    avoids paying that cost at import time; caching the result in
+    ``globals()`` means subsequent accesses are plain attribute hits and
+    never re-enter this function.
+    """
+    if name == "VERSION":
+        value = _resolve_version()
+        globals()["VERSION"] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # Exit codes
 EXIT_SUCCESS = 0
