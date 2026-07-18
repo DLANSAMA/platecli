@@ -33,6 +33,10 @@ Initial development version: LAN-mode printer control (MQTT/FTPS), one-shot `job
 - `load_access_code` and domain handlers raise structured `BambuError` / `abort` instead of calling `sys.exit` (process exit is CLI entry only).
 
 ### Changed
+- Release workflow now creates the GitHub Release only after the PyPI publish succeeds (build → publish → release job chain).
+- Sdists include `pytest.ini` so the shipped test suite runs with the project's marker/coverage config.
+- Simulation mode (`--sim status`) reports representative bed/nozzle targets, fan speed, and WiFi signal instead of `?` placeholders.
+- The missing-config error now names the exact command: ``Please run `bambu-cli setup` first.``
 - `VERSION` is resolved from package metadata / `pyproject.toml` only (no duplicate string in `constants.py`).
 - MQTT status-monitor teardown no longer uses a bare `except:`.
 - Removed `@mockable` / test-awareness indirection from production code.
