@@ -157,3 +157,284 @@ def test_guided_setup_manual_path(tmp_path, monkeypatch):
         assert data.get("printer_ip") == "192.168.1.40"
     else:
         assert raised is not None, "guided setup neither wrote config nor raised"
+
+class MockServiceInfo:
+    def __init__(self, ip):
+        self.ip = ip
+    def parsed_addresses(self):
+        return [self.ip]
+
+class MockZeroconf:
+    def __init__(self, services):
+        self.services = services
+        self.closed = False
+
+    def get_service_info(self, type_, name):
+        for s_name, s_ip in self.services:
+            if s_name == name:
+                return MockServiceInfo(s_ip)
+        return None
+
+    def close(self):
+        self.closed = True
+
+def create_mock_zeroconf(services):
+    return lambda: MockZeroconf(services)
+
+def mock_service_browser(services):
+    def init(zc, type_, listener):
+        for name, _ip in services:
+            listener.add_service(zc, type_, name)
+        return MagicMock()
+    return init
+
+def test_guided_setup_mdns_one_printer(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.json"
+    answers = iter([
+        "87654321",  # access code
+        "",  # confirm model
+        "",  # confirm nozzle
+        "",  # access code file (empty to use secret prompt)
+    ])
+
+    def fake_prompt(msg, args=None, default=None):
+        try:
+            return next(answers)
+        except StopIteration:
+            return default or ""
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    args = Namespace(
+        json=False,
+        migrate_access_code=False,
+        scan_timeout=0.01,
+        printer_ip=None,
+        serial=None,
+        access_code=None,
+        access_code_file=None,
+        access_code_env=None,
+        model=None,
+        nozzle=None,
+        orca_slicer=None,
+        profiles_dir=None,
+        cert_fingerprint=None,
+        insecure_tls=False,
+        config=str(cfg),
+    )
+
+    services = [("BBLP-P1P-01P00A123._bblp._tcp.local.", "10.0.0.50")]
+
+    with (
+        patch.object(common_mod, "_config_path", return_value=str(cfg)),
+        patch.object(wizard_mod, "_config_path", return_value=str(cfg)),
+        patch.object(wizard_mod, "_prompt_text", side_effect=fake_prompt),
+        patch.object(wizard_mod, "_prompt_secret", side_effect=fake_prompt),
+        patch.object(wizard_mod, "_prompt_access_code_file_path", return_value=None),
+        patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="aa:bb:cc"),
+    ):
+        import builtins
+        real_import = builtins.__import__
+
+        def guarded(name, *a, **k):
+            if name == "zeroconf":
+                mock_zc_module = MagicMock()
+                mock_zc_module.Zeroconf = create_mock_zeroconf(services)
+                mock_zc_module.ServiceBrowser = mock_service_browser(services)
+                return mock_zc_module
+            return real_import(name, *a, **k)
+
+        with patch("builtins.__import__", side_effect=guarded):
+            wizard_mod._cmd_setup(args)
+
+    assert cfg.is_file()
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    assert data["printer_ip"] == "10.0.0.50"
+    assert data["serial"] == "01P00A123"
+    assert data["model"] == "P1P"
+
+def test_guided_setup_mdns_multiple_printers(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.json"
+    answers = iter([
+        "1",         # choice: index 1 (the second printer)
+        "11223344",  # access code
+        "",  # confirm model
+        "",  # confirm nozzle
+        "",  # access code file
+    ])
+
+    def fake_prompt(msg, args=None, default=None):
+        try:
+            return next(answers)
+        except StopIteration:
+            return default or ""
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    args = Namespace(
+        json=False,
+        migrate_access_code=False,
+        scan_timeout=0.01,
+        printer_ip=None,
+        serial=None,
+        access_code=None,
+        access_code_file=None,
+        access_code_env=None,
+        model=None,
+        nozzle=None,
+        orca_slicer=None,
+        profiles_dir=None,
+        cert_fingerprint=None,
+        insecure_tls=False,
+        config=str(cfg),
+    )
+
+    services = [
+        ("BBLP-X1C-00M00A000._bblp._tcp.local.", "10.0.0.60"),
+        ("BBLP-A1-03000A111._bblp._tcp.local.", "10.0.0.70"),
+    ]
+
+    with (
+        patch.object(common_mod, "_config_path", return_value=str(cfg)),
+        patch.object(wizard_mod, "_config_path", return_value=str(cfg)),
+        patch.object(wizard_mod, "_prompt_text", side_effect=fake_prompt),
+        patch.object(wizard_mod, "_prompt_secret", side_effect=fake_prompt),
+        patch.object(wizard_mod, "_prompt_access_code_file_path", return_value=None),
+        patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="dd:ee:ff"),
+    ):
+        import builtins
+        real_import = builtins.__import__
+
+        def guarded(name, *a, **k):
+            if name == "zeroconf":
+                mock_zc_module = MagicMock()
+                mock_zc_module.Zeroconf = create_mock_zeroconf(services)
+                mock_zc_module.ServiceBrowser = mock_service_browser(services)
+                return mock_zc_module
+            return real_import(name, *a, **k)
+
+        with patch("builtins.__import__", side_effect=guarded):
+            wizard_mod._cmd_setup(args)
+
+    assert cfg.is_file()
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    assert data["printer_ip"] == "10.0.0.70"
+    assert data["serial"] == "03000A111"
+    assert data["model"] == "A1"
+
+def test_guided_setup_mdns_no_printers(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.json"
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    args = Namespace(
+        json=False,
+        migrate_access_code=False,
+        scan_timeout=0.01,
+        printer_ip=None,
+        serial=None,
+        access_code=None,
+        access_code_file=None,
+        access_code_env=None,
+        model=None,
+        nozzle=None,
+        orca_slicer=None,
+        profiles_dir=None,
+        cert_fingerprint=None,
+        insecure_tls=False,
+        config=str(cfg),
+    )
+
+    services = []
+
+    with (
+        patch.object(common_mod, "_config_path", return_value=str(cfg)),
+        patch.object(wizard_mod, "_config_path", return_value=str(cfg)),
+    ):
+        import builtins
+        real_import = builtins.__import__
+
+        def guarded(name, *a, **k):
+            if name == "zeroconf":
+                mock_zc_module = MagicMock()
+                mock_zc_module.Zeroconf = create_mock_zeroconf(services)
+                mock_zc_module.ServiceBrowser = mock_service_browser(services)
+                return mock_zc_module
+            return real_import(name, *a, **k)
+
+        with patch("builtins.__import__", side_effect=guarded):
+            raised = None
+            try:
+                wizard_mod._cmd_setup(args)
+            except BambuError as exc:
+                raised = exc
+
+    assert raised is not None
+    assert raised.exit_code == 2  # EXIT_NETWORK_ERROR
+
+
+def test_guided_setup_mdns_discovery_error(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.json"
+    answers = iter([
+        "192.168.1.100", # manual IP fallback
+        "03000A222",     # manual Serial fallback
+        "12341234",      # access code
+        "",              # confirm model
+        "",              # confirm nozzle
+        "",              # access code file
+    ])
+
+    def fake_prompt(msg, args=None, default=None):
+        try:
+            return next(answers)
+        except StopIteration:
+            return default or ""
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    args = Namespace(
+        json=False,
+        migrate_access_code=False,
+        scan_timeout=0.01,
+        printer_ip=None,
+        serial=None,
+        access_code=None,
+        access_code_file=None,
+        access_code_env=None,
+        model=None,
+        nozzle=None,
+        orca_slicer=None,
+        profiles_dir=None,
+        cert_fingerprint=None,
+        insecure_tls=False,
+        config=str(cfg),
+    )
+
+    with (
+        patch.object(common_mod, "_config_path", return_value=str(cfg)),
+        patch.object(wizard_mod, "_config_path", return_value=str(cfg)),
+        patch.object(wizard_mod, "_prompt_text", side_effect=fake_prompt),
+        patch.object(wizard_mod, "_prompt_secret", side_effect=fake_prompt),
+        patch.object(wizard_mod, "_prompt_access_code_file_path", return_value=None),
+        patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None),
+    ):
+        import builtins
+        real_import = builtins.__import__
+
+        def guarded(name, *a, **k):
+            if name == "zeroconf":
+                mock_zc_module = MagicMock()
+                # raise exception to trigger manual fallback block
+                def failing_zc(*args, **kwargs):
+                    raise Exception("simulated mDNS failure")
+                mock_zc_module.Zeroconf = failing_zc
+                return mock_zc_module
+            return real_import(name, *a, **k)
+
+        with patch("builtins.__import__", side_effect=guarded):
+            wizard_mod._cmd_setup(args)
+
+    assert cfg.is_file()
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    assert data["printer_ip"] == "192.168.1.100"
+    assert data["serial"] == "03000A222"
