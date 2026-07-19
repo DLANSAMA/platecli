@@ -1,0 +1,3 @@
+## 2026-07-19 - URL parsing bottleneck in JSON serialization
+**Learning:** `urllib.parse.urlparse` has significant overhead when called iteratively on regular strings. In `bambu-cli`, the JSON output compaction loops through every string and calls `_redact_url_credentials`, which was doing a full `urlparse`. An initial attempt to fast-path using `if "://" not in url:` was rejected in review because protocol-relative credentials (e.g. `//user:pass@host`) lack `://`.
+**Action:** When adding fast-paths for string checks, ensure the criteria exactly matches structural requirements. For URL credentials, an `"@"` is always required.

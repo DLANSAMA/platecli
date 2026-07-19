@@ -59,6 +59,13 @@ _LAST_DOWNLOAD_PAYLOAD = None
 
 
 def _redact_url_credentials(url):
+    # Performance optimization: Fast-path for non-strings and strings that clearly
+    # cannot contain credentials (missing '@'). This avoids the overhead of
+    # lazy importing urllib and running the relatively expensive urlparse
+    # on every string value in large JSON responses.
+    if not isinstance(url, str) or "@" not in url:
+        return url
+
     from urllib.parse import urlparse, urlunparse
 
     try:
