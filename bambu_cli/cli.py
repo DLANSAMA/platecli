@@ -99,25 +99,42 @@ def _expand_path(path):
     return os.path.expandvars(os.path.expanduser(str(path)))
 
 
+_HOME_DIR = os.path.expanduser("~")
+_NORM_HOME_DIR = None
+
+
+def _get_norm_home_dir():
+    global _NORM_HOME_DIR
+    if _NORM_HOME_DIR is None:
+        try:
+            _NORM_HOME_DIR = os.path.normcase(os.path.abspath(_HOME_DIR))
+        except (TypeError, ValueError, OSError):
+            _NORM_HOME_DIR = _HOME_DIR
+    return _NORM_HOME_DIR
+
+
 def _display_path(path):
     """Return a user-facing path with the current home directory compacted."""
     if path is None:
         return None
     text = str(path)
-    expanded = _expand_path(text)
+
+    # Inline _expand_path for speed and caching
+    expanded = os.path.expandvars(os.path.expanduser(text))
     if not os.path.isabs(expanded):
         return text
-    home = os.path.expanduser("~")
+
+    norm_home = _get_norm_home_dir()
     try:
         norm_expanded = os.path.normcase(os.path.abspath(expanded))
-        norm_home = os.path.normcase(os.path.abspath(home))
     except (TypeError, ValueError, OSError):
         return text
+
     if norm_expanded == norm_home:
         return "~"
     prefix = norm_home + os.sep
     if norm_expanded.startswith(prefix):
-        return "~" + os.sep + os.path.relpath(expanded, home)
+        return "~" + os.sep + os.path.relpath(expanded, _HOME_DIR)
     return text
 
 
@@ -157,6 +174,8 @@ def _looks_like_schemeless_credential_url(value):
 def _redact_url_credentials(value):
     """Return URL text with any userinfo removed before logging or JSON output."""
     text = str(value or "")
+    if "@" not in text:
+        return value
     parsed = urlparse(text)
     if "://" not in text and _looks_like_schemeless_credential_url(text):
         redacted = _redact_url_credentials(f"https://{text}")

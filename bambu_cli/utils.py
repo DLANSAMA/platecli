@@ -81,12 +81,14 @@ def _redact_url_credentials(url):
     return url
 
 
+_HOME_DIR = os.path.expanduser("~")
+
+
 def _display_path(path):
     if not path:
         return path
-    home = os.path.expanduser("~")
-    if path.startswith(home):
-        return "~" + path[len(home) :]
+    if path.startswith(_HOME_DIR):
+        return "~" + path[len(_HOME_DIR) :]
     return path
 
 
@@ -185,6 +187,8 @@ def _record_download_success(args, payload):
 import socket
 import threading
 
+_RESOLVE_IP_CACHE: dict[str, str] = {}
+
 
 def _resolve_ip(host, timeout=5.0):
     """Resolve a hostname to an IP address (supporting IPv4 and IPv6) exactly once.
@@ -192,6 +196,9 @@ def _resolve_ip(host, timeout=5.0):
     """
     if not host or host == "0.0.0.0":
         return host
+
+    if host in _RESOLVE_IP_CACHE:
+        return _RESOLVE_IP_CACHE[host]
 
     result = [host]
 
@@ -207,6 +214,8 @@ def _resolve_ip(host, timeout=5.0):
     t.daemon = True
     t.start()
     t.join(timeout)
+
+    _RESOLVE_IP_CACHE[host] = result[0]
     return result[0]
 
 
