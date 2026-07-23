@@ -158,11 +158,14 @@ def test_guided_setup_manual_path(tmp_path, monkeypatch):
     else:
         assert raised is not None, "guided setup neither wrote config nor raised"
 
+
 class MockServiceInfo:
     def __init__(self, ip):
         self.ip = ip
+
     def parsed_addresses(self):
         return [self.ip]
+
 
 class MockZeroconf:
     def __init__(self, services):
@@ -178,24 +181,30 @@ class MockZeroconf:
     def close(self):
         self.closed = True
 
+
 def create_mock_zeroconf(services):
     return lambda: MockZeroconf(services)
+
 
 def mock_service_browser(services):
     def init(zc, type_, listener):
         for name, _ip in services:
             listener.add_service(zc, type_, name)
         return MagicMock()
+
     return init
+
 
 def test_guided_setup_mdns_one_printer(tmp_path, monkeypatch):
     cfg = tmp_path / "config.json"
-    answers = iter([
-        "87654321",  # access code
-        "",  # confirm model
-        "",  # confirm nozzle
-        "",  # access code file (empty to use secret prompt)
-    ])
+    answers = iter(
+        [
+            "87654321",  # access code
+            "",  # confirm model
+            "",  # confirm nozzle
+            "",  # access code file (empty to use secret prompt)
+        ]
+    )
 
     def fake_prompt(msg, args=None, default=None):
         try:
@@ -234,6 +243,7 @@ def test_guided_setup_mdns_one_printer(tmp_path, monkeypatch):
         patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="aa:bb:cc"),
     ):
         import builtins
+
         real_import = builtins.__import__
 
         def guarded(name, *a, **k):
@@ -253,15 +263,18 @@ def test_guided_setup_mdns_one_printer(tmp_path, monkeypatch):
     assert data["serial"] == "01P00A123"
     assert data["model"] == "P1P"
 
+
 def test_guided_setup_mdns_multiple_printers(tmp_path, monkeypatch):
     cfg = tmp_path / "config.json"
-    answers = iter([
-        "1",         # choice: index 1 (the second printer)
-        "11223344",  # access code
-        "",  # confirm model
-        "",  # confirm nozzle
-        "",  # access code file
-    ])
+    answers = iter(
+        [
+            "1",  # choice: index 1 (the second printer)
+            "11223344",  # access code
+            "",  # confirm model
+            "",  # confirm nozzle
+            "",  # access code file
+        ]
+    )
 
     def fake_prompt(msg, args=None, default=None):
         try:
@@ -303,6 +316,7 @@ def test_guided_setup_mdns_multiple_printers(tmp_path, monkeypatch):
         patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="dd:ee:ff"),
     ):
         import builtins
+
         real_import = builtins.__import__
 
         def guarded(name, *a, **k):
@@ -321,6 +335,7 @@ def test_guided_setup_mdns_multiple_printers(tmp_path, monkeypatch):
     assert data["printer_ip"] == "10.0.0.70"
     assert data["serial"] == "03000A111"
     assert data["model"] == "A1"
+
 
 def test_guided_setup_mdns_no_printers(tmp_path, monkeypatch):
     cfg = tmp_path / "config.json"
@@ -352,6 +367,7 @@ def test_guided_setup_mdns_no_printers(tmp_path, monkeypatch):
         patch.object(wizard_mod, "_config_path", return_value=str(cfg)),
     ):
         import builtins
+
         real_import = builtins.__import__
 
         def guarded(name, *a, **k):
@@ -375,14 +391,16 @@ def test_guided_setup_mdns_no_printers(tmp_path, monkeypatch):
 
 def test_guided_setup_mdns_discovery_error(tmp_path, monkeypatch):
     cfg = tmp_path / "config.json"
-    answers = iter([
-        "192.168.1.100", # manual IP fallback
-        "03000A222",     # manual Serial fallback
-        "12341234",      # access code
-        "",              # confirm model
-        "",              # confirm nozzle
-        "",              # access code file
-    ])
+    answers = iter(
+        [
+            "192.168.1.100",  # manual IP fallback
+            "03000A222",  # manual Serial fallback
+            "12341234",  # access code
+            "",  # confirm model
+            "",  # confirm nozzle
+            "",  # access code file
+        ]
+    )
 
     def fake_prompt(msg, args=None, default=None):
         try:
@@ -419,14 +437,17 @@ def test_guided_setup_mdns_discovery_error(tmp_path, monkeypatch):
         patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None),
     ):
         import builtins
+
         real_import = builtins.__import__
 
         def guarded(name, *a, **k):
             if name == "zeroconf":
                 mock_zc_module = MagicMock()
+
                 # raise exception to trigger manual fallback block
                 def failing_zc(*args, **kwargs):
                     raise Exception("simulated mDNS failure")
+
                 mock_zc_module.Zeroconf = failing_zc
                 return mock_zc_module
             return real_import(name, *a, **k)

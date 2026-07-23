@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from bambu_cli.camera import _require_localhost_streamer_url, _write_snapshot_atomic
 
+
 class TestCameraBase(unittest.TestCase):
     def test_require_localhost_streamer_url_valid(self):
         args = MagicMock()
@@ -52,5 +53,6 @@ class TestCameraBase(unittest.TestCase):
             # (since we passed the dir as output's directory)
             self.assertEqual(os.listdir(td), [])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
