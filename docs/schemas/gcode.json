@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/gcode.json",
-  "title": "bambu-cli gcode success or confirmation envelope",
+  "$id": "https://platecli.local/schemas/gcode.json",
+  "title": "platecli gcode success or confirmation envelope",
   "type": "object",
   "required": ["status", "command", "gcode", "sent"],
   "properties": {

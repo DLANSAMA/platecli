@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/resume.json",
-  "title": "bambu-cli resume success envelope",
+  "$id": "https://platecli.local/schemas/resume.json",
+  "title": "platecli resume success envelope",
   "type": "object",
   "required": ["status", "command", "resumed"],
   "properties": {

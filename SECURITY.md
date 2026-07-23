@@ -1,6 +1,6 @@
 # Security Policy
 
-`bambu-local-cli` controls 3D printers over your local network and downloads
+`platecli` controls 3D printers over your local network and downloads
 untrusted model files from the internet. Both are security-sensitive, so this
 document explains the threat model, the mitigations already in place, known
 limitations, and how to report a vulnerability.
@@ -16,7 +16,7 @@ channel" **without any details**, and a maintainer will follow up.
 
 Please include, where possible:
 
-- affected version (`bambu-cli --version`) and platform,
+- affected version (`plate --version`) and platform,
 - a description of the issue and its impact,
 - reproduction steps or a proof of concept,
 - any known workaround.
@@ -46,7 +46,7 @@ no telemetry or data leaves your machine except (a) LAN traffic to your printer
 and (b) explicit model downloads you request. Key properties:
 
 - **Printer TLS.** Bambu printers present a self-signed certificate over MQTTS
-  and FTPS. Pin it with `cert_fingerprint` (SHA-256), which `bambu-cli setup`
+  and FTPS. Pin it with `cert_fingerprint` (SHA-256), which `plate setup`
   / `doctor` can capture for you. When a fingerprint is set and does not match,
   the connection is refused on MQTT, FTPS (control + data channel), and the
   direct camera path. `insecure_tls: true` disables verification entirely and
@@ -59,7 +59,7 @@ and (b) explicit model downloads you request. Key properties:
 - **Access codes are secrets.** Store the printer access code in a separate file
   via `access_code_file` (the recommended path) rather than inline in
   `config.json`. Inline `access_code` still works for legacy configs but is
-  deprecated; migrate with `bambu-cli setup --migrate-access-code`. `config show`
+  deprecated; migrate with `plate setup --migrate-access-code`. `config show`
   redacts the access code. On POSIX, config and access-code files are tightened
   toward `0600` on load.
 - **Downloads are SSRF-hardened.** URL fetches (including Printables) resolve

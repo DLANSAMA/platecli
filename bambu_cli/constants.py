@@ -1,4 +1,4 @@
-"""Shared immutable constants for bambu-cli.
+"""Shared immutable constants for platecli.
 
 Single source of truth for exit codes, file-type tables, safety limits, and
 default timeouts. Mutable runtime state (printer address, simulation flag,
@@ -32,7 +32,7 @@ def _resolve_version() -> str:
         from importlib_metadata import PackageNotFoundError, version  # type: ignore
 
     try:
-        return version("bambu-local-cli")
+        return version("platecli")
     except PackageNotFoundError:
         pass
     return _version_from_pyproject() or "0.0.0+dev"

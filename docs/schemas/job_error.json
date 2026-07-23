@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/job_error.json",
-  "title": "bambu-cli job/send error envelope (summary + error fields)",
+  "$id": "https://platecli.local/schemas/job_error.json",
+  "title": "platecli job/send error envelope (summary + error fields)",
   "type": "object",
   "required": ["status", "command", "exit_code", "error", "failed_step"],
   "properties": {

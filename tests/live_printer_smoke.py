@@ -126,7 +126,7 @@ def run_cli(args, expected_returncode=0, timeout=180):
         assert False, (
             "Configured CLI executable was not found: "
             f"{redact_url_credentials(command[0])!r}. "
-            "Set BAMBU_CLI to an installed bambu-cli executable or leave it unset "
+            "Set BAMBU_CLI to an installed plate executable or leave it unset "
             f"to exercise this checkout. Command: {subprocess.list2cmdline(redacted_command)}"
         )
     if result.returncode != expected_returncode:

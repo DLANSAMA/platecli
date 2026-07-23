@@ -3,13 +3,13 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bambu-local-cli"
-version = "0.1.0"
-description = "Unofficial local Bambu Lab printer control for agents and humans (not affiliated with Bambu Lab)"
+name = "platecli"
+version = "0.2.0"
+description = "platecli — local CLI for Bambu Lab printers (not affiliated with Bambu Lab)"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
-authors = [{ name = "bambu-cli contributors" }]
+authors = [{ name = "platecli contributors" }]
 keywords = ["bambu", "3d-printing", "agent", "cli", "orcaslicer"]
 dependencies = [
     "rich>=13.0.0",
@@ -44,13 +44,13 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/DLANSAMA/bambu-local-cli"
-Repository = "https://github.com/DLANSAMA/bambu-local-cli"
-Issues = "https://github.com/DLANSAMA/bambu-local-cli/issues"
-Changelog = "https://github.com/DLANSAMA/bambu-local-cli/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/DLANSAMA/platecli"
+Repository = "https://github.com/DLANSAMA/platecli"
+Issues = "https://github.com/DLANSAMA/platecli/issues"
+Changelog = "https://github.com/DLANSAMA/platecli/blob/main/CHANGELOG.md"
 
 [project.scripts]
-bambu-cli = "bambu_cli.bambu:main"
+plate = "bambu_cli.bambu:main"
 
 # Package inventory is auto-discovered under bambu_cli* — do not hand-maintain
 # a packages= list (Phase 2 Stage A single source of truth).

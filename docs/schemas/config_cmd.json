@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/config_cmd.json",
-  "title": "bambu-cli config show/validate envelope",
+  "$id": "https://platecli.local/schemas/config_cmd.json",
+  "title": "platecli config show/validate envelope",
   "type": "object",
   "required": ["status", "command", "action"],
   "properties": {

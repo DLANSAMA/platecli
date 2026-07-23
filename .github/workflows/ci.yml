@@ -97,21 +97,21 @@ jobs:
         # Subcommands derived from build_parser() (see scripts/cli_help_smoke.py).
         run: |
           python scripts/cli_help_smoke.py
-          bambu-cli --help
-          bambu-cli --version
+          plate --help
+          plate --version
 
       - name: Installed CLI agent smoke
         env:
-          BAMBU_CLI: bambu-cli
+          BAMBU_CLI: plate
         run: python tests/agent_cli_smoke.py
 
       - name: Wheel install smoke
         env:
-          BAMBU_CLI: bambu-cli
+          BAMBU_CLI: plate
         run: |
           python -m pip wheel . -w wheelhouse
-          python -m pip install --force-reinstall --no-deps --no-index --find-links wheelhouse bambu-local-cli
-          bambu-cli --help
+          python -m pip install --force-reinstall --no-deps --no-index --find-links wheelhouse platecli
+          plate --help
           python tests/agent_cli_smoke.py
 
       - name: Source distribution smoke

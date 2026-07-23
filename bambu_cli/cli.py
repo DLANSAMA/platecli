@@ -610,7 +610,7 @@ def main():
                 }
             )
         else:
-            print(f"bambu-cli {VERSION}")
+            print(f"plate {VERSION}")
         return
     if not args.cmd and bool(getattr(args, "json", False)):
         emit_json(
@@ -681,7 +681,7 @@ def main():
     if _requires_printer_dns_check(args):
         printer_ip = _context.current_settings().printer_ip
         if printer_ip == "0.0.0.0":
-            message = "Printer IP is not configured. Please run `bambu-cli setup` first."
+            message = "Printer IP is not configured. Please run `plate setup` first."
             logger.error(message)
             emit_json_error(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
             sys.exit(EXIT_CONFIG_ERROR)

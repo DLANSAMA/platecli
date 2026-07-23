@@ -70,7 +70,7 @@ def check_with_uv():
                 PYTHON_FLOOR,
                 "--universal",
                 "--no-emit-package",
-                "bambu-local-cli",
+                "platecli",
                 "--no-header",
                 "--no-annotate",
                 "--output-file",

@@ -11,7 +11,7 @@ def main():
             p.unlink()
     
     import os
-    dirs_to_remove = ['.pytest_cache', '.mypy_cache', '.ruff_cache', 'build', 'dist', 'wheelhouse', 'bambu_cli.egg-info', 'bambu_local_cli.egg-info']
+    dirs_to_remove = ['.pytest_cache', '.mypy_cache', '.ruff_cache', 'build', 'dist', 'wheelhouse', 'bambu_cli.egg-info', 'bambu_local_cli.egg-info', 'platecli.egg-info']
     if not os.environ.get("GITHUB_ACTIONS"):
         dirs_to_remove.append('.venv')
     for name in dirs_to_remove:

@@ -1,12 +1,12 @@
 # Contributing
 
-Thanks for your interest in improving bambu-local-cli!
+Thanks for your interest in improving platecli!
 
 ## Setup
 
 ```bash
-git clone https://github.com/DLANSAMA/bambu-local-cli
-cd bambu-local-cli   # or bambu-cli if that is your local directory name
+git clone https://github.com/DLANSAMA/platecli
+cd platecli   # or your local directory name
 uv sync              # or: pip install -e ".[test]"
 ```
 

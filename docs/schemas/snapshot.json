@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/snapshot.json",
-  "title": "bambu-cli snapshot success envelope",
+  "$id": "https://platecli.local/schemas/snapshot.json",
+  "title": "platecli snapshot success envelope",
   "type": "object",
   "required": ["status", "command", "output", "size_bytes"],
   "properties": {

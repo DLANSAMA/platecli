@@ -100,7 +100,7 @@ def test_schemas_exist():
 
 
 def test_version_payload_matches_schema(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--json", "--version"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--json", "--version"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     main()
@@ -110,7 +110,7 @@ def test_version_payload_matches_schema(monkeypatch, tmp_path, capsys):
 
 
 def test_status_ok_matches_ok_envelope(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "status", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "status", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     main()
@@ -120,7 +120,7 @@ def test_status_ok_matches_ok_envelope(monkeypatch, tmp_path, capsys):
 
 
 def test_setup_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "setup", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "setup", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     with pytest.raises(SystemExit) as ei:
@@ -157,7 +157,7 @@ def _write_valid_config(path: Path) -> None:
 
 def test_preflight_matches_schema(monkeypatch, tmp_path, capsys):
     """Missing config still emits a preflight envelope with checks[] (error path)."""
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "preflight", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "preflight", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     with pytest.raises(SystemExit):
@@ -171,7 +171,7 @@ def test_preflight_matches_schema(monkeypatch, tmp_path, capsys):
 def test_doctor_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "config.json"
     _write_valid_config(config_path)
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "doctor", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "doctor", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     main()
@@ -187,7 +187,7 @@ def test_job_dry_run_matches_schema(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["bambu-cli", "--sim", "job", str(model), "--dry-run", "--json"],
+        ["plate", "--sim", "job", str(model), "--dry-run", "--json"],
     )
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
@@ -199,7 +199,7 @@ def test_job_dry_run_matches_schema(monkeypatch, tmp_path, capsys):
 def test_gcode_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
     _write_valid_config(config_path)
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "gcode", "G28", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "gcode", "G28", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     with pytest.raises(SystemExit):
@@ -221,7 +221,7 @@ def test_print_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["bambu-cli", "--sim", "print", "cube.gcode.3mf", "--json"],
+        ["plate", "--sim", "print", "cube.gcode.3mf", "--json"],
     )
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
@@ -246,7 +246,7 @@ def test_print_started_fixture_matches_schema():
 def test_delete_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
     _write_valid_config(config_path)
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "delete", "cube.gcode.3mf", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "delete", "cube.gcode.3mf", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     with pytest.raises(SystemExit):
@@ -297,7 +297,7 @@ def test_device_command_errors_match_error_envelope(monkeypatch, tmp_path, capsy
     """Invalid gcode still uses the shared error envelope."""
     config_path = tmp_path / "config" / "cfg.json"
     _write_valid_config(config_path)
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "gcode", "", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "gcode", "", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     with pytest.raises(SystemExit):
@@ -315,7 +315,7 @@ def test_job_error_matches_job_error_and_error_envelope(monkeypatch, tmp_path, c
     monkeypatch.setattr(
         sys,
         "argv",
-        ["bambu-cli", "--sim", "job", str(missing), "--dry-run", "--json"],
+        ["plate", "--sim", "job", str(missing), "--dry-run", "--json"],
     )
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
@@ -332,7 +332,7 @@ def test_job_error_matches_job_error_and_error_envelope(monkeypatch, tmp_path, c
 def test_config_show_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
     _write_valid_config(config_path)
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "config", "show", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "config", "show", "--json"])
     # common._config_path() imports CONFIG_PATH by name — patch both bindings.
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.setup_cmd.common.CONFIG_PATH", str(config_path))
@@ -350,7 +350,7 @@ def test_config_show_matches_schema(monkeypatch, tmp_path, capsys):
 def test_config_validate_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
     _write_valid_config(config_path)
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "config", "validate", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "config", "validate", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.setup_cmd.common.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
@@ -367,7 +367,7 @@ def test_config_validate_matches_schema(monkeypatch, tmp_path, capsys):
 
 
 def test_download_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "download", "not-a-url", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "download", "not-a-url", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     with pytest.raises(SystemExit):
@@ -446,7 +446,7 @@ def test_slice_list_settings_matches_schema(monkeypatch, tmp_path, capsys):
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--json", "slice", "--list-settings"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--json", "slice", "--list-settings"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     main()
@@ -462,7 +462,7 @@ def test_slice_list_settings_matches_schema(monkeypatch, tmp_path, capsys):
 
 def test_slice_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
     missing = tmp_path / "nope.stl"
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "slice", str(missing), "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "slice", str(missing), "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     with pytest.raises(SystemExit):

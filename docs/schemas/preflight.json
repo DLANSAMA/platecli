@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/preflight.json",
-  "title": "bambu-cli preflight result envelope",
+  "$id": "https://platecli.local/schemas/preflight.json",
+  "title": "platecli preflight result envelope",
   "type": "object",
   "required": ["status", "command", "checks"],
   "properties": {

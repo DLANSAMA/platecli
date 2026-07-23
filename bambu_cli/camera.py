@@ -203,7 +203,7 @@ def _grab_camera_frame_direct(
                 )
         elif not printer.insecure_tls and not printer.cert_fingerprint:
             raise ssl.SSLError(
-                "No cert_fingerprint pinned for camera connection; run 'bambu-cli setup' to pin one, or set insecure_tls to bypass (not recommended)"
+                "No cert_fingerprint pinned for camera connection; run 'plate setup' to pin one, or set insecure_tls to bypass (not recommended)"
             )
 
         tls.sendall(bytes(auth))

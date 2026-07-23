@@ -62,13 +62,13 @@ def test_missing_attribute_still_raises_attribute_error():
 
 def test_cli_version_flag_prints_expected_version():
     result = subprocess.run(
-        ["uv", "run", "bambu-cli", "--version"],
+        ["uv", "run", "plate", "--version"],
         capture_output=True,
         text=True,
         check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == f"bambu-cli {constants.VERSION}"
+    assert result.stdout.strip() == f"plate {constants.VERSION}"
 
 
 def test_module_reload_reresolves_version_once():

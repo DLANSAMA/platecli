@@ -120,7 +120,7 @@ def run_main(monkeypatch, tmp_path, argv, config_path=None):
     import bambu_cli.cli as cli_mod
     import bambu_cli.config as config_mod
 
-    monkeypatch.setattr(sys, "argv", ["bambu-cli"] + list(argv))
+    monkeypatch.setattr(sys, "argv", ["plate"] + list(argv))
     monkeypatch.setattr(config_mod, "CONFIG_PATH", config_path or str(tmp_path / "no-such-config" / "config.json"))
     monkeypatch.setattr(cli_mod, "setup_logging", lambda *a, **k: None)
     exc = None

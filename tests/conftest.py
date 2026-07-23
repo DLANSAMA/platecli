@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the bambu-cli suite."""
+"""Shared pytest fixtures for the platecli suite."""
 
 import pytest
 

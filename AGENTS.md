@@ -2,7 +2,7 @@
 
 Runs on Linux, macOS, and Windows.
 
-**Command:** `bambu-cli` (installed via pip/uv). Legacy path without installing: `python3 <path>/scripts/bambu.py`.
+**Command:** `plate` (installed via pip/uv). Legacy path without installing: `python3 <path>/scripts/bambu.py`.
 
 Prefer `job`/`send` for agent work. Always ask the user before running any command with `--confirm`.
 
@@ -57,13 +57,13 @@ When adding tests, follow [docs/test-backlog.md](docs/test-backlog.md) and the q
 
 ## Agent usage
 
-Agents may place `--json` before or after the subcommand; `bambu-cli --json --version` emits machine-readable version details. Slicing accepts meshes in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. AMS slot mappings are zero-or-positive integers. When a slice fails because OrcaSlicer profiles are missing, the `--json` error includes `profiles_dir` (configured) and `detected_profiles_dir` (a real BBL profiles directory found on disk, or null) so the fix is machine-actionable.
+Agents may place `--json` before or after the subcommand; `plate --json --version` emits machine-readable version details. Slicing accepts meshes in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. AMS slot mappings are zero-or-positive integers. When a slice fails because OrcaSlicer profiles are missing, the `--json` error includes `profiles_dir` (configured) and `detected_profiles_dir` (a real BBL profiles directory found on disk, or null) so the fix is machine-actionable.
 
 JSON contracts: human reference [docs/api.md](docs/api.md); machine schemas in [docs/schemas/](docs/schemas/).
 
 ## Packaging
 
-Published on PyPI as `bambu-local-cli`; the installed command is `bambu-cli`.
+Published on PyPI as `platecli`; the installed command is `plate`.
 
 | Artifact | Contents |
 |----------|----------|

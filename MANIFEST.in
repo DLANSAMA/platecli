@@ -1,4 +1,4 @@
-# Source distribution contents for bambu-local-cli.
+# Source distribution contents for platecli.
 #
 # Ship only user/agent-facing docs + runtime + tests/scripts needed to develop
 # from an sdist. Contributor-only planning docs stay on GitHub (not listed here).

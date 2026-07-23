@@ -96,7 +96,7 @@ FORBIDDEN_WHEEL_DATA_SUFFIXES = {
 }
 
 STATIC_METADATA_SNIPPETS = {
-    "Summary: Unofficial local Bambu Lab printer control for agents and humans (not affiliated with Bambu Lab)",
+    "Summary: platecli — local CLI for Bambu Lab printers (not affiliated with Bambu Lab)",
     "Keywords: bambu,3d-printing,agent,cli,orcaslicer",
     "Requires-Python: >=3.9",
     "Requires-Dist: paho-mqtt",
@@ -135,7 +135,7 @@ REQUIRED_GITIGNORE_SNIPPETS = {
 REQUIRED_DOC_SNIPPETS = {
     "README.md": {
         "`--json` | Emit JSON for commands that support it; may appear before or after the subcommand",
-        "`bambu-cli --json --version` emits",
+        "`plate --json --version` emits",
         "STL > STEP > OBJ > 3MF > G-code",
         "--max-download-mb",
         "zero-or-positive slot indexes",
@@ -147,7 +147,7 @@ REQUIRED_DOC_SNIPPETS = {
     "AGENTS.md": {
         "STL > STEP/STP > OBJ > 3MF > G-code",
         "Agents may place `--json` before or after the subcommand",
-        "bambu-cli --json --version",
+        "plate --json --version",
         "--max-download-mb",
         "zero-or-positive integers",
     },
@@ -155,7 +155,7 @@ REQUIRED_DOC_SNIPPETS = {
 
 LICENSE_SNIPPETS = {
     "MIT License",
-    "bambu-cli contributors",
+    "platecli contributors",
     'THE SOFTWARE IS PROVIDED "AS IS"',
 }
 
@@ -252,7 +252,7 @@ def _check_license_text(label, text):
 
 
 def check_sdist(dist_dir):
-    tarballs = sorted(dist_dir.glob("bambu_local_cli-*.tar.gz"))
+    tarballs = sorted(dist_dir.glob("platecli-*.tar.gz"))
     if not tarballs:
         raise SystemExit(f"No source distribution found in {dist_dir}")
     archive_path = tarballs[-1]
@@ -280,7 +280,7 @@ def check_sdist(dist_dir):
 
 
 def check_wheel(dist_dir):
-    wheels = sorted(dist_dir.glob("bambu_local_cli-*.whl"))
+    wheels = sorted(dist_dir.glob("platecli-*.whl"))
     if not wheels:
         raise SystemExit(f"No wheel found in {dist_dir}")
     try:
