@@ -2,7 +2,7 @@ import contextlib
 import ftplib
 import logging
 import os
-import random
+import secrets
 import ssl
 import time
 from typing import Any, Optional
@@ -85,7 +85,7 @@ class BambuPrinter:
     def _backoff_delay(self, attempt: int) -> float:
         """Exponential backoff with jitter, in seconds."""
         base = min(5 * (2**attempt), 30)
-        return base + random.uniform(0, base * 0.25)
+        return base + secrets.SystemRandom().uniform(0, base * 0.25)
 
     def _delete_remote_quiet(self, ftp, remote_path: str) -> None:
         try:

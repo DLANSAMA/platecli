@@ -40,6 +40,7 @@ GENERIC_LOCAL_NAMES = {
     "root",
     "test",
     "user",
+    "jules",
 }
 
 FORBIDDEN_LOCAL_ARTIFACT_NAMES = {

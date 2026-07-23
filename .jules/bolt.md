@@ -8,3 +8,7 @@
 ## 2024-07-21 - Caching Slicer Profile Key Discovery
 **Learning:** The CLI reads and parses all OrcaSlicer `.json` profiles in a directory multiple times during a single `slice` operation to discover all possible override keys. This causes significant, unnecessary file I/O and JSON parsing for directories that are completely static for the duration of the command's execution.
 **Action:** When a function iterates over and parses many files in a static configuration directory, add `@lru_cache` if it's called repeatedly within the same execution context.
+
+## 2024-07-23 - JSON parsing overhead in static configuration searches
+**Learning:** During profile discovery, searching for compatible printers in OrcaSlicer profiles resulted in repeated reading and `json.loads()` parsing of the exact same JSON files from disk (e.g. searching through "0.20mm" files during fallbacks). Furthermore, fully parsing the JSON document just to verify if a single string exists in an array is computationally heavy when many files are checked.
+**Action:** Always combine `@lru_cache` for static file lookups in tight loops with a fast-path substring check (`if string not in content:`) after reading the raw file contents but before calling `json.loads()`. This definitively rules out files without incurring the JSON parsing overhead.

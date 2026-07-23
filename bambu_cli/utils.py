@@ -70,8 +70,8 @@ def _redact_url_credentials(url):
 
     try:
         parsed = urlparse(url)
-        if parsed.password:
-            netloc = f"{parsed.username}:***@{parsed.hostname}"
+        if parsed.username or parsed.password:
+            netloc = f"***@{parsed.hostname}"
             if parsed.port:
                 netloc += f":{parsed.port}"
             parsed = parsed._replace(netloc=netloc)
