@@ -71,7 +71,7 @@ of silent rot vs the old 79 gate.
 
 ### Residual coverage policy
 
-Integration-heavy and platform/TTY/process paths may carry `# pragma: no cover` when unit tests already cover the pure/decision branches and remaining lines are I/O loops (MQTT ack, FTPS resume, interactive wizard, Orca process). Measured coverage is computed under `.coveragerc` with those exclusions. Do not pragma pure helpers that have no tests.
+Integration-heavy and platform/TTY/process paths may carry `# pragma: no cover` when unit tests already cover the pure/decision branches and remaining lines are I/O loops (MQTT ack, FTPS resume, interactive wizard, Orca process). Measured coverage is computed under `[tool.coverage.report]` in `pyproject.toml` with those exclusions. Do not pragma pure helpers that have no tests.
 
 ---
 

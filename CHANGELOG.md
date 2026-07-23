@@ -5,6 +5,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Changed
+- Repo hygiene: `pytest.ini` and `.coveragerc` folded into `pyproject.toml` (`[tool.pytest.ini_options]`, `[tool.coverage.*]`); removed the `.jules/` bot-notes directory. Test/coverage behavior unchanged; sdists still carry the full test config via `pyproject.toml`.
+
 ## [0.2.0] - 2026-07-23
 
 ### Changed

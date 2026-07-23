@@ -58,6 +58,36 @@ plate = "bambu_cli.bambu:main"
 where = ["."]
 include = ["bambu_cli*"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# live_printer_smoke.py is collectable but marked `live` — CI and default local
+# runs use `-m "not live"` so it never touches a printer without BAMBU_LIVE=1.
+python_files = ["test_*.py", "live_printer_smoke.py"]
+addopts = "--cov=bambu_cli --cov-report=term-missing"
+markers = [
+    "security: SSRF, TLS pin, archive, and other security-sensitive cases",
+    "contract: agent-facing JSON shape / schema contracts",
+    "live: requires a real printer (never run in default CI; needs BAMBU_LIVE=1)",
+    "slow: longer-running tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["bambu_cli"]
+
+[tool.coverage.report]
+precision = 1
+# Honest coverage: do not hide except Exception/pass/continue.
+# Only exclude lines that are definitionally unmeasurable or non-executable.
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "\\.\\.\\.",
+]
+
 [tool.ruff]
 target-version = "py39"
 line-length = 120
