@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import tempfile
+from functools import lru_cache
 from typing import IO
 
 from bambu_cli.cli import _display_path, _expand_path
@@ -54,12 +55,19 @@ def _slicer_executable_problem(path: str | None) -> str | None:
     return None
 
 
+@lru_cache(maxsize=128)
 def _process_profile_compatible(path: str, compatible_printer: str | None) -> bool:
     if not compatible_printer:
         return False
     try:
         with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+            content = f.read()
+
+        # Fast-path string match to avoid full JSON parse if not even present
+        if compatible_printer not in content:
+            return False
+
+        data = json.loads(content)
     except (OSError, json.JSONDecodeError):
         return False
     compatible = data.get("compatible_printers")

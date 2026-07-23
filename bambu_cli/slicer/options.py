@@ -11,6 +11,7 @@ import json
 import os
 import re
 import stat
+from functools import lru_cache
 from typing import Any
 
 from bambu_cli.cli import _namespace_get, _path_for_message
@@ -48,11 +49,16 @@ def _profiles_dir_from_process(process_path: str) -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(process_path)))
 
 
+@lru_cache(maxsize=16)
 def _known_setting_keys(profiles_dir: str, kind: str) -> dict[str, Any]:
     """Union of tunable setting keys across every ``kind`` profile on disk.
 
     Returns ``{key: representative_value}`` (first value seen wins) so the
     discovery command can show agents both the key names and example shapes.
+
+    Performance note (Bolt ⚡): Memoized because reading/parsing all profile
+    JSON files on disk is expensive and this is called multiple times per slice
+    command for the exact same directories (static over execution lifetime).
     """
     result: dict[str, Any] = {}
     for path in sorted(glob.glob(os.path.join(profiles_dir, kind, "*.json"))):
