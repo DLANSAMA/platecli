@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/job_ok.json",
-  "title": "bambu-cli job/send success or dry-run envelope",
+  "$id": "https://platecli.local/schemas/job_ok.json",
+  "title": "platecli job/send success or dry-run envelope",
   "type": "object",
   "required": ["status", "command"],
   "properties": {

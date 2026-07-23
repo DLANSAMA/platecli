@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/print.json",
-  "title": "bambu-cli print success or confirmation envelope",
+  "$id": "https://platecli.local/schemas/print.json",
+  "title": "platecli print success or confirmation envelope",
   "type": "object",
   "required": ["status", "command", "file"],
   "properties": {

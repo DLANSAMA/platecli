@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/ok_envelope.json",
-  "title": "bambu-cli JSON ok envelope",
+  "$id": "https://platecli.local/schemas/ok_envelope.json",
+  "title": "platecli JSON ok envelope",
   "type": "object",
   "required": ["status", "command"],
   "properties": {

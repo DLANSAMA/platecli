@@ -1,6 +1,6 @@
 # Quality roadmap: A+ across the board
 
-Living plan to take `bambu-local-cli` from **solid 0.1.x beta (B− overall)** to
+Living plan to take `platecli` from **solid 0.1.x beta (B− overall)** to
 **A+ product + A+ testing**. Derived from the 2026-07 harsh codebase audit.
 
 Update this file when a phase ships: tick acceptance criteria, refresh the

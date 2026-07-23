@@ -78,7 +78,7 @@ export BAMBU_LIVE_CLEANUP=1
 
 - Never run against a printer that is actively printing someone else's job.
 - Use a **uniquely named** source file so upload-new / cleanup assertions are meaningful.
-- `BAMBU_CLI` may point at an installed `bambu-cli`; default is this checkout’s
+- `BAMBU_CLI` may point at an installed `plate`; default is this checkout’s
   `scripts/bambu.py`. Commands that include `--sim` are refused.
 - Do not set `BAMBU_LIVE_PRINT_CONFIRM` unless you intend to start a print.
 - Credentials and serials: doctor JSON must keep serial redacted; the harness

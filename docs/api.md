@@ -1,6 +1,6 @@
-# bambu-cli API Reference
+# platecli API Reference
 
-The `bambu-cli` provides structured JSON output for programmatic integration
+The `plate` command provides structured JSON output for programmatic integration
 (AI agents, scripts, CI). This document is the **human** contract; machine-checkable
 schemas live in [`docs/schemas/`](schemas/).
 
@@ -13,8 +13,8 @@ standard output (`stdout`). Log messages and warnings go to standard error
 `--json` may appear **before or after** the subcommand:
 
 ```bash
-bambu-cli status --json
-bambu-cli --json --version
+plate status --json
+plate --json --version
 # or without installing:
 python3 scripts/bambu.py status --json
 ```

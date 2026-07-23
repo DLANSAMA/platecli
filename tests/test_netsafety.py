@@ -97,7 +97,7 @@ def test_main_allow_private_ips_flag_enables_settings(monkeypatch, tmp_path):
     def capture(_args):
         seen["allow"] = current_settings().allow_private_ips
 
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "--allow-private-ips", "status", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "--allow-private-ips", "status", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no-config" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     monkeypatch.setattr("bambu_cli.commands.cmd_status", capture)
@@ -115,7 +115,7 @@ def test_main_default_denies_private_ips(monkeypatch, tmp_path):
     def capture(_args):
         seen["allow"] = current_settings().allow_private_ips
 
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "status", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "status", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no-config" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     monkeypatch.setattr("bambu_cli.commands.cmd_status", capture)
@@ -139,7 +139,7 @@ def test_main_allow_private_ips_reaches_get_safe_connection(monkeypatch, tmp_pat
             outcomes["result"] = _get_safe_connection("lan.example", 443, 5, None)
             outcomes["connected"] = conn.called
 
-    monkeypatch.setattr(sys, "argv", ["bambu-cli", "--sim", "--allow-private-ips", "status", "--json"])
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "--allow-private-ips", "status", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no-config" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
     monkeypatch.setattr("bambu_cli.commands.cmd_status", capture)

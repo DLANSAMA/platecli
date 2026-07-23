@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-23
+
+### Changed
+- **Project renamed to `platecli`; the installed command is now `plate`** (was
+  `bambu-cli`, published as `bambu-local-cli`). The rename removes the vendor
+  name from the project branding; platecli remains an unofficial tool for
+  Bambu Lab printers and is not affiliated with Bambu Lab. The internal Python
+  package (`bambu_cli`), environment variables (`BAMBU_*`), and config path
+  (`~/.config/bambu/`) are unchanged, so existing configs keep working —
+  only the command you type changes. The old PyPI release `bambu-local-cli`
+  0.1.0 is yanked to point users at `platecli`.
+
 ## [0.1.0] - 2026-07-18
 
 Initial development version: LAN-mode printer control (MQTT/FTPS), one-shot `job`/`send` orchestration, OrcaSlicer integration, guided setup with mDNS discovery, camera snapshots, SSRF-safe downloads with Printables support, simulation mode, and agent-facing `--json` output.

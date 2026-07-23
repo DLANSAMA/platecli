@@ -71,7 +71,7 @@ def collect_preflight_checks():
                 "error",
                 "paho-mqtt",
                 "Missing Python package: paho-mqtt. Reinstall the package "
-                "(e.g. `uv pip install -e .` from a source checkout, or `pip install bambu-local-cli`).",
+                "(e.g. `uv pip install -e .` from a source checkout, or `pip install platecli`).",
             )
         )
 

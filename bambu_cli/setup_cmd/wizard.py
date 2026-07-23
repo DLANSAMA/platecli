@@ -204,7 +204,7 @@ def _cmd_setup_interactive(args):
         logger.warning("⚠️  'zeroconf' package is not installed; network printer auto-discovery is disabled.")
         logger.info(
             "   To enable auto-discovery, reinstall the package "
-            "(e.g. `uv pip install -e .` from a source checkout, or `pip install bambu-local-cli`)."
+            "(e.g. `uv pip install -e .` from a source checkout, or `pip install platecli`)."
         )
         choice = _prompt_text("Would you like to perform a manual configuration instead? [Y/n]: ", args).lower()
         if choice in ("", "y", "yes"):

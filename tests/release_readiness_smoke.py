@@ -53,7 +53,7 @@ FORBIDDEN_GENERATED_PATHS = {
     "dist",
     "wheelhouse",
     "bambu_cli.egg-info",
-    "bambu_local_cli.egg-info",
+    "platecli.egg-info",
 }
 
 FORBIDDEN_GENERATED_NAMES = {
@@ -75,7 +75,7 @@ OBJECTIVE_SNIPPETS = {
         "Use `job` when an agent or user gives either a website URL or a local file path",
     },
     "AGENTS.md": {"Runs on Linux, macOS, and Windows."},
-    "pyproject.toml": {'bambu-cli = "bambu_cli.bambu:main"'},
+    "pyproject.toml": {'plate = "bambu_cli.bambu:main"'},
 }
 
 FORBIDDEN_SNIPPETS = {

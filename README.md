@@ -1,34 +1,34 @@
-# bambu-local-cli — Local CLI for Bambu Lab Printers
+# platecli — local CLI for Bambu Lab printers
 
-[![CI](https://github.com/DLANSAMA/bambu-local-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/DLANSAMA/bambu-local-cli/actions/workflows/ci.yml)
-[![Release Packaging](https://github.com/DLANSAMA/bambu-local-cli/actions/workflows/release.yml/badge.svg)](https://github.com/DLANSAMA/bambu-local-cli/actions/workflows/release.yml)
+[![CI](https://github.com/DLANSAMA/platecli/actions/workflows/ci.yml/badge.svg)](https://github.com/DLANSAMA/platecli/actions/workflows/ci.yml)
+[![Release Packaging](https://github.com/DLANSAMA/platecli/actions/workflows/release.yml/badge.svg)](https://github.com/DLANSAMA/platecli/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyPI](https://img.shields.io/pypi/v/bambu-local-cli)](https://pypi.org/project/bambu-local-cli/)
-[![Downloads](https://static.pepy.tech/badge/bambu-local-cli)](https://pepy.tech/projects/bambu-local-cli)
+[![PyPI](https://img.shields.io/pypi/v/platecli)](https://pypi.org/project/platecli/)
+[![Downloads](https://static.pepy.tech/badge/platecli)](https://pepy.tech/projects/platecli)
 
-![bambu-local-cli demo: live printer status and slicing from the terminal](docs/demo.gif)
+![platecli demo: live printer status and slicing from the terminal](docs/demo.gif)
 
-Fully local 3D printing pipeline for Bambu Lab printers. Runs on **Linux, macOS, and Windows**. The installed command is `bambu-cli`. Download models from Printables, slice with OrcaSlicer, and print — all controlled via CLI by any AI agent or by hand. No cloud account needed.
+Fully local 3D printing pipeline for Bambu Lab printers. Runs on **Linux, macOS, and Windows**. The installed command is `plate`. Download models from Printables, slice with OrcaSlicer, and print — all controlled via CLI by any AI agent or by hand. No cloud account needed.
 
 **Supports:** P1P, P1S, X1C, X1E, A1, A1 Mini (any Bambu printer with LAN mode)
 
-> **Disclaimer:** bambu-local-cli is an unofficial, community-developed tool. It is not affiliated with, endorsed by, or supported by Bambu Lab. "Bambu Lab" and product names are trademarks of their respective owners, used here only to describe compatibility. The printer protocols (MQTT/FTPS) are reverse-engineered; a firmware update may break functionality without warning — run `bambu-cli doctor` after printer updates.
+> **Disclaimer:** platecli is an unofficial, community-developed tool. It is not affiliated with, endorsed by, or supported by Bambu Lab. "Bambu Lab" and product names are trademarks of their respective owners, used here only to describe compatibility. The printer protocols (MQTT/FTPS) are reverse-engineered; a firmware update may break functionality without warning — run `plate doctor` after printer updates.
 
-**Status:** Beta (`0.1.0`). Pre-1.0 — APIs and config keys follow the stability policy in [docs/api.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/docs/api.md).
+**Status:** Beta (`0.2.0`). Pre-1.0 — APIs and config keys follow the stability policy in [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md).
 
 ## Installation
 
-The examples below use the installed `bambu-cli` command.
+The examples below use the installed `plate` command.
 
 ```bash
-pipx install bambu-local-cli
+pipx install platecli
 # or
-uv tool install bambu-local-cli
+uv tool install platecli
 # or
-pip install bambu-local-cli
+pip install platecli
 ```
 
-> Note: the package is published on PyPI as `bambu-local-cli` (the `bambu-cli` name there belongs to an unrelated project). The installed command is still `bambu-cli`.
+> Previously published on PyPI as `bambu-local-cli` (that release is yanked). The project is now `platecli`, and the installed command is `plate`.
 
 Or from source:
 
@@ -42,7 +42,7 @@ pip install .
 Before touching a real printer (or configuring one), sanity-check the install with simulation mode:
 
 ```bash
-bambu-cli --sim status
+plate --sim status
 ```
 
 ```
@@ -59,11 +59,11 @@ bambu-cli --sim status
          Slot 3: TPU #000000 | 45%
 ```
 
-Agents should add `--json` for machine-readable output: `bambu-cli --sim status --json`.
+Agents should add `--json` for machine-readable output: `plate --sim status --json`.
 
 ## Use with AI agents
 
-`--json` is a global flag accepted by every command that produces structured output. Responses follow published JSON Schema files under [`docs/schemas/`](https://github.com/DLANSAMA/bambu-local-cli/tree/main/docs/schemas/) — agents can validate against them or use them to understand the exact shape of each response.
+`--json` is a global flag accepted by every command that produces structured output. Responses follow published JSON Schema files under [`docs/schemas/`](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) — agents can validate against them or use them to understand the exact shape of each response.
 
 `--sim` (simulation mode) replaces the real printer with a local stub, so an agent can develop, test, or exercise the full command surface without any hardware present.
 
@@ -71,10 +71,10 @@ Destructive and physical actions — starting a print, stopping a job, deleting 
 
 ```bash
 # Inspect printer state without hardware
-bambu-cli --sim status --json
+plate --sim status --json
 
 # Start a full print workflow — requires --confirm to actually begin printing
-bambu-cli job <url> --json --confirm
+plate job <url> --json --confirm
 ```
 
 ## Features
@@ -97,20 +97,20 @@ settings), and make sure LAN mode is enabled on the printer.
 Use the interactive `setup` command to create your config securely:
 
 ```bash
-bambu-cli setup
+plate setup
 ```
 
 Inspect or check the resulting config at any time:
 
 ```bash
-bambu-cli config show       # print config path + contents (access code redacted)
-bambu-cli config validate   # check config values without contacting the printer
-bambu-cli doctor            # connectivity + live cert fingerprint
+plate config show       # print config path + contents (access code redacted)
+plate config validate   # check config values without contacting the printer
+plate doctor            # connectivity + live cert fingerprint
 ```
 
 ### OrcaSlicer
 
-Slicing shells out to OrcaSlicer, so `bambu-cli` needs to know where its binary
+Slicing shells out to OrcaSlicer, so `plate` needs to know where its binary
 and bundled `profiles/BBL` directory live. Setup auto-detects the usual install
 locations per platform — the macOS app bundle, the Windows `Program Files`
 install, and on Linux a `$PATH` binary (`orca-slicer`), a Flatpak export, or an
@@ -123,27 +123,27 @@ found instead of failing with a generic error.
 
 ```bash
 # Read-only: check connectivity and printer state (safe, no printer state changes)
-bambu-cli status
-bambu-cli doctor
+plate status
+plate doctor
 ```
 
-For programmatic checks, `bambu-cli --json --version` emits JSON version details.
+For programmatic checks, `plate --json --version` emits JSON version details.
 
 ```bash
 # Full workflow (download, slice, upload, and START A PHYSICAL PRINT)
 # --confirm is required for any command that begins printing.
-bambu-cli job "https://www.printables.com/model/12345-thing" --confirm --json
+plate job "https://www.printables.com/model/12345-thing" --confirm --json
 ```
 
 ### Monitoring a print
 
-`bambu-cli status --monitor` (alias `--wait`) follows a print until it reaches a
+`plate status --monitor` (alias `--wait`) follows a print until it reaches a
 terminal state (`FINISH`, `FAILED`, `STOP`, or `IDLE`). For a human it renders a
 live progress bar; for an agent, add `--json` to stream **newline-delimited
 JSON** (NDJSON) — one compact object per change as the print advances:
 
 ```bash
-bambu-cli status --monitor --json
+plate status --monitor --json
 ```
 
 ```json
@@ -153,7 +153,7 @@ bambu-cli status --monitor --json
 
 Each line is a self-contained JSON object, so an agent can consume the stream
 incrementally and stop once it sees `"event":"terminal"`. Pair with `--sim` to
-exercise the exact event shape without a printer. Schema: [`docs/schemas/status_event.json`](https://github.com/DLANSAMA/bambu-local-cli/blob/main/docs/schemas/status_event.json).
+exercise the exact event shape without a printer. Schema: [`docs/schemas/status_event.json`](https://github.com/DLANSAMA/platecli/blob/main/docs/schemas/status_event.json).
 
 ### Global flags
 
@@ -163,13 +163,13 @@ exercise the exact event shape without a printer. Schema: [`docs/schemas/status_
 | `--sim` | Simulation mode (no real printer) |
 | `--max-download-mb` | Cap URL download and ZIP extraction size (default 2048 MB); accepted by `job`, `send`, and `download` |
 | `--allow-private-ips` | Allow downloads that resolve to private/loopback addresses (default: deny). CLI-only, not sticky config |
-| `--network-timeout` / `--slicer-timeout` / `--command-timeout` / `--upload-timeout` | Bound long operations (see [docs/api.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/docs/api.md)) |
+| `--network-timeout` / `--slicer-timeout` / `--command-timeout` / `--upload-timeout` | Bound long operations (see [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md)) |
 
 ### Slicing & AMS
 
 `slice` accepts common mesh formats in the precedence order STL > STEP > OBJ > 3MF > G-code. When mapping filaments to AMS slots, mapping arguments take zero-or-positive slot indexes.
 
-To decide that mapping, read what is actually loaded first: `bambu-cli status`
+To decide that mapping, read what is actually loaded first: `plate status`
 shows each AMS unit's trays (filament type, colour, and remaining %), and
 `status --json` includes a normalized `ams` block agents can consume directly:
 
@@ -193,7 +193,7 @@ tray (absolute index `unit * 4 + slot`); feed the `slot` indexes to
 ## Config reference
 
 Config file location is platform-standard under the user config directory
-(e.g. `~/.config/bambu/config.json` on Linux). Create/edit via `bambu-cli setup`
+(e.g. `~/.config/bambu/config.json` on Linux). Create/edit via `plate setup`
 or manually.
 
 | Key | Required | Default | Description |
@@ -201,7 +201,7 @@ or manually.
 | `printer_ip` | ✅ | — | Printer's LAN IP address |
 | `serial` | ✅ | — | Printer serial number |
 | `access_code_file` | ✅* | — | Path to file containing access code (**recommended**) |
-| `access_code` | ✅* | — | Inline access code (**deprecated**; migrate with `bambu-cli setup --migrate-access-code`) |
+| `access_code` | ✅* | — | Inline access code (**deprecated**; migrate with `plate setup --migrate-access-code`) |
 | `cert_fingerprint` | recommended | — | SHA-256 of the printer TLS cert (no separators or colon form both accepted) |
 | `insecure_tls` | no | `false` | Disable TLS verification (last resort; CLI warns when true) |
 | `username` | no | `bblp` | MQTT username |
@@ -212,7 +212,7 @@ or manually.
 | `profiles_dir` | for slice | auto-detect | Path to OrcaSlicer `profiles/BBL` directory |
 | `camera_image` | no | `bambu_p1_streamer` | Docker image for X1-style streamer fallback |
 | `camera_container_name` | no | `bambu_camera` | Docker container name |
-| `camera_port` | no | `127.0.0.1:1985:1984` | Docker publish mapping; loopback-only by default. Set to `0.0.0.0:1985:1984` to expose on the LAN (see [SECURITY.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/SECURITY.md)) |
+| `camera_port` | no | `127.0.0.1:1985:1984` | Docker publish mapping; loopback-only by default. Set to `0.0.0.0:1985:1984` to expose on the LAN (see [SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md)) |
 | `camera_stream_url` | no | derived | Must be localhost if set; used for Docker frame fetch |
 | Timeouts | no | package defaults | Optional `network_timeout`, `slicer_timeout`, `command_timeout`, `upload_timeout` (seconds) |
 
@@ -222,7 +222,7 @@ or manually.
 
 ## Project layout
 
-- `bambu_cli/` — Runtime package used by the installed command (`bambu-cli`).
+- `bambu_cli/` — Runtime package used by the installed command (`plate`).
 - `scripts/bambu.py` — Compatibility wrapper for direct script usage without installing.
 - `tests/` — Unit, contract, security-marker, and smoke tests.
 - `docs/` — API, schemas, quality roadmap, test backlog, mutation baseline, live smoke.
@@ -233,11 +233,11 @@ or manually.
 
 | Doc | Audience |
 |-----|----------|
-| [AGENTS.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/AGENTS.md) | Agents and automation (architecture, safety) |
-| [docs/api.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/docs/api.md) | JSON contracts + stability policy |
-| [docs/schemas/](https://github.com/DLANSAMA/bambu-local-cli/tree/main/docs/schemas/) | Machine-checkable JSON Schema files |
-| [SECURITY.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/SECURITY.md) | Threat model, reporting, known limitations |
-| [CHANGELOG.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/CHANGELOG.md) | Release notes |
+| [AGENTS.md](https://github.com/DLANSAMA/platecli/blob/main/AGENTS.md) | Agents and automation (architecture, safety) |
+| [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) | JSON contracts + stability policy |
+| [docs/schemas/](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) | Machine-checkable JSON Schema files |
+| [SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md) | Threat model, reporting, known limitations |
+| [CHANGELOG.md](https://github.com/DLANSAMA/platecli/blob/main/CHANGELOG.md) | Release notes |
 
 Wheels contain **runtime code only** (no docs).
 
@@ -245,11 +245,11 @@ Wheels contain **runtime code only** (no docs).
 
 | Doc | Audience |
 |-----|----------|
-| [CONTRIBUTING.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/CONTRIBUTING.md) | Dev setup, tests, releases |
-| [docs/quality-roadmap.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/docs/quality-roadmap.md) | Quality scoreboard and phased plan |
-| [docs/test-backlog.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/docs/test-backlog.md) | Remaining test / coverage gaps |
-| [docs/live-printer-smoke.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/docs/live-printer-smoke.md) | Opt-in real-printer harness |
-| [docs/mutation-baseline.md](https://github.com/DLANSAMA/bambu-local-cli/blob/main/docs/mutation-baseline.md) | Mutation testing scope and floor |
+| [CONTRIBUTING.md](https://github.com/DLANSAMA/platecli/blob/main/CONTRIBUTING.md) | Dev setup, tests, releases |
+| [docs/quality-roadmap.md](https://github.com/DLANSAMA/platecli/blob/main/docs/quality-roadmap.md) | Quality scoreboard and phased plan |
+| [docs/test-backlog.md](https://github.com/DLANSAMA/platecli/blob/main/docs/test-backlog.md) | Remaining test / coverage gaps |
+| [docs/live-printer-smoke.md](https://github.com/DLANSAMA/platecli/blob/main/docs/live-printer-smoke.md) | Opt-in real-printer harness |
+| [docs/mutation-baseline.md](https://github.com/DLANSAMA/platecli/blob/main/docs/mutation-baseline.md) | Mutation testing scope and floor |
 
 ## License
 

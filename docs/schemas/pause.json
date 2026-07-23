@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bambu-local-cli.local/schemas/pause.json",
-  "title": "bambu-cli pause success envelope",
+  "$id": "https://platecli.local/schemas/pause.json",
+  "title": "platecli pause success envelope",
   "type": "object",
   "required": ["status", "command", "paused"],
   "properties": {

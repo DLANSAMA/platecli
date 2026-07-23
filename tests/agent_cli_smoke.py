@@ -3,7 +3,7 @@
 
 This script is intentionally subprocess-based. By default it exercises this
 checkout's script entry point so source validation cannot accidentally use a
-stale installed `bambu-cli` from PATH. Set BAMBU_CLI explicitly when validating
+stale installed `plate` from PATH. Set BAMBU_CLI explicitly when validating
 an installed command.
 """
 
@@ -150,7 +150,7 @@ def run_cli(args, env, expected_returncode=0, input_text=None):
         assert False, (
             "Configured CLI executable was not found: "
             f"{redact_url_credentials(command[0])!r}. "
-            "Set BAMBU_CLI to an installed bambu-cli executable or leave it unset "
+            "Set BAMBU_CLI to an installed plate executable or leave it unset "
             f"to exercise this checkout. Command: {subprocess.list2cmdline(redacted_command)}"
         )
     if result.returncode != expected_returncode:
@@ -185,7 +185,7 @@ def smoke_help_surface(root):
     if "--json" not in top_stdout or "may appear before the subcommand" not in normalized_help:
         assert False, "top-level help does not expose the agent-friendly global --json flag"
     version = run_cli(["--version"], env)
-    expected_version = f"bambu-cli {project_version()}"
+    expected_version = f"plate {project_version()}"
     if version.stdout.strip() != expected_version:
         assert False, f"--version output {version.stdout!r} did not match {expected_version!r}"
     version_json = json_stdout(run_cli(["--json", "--version"], env))

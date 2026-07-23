@@ -37,9 +37,9 @@ REQUIRED_SNIPPETS = {
     "release readiness removes pycache": "root.rglob('__pycache__')",
     "release readiness removes egg-info": "bambu_cli.egg-info",
     "release readiness removes build outputs": "'build', 'dist', 'wheelhouse'",
-    "installed agent smoke env": "BAMBU_CLI: bambu-cli",
+    "installed agent smoke env": "BAMBU_CLI: plate",
     "package contents smoke": "python tests/package_contents_smoke.py",
-    "installed version smoke": "bambu-cli --version",
+    "installed version smoke": "plate --version",
     "wheel no-deps reinstall": "--force-reinstall --no-deps --no-index --find-links wheelhouse",
     "sdist and wheel package smoke": "python -m build --sdist --wheel --outdir dist",
     # Typing: whole-package mypy (blocklist of residuals lives in pyproject.toml).
