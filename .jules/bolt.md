@@ -8,3 +8,7 @@
 ## 2024-07-21 - Caching Slicer Profile Key Discovery
 **Learning:** The CLI reads and parses all OrcaSlicer `.json` profiles in a directory multiple times during a single `slice` operation to discover all possible override keys. This causes significant, unnecessary file I/O and JSON parsing for directories that are completely static for the duration of the command's execution.
 **Action:** When a function iterates over and parses many files in a static configuration directory, add `@lru_cache` if it's called repeatedly within the same execution context.
+
+## 2026-07-22 - [JSON parsing bottleneck in profile auto-discovery]
+**Learning:** Checking compatibility during profile discovery repeatedly opens and parses JSON files (`_process_profile_compatible`). Since the files on disk don't change during the lifecycle of the CLI command, doing this in loops over many profiles incurs a severe I/O and JSON parsing overhead (~25x slower without memoization).
+**Action:** Use `@lru_cache` to memoize the results of repetitive file reads/JSON parsing during hot paths like profile discovery where the data is static per execution.

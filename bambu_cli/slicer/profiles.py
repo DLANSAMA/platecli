@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import tempfile
+from functools import lru_cache
 from typing import IO
 
 from bambu_cli.cli import _display_path, _expand_path
@@ -54,7 +55,14 @@ def _slicer_executable_problem(path: str | None) -> str | None:
     return None
 
 
+@lru_cache(maxsize=128)
 def _process_profile_compatible(path: str, compatible_printer: str | None) -> bool:
+    """Return True if the profile supports the printer.
+
+    Performance optimization (Bolt ⚡): Memoized because this is called repeatedly
+    during profile auto-discovery in a loop over files on disk, and reading/parsing
+    JSON repeatedly is a significant bottleneck.
+    """
     if not compatible_printer:
         return False
     try:
