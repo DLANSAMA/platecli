@@ -6,7 +6,11 @@
 [![PyPI](https://img.shields.io/pypi/v/platecli)](https://pypi.org/project/platecli/)
 [![Downloads](https://static.pepy.tech/badge/platecli)](https://pepy.tech/projects/platecli)
 
-![platecli demo: live printer status and slicing from the terminal](docs/demo.gif)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/demo-dark.gif">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/demo-light.gif">
+  <img alt="platecli demo: live printer status and slicing from the terminal" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/demo-dark.gif">
+</picture>
 
 Fully local 3D printing pipeline for Bambu Lab printers. Runs on **Linux, macOS, and Windows**. The installed command is `plate`. Download models from Printables, slice with OrcaSlicer, and print — all controlled via CLI by any AI agent or by hand. No cloud account needed.
 
@@ -108,7 +112,11 @@ plate config validate   # check config values without contacting the printer
 plate doctor            # connectivity + live cert fingerprint
 ```
 
-![plate doctor: config, MQTT, and FTPS health checks with TLS-pin verification against a real printer](docs/doctor.gif)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-dark.gif">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-light.gif">
+  <img alt="plate doctor: config, MQTT, and FTPS health checks with TLS-pin verification against a real printer" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-dark.gif">
+</picture>
 
 ### OrcaSlicer
 

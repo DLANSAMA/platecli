@@ -1,9 +1,9 @@
 # Doctor-demo recording for README (mid-page). Regenerate from the repo root:
-#   vhs docs/doctor.tape
+#   vhs docs/doctor-dark.tape
 # Requires: vhs, an installed `plate` in .venv/bin, and a reachable printer
 # (doctor is read-only). Styling matches docs/demo.tape / the social card.
 
-Output docs/doctor.gif
+Output docs/doctor-dark.gif
 
 Set Shell "bash"
 Set FontFamily "Hack"

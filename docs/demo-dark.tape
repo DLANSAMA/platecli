@@ -1,10 +1,10 @@
 # Demo recording for README. Regenerate from the repo root with:
-#   vhs docs/demo.tape
+#   vhs docs/demo-dark.tape
 # Requires: vhs, an installed `plate` in .venv/bin, a reachable printer
 # (status is read-only), and side-v2a.stl (or any STL) in the repo root.
 # Styling matches the repo social-preview card (dark, rounded, traffic lights).
 
-Output docs/demo.gif
+Output docs/demo-dark.gif
 
 Set Shell "bash"
 Set FontFamily "Hack"
