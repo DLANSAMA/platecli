@@ -5,7 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-24
+
+### Fixed
+- **Slice temperature safety now covers process-section overrides**: nozzle/bed
+  temperature keys passed via `--set` or the `"process"` object of
+  `--settings-json` are validated against the same printer-safety bounds as
+  filament overrides (previously only the filament path was checked).
+- `plate doctor` honors `--network-timeout` for its MQTT, FTPS, and version
+  probes (previously hardcoded 5 s with silent retries taking ~23 s), and no
+  longer retries the MQTT check.
+- Deprecation and setup messages referenced the pre-rename `bambu setup`
+  command; they now correctly say `plate setup`.
+- The headless (non-TTY) setup error now includes a copy-pasteable
+  non-interactive example command.
+
+### Added
+- `docs/schemas/status.json`: published JSON Schema for static
+  `plate status --json` output (the monitor stream already had
+  `status_event.json`), validated in contract tests.
+- Community files: code of conduct, issue forms (bug report asks for
+  `plate doctor` output), and a pull-request template.
+
 ### Changed
+- README restructured into a concise landing page; full technical
+  documentation moved to `docs/manual.md` (ships in the sdist, linked from
+  the PyPI sidebar via the new `Documentation` project URL).
+- Quickstart examples use a real Printables model (3DBenchy) instead of a
+  placeholder URL.
 - Repo hygiene: `pytest.ini` and `.coveragerc` folded into `pyproject.toml` (`[tool.pytest.ini_options]`, `[tool.coverage.*]`); removed the `.jules/` bot-notes directory. Test/coverage behavior unchanged; sdists still carry the full test config via `pyproject.toml`.
 
 ## [0.2.0] - 2026-07-23

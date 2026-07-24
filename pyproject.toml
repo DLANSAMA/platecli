@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "platecli"
-version = "0.2.0"
+version = "0.2.1"
 description = "platecli — local CLI for Bambu Lab printers (not affiliated with Bambu Lab)"
 readme = "README.md"
 requires-python = ">=3.9"
