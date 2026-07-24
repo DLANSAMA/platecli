@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-07-24
+
+### Added
+- `plate snapshot --unique`: timestamped output filenames
+  (`printer_snapshot_20260724T195820Z.jpg`) so repeated captures never
+  overwrite each other; composes with `--output` by inserting the stamp
+  before the extension. Designed for AI-agent workflows.
+- Snapshot `--json` output now includes `captured_at` (ISO-8601 UTC) and
+  `sha256` (digest of the JPEG bytes) so callers can verify a capture is
+  genuinely new. Additive fields; `docs/schemas/snapshot.json` updated.
+- Camera-snapshot guidance for agents in `AGENTS.md` and a Camera snapshots
+  section in `docs/manual.md`.
+
 ## [0.2.1] - 2026-07-24
 
 ### Fixed
