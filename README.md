@@ -1,10 +1,19 @@
-# platecli — print from your terminal, no cloud required
+<div align="center">
+
+# platecli
+
+### Print from your terminal — no cloud required
 
 [![CI](https://github.com/DLANSAMA/platecli/actions/workflows/ci.yml/badge.svg)](https://github.com/DLANSAMA/platecli/actions/workflows/ci.yml)
 [![Release Packaging](https://github.com/DLANSAMA/platecli/actions/workflows/release.yml/badge.svg)](https://github.com/DLANSAMA/platecli/actions/workflows/release.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI](https://img.shields.io/pypi/v/platecli)](https://pypi.org/project/platecli/)
+[![Python versions](https://img.shields.io/pypi/pyversions/platecli)](https://pypi.org/project/platecli/)
 [![Downloads](https://static.pepy.tech/badge/platecli)](https://pepy.tech/projects/platecli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+[Install](#install) · [Try it in 30 seconds](#try-it-in-30-seconds) · [Print something](#print-something) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [For AI agents](#built-for-ai-agents)
+
+</div>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/demo-dark.gif">
@@ -13,6 +22,11 @@
 </picture>
 
 Paste a Printables link, get a physical print. `plate` downloads the model, slices it with OrcaSlicer, and sends it to your Bambu Lab printer — one command, entirely on your local network. No cloud account, no telemetry. Runs on **Linux, macOS, and Windows**, driven by hand or by AI agents.
+
+```text
+model URL or file  →  download  →  slice (OrcaSlicer)  →  upload  →  print
+                        one command:  plate job <url> --confirm
+```
 
 **Supports:** P1P, P1S, X1C, X1E, A1, A1 Mini (any Bambu printer with LAN mode)
 
@@ -106,3 +120,9 @@ Every command emits machine-readable `--json` output backed by published [JSON S
 ## License
 
 MIT — Use freely, modify as needed.
+
+---
+
+<div align="center">
+<sub>⭐ If platecli fits your workflow, a star helps other makers find it.</sub>
+</div>
