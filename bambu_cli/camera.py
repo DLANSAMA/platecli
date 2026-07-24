@@ -6,6 +6,8 @@ runner, docker-which, access-code loader) are injectable so tests pass fakes
 instead of patching module globals.
 """
 
+import datetime
+import hashlib
 import json
 import os
 import re
@@ -42,6 +44,17 @@ from bambu_cli.utils import _ensure_parent_dir, emit_json, emit_json_error
 # The port-6000 camera stream's first frames can be stale (buffered from a
 # previous connection); skip a few so the snapshot reflects the current scene.
 _SNAPSHOT_SKIP_FRAMES = 5
+
+
+def _utc_stamp(now: "datetime.datetime | None" = None) -> str:
+    """Return a compact UTC timestamp string ``YYYYMMDDTHHMMSSz``.
+
+    ``now`` is injectable so tests can supply a fixed datetime instead of
+    reading the wall clock (avoids fragile time-dependent assertions).
+    """
+    if now is None:
+        now = datetime.datetime.now(datetime.timezone.utc)
+    return now.strftime("%Y%m%dT%H%M%SZ")
 
 
 class _CameraPinMismatch(BambuError):
@@ -282,6 +295,7 @@ def _cmd_snapshot(
     access_code_loader=None,
     urlopen=None,
     sleep=None,
+    now=None,
 ):
     """Capture a snapshot from the printer camera via BambuP1Streamer.
 
@@ -300,7 +314,20 @@ def _cmd_snapshot(
     _sleep = sleep if sleep is not None else time.sleep
 
     ctx = ctx or RuntimeContext.for_request(args)
-    outpath = _expand_path(args.output or "printer_snapshot.jpg")
+
+    # Resolve output path, honouring --unique for agent-safe timestamped names.
+    unique = bool(_namespace_get(args, "unique", False))
+    user_output = args.output if hasattr(args, "output") else None
+    if unique:
+        stamp = _utc_stamp(now)
+        if user_output:
+            base, ext = os.path.splitext(user_output)
+            resolved_output = f"{base}_{stamp}{ext}"
+        else:
+            resolved_output = f"printer_snapshot_{stamp}.jpg"
+    else:
+        resolved_output = user_output or "printer_snapshot.jpg"
+    outpath = _expand_path(resolved_output)
     if outpath.startswith("-"):
         message = f"Invalid output path: {_path_for_message(outpath)}"
         logger.error(message)
@@ -355,6 +382,8 @@ def _cmd_snapshot(
     if _frame:
         _write_snapshot_atomic(outpath, _frame)
         size = os.path.getsize(outpath)
+        captured_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        sha256 = hashlib.sha256(_frame).hexdigest()
         logger.info(f"\U0001f4f8 Snapshot saved: {_path_for_message(outpath)} ({size // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
             emit_json(
@@ -363,6 +392,8 @@ def _cmd_snapshot(
                     "command": "snapshot",
                     "output": outpath,
                     "size_bytes": size,
+                    "captured_at": captured_at,
+                    "sha256": sha256,
                     "method": "direct",
                 }
             )
@@ -501,6 +532,8 @@ def _cmd_snapshot(
             data = resp.read()
             _write_snapshot_atomic(outpath, data)
         size = os.path.getsize(outpath)
+        captured_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        sha256 = hashlib.sha256(data).hexdigest()
         logger.info(f"✅ Snapshot saved: {_path_for_message(outpath)} ({size // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
             emit_json(
@@ -509,6 +542,8 @@ def _cmd_snapshot(
                     "command": "snapshot",
                     "output": outpath,
                     "size_bytes": size,
+                    "captured_at": captured_at,
+                    "sha256": sha256,
                     "camera_image": camera_image,
                     "docker_container": "bambu_camera",
                 }

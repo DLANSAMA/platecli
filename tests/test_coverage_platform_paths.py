@@ -47,6 +47,13 @@ def test_default_config_path_platforms(platform, monkeypatch, tmp_path):
 
 def test_convert_step_gmsh_missing(monkeypatch):
     monkeypatch.setattr(slicer_mod.step_convert.shutil, "which", lambda *_a, **_k: None)
+
+    def _no_gmsh(*_a, **_k):
+        raise FileNotFoundError("gmsh")
+
+    # Simulate a machine without the gmsh binary regardless of the host env
+    # (a real gmsh on PATH previously made this test environment-dependent).
+    monkeypatch.setattr(slicer_mod.step_convert.subprocess, "run", _no_gmsh)
     with patch.object(slicer_mod.step_convert.sys, "platform", "linux"):
         path, created = slicer_mod._convert_step_to_stl("/tmp/x.step")
     assert path is None

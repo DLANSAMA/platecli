@@ -55,6 +55,10 @@ When adding tests, follow [docs/test-backlog.md](docs/test-backlog.md) and the q
 - Domain modules still import private helpers from `bambu_cli.cli` (`_expand_path`, `_namespace_get`, path/JSON helpers). Target: extract `paths` / `jsonio` / `argutils` (roadmap Phase B.4).
 - TLS fingerprint verification is reimplemented in mqtt, ftps, and camera rather than one shared helper (roadmap B.5).
 
+## Camera snapshots for agents
+
+`plate snapshot` captures a JPEG from the printer camera. To avoid stale-photo mistakes — where an agent re-sends a cached file instead of a fresh capture — always pass a fresh `--output` name or use `--unique` (generates `printer_snapshot_<UTC>Z.jpg`). Every successful `--json` response includes `sha256` (hex digest of the JPEG bytes) and `captured_at` (ISO-8601 UTC); compare these fields before sending the image to a user to verify the capture is genuinely new.
+
 ## Agent usage
 
 Agents may place `--json` before or after the subcommand; `plate --json --version` emits machine-readable version details. Slicing accepts meshes in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. AMS slot mappings are zero-or-positive integers. When a slice fails because OrcaSlicer profiles are missing, the `--json` error includes `profiles_dir` (configured) and `detected_profiles_dir` (a real BBL profiles directory found on disk, or null) so the fix is machine-actionable.

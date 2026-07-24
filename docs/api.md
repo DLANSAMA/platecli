@@ -308,7 +308,11 @@ See [SECURITY.md](../SECURITY.md).
 ### `snapshot`
 
 Schema: [`snapshot.json`](schemas/snapshot.json) — `"status": "saved"`, `"output"`,
-`"size_bytes"`, plus `method` (`direct`) or Docker-related fields when the streamer path is used.
+`"size_bytes"`, `"captured_at"` (ISO-8601 UTC), `"sha256"` (hex digest of JPEG bytes),
+plus `method` (`direct`) or Docker-related fields when the streamer path is used.
+Use `--unique` to get a timestamped filename so repeated captures never overwrite/confuse.
+Agents should compare `sha256` / `captured_at` to verify a new frame was captured before
+sending the image to a user.
 
 ## Global API flags
 

@@ -3,12 +3,20 @@
   "$id": "https://platecli.local/schemas/snapshot.json",
   "title": "platecli snapshot success envelope",
   "type": "object",
-  "required": ["status", "command", "output", "size_bytes"],
+  "required": ["status", "command", "output", "size_bytes", "captured_at", "sha256"],
   "properties": {
     "status": {"const": "saved"},
     "command": {"const": "snapshot"},
     "output": {"type": "string", "minLength": 1},
     "size_bytes": {"type": "integer"},
+    "captured_at": {
+      "type": "string",
+      "description": "ISO-8601 UTC timestamp of capture (e.g. 2026-07-24T19:15:30Z)"
+    },
+    "sha256": {
+      "type": "string",
+      "description": "Hex SHA-256 digest of the captured JPEG bytes; use to verify a capture is new"
+    },
     "method": {"type": "string"},
     "camera_image": {"type": "string"},
     "docker_container": {"type": "string"}

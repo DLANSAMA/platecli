@@ -497,6 +497,15 @@ def build_parser():
 
     p_snap = sub.add_parser("snapshot", parents=[get_global_parser()], help="Capture camera snapshot")
     p_snap.add_argument("--output", help="Output file path (default: printer_snapshot.jpg)")
+    p_snap.add_argument(
+        "--unique",
+        action="store_true",
+        help=(
+            "Use a unique timestamped filename so repeated captures never overwrite/confuse. "
+            "Without --output: saves as printer_snapshot_<UTC>Z.jpg. "
+            "With --output: inserts the timestamp before the file extension."
+        ),
+    )
 
     p_doc = sub.add_parser(
         "doctor", parents=[get_global_parser()], help="Run health check and discover printer capabilities"

@@ -297,6 +297,8 @@ def test_snapshot_success_fixture_matches_schema():
         "command": "snapshot",
         "output": "/tmp/snap.png",
         "size_bytes": 12000,
+        "captured_at": "2026-07-24T19:15:30Z",
+        "sha256": "a" * 64,
         "method": "direct",
     }
     _validate(payload, _load_schema("snapshot.json"))

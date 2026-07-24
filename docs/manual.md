@@ -124,6 +124,20 @@ Each line is a self-contained JSON object, so an agent can consume the stream
 incrementally and stop once it sees `"event":"terminal"`. Pair with `--sim` to
 exercise the exact event shape without a printer. Schema: [`docs/schemas/status_event.json`](https://github.com/DLANSAMA/platecli/blob/main/docs/schemas/status_event.json).
 
+## Camera snapshots
+
+`plate snapshot` captures a JPEG image from the printer camera and saves it locally.
+
+```bash
+plate snapshot                          # saves printer_snapshot.jpg
+plate snapshot --output my_photo.jpg    # explicit output path
+plate snapshot --unique                 # saves printer_snapshot_20260724T191530Z.jpg
+plate snapshot --unique --output cam.jpg  # saves cam_20260724T191530Z.jpg
+plate snapshot --json                   # machine-readable result
+```
+
+Every `--json` response includes `captured_at` (ISO-8601 UTC timestamp) and `sha256` (hex digest of the JPEG bytes). Agents should compare these fields across captures to confirm a fresh frame was received before sending the image to a user. Use `--unique` when taking repeated snapshots — it inserts a UTC timestamp into the filename so successive captures never silently overwrite each other.
+
 ## Global flags
 
 | Flag | Description |
