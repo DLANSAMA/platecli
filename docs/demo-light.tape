@@ -13,7 +13,7 @@ Set Width 1100
 Set Height 420
 Set Padding 24
 Set Margin 36
-Set MarginFill "#f6f8fa"
+Set MarginFill "#1e3a8a"
 Set BorderRadius 14
 Set WindowBar Colorful
 Set WindowBarSize 44
