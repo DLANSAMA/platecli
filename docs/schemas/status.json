@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platecli.local/schemas/status.json",
+  "title": "platecli status success envelope",
+  "description": "JSON output of `plate status --json`. Printer fields appear both at the top level (raw MQTT data) and normalised under the `printer` key.",
+  "type": "object",
+  "required": ["status", "command", "printer"],
+  "properties": {
+    "status": {"const": "ok"},
+    "command": {"const": "status"},
+    "printer": {
+      "type": "object",
+      "description": "Normalised printer state.",
+      "properties": {
+        "gcode_state": {"type": "string"},
+        "mc_percent": {"type": "number"},
+        "hw_ver": {"type": "string"},
+        "sw_ver": {"type": "string"},
+        "bed_temper": {"type": "number"},
+        "bed_target_temper": {"type": "number"},
+        "nozzle_temper": {"type": "number"},
+        "nozzle_target_temper": {"type": "number"},
+        "cooling_fan_speed": {"type": "number"},
+        "wifi_signal": {"type": "string"},
+        "ams": {
+          "type": "object",
+          "description": "Normalised AMS state (present when AMS is attached).",
+          "properties": {
+            "units": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"type": "number"},
+                  "humidity": {"type": "number"},
+                  "temp": {"type": "number"},
+                  "trays": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "slot": {"type": "number"},
+                        "empty": {"type": "boolean"},
+                        "active": {"type": "boolean"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

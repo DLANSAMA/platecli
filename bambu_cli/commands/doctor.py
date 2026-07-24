@@ -12,7 +12,7 @@ from bambu_cli.cli import (
     _namespace_get,
     _path_for_message,
 )
-from bambu_cli.config import CONFIG_PATH, MODEL_MAPPING, _expected_fingerprint, load_config
+from bambu_cli.config import CONFIG_PATH, MODEL_MAPPING, _expected_fingerprint, get_network_timeout, load_config
 from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.context import RuntimeContext
 from bambu_cli.errors import BambuError, abort
@@ -125,7 +125,8 @@ def cmd_doctor(args, ctx=None):
 
     logger.info(f"   [2/3] Verifying MQTT connectivity to {ctx.settings.printer_ip}:{ctx.settings.mqtt_port}...")
     printer = ctx.printer()
-    status = printer.status(timeout=5)
+    net_timeout = get_network_timeout(args)
+    status = printer.status(timeout=net_timeout, retries=0)
     if status:
         logger.info("   ✅ MQTT connection established. Printer identified.")
     else:
@@ -140,7 +141,7 @@ def cmd_doctor(args, ctx=None):
 
     logger.info(f"   [3/3] Verifying FTPS connectivity to {ctx.settings.printer_ip}:990...")
     try:
-        with get_ftp(timeout=5):
+        with get_ftp(timeout=net_timeout):
             logger.info("   ✅ FTPS connection established.")
     except Exception as e:
         message = f"FTPS connection failed: {e}"
@@ -161,7 +162,7 @@ def cmd_doctor(args, ctx=None):
 
     model_info = MODEL_MAPPING.get(ctx.settings.printer_model, MODEL_MAPPING["P1P"])
     firmware = status.get("sw_ver")
-    modules = printer.get_version(timeout=5)
+    modules = printer.get_version(timeout=net_timeout)
     if modules:
         ota = next((m for m in modules if m.get("name") == "ota"), None) or modules[0]
         firmware = ota.get("sw_ver") or firmware

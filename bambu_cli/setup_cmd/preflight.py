@@ -145,7 +145,7 @@ def collect_preflight_checks():
                     "warning",
                     "access-code",
                     "config.json contains an inline access_code; move it to an access_code_file "
-                    "(run: bambu setup --migrate-access-code or edit config). "
+                    "(run: plate setup --migrate-access-code or edit config). "
                     "Inline support will be removed in a future release.",
                 )
             )

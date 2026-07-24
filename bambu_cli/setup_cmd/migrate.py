@@ -69,7 +69,7 @@ def migrate_access_code(config_path=None, access_code_file_path=None):
 def _cmd_migrate_access_code(args):
     """Non-interactive: move inline access_code into access_code_file.
 
-    Wired up via the (planned) ``bambu setup --migrate-access-code`` flag.
+    Wired up via the (planned) ``plate setup --migrate-access-code`` flag.
     """
     try:
         result = migrate_access_code(

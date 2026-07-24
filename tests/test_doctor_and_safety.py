@@ -95,6 +95,38 @@ class TestBambuDoctor(unittest.TestCase):
         )
         self.assertTrue(any_caps_open, "Expected a randomly generated printer_capabilities_*.json to be opened for writing")
 
+    @patch("bambu_cli.protocols.mqtt.get_status")
+    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    @patch("builtins.open")
+    def test_cmd_doctor_honours_network_timeout(self, mock_file_open, mock_logger, mock_get_ftp, mock_get_status):
+        """--network-timeout is forwarded to printer.status() and get_ftp()."""
+        from bambu_cli.commands import cmd_doctor
+        import io
+
+        args = MagicMock()
+        args.output = None
+        # Simulate --network-timeout 3
+        args.network_timeout = 3.0
+
+        original_open = io.open
+
+        def custom_open(file, *args, **kwargs):
+            if "config.json" in str(file):
+                return original_open(file, *args, **kwargs)
+            return MagicMock()
+
+        mock_file_open.side_effect = custom_open
+        mock_get_status.return_value = {"hw_ver": "P1P", "sw_ver": "01.05.00.00"}
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+
+        cmd_doctor(args)
+
+        # Verify get_status was called with timeout=3.0 and retries=0
+        call_kwargs = mock_get_status.call_args
+        self.assertEqual(call_kwargs.kwargs.get("timeout") or call_kwargs[1].get("timeout"), 3.0)
+        self.assertEqual(call_kwargs.kwargs.get("retries", call_kwargs[1].get("retries")), 0)
+
 
 class TestOfferPinFingerprint(unittest.TestCase):
     """The doctor cert-fingerprint auto-pin offer (1.3)."""

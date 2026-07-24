@@ -119,6 +119,15 @@ def test_status_ok_matches_ok_envelope(monkeypatch, tmp_path, capsys):
     assert payload["command"] == "status"
 
 
+def test_status_ok_matches_status_schema(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "status", "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("status.json"))
+
+
 def test_setup_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(sys, "argv", ["plate", "setup", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))

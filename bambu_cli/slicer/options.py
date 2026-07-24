@@ -167,12 +167,13 @@ def _numeric_values(value: Any) -> list[float]:
 
 
 def _effective_override_temps(args: argparse.Namespace) -> tuple[list[float], list[float]]:
-    """Nozzle and bed temps implied by generic filament overrides.
+    """Nozzle and bed temps implied by generic overrides (filament *and* process).
 
-    Inspects ``--settings-json`` and ``--set-filament`` only; the named
-    ``--nozzle-temp`` / ``--bed-temp`` flags are range-checked separately. This
-    is what stops ``--set-filament nozzle_temperature=999`` from bypassing the
-    printer-safety bounds.
+    Inspects ``--settings-json`` (both ``"filament"`` and ``"process"``
+    sections), ``--set-filament``, and ``--set`` so that temperature keys
+    supplied through any of these paths are validated against the same
+    printer-safety bounds.  Named flags (``--nozzle-temp`` / ``--bed-temp``)
+    are range-checked separately.
     """
     from bambu_cli.constants import BED_PLATE_TYPES
 
@@ -185,11 +186,17 @@ def _effective_override_temps(args: argparse.Namespace) -> tuple[list[float], li
             blob = json.loads(raw_json)
         except ValueError:
             blob = {}
-        fil = blob.get("filament", {}) if isinstance(blob, dict) else {}
-        if isinstance(fil, dict):
-            sources.append(fil)
+        if isinstance(blob, dict):
+            for section in ("filament", "process"):
+                sec = blob.get(section, {})
+                if isinstance(sec, dict):
+                    sources.append(sec)
     try:
         sources.append(_parse_kv_overrides(_namespace_get(args, "set_filament", None), "set-filament"))
+    except ValueError:
+        pass  # format error surfaced elsewhere in validation
+    try:
+        sources.append(_parse_kv_overrides(_namespace_get(args, "set_process", None), "set"))
     except ValueError:
         pass  # format error surfaced elsewhere in validation
     bed_keys = set(BED_PLATE_TYPES) | {f"{plate}_initial_layer" for plate in BED_PLATE_TYPES}

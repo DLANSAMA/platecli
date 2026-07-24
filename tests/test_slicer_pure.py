@@ -317,6 +317,34 @@ def test_validate_rejects_bad_named_flags():
     assert "speed" in (S._validate_slice_options(_base_slice_args(speed=0)) or "")
 
 
+# Fix 1: process-section temp guard -------------------------------------------
+
+def test_validate_rejects_unsafe_set_process_nozzle_temp():
+    """--set nozzle_temperature=999 must be rejected (was bypassing guard)."""
+    args = _base_slice_args(set_process=["nozzle_temperature=999"])
+    err = S._validate_slice_options(args)
+    assert err is not None and "nozzle temperature override" in err
+
+
+def test_validate_rejects_unsafe_settings_json_process_nozzle_temp():
+    """--settings-json process nozzle_temperature=999 must be rejected."""
+    args = _base_slice_args(settings_json='{"process": {"nozzle_temperature": "999"}}')
+    err = S._validate_slice_options(args)
+    assert err is not None and "nozzle temperature override" in err
+
+
+def test_validate_accepts_safe_process_nozzle_temp():
+    """A sane process nozzle_temperature must pass validation."""
+    args = _base_slice_args(set_process=["nozzle_temperature=220"])
+    assert S._validate_slice_options(args) is None
+
+
+def test_validate_unrelated_process_key_still_passes():
+    """An unrelated process key (e.g. wall_loops) must still pass validation."""
+    args = _base_slice_args(set_process=["wall_loops=4"])
+    assert S._validate_slice_options(args) is None
+
+
 def test_known_setting_keys_reads_profiles(tmp_path):
     (tmp_path / "process").mkdir()
     (tmp_path / "filament").mkdir()

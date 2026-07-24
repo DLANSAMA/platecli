@@ -1,6 +1,6 @@
-import json
-
 """Send raw G-code via MQTT."""
+
+import json
 
 from bambu_cli.cli import _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR

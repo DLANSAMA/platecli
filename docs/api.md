@@ -77,6 +77,7 @@ Domain code raises `BambuError` / `abort()`; only `cli.main()` calls `sys.exit`.
 | [`ok_envelope.json`](schemas/ok_envelope.json) | Generic success envelope |
 | [`error_envelope.json`](schemas/error_envelope.json) | Generic error envelope |
 | [`version.json`](schemas/version.json) | `--json --version` |
+| [`status.json`](schemas/status.json) | `status --json` snapshot |
 | [`status_event.json`](schemas/status_event.json) | `status --monitor --json` NDJSON events |
 | [`doctor.json`](schemas/doctor.json) | `doctor` |
 | [`preflight.json`](schemas/preflight.json) | `preflight` |

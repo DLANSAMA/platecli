@@ -387,7 +387,12 @@ def _cmd_setup(args):
         return
 
     if not sys.stdin.isatty():
-        message = "Interactive setup cannot run in a headless environment. Please run setup non-interactively with --printer-ip, --serial, and --access-code / --access-code-file options."
+        message = (
+            "Interactive setup cannot run in a headless environment. "
+            "Run setup non-interactively with --printer-ip, --serial, and --access-code-file, for example:\n"
+            "  plate setup --printer-ip 192.168.1.42 --serial 01S00A000000000 "
+            "--access-code-file ~/.bambu_access"
+        )
         logger.error(message)
         emit_json_error(args, "setup", EXIT_CONFIG_ERROR, message, failed_step="validate")
         abort("", exit_code=EXIT_CONFIG_ERROR)
