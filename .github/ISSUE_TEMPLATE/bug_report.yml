@@ -1,0 +1,72 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out as much as you can — it speeds up diagnosis significantly.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug. What did you expect to happen, and what actually happened?
+      placeholder: "Example: plate job ... exited with an error instead of uploading the file."
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command run
+      description: Paste the full command you ran (redact your access code if it appears).
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: printer
+    attributes:
+      label: Printer model
+      options:
+        - P1P
+        - P1S
+        - X1C
+        - X1E
+        - A1
+        - A1 Mini
+        - Other / none (not printer-related)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: platecli version
+      description: Run `plate --version` and paste the output here.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`plate doctor` output"
+      description: |
+        Run `plate doctor` and paste the output. Serials and access codes are redacted automatically in the report — but double-check before submitting that no access code appears in plain text.
+      render: text
+    validations:
+      required: false

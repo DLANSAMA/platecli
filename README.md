@@ -64,6 +64,8 @@ plate --sim status
          Slot 3: TPU #000000 | 45%
 ```
 
+<sub>Timestamps and log-level prefixes trimmed for brevity.</sub>
+
 ## Print something
 
 Enable LAN mode on your printer, grab the IP, serial, and access code from its touchscreen, then let the interactive setup walk you through the rest:
@@ -76,7 +78,7 @@ plate doctor    # optional: verify the connection end to end
 Now go from a link on the internet to plastic on the bed:
 
 ```bash
-plate job "https://www.printables.com/model/12345-thing" --confirm
+plate job "https://www.printables.com/model/3161-3d-benchy" --confirm
 ```
 
 `--confirm` is required for anything that physically prints (or stops, deletes, or sends raw G-code) — leave it off and nothing on the printer moves.
@@ -110,6 +112,7 @@ Every command emits machine-readable `--json` output backed by published [JSON S
 - [SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md) — threat model, reporting, known limitations
 - [CHANGELOG.md](https://github.com/DLANSAMA/platecli/blob/main/CHANGELOG.md) — release notes
 - [CONTRIBUTING.md](https://github.com/DLANSAMA/platecli/blob/main/CONTRIBUTING.md) — dev setup, tests, releases
+- [Discussions](https://github.com/DLANSAMA/platecli/discussions) — questions, show-and-tell, and community conversation
 
 ## Status & disclaimer
 

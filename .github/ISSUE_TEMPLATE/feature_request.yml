@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest an idea or improvement for platecli
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea? Great — describe it below. For open-ended discussion or show-and-tell, consider [Discussions](https://github.com/DLANSAMA/platecli/discussions) instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Is your feature request related to a problem? Describe what you're trying to accomplish and why the current behavior falls short.
+      placeholder: "Example: I always have to pass --max-download-mb manually for large models..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior or interface you'd like to see. Code snippets or example commands are welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you've thought about, or workarounds you're currently using?
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any other context, screenshots, or links that might help.
+    validations:
+      required: false

@@ -101,7 +101,7 @@ For programmatic checks, `plate --json --version` emits JSON version details.
 ```bash
 # Full workflow (download, slice, upload, and START A PHYSICAL PRINT)
 # --confirm is required for any command that begins printing.
-plate job "https://www.printables.com/model/12345-thing" --confirm --json
+plate job "https://www.printables.com/model/3161-3d-benchy" --confirm --json
 ```
 
 ## Monitoring a print

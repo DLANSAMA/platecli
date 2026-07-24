@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discussions — questions & show-and-tell
+    url: https://github.com/DLANSAMA/platecli/discussions
+    about: Ask a question, share a print workflow, or just say hello.
