@@ -9,8 +9,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `tests/test_docs_consistency.py`: guards against version drift in README /
   `docs/api.md` / the bug-report template, and against `docs/manual.md` sections
   missing from its Contents list.
+- `docs/manual.md` documents that Printables downloads are performed on the
+  user's behalf, subject to Printables' terms and each model's own licence.
 
 ### Changed
+- platecli now identifies itself honestly when talking to Printables:
+  requests carry `User-Agent: platecli/<version> (+https://github.com/DLANSAMA/platecli)`
+  instead of impersonating Chrome, and the forged `Origin`/`Referer` headers
+  are gone. Verified against the live Printables GraphQL API. Generic
+  user-supplied download URLs keep a browser-compatible User-Agent for CDN
+  compatibility, now with the honest `platecli/<version>` token appended.
+- Outbound HTTP is throttled to at most one request per second per host, and
+  `429`/`503` responses are retried while respecting `Retry-After` (clamped to
+  30 s, at most two retries).
 - README: stated the OrcaSlicer and Python 3.9+ prerequisites, qualified non-P1
   printer support as best-effort, clarified that `plate snapshot` grabs P1/A1
   cameras directly while X1-series needs the Docker streamer, and added
@@ -22,12 +33,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `AGENTS.md` retitled to the public product name.
 - `docs/api.md`: the `pause.json` / `resume.json` bullets now describe both the
   success and the `confirmation_required` shape, matching the dual schemas.
-
-### Fixed
-- `plate doctor`'s reported `camera_snapshot_note` (and `camera.py`'s snapshot
-  docstring) claimed P1P/P1S snapshots go through the BambuP1Streamer container.
-  It is the reverse: P1/A1-class cameras are captured directly with no Docker,
-  and the container is the X1-series fallback.
 
 ### Changed (BREAKING)
 - `pause` and `resume` now require `--confirm`, matching `stop`/`print`/`gcode`/`delete`.
@@ -47,7 +52,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `docs/schemas/pause.json` / `resume.json` accept the `confirmation_required` status.
 - Filenames containing square brackets (e.g. `part[v2].stl`, common in Printables model titles) no longer crash the CLI or get silently truncated in log output — the Rich log handler no longer parses log text as markup.
 - `--json` now always writes a parseable error envelope to stdout: the JSON envelope is emitted before the human-readable log line, so a logging failure can no longer leave stdout empty.
->>>>>>> origin/main
+- `plate doctor`'s reported `camera_snapshot_note` (and `camera.py`'s snapshot
+  docstring) claimed P1P/P1S snapshots go through the BambuP1Streamer container.
+  It is the reverse: P1/A1-class cameras are captured directly with no Docker,
+  and the container is the X1-series fallback.
 
 ## [0.2.2] - 2026-07-24
 
