@@ -1,8 +1,8 @@
-# Bambu CLI
+# platecli — agent guide
 
 Runs on Linux, macOS, and Windows.
 
-**Command:** `plate` (installed via pip/uv). Legacy path without installing: `python3 <path>/scripts/bambu.py`.
+**Command:** `plate` (installed via pipx/pip/uv). From a source checkout, without installing: `python3 <repo>/scripts/bambu.py`.
 
 Prefer `job`/`send` for agent work. Always ask the user before running any command with `--confirm`.
 
@@ -97,5 +97,5 @@ Full threat model: [SECURITY.md](SECURITY.md).
 - Prefer `cert_fingerprint` + never enable `insecure_tls` unless the user insists.
 - Prefer `access_code_file` over inline `access_code`.
 - Downloads block private/loopback targets unless `--allow-private-ips` (CLI-only, not sticky config).
-- Destructive actions need `--confirm`: print, job print step, stop, delete, gcode. Pause/resume do **not** currently require it.
+- Destructive/physical actions need `--confirm` and exit `5` without it: print, job print step, stop, pause, resume, delete, gcode. `light` is deliberately exempt (no motion/thermal/material effect). `--confirm` is a deliberate-action gate, not an authorization boundary — anything that can run `plate` can pass it.
 - Camera Docker streamer (when used) publishes via `camera_port`, now loopback-only by default (`127.0.0.1:1985:1984`); the feed is unauthenticated, so only expose it on the LAN (`0.0.0.0:...`) deliberately (see SECURITY.md).

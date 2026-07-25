@@ -71,9 +71,12 @@ and (b) explicit model downloads you request. Key properties:
   allowing entries to escape the destination directory; symlinks are skipped;
   existing files are never overwritten (a numbered sibling such as `model-1.stl`
   is created instead).
-- **Printing and other destructive actions require explicit intent.** Physical
-  print start, job print step, stop, delete, and raw gcode will not proceed
-  without `--confirm`. Agents must not invent confirm flags without user approval.
+- **Printing and other physical/destructive actions require explicit intent.** Physical
+  print start, job print step, stop, pause, resume, delete, and raw gcode will not
+  proceed without `--confirm` (they refuse with exit code `5`). `--confirm` is a
+  deliberate-action gate against accidents, not an authorization boundary: the CLI
+  cannot distinguish a human's flag from an agent's. Agents must not invent confirm
+  flags without user approval.
 
 ## Known limitations
 
@@ -85,7 +88,7 @@ Tracked for hardening; not all are “bugs” in the sense of broken claims.
 | **Camera Docker port bind** | Default `camera_port` is now `127.0.0.1:1985:1984`, so the streamer publishes the (unauthenticated) camera feed on **loopback only**. Set `camera_port` to `0.0.0.0:1985:1984` to deliberately expose it on the LAN. Host-qualified specs now parse correctly, `camera_port` is validated, and the CLI warns if a *pre-existing* container is still bound to a non-loopback interface (recreate with `docker rm -f bambu_camera`). | Fixed |
 | **Camera pin fallback** | A pinned-fingerprint **mismatch**, and now also any `ssl.SSLError` from the direct grab — handshake or post-handshake (e.g. from an active MITM interfering with the port-6000 connection) — hard-abort the snapshot when a pin is configured instead of silently falling back to the Docker streamer (which would ignore the pin). Two unverified paths remain: the *no-pin-configured* case (no `cert_fingerprint`, no `insecure_tls`), which still falls through to the streamer since there is no configured control to downgrade; and, even with a pin, non-TLS network failures on port 6000 (connection refused/reset/timeout — which an on-path attacker can also induce), which must remain a fallback because X1-series printers legitimately refuse port 6000. A planned `camera_direct_only` config option would close this by disabling the streamer fallback entirely. | Fixed |
 | **HTTP downloads** | `http://` and `https://` are both accepted. SSRF controls apply; **content integrity** over cleartext HTTP does not (a network attacker can substitute a model). Prefer HTTPS sources. | Residual |
-| **pause / resume** | Do not require `--confirm` (unlike stop/print/delete/gcode). | Residual / product choice |
+| **pause / resume** | Required `--confirm` as of 0.3.0, matching stop/print/delete/gcode. | Fixed |
 | **Windows secret ACLs** | POSIX `0600` enforcement does not apply on Windows; protect the config directory with NTFS ACLs on shared machines. | Platform residual |
 | **Reverse-engineered protocols** | MQTT/FTPS behavior is best-effort; firmware updates can break compatibility. | Out of scope |
 | **Access code = full LAN control** | Protect the config directory, especially on agent-operated hosts. | Residual |

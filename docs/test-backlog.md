@@ -6,19 +6,19 @@
 This file is a short **remaining-gaps** list only. Refresh after each phase or audit.
 Do not treat historical “≥98% coverage” claims as current — see the snapshot below.
 
-## Snapshot (2026-07-17)
+## Snapshot (2026-07-24)
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **~618** | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **~82%** Linux / ~81.9% Windows; **floor 81** | **≥92%** total; optional module floors |
+| Non-live tests collected | **666** passing (measured 2026-07-24) | ≥550 with zero known flakes ✅ size |
+| Line/branch coverage (CI) | **83.3%** Linux measured 2026-07-24; Windows runs slightly lower; **floor 81** | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
 | JSON schemas | **19** files under `docs/schemas/` | every `--json` command + monitor goldens |
 | Mutation baseline | Pure safety modules; floor **40%** | optional raise after hermetic Orca stub |
 | Live printer | Documented opt-in harness | manual pre-release (optional scheduled lab) |
-| Product version | **0.1.0** Beta | **v1.0.0** when roadmap §5 is complete |
+| Product version | pre-1.0 Beta (single-sourced from `pyproject.toml`) | **v1.0.0** when roadmap §5 is complete |
 
 CI evidence: `.github/workflows/ci.yml` (`--cov-fail-under=81`, blocking ruff/mypy/bandit/pip-audit/purity greps).
 

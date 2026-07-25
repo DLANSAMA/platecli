@@ -412,7 +412,7 @@ def test_execute_print_real_accept():
 
 
 def test_cmd_pause_success(capsys):
-    args = Namespace(json=True)
+    args = Namespace(json=True, confirm=True)
     printer = MagicMock()
     printer.send_command.return_value = True
     with (
