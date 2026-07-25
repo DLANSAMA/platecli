@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Changed
+- platecli now identifies itself honestly when talking to Printables:
+  requests carry `User-Agent: platecli/<version> (+https://github.com/DLANSAMA/platecli)`
+  instead of impersonating Chrome, and the forged `Origin`/`Referer` headers
+  are gone. Verified against the live Printables GraphQL API. Generic
+  user-supplied download URLs keep a browser-compatible User-Agent for CDN
+  compatibility, now with the honest `platecli/<version>` token appended.
+- Outbound HTTP is throttled to at most one request per second per host, and
+  `429`/`503` responses are retried while respecting `Retry-After` (clamped to
+  30 s, at most two retries).
+
+### Added
+- `docs/manual.md` documents that Printables downloads are performed on the
+  user's behalf, subject to Printables' terms and each model's own licence.
+
 ## [0.2.2] - 2026-07-24
 
 ### Added
