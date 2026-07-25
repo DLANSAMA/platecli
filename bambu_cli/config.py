@@ -142,6 +142,10 @@ def _orca_binary_candidates():
         "/usr/bin/orca-slicer",
         "/usr/local/bin/orca-slicer",
         "/opt/OrcaSlicer/orca-slicer",
+        # Current Flathub app id first so a present-day install wins; legacy id
+        # kept below for users who installed before the Flathub rename.
+        "/var/lib/flatpak/exports/bin/com.orcaslicer.OrcaSlicer",
+        "~/.local/share/flatpak/exports/bin/com.orcaslicer.OrcaSlicer",
         "/var/lib/flatpak/exports/bin/io.github.softfever.OrcaSlicer",
         "~/.local/share/flatpak/exports/bin/io.github.softfever.OrcaSlicer",
         "~/Applications/OrcaSlicer.AppImage",
@@ -179,6 +183,15 @@ def _profiles_dir_candidates():
     return [
         "/usr/share/OrcaSlicer/resources/profiles/BBL",
         "/opt/OrcaSlicer/resources/profiles/BBL",
+        # Flatpak profile-directory paths below are INFERRED from the standard
+        # flatpak app-tree layout and have NOT been verified against a real
+        # Flathub OrcaSlicer install.  They are additive and harmless if wrong
+        # (non-existent candidates are skipped).  Current id listed first,
+        # legacy id kept for pre-rename installs.
+        "/var/lib/flatpak/app/com.orcaslicer.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
+        "~/.local/share/flatpak/app/com.orcaslicer.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
+        "/var/lib/flatpak/app/io.github.softfever.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
+        "~/.local/share/flatpak/app/io.github.softfever.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
         "~/tools/squashfs-root/resources/profiles/BBL",
         os.path.join(_SCRIPT_DIR, "..", "tools", "squashfs-root", "resources", "profiles", "BBL"),
     ]

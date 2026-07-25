@@ -69,6 +69,8 @@ body:
       label: "`plate doctor --json` output"
       description: |
         Run `plate doctor --json` and paste the output. Serial, access code, and your printer's LAN IP are redacted automatically in `--json` mode — but double-check before submitting that no access code or LAN address appears in plain text. Do not add `-v`/`--verbose`: that un-redacts your printer's IP.
+
+        One field is **not** redacted: `certificate_fingerprint`. It is kept in full because that is how you (or an agent) pin the connection, and it reveals nothing about your network. It is, however, a value unique to your printer — if you would rather not publish it, truncate it to the first 8 characters before pasting.
       render: json
     validations:
       required: false
