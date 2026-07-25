@@ -6,6 +6,14 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  # Weekly drift detector: firmware, the Printables GraphQL API, OrcaSlicer
+  # flags and new CVEs (pip-audit) all move without a commit in this repo.
+  schedule:
+    # 07:00 UTC Mondays (mutation.yml already owns 06:15 daily).
+    - cron: "0 7 * * 1"
+  # Called by release.yml so a tag cannot publish unless this matrix is green
+  # on the tagged commit. Keep this trigger — release.yml depends on it.
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,12 +40,12 @@ jobs:
             python-version: "3.14"
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -126,21 +134,24 @@ jobs:
     name: Lint (ruff + bandit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      # Lint tool versions are pinned so a new upstream release cannot red a
+      # contributor's unrelated PR. Bump deliberately (and fix the new findings
+      # in that same PR). Keep AGENTS.md / CONTRIBUTING.md notes in sync.
       - name: ruff (blocking, correctness rules only)
-        run: uvx ruff check bambu_cli
+        run: uvx ruff@0.16.0 check bambu_cli
       - name: ruff format (blocking, style consistency)
-        run: uvx ruff format --check bambu_cli
+        run: uvx ruff@0.16.0 format --check bambu_cli
       - name: bandit (blocking medium+)
-        run: uvx bandit -c pyproject.toml -r bambu_cli -ll
+        run: uvx bandit@1.9.4 -c pyproject.toml -r bambu_cli -ll
       - name: pip-audit (blocking high+)
         run: |
           uv export --frozen --no-emit-project --format requirements-txt > audit-requirements.txt
-          uvx pip-audit -r audit-requirements.txt
+          uvx pip-audit@2.10.1 -r audit-requirements.txt
       - name: mypy (blocking; full bambu_cli package, check_untyped_defs)
-        run: uvx mypy -p bambu_cli
+        run: uvx mypy@2.3.0 -p bambu_cli
       - name: no test-awareness in production code (blocking)
         run: |
           if grep -rnE 'isinstance\([^)]*\bMock\b|["'"'"']unittest["'"'"'] in sys\.modules' bambu_cli/; then

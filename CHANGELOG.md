@@ -25,6 +25,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `AGENTS.md` retitled to the public product name.
 - `docs/api.md`: the `pause.json` / `resume.json` bullets now describe both the
   success and the `confirmation_required` shape, matching the dual schemas.
+- CI runs weekly on a schedule (external drift: firmware, Printables API,
+  OrcaSlicer, new CVEs) and pins ruff/mypy/bandit/pip-audit versions.
+- Dependabot config added for GitHub Actions and uv dependencies.
+- New `docs/releasing.md` with the yank/rollback runbook.
 
 ### Fixed
 - `plate doctor`'s reported `camera_snapshot_note` (and `camera.py`'s snapshot
@@ -54,6 +58,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   configured, instead of printing `OrcaSlicer not found at` with a blank path.
 - Contributor setup uses `uv sync --extra test`, so the documented test command works
   on a fresh clone (`uv sync` alone does not install pytest).
+
+### Security
+- All GitHub Actions are pinned to immutable commit SHAs, enforced by
+  `tests/ci_workflow_smoke.py`. Notably `pypa/gh-action-pypi-publish` was
+  tracking the mutable `release/v1` branch in the job that holds the PyPI
+  trusted-publishing `id-token: write` permission.
+- Releases now re-run the full CI matrix on the tagged commit before publishing,
+  so a tag on a red commit can no longer reach PyPI.
 
 ## [0.2.2] - 2026-07-24
 

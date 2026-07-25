@@ -7,6 +7,7 @@ hand-maintained here. See scripts/syntax_smoke.py and scripts/cli_help_smoke.py.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -43,7 +44,12 @@ REQUIRED_SNIPPETS = {
     "wheel no-deps reinstall": "--force-reinstall --no-deps --no-index --find-links wheelhouse",
     "sdist and wheel package smoke": "python -m build --sdist --wheel --outdir dist",
     # Typing: whole-package mypy (blocklist of residuals lives in pyproject.toml).
-    "mypy whole-package blocklist gate": "uvx mypy -p bambu_cli",
+    # Version-pinned via `uvx mypy@X.Y.Z`, so match the invocation in two halves
+    # instead of one literal that a version bump would break.
+    "mypy whole-package blocklist gate": "mypy@",
+    "mypy whole-package target": "-p bambu_cli",
+    "weekly scheduled run": "schedule:",
+    "reusable by release.yml": "workflow_call:",
 }
 
 FORBIDDEN_SNIPPETS = {
@@ -69,6 +75,29 @@ def _package_modules() -> list[Path]:
     return sorted(p for p in root.rglob("*.py") if p.is_file())
 
 
+USES_RE = re.compile(r"^\s*(?:-\s+)?uses:\s*(\S+)", re.MULTILINE)
+
+
+def _unpinned_action_refs() -> list[str]:
+    """Every third-party action must be pinned to a 40-hex commit SHA.
+
+    Mutable tags/branches (notably pypa/gh-action-pypi-publish@release/v1 in the
+    job holding `id-token: write`) let an upstream compromise reach our PyPI
+    trusted-publishing token.
+    """
+    workflow_dir = ROOT / ".github" / "workflows"
+    files = sorted(list(workflow_dir.glob("*.yml")) + list(workflow_dir.glob("*.yaml")))
+    bad = []
+    for wf in files:
+        for ref in USES_RE.findall(wf.read_text(encoding="utf-8")):
+            if ref.startswith("./"):  # local reusable workflow: no SHA needed
+                continue
+            _, _, rev = ref.partition("@")
+            if not re.fullmatch(r"[0-9a-f]{40}", rev):
+                bad.append(f"{wf.name}: {ref}")
+    return bad
+
+
 def main():
     text = WORKFLOW.read_text(encoding="utf-8")
     missing = [label for label, snippet in REQUIRED_SNIPPETS.items() if snippet not in text]
@@ -85,6 +114,10 @@ def main():
     modules = _package_modules()
     if not modules:
         raise SystemExit("discovered zero bambu_cli modules")
+
+    unpinned = _unpinned_action_refs()
+    if unpinned:
+        raise SystemExit("unpinned GitHub Action refs (must be 40-hex SHA): " + ", ".join(unpinned))
 
     if missing or forbidden:
         lines = []
