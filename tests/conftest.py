@@ -6,6 +6,27 @@ from tests.bambu_test_base import install_baseline_context
 
 
 @pytest.fixture(autouse=True)
+def _no_network_throttle():
+    """Zero the per-host politeness delay and clear its state for every test.
+
+    ``bambu_cli.netsafety._throttle_host`` sleeps up to
+    MIN_HOST_REQUEST_INTERVAL between requests to the same host. Real sleeps in
+    the suite would be slow AND order-dependent (``_last_request_at`` is
+    module-level mutable state shared across tests), so pin the interval to 0
+    and clear the map around every test. Tests that exercise the throttle
+    itself must monkeypatch the interval back up locally.
+    """
+    from bambu_cli import netsafety
+
+    saved = netsafety.MIN_HOST_REQUEST_INTERVAL
+    netsafety.MIN_HOST_REQUEST_INTERVAL = 0.0
+    netsafety._last_request_at.clear()
+    yield
+    netsafety.MIN_HOST_REQUEST_INTERVAL = saved
+    netsafety._last_request_at.clear()
+
+
+@pytest.fixture(autouse=True)
 def _reset_runtime_context():
     """Isolate the process-wide RuntimeContext between tests.
 

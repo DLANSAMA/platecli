@@ -169,7 +169,10 @@ def test_get_ftp_simulation():
 def test_safe_http_handler_open_methods():
     opener = netsafety.build_safe_opener()
     assert any(isinstance(h, netsafety.SafeHTTPSHandler) for h in opener.handlers)
-    assert netsafety._default_user_agent().startswith("Mozilla/5.0")
+    ua = netsafety._default_user_agent()
+    assert ua.startswith("Mozilla/5.0")
+    # Even the CDN-compatibility UA must carry an honest, attributable token.
+    assert "platecli/" in ua
 
 
 def test_link_local_refused():

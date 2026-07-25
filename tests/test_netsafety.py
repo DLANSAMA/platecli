@@ -312,3 +312,110 @@ def test_safe_https_connect_closes_on_wrap_failure():
     with patch.object(netsafety, "_get_safe_connection", return_value=sock), pytest.raises(OSError):
         conn.connect()
     sock.close.assert_called()
+
+
+# --- polite client (per-host throttle + Retry-After) -------------------------
+
+
+def _http_error(code, retry_after=None):
+    import email.message
+
+    hdrs = email.message.Message()
+    if retry_after is not None:
+        hdrs["Retry-After"] = retry_after
+    return urllib.error.HTTPError("https://api.printables.com/graphql/", code, "rate limited", hdrs, None)
+
+
+def _fake_req(url="https://api.printables.com/graphql/"):
+    req = MagicMock()
+    req.full_url = url
+    return req
+
+
+def test_polite_open_retries_on_429_and_honors_retry_after(monkeypatch):
+    monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 1.0)
+    sentinel = object()
+    slept = []
+
+    opener = MagicMock()
+    opener.open.side_effect = [_http_error(429, "2"), sentinel]
+    assert netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=slept.append) is sentinel
+    assert 2.0 in slept
+
+    # Absurd Retry-After clamps to MAX_RETRY_AFTER_WAIT.
+    netsafety._last_request_at.clear()
+    slept.clear()
+    opener = MagicMock()
+    opener.open.side_effect = [_http_error(429, "999"), sentinel]
+    assert netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=slept.append) is sentinel
+    assert 30.0 in slept
+
+    # An HTTP-date Retry-After falls back to the polite interval, no raise.
+    assert netsafety._retry_after_seconds(_http_error(429, "Wed, 21 Oct 2026 07:28:00 GMT")) == 1.0
+    # hdrs={} (a plain dict, as some tests construct) also falls back.
+    assert netsafety._retry_after_seconds(urllib.error.HTTPError("u", 429, "m", {}, None)) == 1.0
+
+    # 503 also retries.
+    netsafety._last_request_at.clear()
+    opener = MagicMock()
+    opener.open.side_effect = [_http_error(503, "1"), sentinel]
+    assert netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=slept.append) is sentinel
+
+    # A permanent 429 re-raises after exactly 1 + MAX_RATE_LIMIT_RETRIES calls.
+    netsafety._last_request_at.clear()
+    opener = MagicMock()
+    opener.open.side_effect = _http_error(429, "1")
+    with pytest.raises(urllib.error.HTTPError):
+        netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=slept.append)
+    assert opener.open.call_count == 3
+
+    # A non-rate-limit status re-raises immediately.
+    netsafety._last_request_at.clear()
+    opener = MagicMock()
+    opener.open.side_effect = _http_error(404)
+    with pytest.raises(urllib.error.HTTPError):
+        netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=slept.append)
+    assert opener.open.call_count == 1
+
+
+def test_throttle_host_enforces_min_interval_per_host(monkeypatch):
+    monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 1.0)
+    netsafety._last_request_at.clear()
+    slept = []
+
+    netsafety._throttle_host("api.printables.com", sleep=slept.append)
+    assert slept == []
+
+    netsafety._throttle_host("api.printables.com", sleep=slept.append)
+    assert len(slept) == 1
+    assert 0 < slept[0] <= 1.0
+
+    # A different host is throttled independently.
+    slept.clear()
+    netsafety._throttle_host("files.printables.com", sleep=slept.append)
+    assert slept == []
+
+    # No host means no policy and no throttling.
+    slept.clear()
+    netsafety._throttle_host("", sleep=slept.append)
+    assert slept == []
+
+    # With the interval at 0 (the suite-wide conftest default) the throttle is
+    # fully disarmed -- this is what keeps the test suite from really sleeping.
+    monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 0.0)
+    netsafety._last_request_at.clear()
+    slept.clear()
+    netsafety._throttle_host("api.printables.com", sleep=slept.append)
+    netsafety._throttle_host("api.printables.com", sleep=slept.append)
+    assert slept == []
+
+
+def test_polite_open_tolerates_non_string_full_url():
+    sentinel = object()
+    slept = []
+    opener = MagicMock()
+    opener.open.return_value = sentinel
+
+    assert netsafety.polite_open(opener, MagicMock(), timeout=5, sleep=slept.append) is sentinel
+    assert slept == []
+    assert netsafety._host_of(MagicMock().full_url) == ""
