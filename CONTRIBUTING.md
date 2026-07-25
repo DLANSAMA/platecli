@@ -7,8 +7,12 @@ Thanks for your interest in improving platecli!
 ```bash
 git clone https://github.com/DLANSAMA/platecli
 cd platecli   # or your local directory name
-uv sync              # or: pip install -e ".[test]"
+uv sync --extra test   # test deps (pytest etc.) live in the "test" extra
+# or: pip install -e ".[test]"
 ```
+
+Plain `uv sync` installs runtime deps only — the test commands below then fail
+with `No module named pytest`. CI installs the same set via `uv pip install '.[test]'`.
 
 ## Running tests
 
@@ -49,6 +53,8 @@ uvx bandit -c pyproject.toml -r bambu_cli -ll
 # pip-audit is also blocking in CI (dependency high/critical)
 ```
 
+CI pins these tool versions (see `.github/workflows/ci.yml`); running them unpinned locally is fine.
+
 A green `pytest` does **not** mean lint/types/security gates are green.
 
 ## Quality roadmap
@@ -78,12 +84,15 @@ SECURITY.md.
 
 ## Releases (maintainers)
 
+Full procedure, including the **yank/rollback runbook**: [docs/releasing.md](docs/releasing.md).
+
 1. Update **`version` only in `pyproject.toml`** (runtime `bambu_cli.constants.VERSION`
    resolves from package metadata / that file). Move `CHANGELOG.md` entries from Unreleased
    to the new version.
-2. Tag: `git tag vX.Y.Z && git push --tags`.
-3. The Release workflow builds, creates a GitHub release, and publishes to PyPI via trusted
-   publishing (the `pypi` environment must be configured on GitHub and the project registered
-   as a trusted publisher on PyPI).
-4. For releases that touch FTPS, gcode confirm, slice validation, or job upload: run the
+2. Only tag a commit that is green on CI: `git tag vX.Y.Z && git push --tags`.
+3. The Release workflow re-runs the full CI matrix on the tagged commit, builds, publishes
+   to PyPI via trusted publishing (the `pypi` environment must be configured on GitHub and
+   the project registered as a trusted publisher on PyPI), then creates the GitHub release.
+4. A bad release cannot be re-uploaded — yank it and ship `X.Y.Z+1`. See docs/releasing.md.
+5. For releases that touch FTPS, gcode confirm, slice validation, or job upload: run the
    [live-printer smoke](docs/live-printer-smoke.md) when a printer is available.

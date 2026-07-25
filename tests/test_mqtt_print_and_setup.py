@@ -460,3 +460,40 @@ def test_setup_noninteractive_writes_config(tmp_path, capsys):
     data = json.loads(cfg.read_text(encoding="utf-8"))
     assert data["printer_ip"] == "192.168.1.50"
     assert data["serial"] == "01P00A000000000"
+
+
+def test_printer_error_hex_rendering():
+    assert mqtt_mod._printer_error_hex(83935248) == "0x0500C010"
+    assert mqtt_mod._printer_error_hex(1234) == "0x000004D2"
+    assert mqtt_mod._printer_error_hex("nope") is None
+    assert mqtt_mod._printer_error_hex(True) is None
+    assert mqtt_mod._printer_error_hex(None) is None
+
+
+def test_execute_print_printer_error_code_records_hex():
+    from bambu_cli import utils as utils_mod
+
+    printer = _test_printer(simulation_mode=False)
+    client = MagicMock()
+
+    def connect(*a, **k):
+        client.on_connect(client, None, None, 0)
+
+    def loop_start():
+        msg = MagicMock()
+        msg.payload = json.dumps({"print": {"command": "project_file", "print_error": 83935248}}).encode()
+        client.on_message(client, None, msg)
+
+    client.connect.side_effect = connect
+    client.loop_start.side_effect = loop_start
+    utils_mod._LAST_ERROR_PAYLOAD = None
+    with (
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+        pytest.raises(BambuError),
+    ):
+        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
+
+    payload = utils_mod._LAST_ERROR_PAYLOAD
+    assert payload["printer_error_code"] == 83935248
+    assert payload["printer_error_code_hex"] == "0x0500C010"

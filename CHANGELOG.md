@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- Printer error codes are now shown in hex as well as decimal (e.g. `Print failed
+  with error code 83935248 (hex 0x0500C010)`), and JSON error envelopes gain an
+  additive `printer_error_code_hex` field. Bambu documents these codes in hex.
 - `tests/test_docs_consistency.py`: guards against version drift in README /
   `docs/api.md` / the bug-report template, and against `docs/manual.md` sections
   missing from its Contents list.
@@ -33,6 +36,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `AGENTS.md` retitled to the public product name.
 - `docs/api.md`: the `pause.json` / `resume.json` bullets now describe both the
   success and the `confirmation_required` shape, matching the dual schemas.
+- CI runs weekly on a schedule (external drift: firmware, Printables API,
+  OrcaSlicer, new CVEs) and pins ruff/mypy/bandit/pip-audit versions.
+- Dependabot config added for GitHub Actions and uv dependencies.
+- New `docs/releasing.md` with the yank/rollback runbook.
 
 ### Changed (BREAKING)
 - `pause` and `resume` now require `--confirm`, matching `stop`/`print`/`gcode`/`delete`.
@@ -56,6 +63,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   docstring) claimed P1P/P1S snapshots go through the BambuP1Streamer container.
   It is the reverse: P1/A1-class cameras are captured directly with no Docker,
   and the container is the X1-series fallback.
+- `plate preflight` now says what to do when `orca_slicer` / `profiles_dir` are not
+  configured, instead of printing `OrcaSlicer not found at` with a blank path.
+- Contributor setup uses `uv sync --extra test`, so the documented test command works
+  on a fresh clone (`uv sync` alone does not install pytest).
+
+### Security
+- All GitHub Actions are pinned to immutable commit SHAs, enforced by
+  `tests/ci_workflow_smoke.py`. Notably `pypa/gh-action-pypi-publish` was
+  tracking the mutable `release/v1` branch in the job that holds the PyPI
+  trusted-publishing `id-token: write` permission.
+- Releases now re-run the full CI matrix on the tagged commit before publishing,
+  so a tag on a red commit can no longer reach PyPI.
 
 ## [0.2.2] - 2026-07-24
 
