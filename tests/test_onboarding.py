@@ -42,8 +42,17 @@ def test_linux_orca_candidates_include_path_flatpak_and_appimage():
     ):
         candidates = config._orca_binary_candidates()
     assert "/usr/bin/orca-slicer" in candidates  # PATH lookup
-    assert any(c and "flatpak" in c for c in candidates)  # Flatpak export
+    assert any(c and "com.orcaslicer.OrcaSlicer" in c for c in candidates)  # current Flathub id
+    assert any(c and "io.github.softfever.OrcaSlicer" in c for c in candidates)  # legacy id kept
     assert any(c and c.endswith("OrcaSlicer.AppImage") for c in candidates)  # AppImage
+
+
+def test_linux_profiles_dir_candidates_include_flatpak():
+    # Force the Linux branch regardless of the CI runner's OS.
+    with patch("bambu_cli.config.sys.platform", "linux"):
+        candidates = config._profiles_dir_candidates()
+    assert any(c and "com.orcaslicer.OrcaSlicer" in c for c in candidates)  # current Flathub id
+    assert any(c and "io.github.softfever.OrcaSlicer" in c for c in candidates)  # legacy id kept
 
 
 def test_preflight_suggests_detected_orca_when_configured_path_bad():
