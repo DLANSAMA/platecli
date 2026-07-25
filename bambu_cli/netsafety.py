@@ -12,6 +12,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 
 from bambu_cli.cli import _redact_url_credentials
 from bambu_cli.logging_utils import logger
@@ -146,9 +147,48 @@ class SafeHTTPSHandler(urllib.request.HTTPSHandler):
         return self.do_open(SafeHTTPSConnection, req, **kwargs)
 
 
+PROJECT_URL = "https://github.com/DLANSAMA/platecli"
+
+# Hosts we speak to as a first-party API client: identify honestly, never
+# impersonate a browser, never forge browser-only headers. Exact-host matching
+# (not suffix matching) so a lookalike such as "printables.com.evil.example"
+# can never inherit the first-party policy.
+HONEST_UA_HOSTS = frozenset(
+    {
+        "api.printables.com",
+        "printables.com",
+        "www.printables.com",
+        # Verified 2026-07-25: the download link returned by GetDownloadLink
+        # resolves to files.printables.com, which serves 200 to the honest UA.
+        "files.printables.com",
+    }
+)
+
+
 @functools.lru_cache(maxsize=1)
-def _default_user_agent():
-    """Construct a User-Agent string that reflects the actual host OS."""
+def platecli_user_agent() -> str:
+    """Honest, identifying User-Agent: ``platecli/<version> (+<project url>)``.
+
+    The version comes from the single source of truth: ``bambu_cli.constants``
+    resolves it lazily from installed package metadata, falling back to
+    pyproject.toml (constants.py:28-56). Never hardcode a version literal here.
+    """
+    from bambu_cli import constants
+
+    return f"platecli/{constants.VERSION} (+{PROJECT_URL})"
+
+
+@functools.lru_cache(maxsize=1)
+def _default_user_agent() -> str:
+    """User-Agent for generic, user-supplied file URLs.
+
+    Deliberately still browser-shaped: many CDNs and file hosts (the arbitrary
+    URLs a user pastes into ``plate download``) 403 non-browser clients, and a
+    failed download is a real UX regression. The honest ``platecli/<version>``
+    token is appended so the client is always identifiable and attributable --
+    this is compatibility, not impersonation. First-party API hosts get
+    :func:`platecli_user_agent` instead; see :func:`user_agent_for_url`.
+    """
     system = platform.system()
     machine = platform.machine() or "x86_64"
     if system == "Darwin":
@@ -157,7 +197,96 @@ def _default_user_agent():
         os_label = "Windows NT 10.0; Win64; x64"
     else:
         os_label = f"X11; Linux {machine}"
-    return f"Mozilla/5.0 ({os_label}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    return (
+        f"Mozilla/5.0 ({os_label}) AppleWebKit/537.36 (KHTML, like Gecko) "
+        f"Chrome/120.0.0.0 Safari/537.36 {platecli_user_agent()}"
+    )
+
+
+def _host_of(url) -> str:
+    """Best-effort lowercase hostname. Never raises.
+
+    Defensive on purpose: callers pass ``req.full_url``, and
+    tests/test_download_cmd.py:455 patches ``urllib.request.Request`` with a
+    MagicMock whose ``full_url`` is not a string. ``urlparse`` on such a value
+    raises ``TypeError: '>' not supported between instances of 'MagicMock' and
+    'int'`` (verified). Returning "" means "no host policy, no throttling",
+    which is the safe degradation.
+    """
+    try:
+        return (urlparse(url).hostname or "").lower()
+    except (TypeError, ValueError, AttributeError):
+        return ""
+
+
+def user_agent_for_url(url) -> str:
+    """Pick the UA policy for ``url``: honest for first-party API hosts,
+    browser-compatible for arbitrary user-supplied download URLs."""
+    if _host_of(url) in HONEST_UA_HOSTS:
+        return platecli_user_agent()
+    return _default_user_agent()
+
+
+# --- polite client -----------------------------------------------------------
+# Minimum wall-clock gap between two requests to the same host, plus the
+# 429/503 backoff policy. platecli issues a handful of requests per invocation,
+# so this costs users almost nothing and keeps us a well-behaved third party.
+# MIN_HOST_REQUEST_INTERVAL is read at call time (not captured), so the test
+# suite can zero it via the autouse fixture in tests/conftest.py.
+MIN_HOST_REQUEST_INTERVAL = 1.0
+MAX_RETRY_AFTER_WAIT = 30.0
+MAX_RATE_LIMIT_RETRIES = 2
+
+_last_request_at: dict = {}
+_last_request_lock = threading.Lock()
+
+
+def _throttle_host(host, sleep=time.sleep) -> None:
+    """Block until MIN_HOST_REQUEST_INTERVAL has passed since the last request
+    to ``host``. ``sleep`` is injectable so tests never really wait."""
+    if not host:
+        return
+    with _last_request_lock:
+        previous = _last_request_at.get(host)
+        now = time.monotonic()
+        wait = 0.0 if previous is None else MIN_HOST_REQUEST_INTERVAL - (now - previous)
+        wait = max(wait, 0.0)
+        _last_request_at[host] = now + wait
+    if wait > 0:
+        sleep(min(wait, MIN_HOST_REQUEST_INTERVAL))
+
+
+def _retry_after_seconds(err) -> float:
+    """Parse Retry-After, clamped. Non-numeric (HTTP-date) values fall back to
+    the normal polite interval rather than raising."""
+    headers = getattr(err, "headers", None)
+    raw = headers.get("Retry-After") if headers else None
+    try:
+        seconds = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return MIN_HOST_REQUEST_INTERVAL
+    return max(0.0, min(seconds, MAX_RETRY_AFTER_WAIT))
+
+
+def polite_open(opener, req, timeout=None, sleep=time.sleep):
+    """``opener.open`` with per-host throttling and 429/503 Retry-After respect.
+
+    Returns the live response object (callers keep using it as a context
+    manager). Re-raises the final HTTPError if the server keeps rate-limiting.
+    """
+    host = _host_of(getattr(req, "full_url", ""))
+    attempt = 0
+    while True:
+        _throttle_host(host, sleep=sleep)
+        try:
+            return opener.open(req, timeout=timeout)
+        except urllib.error.HTTPError as err:
+            if err.code not in (429, 503) or attempt >= MAX_RATE_LIMIT_RETRIES:
+                raise
+            delay = _retry_after_seconds(err)
+            logger.warning(f"Rate limited by {host or 'server'} (HTTP {err.code}); waiting {delay:.0f}s before retry")
+            attempt += 1
+            sleep(delay)
 
 
 def build_safe_opener():

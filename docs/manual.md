@@ -43,6 +43,7 @@ plate job <url> --json --confirm
 ## Features in depth
 
 - **Jobs & URL support** — Use `job` when an agent or user gives either a website URL or a local file path. It handles everything in one shot.
+- **Printables downloads** — platecli fetches files from Printables *on your behalf*, from your own machine and network — the same file you would get by clicking Download. It identifies itself honestly as `platecli/<version>`, keeps at least one second between requests to the same host, and honors `Retry-After`. Your use is subject to [Printables' terms of service](https://www.printables.com/legal/terms-of-use) and to the individual model's own licence (often a Creative Commons variant with attribution, non-commercial, or no-derivatives conditions). platecli grants you no rights to any downloaded model — check the licence on the model page before printing, remixing, redistributing, or selling. The Printables API used for resolution is undocumented and may change or stop working without notice.
 - **Safe extraction** — ZIP archives containing model files are fully supported. Existing files are kept safe by creating a numbered sibling such as `model-1.stl`. URL downloads and ZIP extraction have a 2048 MB safety limit, adjustable via `--max-download-mb`.
 - **Modularity** — Run steps individually using `download`, `slice`, `upload`, or `print`.
 - **Safety first** — One-shot and print flows will not start a physical print unless `--confirm` is present. Stop, delete, and raw gcode also require `--confirm`.

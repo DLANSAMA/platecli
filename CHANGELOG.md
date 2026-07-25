@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Changed
+- platecli now identifies itself honestly to Printables as `platecli/<version> (+https://github.com/DLANSAMA/platecli)` and no longer forges browser-only `Origin`/`Referer` headers against the Printables GraphQL API. Verified 2026-07-25: both the file-info query and the download-link mutation return 200 without them.
+- Outbound HTTP is now a polite client: at least one second between requests to the same host, with `Retry-After` respected on 429/503 (clamped to 30 s, at most two retries).
+- Arbitrary user-supplied download URLs keep a browser-compatible User-Agent for CDN compatibility, but it now always carries an identifying `platecli/<version>` token.
+
 ## [0.2.2] - 2026-07-24
 
 ### Added

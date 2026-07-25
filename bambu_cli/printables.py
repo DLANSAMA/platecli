@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 from bambu_cli.constants import DEFAULT_NETWORK_TIMEOUT
 from bambu_cli.logging_utils import logger
-from bambu_cli.netsafety import _default_user_agent, build_safe_opener
+from bambu_cli.netsafety import build_safe_opener, platecli_user_agent, polite_open
 
 
 def _is_printables_model_url(value):
@@ -42,7 +42,7 @@ def _get_printables_file_info(model_id, gql_headers, opener):
 
     file_type = "stl"
     try:
-        with opener.open(req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
+        with polite_open(opener, req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
             response_data = resp.read()
     except urllib.error.URLError as e:
         logger.error(f"Network error querying Printables API: {e}")
@@ -113,7 +113,7 @@ def _get_printables_download_link(file_id, model_id, file_type, stl_name, gql_he
     req = urllib.request.Request("https://api.printables.com/graphql/", data=payload.encode(), headers=gql_headers)
 
     try:
-        with opener.open(req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
+        with polite_open(opener, req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
             result = json.loads(resp.read())
             dl = result.get("data", {}).get("getDownloadLink", {})
             if dl.get("ok") and dl.get("output", {}).get("link"):
@@ -146,15 +146,14 @@ def resolve_printables_url(url):
     model_id = printables_match.group(1)
     logger.info(f"🔍 Detected Printables model #{model_id}, resolving files...")
 
-    headers = {
-        "User-Agent": _default_user_agent(),
-        "Accept": "*/*",
-    }
+    # platecli identifies itself honestly to Printables and does not forge
+    # browser-only headers (Origin/Referer). Verified against
+    # https://api.printables.com/graphql/ on 2026-07-25: both the file-info
+    # query and the GetDownloadLink mutation return 200 without them.
     gql_headers = {
-        **headers,
+        "User-Agent": platecli_user_agent(),
+        "Accept": "*/*",
         "Content-Type": "application/json",
-        "Origin": "https://www.printables.com",
-        "Referer": "https://www.printables.com/",
     }
 
     opener = build_safe_opener()
