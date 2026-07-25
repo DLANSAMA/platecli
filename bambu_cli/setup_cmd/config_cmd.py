@@ -6,7 +6,7 @@ import os
 from bambu_cli.cli import _display_path, _exception_for_message, _expand_path, _namespace_get
 from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_SUCCESS
 from bambu_cli.errors import abort
-from bambu_cli.logging_utils import logger
+from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.setup_cmd.common import _config_path
 from bambu_cli.setup_cmd.preflight import collect_preflight_checks
 from bambu_cli.utils import emit_json, emit_json_error
@@ -40,7 +40,6 @@ def _cmd_config_show(args):
     config_path = _expand_path(_config_path())
     if not os.path.exists(config_path):
         message = f"Config not found at {_display_path(config_path)}. Run `setup` first."
-        logger.error(message)
         emit_json_error(
             args,
             "config",
@@ -50,13 +49,13 @@ def _cmd_config_show(args):
             action="show",
             config_path=_display_path(config_path),
         )
+        safe_log_error(message)
         abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
         with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
         message = f"Could not read config: {_exception_for_message(exc)}"
-        logger.error(message)
         emit_json_error(
             args,
             "config",
@@ -66,6 +65,7 @@ def _cmd_config_show(args):
             action="show",
             config_path=_display_path(config_path),
         )
+        safe_log_error(message)
         abort("", exit_code=EXIT_CONFIG_ERROR)
 
     redacted = _redacted_config(config)

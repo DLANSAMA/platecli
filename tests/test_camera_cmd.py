@@ -149,7 +149,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args = MagicMock()
         args.output = "snap.jpg"
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             settings_ctx(camera_stream_url="http://evil.example.com:8080/frame.jpeg"),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
@@ -174,7 +174,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args = MagicMock()
         args.output = "-invalid.jpg"
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             patch("sys.exit", side_effect=SystemExit(3)),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
@@ -199,7 +199,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
 
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             patch("sys.exit", side_effect=SystemExit(2)),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
@@ -229,7 +229,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
 
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             patch("sys.exit", side_effect=SystemExit(5)),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
@@ -262,7 +262,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
             raise _CameraPinMismatch("Certificate fingerprint mismatch: expected aa, got bb")
 
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
             cmd_snapshot(
@@ -303,7 +303,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         ctx = RuntimeContext(settings=Settings(cert_fingerprint="aa" * 32, insecure_tls=False))
 
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
             cmd_snapshot(
@@ -353,7 +353,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
 
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             settings_ctx(cert_fingerprint=None, insecure_tls=False),
             patch("os.path.exists", return_value=True),
             patch("os.fdopen", mock_open()),
@@ -400,7 +400,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
 
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             patch("os.path.exists", return_value=True),
             patch("os.fdopen", mock_open()),
             patch("os.unlink"),
@@ -439,7 +439,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args = MagicMock()
         args.output = "snap.jpg"
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             settings_ctx(camera_port="not-a-port"),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
@@ -468,7 +468,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args = MagicMock()
         args.output = "snap.jpg"
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             patch("bambu_cli.camera._write_snapshot_atomic"),
             patch("os.path.getsize", return_value=1024),
             settings_ctx(camera_port="0.0.0.0:1985:1984"),
@@ -505,7 +505,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args = MagicMock()
         args.output = "snap.jpg"
         with (
-            patch("bambu_cli.camera.logger", mock_logger),
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
             patch("bambu_cli.camera._write_snapshot_atomic"),
             patch("os.path.getsize", return_value=1024),
             settings_ctx(camera_port="127.0.0.1:1985:1984"),  # config is safe
@@ -551,7 +551,7 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
 
         with (
             patch("bambu_cli.camera._write_snapshot_atomic", side_effect=_fake_write),
-            patch("bambu_cli.camera.logger", MagicMock()),
+            patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=1024),
             patch("bambu_cli.camera._ensure_parent_dir"),
         ):
@@ -581,7 +581,7 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
 
         with (
             patch("bambu_cli.camera._write_snapshot_atomic", side_effect=_fake_write),
-            patch("bambu_cli.camera.logger", MagicMock()),
+            patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=1024),
             patch("bambu_cli.camera._ensure_parent_dir"),
         ):
@@ -608,7 +608,7 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
 
         with (
             patch("bambu_cli.camera._write_snapshot_atomic", side_effect=_fake_write),
-            patch("bambu_cli.camera.logger", MagicMock()),
+            patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=1024),
             patch("bambu_cli.camera._ensure_parent_dir"),
         ):
@@ -646,7 +646,7 @@ class TestSnapshotJsonMetadata(unittest.TestCase):
         buf = io.StringIO()
         with (
             patch("bambu_cli.camera._write_snapshot_atomic"),
-            patch("bambu_cli.camera.logger", MagicMock()),
+            patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=len(frame_data)),
             patch("bambu_cli.camera._ensure_parent_dir"),
             patch("bambu_cli.camera.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
@@ -682,7 +682,7 @@ class TestSnapshotJsonMetadata(unittest.TestCase):
         buf = io.StringIO()
         with (
             patch("bambu_cli.camera._write_snapshot_atomic"),
-            patch("bambu_cli.camera.logger", MagicMock()),
+            patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=len(frame_data)),
             patch("bambu_cli.camera._ensure_parent_dir"),
             patch("bambu_cli.camera.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),

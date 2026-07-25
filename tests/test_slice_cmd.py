@@ -10,7 +10,7 @@ class TestBambuCmdSlice(unittest.TestCase):
     def tearDown(self):
         self.access_patcher.stop()
 
-    @patch("bambu_cli.slicer.cmd.logger")
+    @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_slice_invalid_filepath(self, mock_logger):
         from bambu_cli.slicer import cmd_slice
 

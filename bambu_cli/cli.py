@@ -9,7 +9,7 @@ import bambu_cli.utils as utils
 from bambu_cli.errors import BambuError
 
 # Logging
-from bambu_cli.logging_utils import logger
+from bambu_cli.logging_utils import logger, safe_log_error
 
 from .constants import (
     DEFAULT_MAX_DOWNLOAD_MB,
@@ -608,21 +608,12 @@ def _resolve_command(name):
 
 
 def _safe_log_error(message, **kwargs):
-    """Log an error without ever letting the logging layer abort the process.
+    """Backwards-compatible alias for the shared helper in ``logging_utils``.
 
-    The --json contract (README "Built for AI agents") promises a parseable envelope on
-    every run. A handler that raises while formatting a user-controlled string (rich
-    markup, encoding, a broken stream) must not be able to swallow that envelope, so
-    failures here degrade to a bare stderr write.
+    The implementation lives in ``bambu_cli.logging_utils.safe_log_error`` so the whole
+    package shares one copy; this name is kept because existing tests patch/call it here.
     """
-    try:
-        logger.error(message, **kwargs)
-    except Exception:
-        # Logging must never be fatal; fall back to the rawest possible write.
-        try:
-            print(f"ERROR: {message}", file=sys.stderr)
-        except Exception:
-            pass
+    safe_log_error(message, **kwargs)
 
 
 def main():

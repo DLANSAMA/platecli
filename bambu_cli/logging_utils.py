@@ -8,6 +8,7 @@ patching ``bambu_cli.bambu.logger`` or each consumer module's import binding.
 from __future__ import annotations
 
 import logging
+import sys
 from contextlib import contextmanager
 from typing import Any
 
@@ -53,3 +54,23 @@ def patched_logger(backend: Any | None = None):
         yield mock
     finally:
         set_logger(prev)
+
+
+def safe_log_error(message: Any, **kwargs: Any) -> None:
+    """Log an error without ever letting the logging layer abort the process.
+
+    The --json contract (README "Built for AI agents") promises a parseable envelope on
+    every run. A handler that raises while formatting a user-controlled string (rich
+    markup, encoding, a broken stream) must not be able to swallow that envelope, so
+    failures here degrade to a bare stderr write.
+
+    Only ``Exception`` is caught, so ``KeyboardInterrupt``/``SystemExit`` still propagate.
+    """
+    try:
+        logger.error(message, **kwargs)
+    except Exception:
+        # Logging must never be fatal; fall back to the rawest possible write.
+        try:
+            print(f"ERROR: {message}", file=sys.stderr)
+        except Exception:
+            pass

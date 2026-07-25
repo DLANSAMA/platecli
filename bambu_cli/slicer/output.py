@@ -15,7 +15,7 @@ from bambu_cli.cli import (
 )
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
 from bambu_cli.errors import abort
-from bambu_cli.logging_utils import logger
+from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.protocols.ftps import _remove_partial_file
 from bambu_cli.utils import emit_json, emit_json_error
 
@@ -78,7 +78,6 @@ def _finalize_slice(
             size = os.path.getsize(outpath)
         except OSError as exc:
             message = f"Could not read sliced output file: {_exception_for_message(exc)}"
-            logger.error(message)
             emit_json_error(
                 args,
                 "slice",
@@ -88,11 +87,11 @@ def _finalize_slice(
                 file=filepath,
                 output=outpath,
             )
+            safe_log_error(message)
             abort("", exit_code=EXIT_FILE_ERROR)
         if size <= 0:
             _remove_partial_file(outpath)
             message = f"Slicing produced an empty output file: {_path_for_message(outpath)}"
-            logger.error(message)
             emit_json_error(
                 args,
                 "slice",
@@ -103,12 +102,12 @@ def _finalize_slice(
                 output=outpath,
                 bytes=size,
             )
+            safe_log_error(message)
             abort("", exit_code=EXIT_FILE_ERROR)
         # Zero returncode also requires a real 3MF — do not trust size alone.
         if not _is_valid_sliced_3mf(outpath):
             _remove_partial_file(outpath)
             message = f"Slicing produced a corrupt or incomplete .3mf: {_path_for_message(outpath)}"
-            logger.error(message)
             emit_json_error(
                 args,
                 "slice",
@@ -119,6 +118,7 @@ def _finalize_slice(
                 output=outpath,
                 bytes=size,
             )
+            safe_log_error(message)
             abort("", exit_code=EXIT_FILE_ERROR)
         logger.info(f"✅ Sliced: {_path_for_message(outpath)} ({size // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
@@ -137,21 +137,6 @@ def _finalize_slice(
     else:
         rc = result.returncode if result is not None else -1
         message = f"Slicing failed (RC={rc})"
-        logger.error(message)
-        all_output = ""
-        if result is not None:
-            all_output = (result.stdout or "") + (result.stderr or "")
-        error_found = False
-        for line in all_output.split("\n"):
-            lower_line = line.lower()
-            if "[error]" in lower_line or "nothing to be sliced" in lower_line or "error:" in lower_line:
-                msg = line.split("] ")[-1].strip() if "] " in line else line.strip()
-                if msg:
-                    logger.error(f"   {msg}")
-                    error_found = True
-
-        if not error_found:
-            logger.info("   Check OrcaSlicer profiles or syntax.")
         emit_json_error(
             args,
             "slice",
@@ -162,4 +147,19 @@ def _finalize_slice(
             output=outpath,
             returncode=rc,
         )
+        safe_log_error(message)
+        all_output = ""
+        if result is not None:
+            all_output = (result.stdout or "") + (result.stderr or "")
+        error_found = False
+        for line in all_output.split("\n"):
+            lower_line = line.lower()
+            if "[error]" in lower_line or "nothing to be sliced" in lower_line or "error:" in lower_line:
+                msg = line.split("] ")[-1].strip() if "] " in line else line.strip()
+                if msg:
+                    safe_log_error(f"   {msg}")
+                    error_found = True
+
+        if not error_found:
+            logger.info("   Check OrcaSlicer profiles or syntax.")
         abort("", exit_code=EXIT_COMMAND_ERROR)

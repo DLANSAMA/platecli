@@ -234,7 +234,7 @@ class TestCmdConfig(unittest.TestCase):
 
         with (
             patch("bambu_cli.setup_cmd.config_cmd._config_path", return_value="/nonexistent/config.json"),
-            patch("bambu_cli.setup_cmd.config_cmd.logger") as mock_logger,
+            patch("bambu_cli.logging_utils._BACKEND") as mock_logger,
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
             _cmd_config(self._args("show"))
