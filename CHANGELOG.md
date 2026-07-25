@@ -5,7 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+- `pause` and `resume` now require `--confirm`, matching `stop`/`print`/`gcode`/`delete`.
+  Pausing mid-print parks a hot nozzle over the part; resuming an abandoned print
+  restarts motion unsupervised. Without `--confirm` they now refuse with exit code `5`
+  and (with `--json`) `"status": "confirmation_required"`. Scripts calling
+  `plate pause` / `plate resume` must add `--confirm`.
+- `print` without `--confirm` now exits `5` (`EXIT_COMMAND_ERROR`) instead of `0`.
+  The JSON payload is unchanged (`"status": "confirmation_required"`). This aligns it
+  with `stop`/`gcode`/`delete` and with the exit-code table in `docs/api.md`; a script
+  that treated exit `0` as "print started" was already silently wrong.
+
 ### Fixed
+- README, AGENTS.md, SECURITY.md, docs/api.md, and docs/manual.md no longer claim a
+  universal `--confirm` gate that `pause`/`resume` did not implement; `--confirm` is
+  now documented as a deliberate-action gate rather than an authorization boundary.
+- `docs/schemas/pause.json` / `resume.json` accept the `confirmation_required` status.
 - Filenames containing square brackets (e.g. `part[v2].stl`, common in Printables model titles) no longer crash the CLI or get silently truncated in log output — the Rich log handler no longer parses log text as markup.
 - `--json` now always writes a parseable error envelope to stdout: the JSON envelope is emitted before the human-readable log line, so a logging failure can no longer leave stdout empty.
 

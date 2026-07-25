@@ -68,6 +68,13 @@ Stable for a given major version (`bambu_cli.constants`):
 | 5 | `EXIT_COMMAND_ERROR` | Invalid usage / command refused |
 | 6 | `EXIT_TIMEOUT` | Operation timed out |
 
+**Refusal contract:** every command that causes physical printer motion or
+destroys printer-side data — `print`, `stop`, `pause`, `resume`, `gcode`,
+`delete` — refuses without `--confirm`, exits `5`, and (with `--json`) emits
+`"status": "confirmation_required"` plus a `next_command` array. `job` / `send`
+without `--confirm` is **not** a refusal: the download/slice/upload really
+happened, so it exits `0` with `"status": "uploaded_not_printed"`.
+
 Domain code raises `BambuError` / `abort()`; only `cli.main()` calls `sys.exit`.
 
 ## Schema inventory
@@ -302,8 +309,10 @@ not yet published; treat as confirmation + ok/error envelopes until added.
 - [`pause.json`](schemas/pause.json): `"status": "paused"`, `"paused": true`
 - [`resume.json`](schemas/resume.json): `"status": "resumed"`, `"resumed": true`
 
-**Note:** `pause` and `resume` do **not** require `--confirm` today (unlike stop/print).
-See [SECURITY.md](../SECURITY.md).
+`pause` and `resume` require `--confirm` (since 0.3.0). Without it they emit
+`"status": "confirmation_required"` with `"paused": false` / `"resumed": false`
+plus `next_command`, and exit `5`. `light` does **not** require `--confirm`:
+it changes no motion, thermal, or material state. See [SECURITY.md](../SECURITY.md).
 
 ### `snapshot`
 

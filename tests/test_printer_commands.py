@@ -951,7 +951,9 @@ class TestBambuCmdPrint(unittest.TestCase):
         args.ams_mapping = None
         args.use_ams = False
 
-        cmd_print(args)
+        with self.assertRaises((SystemExit, BambuError)) as cm:
+            cmd_print(args)
+        self.assertEqual(cm.exception.exit_code, 5)
 
         mock_generate.assert_not_called()
         mock_execute.assert_not_called()
