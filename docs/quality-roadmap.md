@@ -11,10 +11,12 @@ lands them.
 
 ## 1. Scoreboard (baseline → target)
 
-Baselines from audit + full `pytest --cov=bambu_cli` on 2026-07-08:
-**368 tests**, **78%** line coverage (1105 / 4973 stmts missed), **130**
-`sys.exit` sites in `bambu_cli/`, **7** `@mockable` sites (def + 6 uses),
-**1** `BambuError` raise in production. Recalculate after each phase.
+Historical baseline (do not read as current), from the audit + full
+`pytest --cov=bambu_cli` on 2026-07-08: **368 tests**, **78%** line coverage
+(1105 / 4973 stmts missed), **130** `sys.exit` sites in `bambu_cli/`, **7**
+`@mockable` sites (def + 6 uses), **1** `BambuError` raise in production.
+The "Baseline" column below is that snapshot. **Current measured (2026-07-24):
+666 passed, 83.3% branch coverage over 5386 statements.**
 
 | Area | Baseline | Gate to A | Gate to A+ | Primary evidence |
 |------|----------|-----------|------------|------------------|
@@ -33,7 +35,7 @@ Baselines from audit + full `pytest --cov=bambu_cli` on 2026-07-08:
 
 ## Scoreboard (current)
 
-Updated **2026-07-17** (full codebase audit + doc truth pass). Foundational phases
+Updated **2026-07-24** (docs truth pass; test/coverage numbers re-measured). Foundational phases
 (0/A/B) are done. Phase C **typing is done** (full package + `check_untyped_defs`);
 coverage floor is **81** (target 92). Phase D schemas largely landed but not
 complete for every command. The camera Docker bind default and camera pin
@@ -54,10 +56,10 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **~618** non-live tests collected; **~82%** coverage; floor **81**; per-module floors not enforced |
+| Tests | **A−** | **666** non-live tests passing; **83.3%** coverage measured 2026-07-24; CI floor **81**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=81`** (A+ target remains 92) |
-| Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-17); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
-| Product polish | **B+** | quality gates in place; version remains **0.1.0** Beta; coverage ratchet + camera defaults remain for 1.0 A+ |
+| Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
+| Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
 
 **Overall:** **solid A− / A** — error model, typing, and security *controls* are strong;
 architecture is A− until domain helpers leave `cli.py`. Remaining gap to A+ / `v1.0.0`
@@ -65,7 +67,7 @@ is coverage toward 92, schema completeness, B.4/B.5 layering, and documented cam
 hardenings. Tagging `v1.0.0` still requires §5.
 
 **Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09).
-Measured branch total is ~82.3% on Linux and ~81.9% on Windows; the floor is set
+Measured branch total is **83.3%** on Linux (2026-07-24; Windows historically ran ~0.4pt lower); the floor is set
 at the multi-OS minimum so the matrix does not flake while still denying ~2 points
 of silent rot vs the old 79 gate.
 
@@ -623,7 +625,7 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 | C Coverage & typing | **in progress** | #18 | 2026-07-09 | full-package mypy + `check_untyped_defs` done; cov ~82% with CI floor **81** (target 92); per-module floors not enforced |
 | D Contracts & 1.0 | **in progress** | local | — | schemas + contract harness + stability policy; remaining agent `--json` schemas land in follow-up PRs |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
-| Doc truth pass | **done** | local | 2026-07-17 | AGENTS/CONTRIBUTING/SECURITY/README/api/backlog/roadmap aligned with audit; no code changes required for docs-only pass |
+| Doc truth pass | **done** | local | 2026-07-24 | versions de-literalized, prerequisites stated, camera guidance corrected, test/coverage numbers re-measured |
 
 > **Verified 2026-07-09** against a clean checkout — the "current scoreboard" above
 > was corrected the same day. Coverage floor raised 79→**81** (multi-OS minimum:
@@ -634,6 +636,10 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 > **Re-verified 2026-07-17** (full audit): typing excludes remain **gone**; architecture
 > grade corrected to **A−** (domain→cli coupling); test count ~618 collected; SECURITY
 > known-limitations expanded (camera Docker bind, pin soft-fallback, HTTP downloads).
+>
+> **Re-verified 2026-07-24** (docs truth pass): coverage floor holds at **81**; Linux
+> branch total now **83.3%** (666 non-live tests, 5386 stmts). Prior ~82.3% / ~81.9%
+> figures were accurate at 2026-07-17 and are retained above as the dated record.
 
 ### mockable count (burn-down)
 

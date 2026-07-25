@@ -1,6 +1,13 @@
 from tests.bambu_test_base import *  # noqa: F401,F403
 from bambu_cli.errors import BambuError
 
+import contextlib
+import pathlib
+import subprocess
+import tempfile
+
+from bambu_cli.constants import EXIT_FILE_ERROR
+
 
 class TestMain(unittest.TestCase):
     def tearDown(self):
@@ -70,6 +77,26 @@ class TestMain(unittest.TestCase):
 
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
         mock_logger.error.assert_called_with("Invalid printer_ip or hostname in config: invalid_ip")
+
+    @patch("sys.argv", ["bambu.py", "--json", "--sim", "upload", "x.stl"])
+    @patch("bambu_cli.cli.setup_logging")
+    def test_json_envelope_survives_logger_failure(self, _mock_setup_logging):
+        import bambu_cli.cli as cli
+        import bambu_cli.utils as utils
+
+        utils._JSON_EMITTED = False
+        buf = io.StringIO()
+        boom = BambuError("boom", exit_code=EXIT_FILE_ERROR, failed_step="validate")
+        with patch("bambu_cli.commands.cmd_upload", side_effect=boom):
+            with patch("bambu_cli.cli.logger") as mock_logger:
+                mock_logger.error.side_effect = RuntimeError("handler exploded")
+                with contextlib.redirect_stdout(buf):
+                    with self.assertRaises(SystemExit) as cm:
+                        cli.main()
+        self.assertEqual(cm.exception.code, EXIT_FILE_ERROR)
+        payload = json.loads(buf.getvalue())
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"], "boom")
 
 
 class TestBambuCmdSetup(unittest.TestCase):
@@ -204,6 +231,47 @@ class TestBambuCmdSetup(unittest.TestCase):
             )
         finally:
             builtins.__import__ = original_import
+
+
+class TestBracketFilenames(unittest.TestCase):
+    ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+    def _run(self, argv, tmpdir):
+        env = {**os.environ, "COLUMNS": "200", "NO_COLOR": "1"}
+        env["XDG_CONFIG_HOME"] = tmpdir
+        env.pop("BAMBU_CLI", None)
+        return subprocess.run(
+            [sys.executable, "-m", "bambu_cli.bambu"] + argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            check=False,
+            cwd=str(self.ROOT),
+            env=env,
+        )
+
+    def test_plain_mode_bracket_filename_does_not_crash(self):
+        with tempfile.TemporaryDirectory() as td:
+            for name in ("a[/b]c.stl", "part[v2].stl"):
+                with self.subTest(name=name):
+                    r = self._run(["--sim", "upload", name], td)
+                    self.assertNotIn("MarkupError", r.stderr)
+                    self.assertIn(name, r.stderr)
+                    self.assertEqual(r.returncode, EXIT_FILE_ERROR, r.stderr)
+
+    def test_json_mode_bracket_filename_emits_valid_envelope(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = self._run(["--json", "--sim", "upload", "a[/b]c.stl"], td)
+            payload = json.loads(r.stdout)
+            self.assertEqual(payload["status"], "error")
+            self.assertEqual(payload["command"], "upload")
+            self.assertEqual(payload["exit_code"], EXIT_FILE_ERROR)
+            self.assertEqual(payload["error"], "File not found: a[/b]c.stl")
+            self.assertEqual(payload["file"], "a[/b]c.stl")
+            self.assertEqual(payload["failed_step"], "validate")
+            self.assertEqual(r.returncode, EXIT_FILE_ERROR)
 
 
 if __name__ == "__main__":

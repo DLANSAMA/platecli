@@ -68,6 +68,13 @@ Stable for a given major version (`bambu_cli.constants`):
 | 5 | `EXIT_COMMAND_ERROR` | Invalid usage / command refused |
 | 6 | `EXIT_TIMEOUT` | Operation timed out |
 
+**Refusal contract:** every command that causes physical printer motion or
+destroys printer-side data — `print`, `stop`, `pause`, `resume`, `gcode`,
+`delete` — refuses without `--confirm`, exits `5`, and (with `--json`) emits
+`"status": "confirmation_required"` plus a `next_command` array. `job` / `send`
+without `--confirm` is **not** a refusal: the download/slice/upload really
+happened, so it exits `0` with `"status": "uploaded_not_printed"`.
+
 Domain code raises `BambuError` / `abort()`; only `cli.main()` calls `sys.exit`.
 
 When a print fails with a printer-reported code, the error envelope carries both
@@ -113,8 +120,11 @@ Contract tests: `tests/contracts/test_schema_validation.py` and
 ### `version`
 
 ```json
-{"status": "ok", "command": "version", "version": "0.1.0"}
+{"status": "ok", "command": "version", "version": "X.Y.Z"}
 ```
+
+`version` is the installed platecli release (the same string `plate --version`
+prints); it is not a fixed value and is deliberately shown as a placeholder here.
 
 Schema: [`version.json`](schemas/version.json).
 
@@ -304,11 +314,19 @@ not yet published; treat as confirmation + ok/error envelopes until added.
 ### `light` / `pause` / `resume`
 
 - [`light.json`](schemas/light.json): `"status": "light_changed"`, `"action": "on"|"off"`, `"changed": true`
-- [`pause.json`](schemas/pause.json): `"status": "paused"`, `"paused": true`
-- [`resume.json`](schemas/resume.json): `"status": "resumed"`, `"resumed": true`
+- [`pause.json`](schemas/pause.json): dual success-or-confirmation envelope —
+  `"status": "paused"` with `"paused": true` on success, or
+  `"status": "confirmation_required"` with `"paused": false` plus `next_command`
+  when `--confirm` is absent
+- [`resume.json`](schemas/resume.json): dual success-or-confirmation envelope —
+  `"status": "resumed"` with `"resumed": true` on success, or
+  `"status": "confirmation_required"` with `"resumed": false` plus `next_command`
+  when `--confirm` is absent
 
-**Note:** `pause` and `resume` do **not** require `--confirm` today (unlike stop/print).
-See [SECURITY.md](../SECURITY.md).
+`pause` and `resume` require `--confirm` (since 0.3.0). Without it they emit
+`"status": "confirmation_required"` with `"paused": false` / `"resumed": false`
+plus `next_command`, and exit `5`. `light` does **not** require `--confirm`:
+it changes no motion, thermal, or material state. See [SECURITY.md](../SECURITY.md).
 
 ### `snapshot`
 

@@ -33,7 +33,11 @@ def setup_logging(verbose=False, json_mode=False):
         install(show_locals=False)
         console = Console(stderr=True)
         # file.py:line origin column is developer detail — only show it with --verbose.
-        handler = RichHandler(console=console, rich_tracebacks=True, markup=True, show_path=verbose)
+        # markup=False is mandatory: log lines interpolate user-controlled filenames, and rich
+        # would parse 'part[v2].stl' as a style tag (silently dropping it) or raise MarkupError
+        # on 'a[/b]c.stl'. No logger call in bambu_cli/ uses markup tags (verified by grep); the
+        # only '[bold blue]' strings are rich Progress TextColumn templates, which are unaffected.
+        handler = RichHandler(console=console, rich_tracebacks=True, markup=False, show_path=verbose)
     except ImportError:
         stream = sys_module.stderr
         handler = logging_module.StreamHandler(stream)
@@ -397,10 +401,12 @@ def build_parser():
     )
 
     p_pause = sub.add_parser("pause", parents=[get_global_parser()], help="Pause current print")
+    p_pause.add_argument("--confirm", action="store_true", help="Confirm pausing the running print")
     p_pause.add_argument(
         "--json", action="store_true", default=argparse.SUPPRESS, help="Emit machine-readable pause summary"
     )
     p_resume = sub.add_parser("resume", parents=[get_global_parser()], help="Resume paused print")
+    p_resume.add_argument("--confirm", action="store_true", help="Confirm resuming the paused print")
     p_resume.add_argument(
         "--json", action="store_true", default=argparse.SUPPRESS, help="Emit machine-readable resume summary"
     )
@@ -601,6 +607,24 @@ def _resolve_command(name):
     return getattr(commands_mod, func_name, None)
 
 
+def _safe_log_error(message, **kwargs):
+    """Log an error without ever letting the logging layer abort the process.
+
+    The --json contract (README "Built for AI agents") promises a parseable envelope on
+    every run. A handler that raises while formatting a user-controlled string (rich
+    markup, encoding, a broken stream) must not be able to swallow that envelope, so
+    failures here degrade to a bare stderr write.
+    """
+    try:
+        logger.error(message, **kwargs)
+    except Exception:
+        # Logging must never be fatal; fall back to the rawest possible write.
+        try:
+            print(f"ERROR: {message}", file=sys.stderr)
+        except Exception:
+            pass
+
+
 def main():
     from bambu_cli.config import load_config
     from bambu_cli.constants import VERSION
@@ -662,8 +686,8 @@ def main():
     def _handle_bambu_error(exc, command_name):
         # Expected domain failures: log the message only (no traceback noise for agents).
         msg = str(exc)
-        if msg and not msg.startswith("Command failed (exit "):
-            logger.error(msg)
+        # Emit the machine-readable envelope FIRST: stdout must stay parseable even if the
+        # human-readable log line below fails to render.
         if _json_mode_requested(args) and not utils._JSON_EMITTED:
             extra = {}
             if exc.detail:
@@ -678,6 +702,8 @@ def main():
                 failed_step=exc.failed_step,
                 **extra,
             )
+        if msg and not msg.startswith("Command failed (exit "):
+            _safe_log_error(msg)
         sys.exit(exc.exit_code)
 
     if _json_setup_should_be_noninteractive(args):
@@ -692,15 +718,15 @@ def main():
         printer_ip = _context.current_settings().printer_ip
         if printer_ip == "0.0.0.0":
             message = "Printer IP is not configured. Please run `plate setup` first."
-            logger.error(message)
             emit_json_error(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
+            logger.error(message)
             sys.exit(EXIT_CONFIG_ERROR)
         try:
             socket.getaddrinfo(printer_ip, None)
         except socket.gaierror:
             message = f"Invalid printer_ip or hostname in config: {printer_ip}"
-            logger.error(message)
             emit_json_error(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
+            logger.error(message)
             sys.exit(EXIT_CONFIG_ERROR)
 
     _handler = _resolve_command(args.cmd)
@@ -723,7 +749,7 @@ def main():
         except BambuError as exc:
             _handle_bambu_error(exc, args.cmd)
         except Exception as exc:
-            logger.error(f"Uncaught exception: {exc}", exc_info=True)
+            # Envelope first — see _safe_log_error: a logging failure must not eat stdout.
             if _json_mode_requested(args) and not utils._JSON_EMITTED:
                 emit_json_error(
                     args,
@@ -731,6 +757,7 @@ def main():
                     EXIT_COMMAND_ERROR,
                     f"Unexpected error: {str(exc)}",
                 )
+            _safe_log_error(f"Uncaught exception: {exc}", exc_info=True)
             sys.exit(EXIT_COMMAND_ERROR)
     else:
         parser.print_help(sys.stderr)
