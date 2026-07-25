@@ -81,22 +81,37 @@ class TestMain(unittest.TestCase):
     @patch("sys.argv", ["bambu.py", "--json", "--sim", "upload", "x.stl"])
     @patch("bambu_cli.cli.setup_logging")
     def test_json_envelope_survives_logger_failure(self, _mock_setup_logging):
+        """Verify the try/except fallback in logging_utils.safe_log_error is exercised.
+
+        The critical patch target is bambu_cli.logging_utils.logger (the name binding
+        actually used by safe_log_error), NOT bambu_cli.cli.logger (a different object
+        that is never called on this path). Patching the wrong target made the mock
+        never fire, leaving the fallback path at logging_utils.py:69-76 uncovered.
+        """
         import bambu_cli.cli as cli
         import bambu_cli.utils as utils
 
         utils._JSON_EMITTED = False
         buf = io.StringIO()
+        stderr_buf = io.StringIO()
         boom = BambuError("boom", exit_code=EXIT_FILE_ERROR, failed_step="validate")
         with patch("bambu_cli.commands.cmd_upload", side_effect=boom):
-            with patch("bambu_cli.cli.logger") as mock_logger:
+            with patch("bambu_cli.logging_utils.logger") as mock_logger:
                 mock_logger.error.side_effect = RuntimeError("handler exploded")
                 with contextlib.redirect_stdout(buf):
-                    with self.assertRaises(SystemExit) as cm:
-                        cli.main()
+                    with contextlib.redirect_stderr(stderr_buf):
+                        with self.assertRaises(SystemExit) as cm:
+                            cli.main()
+        # The mock must actually have been called — if it wasn't, the test is vacuous.
+        mock_logger.error.assert_called()
+        # Exit code preserved despite logging failure.
         self.assertEqual(cm.exception.code, EXIT_FILE_ERROR)
+        # JSON envelope still emitted to stdout before the logging attempt.
         payload = json.loads(buf.getvalue())
         self.assertEqual(payload["status"], "error")
         self.assertEqual(payload["error"], "boom")
+        # Bare-stderr fallback path fired (logging_utils.py:73-74).
+        self.assertIn("ERROR", stderr_buf.getvalue())
 
 
 class TestBambuCmdSetup(unittest.TestCase):

@@ -16,6 +16,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   typo is diagnosable, and the `--json` contract is unchanged.
 - The bug-report template now asks for `plate doctor --json` (which redacts the
   LAN IP) instead of the human output.
+- All GitHub Actions are pinned to immutable commit SHAs, enforced by
+  `tests/ci_workflow_smoke.py`. Notably `pypa/gh-action-pypi-publish` was
+  tracking the mutable `release/v1` branch in the job that holds the PyPI
+  trusted-publishing `id-token: write` permission.
+- Releases now re-run the full CI matrix on the tagged commit before publishing,
+  so a tag on a red commit can no longer reach PyPI.
 
 ### Added
 - `docs/troubleshooting.md`: a symptom-keyed troubleshooting guide organised
@@ -106,14 +112,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - Device, file, print and G-code commands now emit the `--json` error envelope before
   writing the human-readable log line, so a failure in the logging layer can no longer
   leave stdout without a parseable envelope.
-
-### Security
-- All GitHub Actions are pinned to immutable commit SHAs, enforced by
-  `tests/ci_workflow_smoke.py`. Notably `pypa/gh-action-pypi-publish` was
-  tracking the mutable `release/v1` branch in the job that holds the PyPI
-  trusted-publishing `id-token: write` permission.
-- Releases now re-run the full CI matrix on the tagged commit before publishing,
-  so a tag on a red commit can no longer reach PyPI.
 
 ## [0.2.2] - 2026-07-24
 

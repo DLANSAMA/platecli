@@ -102,23 +102,27 @@ sudo pacman -S orca-slicer          # Arch
 # Fedora/Debian: no official package; use Flatpak or the AppImage below
 ```
 
-**Linux — Flatpak**
+**Linux — Flatpak (recommended)**
 
 ```bash
 flatpak install flathub com.orcaslicer.OrcaSlicer
 flatpak run com.orcaslicer.OrcaSlicer   # first run, to let it unpack resources
 ```
 
-> Auto-detection currently only knows the older Flatpak export name
-> (`io.github.softfever.OrcaSlicer`). If you installed under a different app id,
-> set the paths yourself — see [Overriding the paths](#overriding-the-paths).
-> The exported launcher lives under `/var/lib/flatpak/exports/bin/` (or the same
-> path under `~/.local/share/flatpak/` for a `--user` install), and you can
-> locate the profiles with:
+> Auto-detection knows both the current Flathub app id
+> (`com.orcaslicer.OrcaSlicer`) and the legacy one (`io.github.softfever.OrcaSlicer`),
+> so a standard Flathub install should be picked up automatically. Manual paths are
+> only needed for a non-standard install location — see
+> [Overriding the paths](#overriding-the-paths).
+>
+> **Note:** The Flatpak profile-directory paths are inferred and have not been
+> verified against a real Flathub install. If `plate preflight` reports profiles
+> not found after a Flatpak install, set `profiles_dir` manually:
 >
 > ```bash
 > flatpak info --show-location com.orcaslicer.OrcaSlicer
 > # then look under <location>/files/share/OrcaSlicer/resources/profiles/BBL
+> plate setup --profiles-dir <path>
 > ```
 
 **Linux — AppImage**
