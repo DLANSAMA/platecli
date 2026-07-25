@@ -281,8 +281,10 @@ def test_cmd_light_failure_raises():
     ("cmd_name", "args"),
     [
         ("cmd_light", Namespace(action="on", json=True)),
-        ("cmd_pause", Namespace(json=True)),
-        ("cmd_resume", Namespace(json=True)),
+        # pause/resume are --confirm-gated; without the flag they refuse before
+        # reaching the MQTT error path this test is about.
+        ("cmd_pause", Namespace(json=True, confirm=True)),
+        ("cmd_resume", Namespace(json=True, confirm=True)),
         ("cmd_stop", Namespace(json=True, confirm=True)),
     ],
 )
