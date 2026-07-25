@@ -28,9 +28,11 @@ model URL or file  →  download  →  slice (OrcaSlicer)  →  upload  →  pri
                         one command:  plate job <url> --confirm
 ```
 
-**Supports:** P1P, P1S, X1C, X1E, A1, A1 Mini (any Bambu printer with LAN mode)
+**Supports:** any Bambu Lab printer with LAN mode — P1P, P1S, X1C, X1E, A1, A1 Mini. **Hardware-tested on the P1 series (P1P/P1S) only.** The rest speak the same LAN protocols and are expected to work, but are unverified on real hardware — treat them as best-effort and please [open an issue](https://github.com/DLANSAMA/platecli/issues) with what you hit. One caveat: `plate snapshot` grabs the camera directly (no extra software) on P1/A1-class printers, but X1-series cameras need a locally-running Docker streamer container.
 
 ## Install
+
+**Requirements:** Python 3.9+, and [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer/releases) installed locally if you want to slice. `plate slice` and `plate job` shell out to the OrcaSlicer binary; `download`, `status`, `upload`, and `print` do not need it. `plate setup` auto-detects the usual install locations (macOS app bundle, Windows Program Files, and on Linux a `$PATH` binary, Flatpak export, or AppImage), and `plate preflight` (or `plate config validate`) tells you if it can't find one.
 
 ```bash
 pipx install platecli
@@ -114,9 +116,17 @@ Every command emits machine-readable `--json` output backed by published [JSON S
 - [CONTRIBUTING.md](https://github.com/DLANSAMA/platecli/blob/main/CONTRIBUTING.md) — dev setup, tests, releases
 - [Discussions](https://github.com/DLANSAMA/platecli/discussions) — questions, show-and-tell, and community conversation
 
+## Before you print unattended
+
+`plate` can start a print with nobody standing at the machine, which is exactly the point — and exactly the risk. An FDM printer is a hot, moving appliance: a failed print can jam, spaghetti, damage the hotend, or in rare cases start a fire. Keep the printer in view of a person or a camera, don't kick off long jobs overnight or in an empty house, and leave your printer's own firmware safety features on. `plate` uploads a job and starts it; it does not watch the plate for failures and will not stop a print that is going wrong. What the machine does is your responsibility.
+
+## Support & expectations
+
+platecli is maintained by one person in their spare time. Bug reports and pull requests are genuinely welcome — [open an issue](https://github.com/DLANSAMA/platecli/issues) with your `plate doctor` output attached and I'll get to it when I can. There is no response-time guarantee, and feature requests may sit or be declined to keep the tool small and local-only. If you need something faster than that, fork it — it's MIT.
+
 ## Status & disclaimer
 
-**Status:** Beta (`0.2.0`). Pre-1.0 — APIs and config keys follow the stability policy in [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md).
+**Status:** Beta, pre-1.0 — APIs and config keys follow the stability policy in [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md). The current release is whatever the [PyPI badge](https://pypi.org/project/platecli/) at the top of this page shows; `plate --version` reports the copy you have installed.
 
 > **Disclaimer:** platecli is an unofficial, community-developed tool. It is not affiliated with, endorsed by, or supported by Bambu Lab. "Bambu Lab" and product names are trademarks of their respective owners, used here only to describe compatibility. The printer protocols (MQTT/FTPS) are reverse-engineered; a firmware update may break functionality without warning — run `plate doctor` after printer updates.
 

@@ -11,6 +11,7 @@ The complete reference for `plate` — setup, configuration, slicing, monitoring
 - [OrcaSlicer](#orcaslicer)
 - [Usage](#usage)
 - [Monitoring a print](#monitoring-a-print)
+- [Camera snapshots](#camera-snapshots)
 - [Global flags](#global-flags)
 - [Slicing & AMS](#slicing--ams)
 - [Config reference](#config-reference)

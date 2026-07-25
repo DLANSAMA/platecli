@@ -57,7 +57,7 @@ body:
     attributes:
       label: platecli version
       description: Run `plate --version` and paste the output here.
-      placeholder: "0.2.0"
+      placeholder: "plate X.Y.Z"
     validations:
       required: true
 

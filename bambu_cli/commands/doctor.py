@@ -175,7 +175,10 @@ def cmd_doctor(args, ctx=None):
             "ams": "ams" in status,
             "chamber_light": True,
             "camera_snapshot": ctx.settings.printer_model in ("P1P", "P1S"),
-            "camera_snapshot_note": "snapshot uses the optional BambuP1Streamer container and is intended for P1P/P1S",
+            "camera_snapshot_note": (
+                "P1P/P1S capture directly from the printer camera and need no Docker; "
+                "X1-series fall back to the optional BambuP1Streamer container"
+            ),
         },
     }
 

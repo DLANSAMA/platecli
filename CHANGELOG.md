@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Added
+- `tests/test_docs_consistency.py`: guards against version drift in README /
+  `docs/api.md` / the bug-report template, and against `docs/manual.md` sections
+  missing from its Contents list.
+
+### Changed
+- README: stated the OrcaSlicer and Python 3.9+ prerequisites, qualified non-P1
+  printer support as best-effort, clarified that `plate snapshot` grabs P1/A1
+  cameras directly while X1-series needs the Docker streamer, and added
+  unattended-printing safety and maintenance-expectations sections.
+- Removed hardcoded version strings from README, `docs/api.md`, and the bug-report
+  template; the version is single-sourced from `pyproject.toml`.
+- Refreshed measured test/coverage numbers in `docs/quality-roadmap.md` and
+  `docs/test-backlog.md` (666 tests, 83.3%).
+- `AGENTS.md` retitled to the public product name.
+- `docs/api.md`: the `pause.json` / `resume.json` bullets now describe both the
+  success and the `confirmation_required` shape, matching the dual schemas.
+
+### Fixed
+- `plate doctor`'s reported `camera_snapshot_note` (and `camera.py`'s snapshot
+  docstring) claimed P1P/P1S snapshots go through the BambuP1Streamer container.
+  It is the reverse: P1/A1-class cameras are captured directly with no Docker,
+  and the container is the X1-series fallback.
+
 ### Changed (BREAKING)
 - `pause` and `resume` now require `--confirm`, matching `stop`/`print`/`gcode`/`delete`.
   Pausing mid-print parks a hot nozzle over the part; resuming an abandoned print
