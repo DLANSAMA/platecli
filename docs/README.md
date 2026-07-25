@@ -7,5 +7,6 @@
 - [test-backlog.md](test-backlog.md) — Remaining test / coverage gaps (contributor-only).
 - [mutation-baseline.md](mutation-baseline.md) — Mutation testing scope and floor (contributor-only).
 - [live-printer-smoke.md](live-printer-smoke.md) — Opt-in real-printer harness, `BAMBU_LIVE=1` (contributor-only).
+- [releasing.md](releasing.md) — Release procedure and the PyPI yank/rollback runbook (contributor-only).
 
 Contributor-only docs stay on GitHub and are excluded from the PyPI sdist; see [../MANIFEST.in](../MANIFEST.in).

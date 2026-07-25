@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Security
+- All GitHub Actions are pinned to immutable commit SHAs, enforced by
+  `tests/ci_workflow_smoke.py`. Notably `pypa/gh-action-pypi-publish` was
+  tracking the mutable `release/v1` branch in the job that holds the PyPI
+  trusted-publishing `id-token: write` permission.
+- Releases now re-run the full CI matrix on the tagged commit before publishing,
+  so a tag on a red commit can no longer reach PyPI.
+
+### Changed
+- CI runs weekly on a schedule (external drift: firmware, Printables API,
+  OrcaSlicer, new CVEs) and pins ruff/mypy/bandit/pip-audit versions.
+- Dependabot enabled for GitHub Actions and uv dependencies.
+- New docs/releasing.md with the yank/rollback runbook (contributor-only; not
+  shipped in the sdist).
+
 ## [0.2.2] - 2026-07-24
 
 ### Added

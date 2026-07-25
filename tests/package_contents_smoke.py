@@ -64,6 +64,7 @@ FORBIDDEN_SDIST_FILES = {
     "docs/test-backlog.md",
     "docs/mutation-baseline.md",
     "docs/live-printer-smoke.md",
+    "docs/releasing.md",
 }
 
 REQUIRED_WHEEL_FILES = {

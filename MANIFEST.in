@@ -32,4 +32,5 @@ global-exclude docs/quality-roadmap.md
 global-exclude docs/test-backlog.md
 global-exclude docs/mutation-baseline.md
 global-exclude docs/live-printer-smoke.md
+global-exclude docs/releasing.md
 global-exclude CONTRIBUTING.md
