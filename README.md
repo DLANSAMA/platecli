@@ -81,7 +81,7 @@ Now go from a link on the internet to plastic on the bed:
 plate job "https://www.printables.com/model/3161-3d-benchy" --confirm
 ```
 
-`--confirm` is required for anything that physically prints (or stops, deletes, or sends raw G-code) — leave it off and nothing on the printer moves.
+`--confirm` is required for anything that moves the printer or destroys data on it: `print`, `stop`, `pause`, `resume`, `gcode`, `delete`, and the print step of `job`. Leave it off and the command refuses with exit code `5` — nothing on the printer moves. (`light` is exempt; an LED is not a physical action.)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-dark.gif">
@@ -93,7 +93,7 @@ plate job "https://www.printables.com/model/3161-3d-benchy" --confirm
 
 - **One command, whole pipeline** — `plate job <url>` downloads, slices, uploads, and prints in one shot; or run `download` / `slice` / `upload` / `print` individually.
 - **Fully local & private** — talks straight to the printer over your LAN; no Bambu cloud account, ever.
-- **Safe by default** — nothing physical happens without `--confirm`, so a typo (or an over-eager AI agent) can't start a print.
+- **Deliberate-action gate** — physical commands refuse without `--confirm` (exit `5`), so a typo, a truncated argument list, or a replayed read-only command can't start a print. It is a gate against *accidents*, not an authorization boundary: `plate` cannot tell your `--confirm` from an agent's, so anything you let run `plate` can pass the flag. Sandbox agents accordingly.
 - **AI-agent ready** — every command speaks `--json` with published schemas, plus a `--sim` mode for hardware-free automation.
 - **Watch it live** — `plate status --monitor` follows a print with a live progress bar until it finishes.
 - **Fixes itself findable** — `plate doctor` checks network, FTPS, and MQTT health and tells you exactly what's wrong.
@@ -101,7 +101,7 @@ plate job "https://www.printables.com/model/3161-3d-benchy" --confirm
 
 ## Built for AI agents
 
-Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a full fake printer for development without hardware, and the `--confirm` gate makes accidental physical actions impossible by default. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
+Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a full fake printer for development without hardware, and the `--confirm` gate means physical actions never happen by accident. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
 
 ## Documentation
 

@@ -234,7 +234,10 @@ def test_print_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     )
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
-    main()  # print without --confirm returns without SystemExit
+    # print without --confirm refuses with EXIT_COMMAND_ERROR (5)
+    with pytest.raises(SystemExit) as excinfo:
+        main()
+    assert excinfo.value.code == 5
     payload = json.loads(capsys.readouterr().out)
     _validate(payload, _load_schema("print.json"))
     assert payload["status"] == "confirmation_required"
@@ -288,6 +291,26 @@ def test_pause_success_fixture_matches_schema():
 
 def test_resume_success_fixture_matches_schema():
     payload = {"status": "resumed", "command": "resume", "resumed": True}
+    _validate(payload, _load_schema("resume.json"))
+
+
+def test_pause_confirmation_fixture_matches_schema():
+    payload = {
+        "status": "confirmation_required",
+        "command": "pause",
+        "paused": False,
+        "next_command": ["pause", "--confirm", "--json"],
+    }
+    _validate(payload, _load_schema("pause.json"))
+
+
+def test_resume_confirmation_fixture_matches_schema():
+    payload = {
+        "status": "confirmation_required",
+        "command": "resume",
+        "resumed": False,
+        "next_command": ["resume", "--confirm", "--json"],
+    }
     _validate(payload, _load_schema("resume.json"))
 
 
