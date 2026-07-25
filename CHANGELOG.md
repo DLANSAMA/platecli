@@ -6,11 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- `docs/troubleshooting.md`: a symptom-keyed troubleshooting guide organised
+  around the errors the CLI emits (MQTT/FTPS connectivity, cert-pin mismatches,
+  OrcaSlicer and profile paths, camera/Docker, SSRF-blocked downloads, config
+  location). Linked from the README, the user guide, and the bug-report
+  template; ships in the sdist.
+- `tests/test_docs_links.py`: checks that cross-doc GitHub links resolve to real
+  repo paths and that every in-page anchor in the troubleshooting guide matches a
+  real heading.
+- README: a "How it compares" section describing adjacent cloud-free Bambu
+  projects and when to use them instead.
 - `tests/test_docs_consistency.py`: guards against version drift in README /
   `docs/api.md` / the bug-report template, and against `docs/manual.md` sections
   missing from its Contents list.
 
 ### Changed
+- `docs/manual.md`: the OrcaSlicer section now covers per-OS installation, the
+  exact auto-detected default paths, and how to override them.
 - README: stated the OrcaSlicer and Python 3.9+ prerequisites, qualified non-P1
   printer support as best-effort, clarified that `plate snapshot` grabs P1/A1
   cameras directly while X1-series needs the Docker streamer, and added

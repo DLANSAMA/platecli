@@ -7,6 +7,8 @@ body:
       value: |
         Thanks for taking the time to report a bug. Please fill out as much as you can — it speeds up diagnosis significantly.
 
+        **Before you file:** many connection, slicing, and camera problems are covered in the [troubleshooting guide](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) — it is keyed by the error message. Running `plate doctor` and `plate preflight` first also makes the report much easier to act on.
+
   - type: textarea
     id: what-happened
     attributes:

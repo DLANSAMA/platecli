@@ -15,6 +15,7 @@ The complete reference for `plate` — setup, configuration, slicing, monitoring
 - [Global flags](#global-flags)
 - [Slicing & AMS](#slicing--ams)
 - [Config reference](#config-reference)
+- [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md)
 - [Project layout](#project-layout)
 - [Documentation map](#documentation-map)
 
@@ -80,14 +81,109 @@ plate doctor            # connectivity + live cert fingerprint
 
 ## OrcaSlicer
 
-Slicing shells out to OrcaSlicer, so `plate` needs to know where its binary
-and bundled `profiles/BBL` directory live. Setup auto-detects the usual install
-locations per platform — the macOS app bundle, the Windows `Program Files`
-install, and on Linux a `$PATH` binary (`orca-slicer`), a Flatpak export, or an
-AppImage under `~/Applications` or `~/tools`. If detection misses your install,
-set `orca_slicer` and `profiles_dir` in `config.json`; when a configured path is
-wrong, `config validate` (and slicing) will point you at a working OrcaSlicer it
-found instead of failing with a generic error.
+Slicing shells out to OrcaSlicer, so `plate` needs two paths: the **binary** and
+the bundled **`resources/profiles/BBL`** directory. `plate setup` auto-detects
+the usual locations; this section covers installing it and overriding the paths
+when detection misses.
+
+Check what was detected at any time:
+
+```bash
+plate preflight     # emits explicit `orca-slicer` and `profiles-dir` checks
+```
+
+### Install
+
+**Linux — distro package (simplest, if your distro has it)**
+
+```bash
+sudo pacman -S orca-slicer          # Arch
+# Fedora/Debian: no official package; use Flatpak or the AppImage below
+```
+
+**Linux — Flatpak**
+
+```bash
+flatpak install flathub com.orcaslicer.OrcaSlicer
+flatpak run com.orcaslicer.OrcaSlicer   # first run, to let it unpack resources
+```
+
+> Auto-detection currently only knows the older Flatpak export name
+> (`io.github.softfever.OrcaSlicer`). If you installed under a different app id,
+> set the paths yourself — see [Overriding the paths](#overriding-the-paths).
+> The exported launcher lives under `/var/lib/flatpak/exports/bin/` (or the same
+> path under `~/.local/share/flatpak/` for a `--user` install), and you can
+> locate the profiles with:
+>
+> ```bash
+> flatpak info --show-location com.orcaslicer.OrcaSlicer
+> # then look under <location>/files/share/OrcaSlicer/resources/profiles/BBL
+> ```
+
+**Linux — AppImage**
+
+Download the AppImage from the [OrcaSlicer releases page](https://github.com/SoftFever/OrcaSlicer/releases),
+then extract it so the `profiles/BBL` directory is reachable (an un-extracted
+AppImage hides its resources):
+
+```bash
+mkdir -p ~/tools && cd ~/tools
+mv ~/Downloads/OrcaSlicer_Linux_*.AppImage OrcaSlicer.AppImage
+chmod +x OrcaSlicer.AppImage
+./OrcaSlicer.AppImage --appimage-extract    # creates ~/tools/squashfs-root/
+```
+
+`~/tools/OrcaSlicer.AppImage` and `~/tools/squashfs-root/resources/profiles/BBL`
+are both on the auto-detection list, so this layout needs no config.
+
+Also install `xvfb` on a headless Linux machine — OrcaSlicer needs a display
+even when slicing from the command line (`preflight` warns if `xvfb-run` is
+missing).
+
+**macOS**
+
+Install OrcaSlicer from its `.dmg` into `/Applications` (or `~/Applications`),
+both of which are auto-detected.
+
+**Windows**
+
+Run the installer from the OrcaSlicer releases page; the default
+`Program Files` and per-user `Programs` locations are both auto-detected.
+
+### Where plate looks by default
+
+Best-match-first, exactly as auto-detection tries them:
+
+| Platform | Binary | `profiles/BBL` |
+|---|---|---|
+| Linux | `orca-slicer` / `OrcaSlicer` / `orcaslicer` on `$PATH`, then `/usr/bin/orca-slicer`, `/usr/local/bin/orca-slicer`, `/opt/OrcaSlicer/orca-slicer`, `/var/lib/flatpak/exports/bin/io.github.softfever.OrcaSlicer`, `~/.local/share/flatpak/exports/bin/io.github.softfever.OrcaSlicer`, `~/Applications/OrcaSlicer.AppImage`, `~/tools/OrcaSlicer.AppImage` | `/usr/share/OrcaSlicer/resources/profiles/BBL`, `/opt/OrcaSlicer/resources/profiles/BBL`, `~/tools/squashfs-root/resources/profiles/BBL` |
+| macOS | `/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer`, `~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer` | the matching `.../Contents/Resources/profiles/BBL` |
+| Windows | `%PROGRAMFILES%\OrcaSlicer\OrcaSlicer.exe`, `%LOCALAPPDATA%\Programs\OrcaSlicer\OrcaSlicer.exe`, `%PROGRAMFILES(X86)%\OrcaSlicer\OrcaSlicer.exe` | the matching `...\OrcaSlicer\resources\profiles\BBL` |
+
+A checkout-relative `../tools/OrcaSlicer.AppImage` (and its `squashfs-root`
+profiles dir) is also probed, for running from a source tree.
+
+### Overriding the paths
+
+The supported way is `plate setup` — it accepts both as flags and writes them to
+`config.json`:
+
+```bash
+plate setup \
+  --orca-slicer /var/lib/flatpak/exports/bin/com.orcaslicer.OrcaSlicer \
+  --profiles-dir ~/tools/squashfs-root/resources/profiles/BBL
+```
+
+Or edit `config.json` directly and set the `orca_slicer` and `profiles_dir`
+keys (see [Config reference](#config-reference); there is no `plate config set`
+— `plate config` is `show`/`validate` only).
+
+When a configured path is wrong, `preflight` and `config validate` search for a
+working install and tell you which path to use instead of failing with a generic
+error. Verify with `plate preflight`.
+
+If slicing still fails, see
+[Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md#orcaslicer-or-its-bbl-profiles-were-not-found).
 
 ## Usage
 
@@ -219,6 +315,7 @@ or manually.
 |-----|----------|
 | [AGENTS.md](https://github.com/DLANSAMA/platecli/blob/main/AGENTS.md) | Agents and automation (architecture, safety) |
 | [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) | JSON contracts + stability policy |
+| [docs/troubleshooting.md](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) | Symptom-keyed fixes for connection, slicing, and camera errors |
 | [docs/schemas/](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) | Machine-checkable JSON Schema files |
 | [SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md) | Threat model, reporting, known limitations |
 | [CHANGELOG.md](https://github.com/DLANSAMA/platecli/blob/main/CHANGELOG.md) | Release notes |
