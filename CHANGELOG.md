@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Added
+- Printer error codes are now shown in hex as well as decimal (e.g. `Print failed
+  with error code 83935248 (hex 0x0500C010)`), and JSON error envelopes gain an
+  additive `printer_error_code_hex` field. Bambu documents these codes in hex.
+
+### Fixed
+- `plate preflight` now says what to do when `orca_slicer` / `profiles_dir` are not
+  configured, instead of printing `OrcaSlicer not found at` with a blank path.
+- Contributor setup uses `uv sync --extra test`, so the documented test command works
+  on a fresh clone (`uv sync` alone does not install pytest).
+
 ## [0.2.2] - 2026-07-24
 
 ### Added

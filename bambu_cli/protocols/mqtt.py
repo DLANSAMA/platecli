@@ -4,6 +4,7 @@ import ssl
 import sys
 import threading
 import time
+from typing import Optional
 
 from bambu_cli.config import get_command_timeout
 from bambu_cli.errors import BambuError, abort
@@ -577,6 +578,16 @@ def _get_and_verify_cert_pem(host, port, expected_fingerprint, timeout=5):
         return pem
 
 
+def _printer_error_hex(code: object) -> Optional[str]:
+    """Render a printer error code as the hex form Bambu documents (e.g. 0x0500C010).
+
+    Returns None when the code is not an integer we can render.
+    """
+    if isinstance(code, bool) or not isinstance(code, int):
+        return None
+    return f"0x{code & 0xFFFFFFFF:08X}"
+
+
 def execute_print_command(
     printer,
     payload,
@@ -707,7 +718,10 @@ def execute_print_command(
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
     if print_error[0]:
+        error_hex = _printer_error_hex(print_error[0])
         message = f"Print failed with error code {print_error[0]}"
+        if error_hex:
+            message += f" (hex {error_hex})"
         logger.error(message)
         if print_error[0] == 83935248:
             logger.info("   File not found on printer SD card. Check filename with 'files' command.")
@@ -718,6 +732,7 @@ def execute_print_command(
                 failed_step="print",
                 file=basename,
                 printer_error_code=print_error[0],
+                printer_error_code_hex=error_hex,
                 printed=False,
             )
             abort("", exit_code=EXIT_FILE_ERROR)
@@ -728,6 +743,7 @@ def execute_print_command(
             failed_step="print",
             file=basename,
             printer_error_code=print_error[0],
+            printer_error_code_hex=error_hex,
             printed=False,
         )
         abort("", exit_code=EXIT_PRINTER_ERROR)

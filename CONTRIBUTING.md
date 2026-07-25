@@ -7,8 +7,12 @@ Thanks for your interest in improving platecli!
 ```bash
 git clone https://github.com/DLANSAMA/platecli
 cd platecli   # or your local directory name
-uv sync              # or: pip install -e ".[test]"
+uv sync --extra test   # test deps (pytest etc.) live in the "test" extra
+# or: pip install -e ".[test]"
 ```
+
+Plain `uv sync` installs runtime deps only — the test commands below then fail
+with `No module named pytest`. CI installs the same set via `uv pip install '.[test]'`.
 
 ## Running tests
 
