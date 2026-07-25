@@ -5,6 +5,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Fixed
+- Filenames containing square brackets (e.g. `part[v2].stl`, common in Printables model titles) no longer crash the CLI or get silently truncated in log output — the Rich log handler no longer parses log text as markup.
+- `--json` now always writes a parseable error envelope to stdout: the JSON envelope is emitted before the human-readable log line, so a logging failure can no longer leave stdout empty.
+
 ## [0.2.2] - 2026-07-24
 
 ### Added
