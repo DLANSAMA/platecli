@@ -11,7 +11,7 @@
 [![Downloads](https://static.pepy.tech/badge/platecli)](https://pepy.tech/projects/platecli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[Install](#install) · [Try it in 30 seconds](#try-it-in-30-seconds) · [Print something](#print-something) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [For AI agents](#built-for-ai-agents)
+[Install](#install) · [Try it in 30 seconds](#try-it-in-30-seconds) · [Print something](#print-something) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) · [For AI agents](#built-for-ai-agents)
 
 </div>
 
@@ -32,7 +32,7 @@ model URL or file  →  download  →  slice (OrcaSlicer)  →  upload  →  pri
 
 ## Install
 
-**Requirements:** Python 3.9+, and [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer/releases) installed locally if you want to slice. `plate slice` and `plate job` shell out to the OrcaSlicer binary; `download`, `status`, `upload`, and `print` do not need it. `plate setup` auto-detects the usual install locations (macOS app bundle, Windows Program Files, and on Linux a `$PATH` binary, Flatpak export, or AppImage), and `plate preflight` (or `plate config validate`) tells you if it can't find one.
+**Requirements:** Python 3.9+, and [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/releases) installed locally if you want to slice. `plate slice` and `plate job` shell out to the OrcaSlicer binary; `download`, `status`, `upload`, and `print` do not need it. `plate setup` auto-detects the usual install locations (macOS app bundle, Windows Program Files, and on Linux a `$PATH` binary, Flatpak export, or AppImage), and `plate preflight` (or `plate config validate`) tells you if it can't find one.
 
 ```bash
 pipx install platecli
@@ -101,6 +101,28 @@ plate job "https://www.printables.com/model/3161-3d-benchy" --confirm
 - **Fixes itself findable** — `plate doctor` checks network, FTPS, and MQTT health and tells you exactly what's wrong.
 - **Hardened where it counts** — TLS certificate pinning, SSRF-guarded downloads, and size-capped ZIP extraction.
 
+## How it compares
+
+The cloud-free Bambu ecosystem is in good shape, and for many people one of
+these is the better answer:
+
+| Project | What it is | Reach for it when |
+|---|---|---|
+| [Bambuddy](https://github.com/maziggy/bambuddy) (~2.6k ★) | Self-hosted web command center, from a single printer up to a print farm | You want a polished dashboard, a print farm, or a full cloud replacement |
+| [ha-bambulab](https://github.com/greghesp/ha-bambulab) (~2.3k ★) | The Home Assistant integration — sensors, cameras, automations | Your printer should be part of your smart home |
+| [bambulabs_api](https://github.com/BambuTools/bambulabs_api) (~320 ★) / [pybambu](https://github.com/greghesp/pybambu) (~60 ★) | Maintained Python libraries for the printer protocols | You're writing your own application, not running a tool |
+| [davglass/bambu-cli](https://github.com/davglass/bambu-cli) (~95 ★, archived) | A Node.js CLI with a rich command set (unrelated project, same name) | You live in Node and are happy with a project that is no longer maintained |
+| **platecli** | This — a Python CLI for the whole pipeline | You want one command from a model link to a finished print, scriptable and cloud-free |
+
+platecli's own emphasis is the end-to-end pipeline as a single command:
+`plate job <url> --confirm` runs download → slice (OrcaSlicer) → upload → print,
+with no account, no daemon, and no web UI. Every command speaks `--json` against
+[published JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/),
+and `--sim` gives you a complete fake printer so scripts and AI agents can be
+developed and tested with no hardware at all. If you want a dashboard or a
+smart-home surface, the projects above are the better fit; if you want a pipeline
+you can put in a shell script or hand to an agent, use this.
+
 ## Built for AI agents
 
 Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a full fake printer for development without hardware, and the `--confirm` gate means physical actions never happen by accident. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
@@ -108,6 +130,7 @@ Every command emits machine-readable `--json` output backed by published [JSON S
 ## Documentation
 
 - **[User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md)** — full setup, config reference, slicing & AMS mapping, print monitoring, and every flag
+- **[Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md)** — keyed by the error message you actually saw: access codes, LAN mode, cert pins, FTPS, OrcaSlicer, camera
 - [AGENTS.md](https://github.com/DLANSAMA/platecli/blob/main/AGENTS.md) — architecture and safety notes for agents and automation
 - [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) — JSON contracts + stability policy
 - [docs/schemas/](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) — machine-checkable JSON Schema files

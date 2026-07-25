@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- `docs/troubleshooting.md`: a symptom-keyed troubleshooting guide organised
+  around the errors the CLI emits (MQTT/FTPS connectivity, cert-pin mismatches,
+  OrcaSlicer and profile paths, camera/Docker, SSRF-blocked downloads, config
+  location). Linked from the README, the user guide, and the bug-report
+  template; ships in the sdist.
+- `tests/test_docs_links.py`: checks that cross-doc GitHub links resolve to real
+  repo paths and that every in-page anchor in the troubleshooting guide matches a
+  real heading.
+- README: a "How it compares" section describing adjacent cloud-free Bambu
+  projects and when to use them instead.
 - Printer error codes are now shown in hex as well as decimal (e.g. `Print failed
   with error code 83935248 (hex 0x0500C010)`), and JSON error envelopes gain an
   additive `printer_error_code_hex` field. Bambu documents these codes in hex.
@@ -16,6 +26,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   user's behalf, subject to Printables' terms and each model's own licence.
 
 ### Changed
+- `docs/manual.md`: the OrcaSlicer section now covers per-OS installation, the
+  exact auto-detected default paths, and how to override them.
 - platecli now identifies itself honestly when talking to Printables:
   requests carry `User-Agent: platecli/<version> (+https://github.com/DLANSAMA/platecli)`
   instead of impersonating Chrome, and the forged `Origin`/`Referer` headers

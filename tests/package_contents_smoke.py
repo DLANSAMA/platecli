@@ -16,6 +16,7 @@ REQUIRED_SDIST_FILES = {
     "CHANGELOG.md",
     "docs/manual.md",
     "docs/api.md",
+    "docs/troubleshooting.md",
     "docs/schemas/error_envelope.json",
     "docs/schemas/job_ok.json",
     "docs/schemas/version.json",
