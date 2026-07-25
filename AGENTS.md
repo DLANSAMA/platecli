@@ -1,8 +1,8 @@
-# Bambu CLI
+# platecli — agent guide
 
 Runs on Linux, macOS, and Windows.
 
-**Command:** `plate` (installed via pip/uv). Legacy path without installing: `python3 <path>/scripts/bambu.py`.
+**Command:** `plate` (installed via pipx/pip/uv). From a source checkout, without installing: `python3 <repo>/scripts/bambu.py`.
 
 Prefer `job`/`send` for agent work. Always ask the user before running any command with `--confirm`.
 

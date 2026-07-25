@@ -297,7 +297,11 @@ def _cmd_snapshot(
     sleep=None,
     now=None,
 ):
-    """Capture a snapshot from the printer camera via BambuP1Streamer.
+    """Capture a snapshot from the printer camera.
+
+    P1/A1-class printers are captured directly over the native TLS port-6000
+    protocol and need no Docker; X1-series (or any printer where the direct grab
+    yields no frame) fall back to the optional BambuP1Streamer container.
 
     Collaborators are injectable so tests pass fakes instead of patching
     module globals. Defaults are the real production implementations.
