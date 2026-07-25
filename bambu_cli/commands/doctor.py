@@ -123,7 +123,18 @@ def cmd_doctor(args, ctx=None):
             logger.info(f'        "cert_fingerprint": "{fp}"')
             logger.info("      then re-run doctor.")
 
-    logger.info(f"   [2/3] Verifying MQTT connectivity to {ctx.settings.printer_ip}:{ctx.settings.mqtt_port}...")
+    verbose = bool(_namespace_get(args, "verbose", False))
+
+    def shown_ip():
+        """Hide the printer's LAN address unless -v.
+
+        doctor output is routinely pasted into issue reports and recorded into
+        the README/PyPI demo GIFs, so the address is redacted by default. The
+        user already knows their own IP; -v prints it for real debugging.
+        """
+        return ctx.settings.printer_ip if verbose else "<redacted>"
+
+    logger.info(f"   [2/3] Verifying MQTT connectivity to {shown_ip()}:{ctx.settings.mqtt_port}...")
     printer = ctx.printer()
     net_timeout = get_network_timeout(args)
     status = printer.status(timeout=net_timeout, retries=0)
@@ -139,7 +150,7 @@ def cmd_doctor(args, ctx=None):
         emit_doctor_failure("mqtt", EXIT_NETWORK_ERROR, message, extra=extra)
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
-    logger.info(f"   [3/3] Verifying FTPS connectivity to {ctx.settings.printer_ip}:990...")
+    logger.info(f"   [3/3] Verifying FTPS connectivity to {shown_ip()}:990...")
     try:
         with get_ftp(timeout=net_timeout):
             logger.info("   ✅ FTPS connection established.")
@@ -152,13 +163,21 @@ def cmd_doctor(args, ctx=None):
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
     if fp:
-        logger.info(f"   🔐 Printer certificate SHA-256: {fp}")
-        if _expected_fingerprint() == fp:
-            logger.info("      ✅ Matches the pinned cert_fingerprint in your config.")
-        elif _expected_fingerprint():
-            logger.warning("      ⚠️  Does NOT match the cert_fingerprint in your config!")
-        elif ctx.settings.insecure_tls or not _offer_pin_fingerprint(fp, CONFIG_PATH, json_mode):
-            logger.info('      Add "cert_fingerprint": "<above>" to config.json to pin this connection.')
+        pinned = _expected_fingerprint()
+        if pinned == fp:
+            # Already pinned and matching: the hex adds nothing and is the value
+            # that leaked into the committed demo GIFs. Show it only with -v.
+            if verbose:
+                logger.info(f"   🔐 Printer certificate SHA-256: {fp}")
+            logger.info("   🔐 ✅ Printer certificate matches the pinned cert_fingerprint in your config.")
+        elif pinned:
+            logger.warning("   🔐 ⚠️  Printer certificate does NOT match the cert_fingerprint in your config!")
+            logger.warning(f"      Seen: {fp[:8]}…  (re-run with -v to print the full SHA-256)")
+        else:
+            # Not pinned yet: the user needs the full value to pin it.
+            logger.info(f"   🔐 Printer certificate SHA-256: {fp}")
+            if ctx.settings.insecure_tls or not _offer_pin_fingerprint(fp, CONFIG_PATH, json_mode):
+                logger.info('      Add "cert_fingerprint": "<above>" to config.json to pin this connection.')
 
     model_info = MODEL_MAPPING.get(ctx.settings.printer_model, MODEL_MAPPING["P1P"])
     firmware = status.get("sw_ver")
@@ -196,7 +215,7 @@ def cmd_doctor(args, ctx=None):
     logger.info(f"✅ All checks passed! Printer capabilities saved to {_display_path(cap_path)}")
     if json_mode:
         # Mask IP address inside doctor capabilities report unless --verbose is checked (A0530-SEC-16)
-        reported_ip = ctx.settings.printer_ip if bool(_namespace_get(args, "verbose", False)) else "<redacted>"
+        reported_ip = ctx.settings.printer_ip if verbose else "<redacted>"
         emit_json(
             {
                 "command": "doctor",

@@ -66,9 +66,9 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: "`plate doctor` output"
+      label: "`plate doctor --json` output"
       description: |
-        Run `plate doctor` and paste the output. Serials and access codes are redacted automatically in the report — but double-check before submitting that no access code appears in plain text.
-      render: text
+        Run `plate doctor --json` and paste the output. Serial, access code, and your printer's LAN IP are redacted automatically in `--json` mode — but double-check before submitting that no access code or LAN address appears in plain text. Do not add `-v`/`--verbose`: that un-redacts your printer's IP.
+      render: json
     validations:
       required: false

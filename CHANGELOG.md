@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Security
+- **`plate doctor` no longer prints your printer's LAN IP or full certificate
+  SHA-256 in its human output by default.** doctor output is routinely pasted
+  into issue reports and recorded into the README/PyPI demo GIFs. The IP now
+  reads `<redacted>`, and once a cert is pinned doctor prints a hex-free match
+  confirmation instead of the fingerprint. Pass `-v`/`--verbose` to see both.
+  The full fingerprint is still printed when the cert is *not* yet pinned (you
+  need it to pin), the MQTT-failure message still echoes the configured IP so a
+  typo is diagnosable, and the `--json` contract is unchanged.
+- The bug-report template now asks for `plate doctor --json` (which redacts the
+  LAN IP) instead of the human output.
+
 ### Added
 - `docs/troubleshooting.md`: a symptom-keyed troubleshooting guide organised
   around the errors the CLI emits (MQTT/FTPS connectivity, cert-pin mismatches,
