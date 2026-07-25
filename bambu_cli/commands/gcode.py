@@ -7,7 +7,7 @@ from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.context import RuntimeContext
 from bambu_cli.download.naming import _has_command_injection_chars
 from bambu_cli.errors import abort
-from bambu_cli.logging_utils import logger
+from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.utils import emit_json, emit_json_error, get_sequence_id
 
 
@@ -22,7 +22,7 @@ def cmd_gcode(args, ctx=None):
     if not gcode.strip() or _has_command_injection_chars(gcode):
         message = "Invalid G-code: must be non-empty and must not contain control characters (CR/LF/NUL)."
         emit_json_error(args, "gcode", EXIT_COMMAND_ERROR, message, failed_step="validate", gcode=gcode, sent=False)
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
     if not args.confirm:
@@ -44,7 +44,7 @@ def cmd_gcode(args, ctx=None):
     if not printer.send_command(payload):
         message = "Failed to send G-code command."
         emit_json_error(args, "gcode", EXIT_NETWORK_ERROR, message, failed_step="mqtt", gcode=gcode, sent=False)
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info(f"📡 Sent: {gcode}")
     if bool(_namespace_get(args, "json", False)):

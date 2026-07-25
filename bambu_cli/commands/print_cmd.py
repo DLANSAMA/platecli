@@ -12,7 +12,7 @@ from bambu_cli.download.naming import (
 )
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.job import _last_error_for, _parse_print_options, _print_next_command, generate_print_payload
-from bambu_cli.logging_utils import logger
+from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.utils import emit_json, emit_json_error
 
 
@@ -26,18 +26,18 @@ def cmd_print(args, ctx=None):
     if _safe_remote_name(basename) is None:
         message = f"Refusing to print file with unsafe name: {_name_for_message(basename)!r}"
         emit_json_error(args, "print", EXIT_FILE_ERROR, message, failed_step="validate", file=basename)
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if not _is_print_ready_name(basename):
         message = _print_ready_error_message(basename, "print")
         emit_json_error(args, "print", EXIT_FILE_ERROR, message, failed_step="validate", file=basename)
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
 
     ams_mapping, print_option_error = _parse_print_options(args)
     if print_option_error:
         emit_json_error(args, "print", EXIT_COMMAND_ERROR, print_option_error, failed_step="validate", file=basename)
-        logger.error(print_option_error)
+        safe_log_error(print_option_error)
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
     if not args.confirm and not dry_run:

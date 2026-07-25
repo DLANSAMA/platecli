@@ -71,10 +71,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `docs/schemas/pause.json` / `resume.json` accept the `confirmation_required` status.
 - Filenames containing square brackets (e.g. `part[v2].stl`, common in Printables model titles) no longer crash the CLI or get silently truncated in log output — the Rich log handler no longer parses log text as markup.
 - `--json` now always writes a parseable error envelope to stdout: the JSON envelope is emitted before the human-readable log line, so a logging failure can no longer leave stdout empty.
-- The envelope-before-log ordering now covers the rest of the package (`camera`,
-  `download/`, `slicer/`, `setup_cmd/`), not just `cli.py` and `commands/`. Those log
-  calls also route through the shared `logging_utils.safe_log_error`, which degrades to a
-  bare stderr write instead of aborting the process, so a handler that raises while
+- The envelope-before-log ordering now covers the whole package (`commands/`,
+  `camera`, `download/`, `slicer/`, `setup_cmd/`), not just `cli.py`. Every log call on
+  an error path now also routes through the shared `logging_utils.safe_log_error`, which
+  degrades to a bare stderr write instead of propagating, so a handler that raises while
   rendering a user-controlled string can no longer swallow the `--json` envelope or
   replace the real `BambuError` with a logging traceback.
 - `plate doctor`'s reported `camera_snapshot_note` (and `camera.py`'s snapshot
