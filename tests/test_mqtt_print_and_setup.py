@@ -277,6 +277,45 @@ def test_cmd_light_failure_raises():
             commands_mod.cmd_light(args)
 
 
+@pytest.mark.parametrize(
+    ("cmd_name", "args"),
+    [
+        ("cmd_light", Namespace(action="on", json=True)),
+        ("cmd_pause", Namespace(json=True)),
+        ("cmd_resume", Namespace(json=True)),
+        ("cmd_stop", Namespace(json=True, confirm=True)),
+    ],
+)
+def test_json_envelope_survives_logger_failure(cmd_name, args, capsys):
+    """A raising log handler must not be able to swallow the --json error envelope.
+
+    The domain error paths emit the machine-readable envelope BEFORE the human-readable
+    log line, so a handler that blows up while rendering a user-controlled string leaves
+    stdout parseable. Guards the ordering in bambu_cli/commands/device.py.
+    """
+
+    printer = MagicMock()
+    printer.send_command.return_value = False
+    broken_logger = MagicMock()
+    broken_logger.error.side_effect = RuntimeError("handler exploded")
+    with (
+        patch("bambu_cli.commands.device.RuntimeContext.for_request") as fr,
+        patch("bambu_cli.commands.device.logger", broken_logger),
+    ):
+        ctx = MagicMock()
+        ctx.printer.return_value = printer
+        fr.return_value = ctx
+        with pytest.raises(RuntimeError, match="handler exploded"):
+            getattr(commands_mod, cmd_name)(args)
+
+    # The envelope reached stdout even though logging then failed.
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "error"
+    assert payload["command"] == cmd_name.removeprefix("cmd_")
+    assert payload["failed_step"] == "mqtt"
+    broken_logger.error.assert_called_once()
+
+
 def test_slicer_process_profile_compatible(tmp_path):
     p = tmp_path / "p.json"
     p.write_text(json.dumps({"compatible_printers": ["X"]}), encoding="utf-8")

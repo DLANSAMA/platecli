@@ -15,6 +15,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   configured, instead of printing `OrcaSlicer not found at` with a blank path.
 - Contributor setup uses `uv sync --extra test`, so the documented test command works
   on a fresh clone (`uv sync` alone does not install pytest).
+- Config and access-code writes are now atomic (temp file + fsync + rename) and keep a
+  `.bak` of the previous file, so a crash mid-write can no longer truncate `config.json`
+  or the access-code file. Mode stays `0600`.
+- `plate slice` now says what to do when `orca_slicer` is not configured at all, instead
+  of reporting `OrcaSlicer not found at ` with a blank path.
+- Device, file, print and G-code commands now emit the `--json` error envelope before
+  writing the human-readable log line, so a failure in the logging layer can no longer
+  leave stdout without a parseable envelope.
 
 ## [0.2.2] - 2026-07-24
 

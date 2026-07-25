@@ -4,7 +4,9 @@ import getpass
 import json
 import os
 import re
+import shutil
 import sys
+import tempfile
 
 from bambu_cli.cli import _display_path, _expand_path
 from bambu_cli.config import CONFIG_PATH, MODEL_MAPPING
@@ -35,40 +37,60 @@ def _normalize_nozzle(nozzle):
     return nozzle
 
 
-def _secure_write_json(path, data):
+def _atomic_secure_write(path, text):
+    """Write ``text`` to ``path`` atomically at mode 0600, keeping a ``.bak`` of the previous file.
+
+    A crash mid-write must never leave a truncated config.json or access_code file:
+    write a sibling temp file, fsync it, back up the old file, then os.replace
+    (atomic on POSIX and on Windows for same-volume renames).
+
+    ``tempfile.mkstemp`` already creates the temp file with O_EXCL at mode 0600, so the
+    secret is never world-readable even transiently; the explicit chmod below is only a
+    belt-and-braces guard for exotic umask/ACL setups. On Windows POSIX modes are not
+    enforced, which is why every chmod is best-effort rather than load-bearing.
+    """
     expanded = _expand_path(path)
     directory = os.path.dirname(expanded)
     if directory:
         _secure_makedirs(directory, exist_ok=True)
-    if os.path.exists(expanded):
+    fd, tmp_path = tempfile.mkstemp(prefix=os.path.basename(expanded) + ".", suffix=".tmp", dir=directory or ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
         try:
-            os.chmod(expanded, 0o600)
+            os.chmod(tmp_path, 0o600)
         except OSError:
             pass
-    with open(os.open(expanded, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+        if os.path.exists(expanded):
+            backup = expanded + ".bak"
+            try:
+                shutil.copy2(expanded, backup)
+                os.chmod(backup, 0o600)
+            except OSError:
+                pass
+        os.replace(tmp_path, expanded)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
     try:
         os.chmod(expanded, 0o600)
     except OSError:
         pass
+
+
+def _secure_write_json(path, data):
+    # Serialize before touching the filesystem: an unserializable payload must leave the
+    # existing file intact rather than truncating it half-way through json.dump.
+    _atomic_secure_write(path, json.dumps(data, indent=2))
 
 
 def _secure_write_text(path, text):
-    expanded = _expand_path(path)
-    directory = os.path.dirname(expanded)
-    if directory:
-        _secure_makedirs(directory, exist_ok=True)
-    if os.path.exists(expanded):
-        try:
-            os.chmod(expanded, 0o600)
-        except OSError:
-            pass
-    with open(os.open(expanded, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
-        f.write(text)
-    try:
-        os.chmod(expanded, 0o600)
-    except OSError:
-        pass
+    _atomic_secure_write(path, text)
 
 
 def _default_access_code_file_path():

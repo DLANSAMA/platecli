@@ -33,47 +33,46 @@ def cmd_upload(args, ctx=None):
     filepath = _expand_path(args.file)
     if filepath.startswith("-"):
         message = f"Invalid filepath: {_path_for_message(filepath)}"
-        logger.error(message)
         emit_json_error(args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
+        logger.error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if not os.path.exists(filepath):
         message = f"File not found: {_path_for_message(filepath)}"
-        logger.error(message)
         emit_json_error(args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
+        logger.error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if _is_directory_input(filepath):
         message = _directory_input_message(filepath)
-        logger.error(message)
         emit_json_error(args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
+        logger.error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
 
     filename = _portable_basename(filepath)
     if _safe_remote_name(filename) is None:
         message = f"Refusing to upload file with unsafe name: {_name_for_message(filename)!r}"
-        logger.error(message)
         emit_json_error(
             args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath, remote_name=filename
         )
+        logger.error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if not _is_print_ready_name(filename):
         message = _print_ready_error_message(filename, "upload")
-        logger.error(message)
         emit_json_error(
             args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath, remote_name=filename
         )
+        logger.error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     try:
         filesize = os.path.getsize(filepath)
     except OSError as exc:
         message = f"Could not read file size for {_path_for_message(filepath)}: {_exception_for_message(exc)}"
-        logger.error(message)
         emit_json_error(
             args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath, remote_name=filename
         )
+        logger.error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if filesize <= 0:
         message = f"Refusing to upload empty file: {_path_for_message(filepath)}"
-        logger.error(message)
         emit_json_error(
             args,
             "upload",
@@ -84,6 +83,7 @@ def cmd_upload(args, ctx=None):
             remote_name=filename,
             bytes=filesize,
         )
+        logger.error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
 
     if getattr(args, "dry_run", False):
@@ -96,10 +96,10 @@ def cmd_upload(args, ctx=None):
             logger.info("   ✅ Printer reachable.")
         except Exception:
             message = "Dry run failed: Could not reach printer."
-            logger.error(message)
             emit_json_error(
                 args, "upload", EXIT_NETWORK_ERROR, message, failed_step="dry_run", file=filepath, remote_name=filename
             )
+            logger.error(message)
             abort("", exit_code=EXIT_NETWORK_ERROR)
 
         logger.info(f"   ✅ Local file {_path_for_message(filepath)} exists ({filesize // 1024}KB)")
@@ -177,7 +177,6 @@ def cmd_upload(args, ctx=None):
     else:
         # 4 attempts mirrors upload_file.max_retries (3 retries + initial try)
         message = "Upload failed after 4 attempts."
-        logger.error(f"❌ {message}")
         emit_json_error(
             args,
             "upload",
@@ -187,6 +186,7 @@ def cmd_upload(args, ctx=None):
             file=filepath,
             remote_name=filename,
         )
+        logger.error(f"❌ {message}")
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
 
@@ -220,8 +220,8 @@ def cmd_files(args, ctx=None):
             logger.info(f"   {f}")
     except Exception as e:
         message = f"Error listing files: {e}"
-        logger.error(message)
         emit_json_error(args, "files", EXIT_NETWORK_ERROR, message, failed_step="ftps", files=[])
+        logger.error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
 
@@ -233,8 +233,8 @@ def cmd_delete(args, ctx=None):
     filename = str(args.file or "")
     if _safe_remote_name(filename) is None:
         message = f"Refusing to delete file with unsafe name: {_name_for_message(filename)!r}"
-        logger.error(message)
         emit_json_error(args, "delete", EXIT_FILE_ERROR, message, failed_step="validate", file=filename, deleted=False)
+        logger.error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if not args.confirm:
         logger.warning(f"⚠️  This will DELETE '{filename}' from the printer. Add --confirm to proceed.")
@@ -267,6 +267,6 @@ def cmd_delete(args, ctx=None):
             raise Exception("Delete operation failed in printer client.")
     except Exception as e:
         message = f"Delete failed: {e}"
-        logger.error(message)
         emit_json_error(args, "delete", EXIT_NETWORK_ERROR, message, failed_step="ftps", file=filename, deleted=False)
+        logger.error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)

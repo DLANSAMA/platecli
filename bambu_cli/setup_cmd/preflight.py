@@ -156,7 +156,7 @@ def collect_preflight_checks():
     else:
         checks.append(
             _preflight_result(
-                "error", "config", f"Config not found at {_display_path(_config_path())}. Run `setup` first."
+                "error", "config", f"Config not found at {_display_path(_config_path())}. Run `plate setup` first."
             )
         )
 

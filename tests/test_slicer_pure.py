@@ -170,6 +170,17 @@ def test_slicer_executable_problem_empty():
     assert S._slicer_executable_problem(None) is not None
 
 
+def test_slicer_executable_problem_unconfigured_is_actionable():
+    # An unconfigured machine has orca_slicer == "" (not None), which used to print
+    # "OrcaSlicer not found at " with a blank path instead of saying what to do.
+    for value in ("", None, "   "):
+        msg = S._slicer_executable_problem(value)
+        assert msg is not None
+        assert "not configured" in msg
+        assert "plate setup" in msg
+        assert "not found at" not in msg
+
+
 def test_process_profile_compatible_missing_file(tmp_path):
     assert S._process_profile_compatible(str(tmp_path / "nope.json"), "X") is False
 

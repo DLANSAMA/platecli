@@ -31,8 +31,8 @@ def cmd_light(args, ctx=None):
     printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send light command."
-        logger.error(message)
         emit_json_error(args, "light", EXIT_NETWORK_ERROR, message, failed_step="mqtt", action=action, changed=False)
+        logger.error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info(f"💡 Light turned {action}")
     if bool(_namespace_get(args, "json", False)):
@@ -54,8 +54,8 @@ def cmd_pause(args, ctx=None):
     printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send pause command."
-        logger.error(message)
         emit_json_error(args, "pause", EXIT_NETWORK_ERROR, message, failed_step="mqtt", paused=False)
+        logger.error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info("⏸️  Print paused")
     if bool(_namespace_get(args, "json", False)):
@@ -76,8 +76,8 @@ def cmd_resume(args, ctx=None):
     printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send resume command."
-        logger.error(message)
         emit_json_error(args, "resume", EXIT_NETWORK_ERROR, message, failed_step="mqtt", resumed=False)
+        logger.error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info("▶️  Print resumed")
     if bool(_namespace_get(args, "json", False)):
@@ -110,8 +110,8 @@ def cmd_stop(args, ctx=None):
     printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send stop command."
-        logger.error(message)
         emit_json_error(args, "stop", EXIT_NETWORK_ERROR, message, failed_step="mqtt", stopped=False)
+        logger.error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info("⏹️  Print stopped")
     if bool(_namespace_get(args, "json", False)):

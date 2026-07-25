@@ -42,8 +42,12 @@ def _profiles_dir_diagnostic(profiles_dir):
 def _slicer_executable_problem(path: str | None) -> str | None:
     """Return a human-readable OrcaSlicer path problem, or None when usable."""
 
-    if path is None:
-        return "OrcaSlicer path not specified in configuration."
+    if not path or not str(path).strip():
+        return (
+            "OrcaSlicer is not configured. Install OrcaSlicer "
+            "(https://github.com/SoftFever/OrcaSlicer/releases), then run `plate setup`, "
+            'or set "orca_slicer" in your config.json.'
+        )
     expanded = _expand_path(path)
     display = _display_path(expanded)
     if not os.path.exists(expanded):
