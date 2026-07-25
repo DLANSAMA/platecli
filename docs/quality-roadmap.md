@@ -58,7 +58,7 @@ security is not yet **A+**.
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
 | Tests | **A−** | **666** non-live tests passing; **83.3%** coverage measured 2026-07-24; CI floor **81**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=81`** (A+ target remains 92) |
-| Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-17); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
+| Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
 
 **Overall:** **solid A− / A** — error model, typing, and security *controls* are strong;
@@ -625,7 +625,7 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 | C Coverage & typing | **in progress** | #18 | 2026-07-09 | full-package mypy + `check_untyped_defs` done; cov ~82% with CI floor **81** (target 92); per-module floors not enforced |
 | D Contracts & 1.0 | **in progress** | local | — | schemas + contract harness + stability policy; remaining agent `--json` schemas land in follow-up PRs |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
-| Doc truth pass | **done** | local | 2026-07-17 | AGENTS/CONTRIBUTING/SECURITY/README/api/backlog/roadmap aligned with audit; no code changes required for docs-only pass |
+| Doc truth pass | **done** | local | 2026-07-24 | versions de-literalized, prerequisites stated, camera guidance corrected, test/coverage numbers re-measured |
 
 > **Verified 2026-07-09** against a clean checkout — the "current scoreboard" above
 > was corrected the same day. Coverage floor raised 79→**81** (multi-OS minimum:
@@ -636,6 +636,10 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 > **Re-verified 2026-07-17** (full audit): typing excludes remain **gone**; architecture
 > grade corrected to **A−** (domain→cli coupling); test count ~618 collected; SECURITY
 > known-limitations expanded (camera Docker bind, pin soft-fallback, HTTP downloads).
+>
+> **Re-verified 2026-07-24** (docs truth pass): coverage floor holds at **81**; Linux
+> branch total now **83.3%** (666 non-live tests, 5386 stmts). Prior ~82.3% / ~81.9%
+> figures were accurate at 2026-07-17 and are retained above as the dated record.
 
 ### mockable count (burn-down)
 

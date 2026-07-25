@@ -28,7 +28,7 @@ model URL or file  →  download  →  slice (OrcaSlicer)  →  upload  →  pri
                         one command:  plate job <url> --confirm
 ```
 
-**Supports:** any Bambu Lab printer with LAN mode — P1P, P1S, X1C, X1E, A1, A1 Mini. They all speak the same LAN protocols, but the maintainer does not own every model, so treat anything you can't find confirmed in the issue tracker as best-effort and please [open an issue](https://github.com/DLANSAMA/platecli/issues) with what you hit. One caveat: `plate snapshot` grabs the camera directly (no extra software) on P1/A1-class printers, but X1-series cameras need a locally-running Docker streamer container.
+**Supports:** any Bambu Lab printer with LAN mode — P1P, P1S, X1C, X1E, A1, A1 Mini. **Hardware-tested on the P1 series (P1P/P1S) only.** The rest speak the same LAN protocols and are expected to work, but are unverified on real hardware — treat them as best-effort and please [open an issue](https://github.com/DLANSAMA/platecli/issues) with what you hit. One caveat: `plate snapshot` grabs the camera directly (no extra software) on P1/A1-class printers, but X1-series cameras need a locally-running Docker streamer container.
 
 ## Install
 
