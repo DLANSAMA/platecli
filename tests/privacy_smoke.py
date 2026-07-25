@@ -46,6 +46,7 @@ GENERIC_LOCAL_NAMES = {
 FORBIDDEN_LOCAL_ARTIFACT_NAMES = {
     "access_code",
     "config.json",
+    "config.json.bak",
     "printer_capabilities.json",
     "printer_snapshot.jpg",
 }

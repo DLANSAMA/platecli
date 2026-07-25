@@ -111,18 +111,18 @@ class TestBambuCmdSetup(unittest.TestCase):
         self.input_patcher.stop()
 
     @patch("getpass.getpass")
-    @patch("os.makedirs")
-    @patch("os.open")
-    @patch("builtins.open", new_callable=mock_open)
     @patch("bambu_cli.setup_cmd.wizard.logger")
     @patch("bambu_cli.setup_cmd.common.logger")
     @patch("bambu_cli.setup_cmd.wizard.socket.inet_ntoa")
-    def test_cmd_setup_zeroconf_success(
-        self, mock_ntoa, mock_common_logger, mock_logger, mock_file, mock_open_fd, mock_makedirs, mock_getpass
-    ):
+    def test_cmd_setup_zeroconf_success(self, mock_ntoa, mock_common_logger, mock_logger, mock_getpass):
+        # Asserts the observable outcome (config content, 0600, no temp litter) rather than
+        # the os.open/mock_open write idiom, which is an implementation detail of the
+        # secure writer and changed when writes became atomic.
         import sys
-        import os
-        from bambu_cli.config import CONFIG_PATH
+        import json
+        import tempfile
+        import os as _os
+        from unittest.mock import patch as _patch
 
         mock_zc_module = MagicMock()
         mock_zc_class = MagicMock()
@@ -149,24 +149,30 @@ class TestBambuCmdSetup(unittest.TestCase):
         from bambu_cli.commands import cmd_setup
 
         mock_getpass.return_value = "12345678"
-        mock_open_fd.return_value = 5
         self.input_mock_obj.side_effect = ["", "", "n"]
 
-        cmd_setup(MagicMock(json=False))
+        tmpdir = tempfile.mkdtemp()
+        cfg_path = _os.path.join(tmpdir, "config.json")
+        try:
+            with _patch("bambu_cli.setup_cmd.common._config_path", return_value=cfg_path):
+                cmd_setup(MagicMock(json=False))
 
-        from bambu_cli.utils import _display_path
+            from bambu_cli.utils import _display_path
 
-        mock_common_logger.info.assert_any_call(f"\n✅ Config saved to {_display_path(CONFIG_PATH)}")
-        mock_file.assert_called_with(5, "w", encoding="utf-8")
-        import json
+            mock_common_logger.info.assert_any_call(f"\n✅ Config saved to {_display_path(cfg_path)}")
+            with open(cfg_path, encoding="utf-8") as f:
+                data = json.load(f)
+            self.assertEqual(data["printer_ip"], "192.168.1.1")
+            self.assertEqual(data["serial"], "00112233")
+            self.assertEqual(data["access_code"], "12345678")
+            if sys.platform != "win32":
+                self.assertEqual(_os.stat(cfg_path).st_mode & 0o777, 0o600)
+            self.assertEqual([n for n in _os.listdir(tmpdir) if n.endswith(".tmp")], [])
+        finally:
+            import shutil as _shutil
 
-        written_content = "".join(call[0][0] for call in mock_file().write.call_args_list)
-        data = json.loads(written_content)
-        self.assertEqual(data["printer_ip"], "192.168.1.1")
-        self.assertEqual(data["serial"], "00112233")
-        self.assertEqual(data["access_code"], "12345678")
-
-        del sys.modules["zeroconf"]
+            _shutil.rmtree(tmpdir, ignore_errors=True)
+            del sys.modules["zeroconf"]
 
     @patch("bambu_cli.setup_cmd.wizard.logger")
     @patch("sys.exit")

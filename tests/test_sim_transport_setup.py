@@ -345,3 +345,46 @@ def test_migrate_cmd_noop_logs(tmp_path, capsys):
     with patch.object(migrate_mod, "_config_path", return_value=str(cfg)):
         migrate_mod._cmd_migrate_access_code(args)
     assert "noop" in capsys.readouterr().out
+
+
+def test_secure_write_json_is_atomic_and_backs_up(tmp_path):
+    """config.json writes keep a .bak; access-code writes do not.
+
+    The asymmetry is intentional: a second copy of the printer credential on disk is a
+    worse tradeoff than the recovery convenience (lost access codes can be re-read from
+    the printer), while losing config.json mid-write would be genuinely disruptive.
+    """
+    from bambu_cli.setup_cmd import common as common
+
+    # --- config.json path (backup=True via _secure_write_json) ---
+    cfg = tmp_path / "c.json"
+    common._secure_write_json(str(cfg), {"a": 1})
+    common._secure_write_json(str(cfg), {"a": 2})
+    assert json.loads(cfg.read_text()) == {"a": 2}
+    cfg_bak = tmp_path / "c.json.bak"
+    assert json.loads(cfg_bak.read_text()) == {"a": 1}
+    if sys.platform != "win32":
+        assert (cfg.stat().st_mode & 0o777) == 0o600
+        assert (cfg_bak.stat().st_mode & 0o777) == 0o600
+    assert list(tmp_path.glob("*.tmp")) == []
+
+    # --- access-code path (backup=False via _secure_write_text) ---
+    sec = tmp_path / "access_code"
+    common._secure_write_text(str(sec), "AAAABBBB")
+    common._secure_write_text(str(sec), "CCCCDDDD")
+    assert sec.read_text() == "CCCCDDDD"
+    # No .bak must exist — not even transiently from this implementation.
+    assert not (tmp_path / "access_code.bak").exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_secure_write_json_leaves_original_intact_on_serialization_failure(tmp_path):
+    from bambu_cli.setup_cmd import common as common
+
+    path = tmp_path / "c.json"
+    common._secure_write_json(str(path), {"good": True})
+    with pytest.raises(TypeError):
+        common._secure_write_json(str(path), {"bad": object()})
+    # Serialization happens before the file is touched, so the old config survives.
+    assert json.loads(path.read_text()) == {"good": True}
+    assert list(tmp_path.glob("*.tmp")) == []

@@ -21,8 +21,8 @@ def cmd_gcode(args, ctx=None):
     # sanitization — same command-injection risk on MQTT as on FTP lines).
     if not gcode.strip() or _has_command_injection_chars(gcode):
         message = "Invalid G-code: must be non-empty and must not contain control characters (CR/LF/NUL)."
-        logger.error(message)
         emit_json_error(args, "gcode", EXIT_COMMAND_ERROR, message, failed_step="validate", gcode=gcode, sent=False)
+        logger.error(message)
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
     if not args.confirm:
@@ -43,8 +43,8 @@ def cmd_gcode(args, ctx=None):
     printer = ctx.printer()
     if not printer.send_command(payload):
         message = "Failed to send G-code command."
-        logger.error(message)
         emit_json_error(args, "gcode", EXIT_NETWORK_ERROR, message, failed_step="mqtt", gcode=gcode, sent=False)
+        logger.error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info(f"📡 Sent: {gcode}")
     if bool(_namespace_get(args, "json", False)):
