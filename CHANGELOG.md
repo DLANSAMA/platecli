@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- Printer error codes are now shown in hex as well as decimal (e.g. `Print failed
+  with error code 83935248 (hex 0x0500C010)`), and JSON error envelopes gain an
+  additive `printer_error_code_hex` field. Bambu documents these codes in hex.
 - `tests/test_docs_consistency.py`: guards against version drift in README /
   `docs/api.md` / the bug-report template, and against `docs/manual.md` sections
   missing from its Contents list.
@@ -47,6 +50,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `docs/schemas/pause.json` / `resume.json` accept the `confirmation_required` status.
 - Filenames containing square brackets (e.g. `part[v2].stl`, common in Printables model titles) no longer crash the CLI or get silently truncated in log output — the Rich log handler no longer parses log text as markup.
 - `--json` now always writes a parseable error envelope to stdout: the JSON envelope is emitted before the human-readable log line, so a logging failure can no longer leave stdout empty.
+- `plate preflight` now says what to do when `orca_slicer` / `profiles_dir` are not
+  configured, instead of printing `OrcaSlicer not found at` with a blank path.
+- Contributor setup uses `uv sync --extra test`, so the documented test command works
+  on a fresh clone (`uv sync` alone does not install pytest).
 
 ## [0.2.2] - 2026-07-24
 

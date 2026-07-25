@@ -165,19 +165,44 @@ def collect_preflight_checks():
     from bambu_cli.config import detect_orca_slicer, detect_profiles_dir
 
     orca_path = _expand_path(cfg_for_paths.get("orca_slicer", settings.orca_slicer))
-    orca_problem = _slicer_executable_problem(orca_path)
-    if not orca_problem:
-        checks.append(_preflight_result("ok", "orca-slicer", f"OrcaSlicer found at {_display_path(orca_path)}."))
-    else:
+    if not orca_path:
+        message = (
+            "OrcaSlicer path is not configured. Run `plate setup` to create a config, or add "
+            '"orca_slicer": "/path/to/OrcaSlicer" to config.json, then re-run `plate preflight` '
+            "(`plate config show` prints the config path in use)."
+        )
         detected = detect_orca_slicer()
-        if detected and detected != orca_path:
-            orca_problem += (
+        if detected:
+            message += (
                 f' Detected an OrcaSlicer at {_display_path(detected)} — set "orca_slicer" to this in config.json.'
             )
-        checks.append(_preflight_result("error", "orca-slicer", orca_problem))
+        checks.append(_preflight_result("error", "orca-slicer", message))
+    else:
+        orca_problem = _slicer_executable_problem(orca_path)
+        if not orca_problem:
+            checks.append(_preflight_result("ok", "orca-slicer", f"OrcaSlicer found at {_display_path(orca_path)}."))
+        else:
+            detected = detect_orca_slicer()
+            if detected and detected != orca_path:
+                orca_problem += (
+                    f' Detected an OrcaSlicer at {_display_path(detected)} — set "orca_slicer" to this in config.json.'
+                )
+            checks.append(_preflight_result("error", "orca-slicer", orca_problem))
 
     profiles_dir = _expand_path(cfg_for_paths.get("profiles_dir", settings.profiles_dir))
-    if os.path.isdir(profiles_dir):
+    if not profiles_dir:
+        message = (
+            "OrcaSlicer profile directory is not configured. Run `plate setup` to create a config, or add "
+            '"profiles_dir": "/path/to/OrcaSlicer/resources/profiles/BBL" to config.json, then re-run '
+            "`plate preflight`."
+        )
+        detected_profiles = detect_profiles_dir()
+        if detected_profiles:
+            message += (
+                f' Detected profiles at {_display_path(detected_profiles)} — set "profiles_dir" to this in config.json.'
+            )
+        checks.append(_preflight_result("error", "profiles-dir", message))
+    elif os.path.isdir(profiles_dir):
         checks.append(
             _preflight_result("ok", "profiles-dir", f"OrcaSlicer profiles found at {_display_path(profiles_dir)}.")
         )
@@ -243,7 +268,7 @@ def _cmd_preflight(args):
         }
         emit_json(payload)
     else:
-        logger.info("🧪 Bambu CLI Preflight")
+        logger.info("🧪 platecli preflight")
         for check in checks:
             icon = {"ok": "✅", "warning": "⚠️ ", "error": "❌"}[check["status"]]
             logger.info(f"   {icon} {check['name']}: {check['message']}")

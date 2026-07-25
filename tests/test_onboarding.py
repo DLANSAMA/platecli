@@ -7,6 +7,7 @@ a real binary/profile it can actually find, rather than a generic "edit config".
 from unittest.mock import patch
 
 from bambu_cli import config, setup_cmd
+from tests.bambu_test_base import settings_ctx
 
 
 def test_detect_orca_returns_none_when_nothing_exists():
@@ -81,3 +82,42 @@ def test_preflight_suggests_detected_profiles_when_configured_dir_bad():
     assert profiles["status"] == "error"
     assert "/found/BBL" in profiles["message"]
     assert "profiles_dir" in profiles["message"]
+
+
+def test_preflight_unset_orca_path_is_actionable():
+    cfg = {"printer_ip": "1.2.3.4", "serial": "SN", "access_code": "x"}
+    with (
+        settings_ctx(orca_slicer="", profiles_dir=""),
+        patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg),
+        patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"),
+        patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p),
+        patch("bambu_cli.config.detect_orca_slicer", return_value=None),
+        patch("bambu_cli.config.detect_profiles_dir", return_value=None),
+        patch("shutil.which", return_value=None),
+    ):
+        checks = setup_cmd.collect_preflight_checks()
+    orca = [c for c in checks if c["name"] == "orca-slicer"][0]
+    assert orca["status"] == "error"
+    assert "plate setup" in orca["message"]
+    assert "orca_slicer" in orca["message"]
+    assert not orca["message"].rstrip().endswith("at")
+    assert "not found at" not in orca["message"]
+
+
+def test_preflight_unset_profiles_dir_is_actionable():
+    cfg = {"printer_ip": "1.2.3.4", "serial": "SN", "access_code": "x"}
+    with (
+        settings_ctx(orca_slicer="", profiles_dir=""),
+        patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg),
+        patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"),
+        patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p),
+        patch("bambu_cli.config.detect_orca_slicer", return_value=None),
+        patch("bambu_cli.config.detect_profiles_dir", return_value=None),
+        patch("shutil.which", return_value=None),
+    ):
+        checks = setup_cmd.collect_preflight_checks()
+    profiles = [c for c in checks if c["name"] == "profiles-dir"][0]
+    assert profiles["status"] == "error"
+    assert "plate setup" in profiles["message"]
+    assert "profiles_dir" in profiles["message"]
+    assert "not found at ." not in profiles["message"]
