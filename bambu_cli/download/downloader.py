@@ -41,7 +41,7 @@ from bambu_cli.download.validation import (
 )
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
-from bambu_cli.netsafety import _default_user_agent, build_safe_opener
+from bambu_cli.netsafety import build_safe_opener, polite_open, user_agent_for_url
 from bambu_cli.printables import _is_printables_model_url, resolve_printables_url
 from bambu_cli.protocols.ftps import _download_partial_path, _noncolliding_path, _remove_partial_file
 from bambu_cli.utils import _ensure_output_dir, _record_download_success, emit_json_error
@@ -125,7 +125,6 @@ def _cmd_download(
         )
         raise
     headers = {
-        "User-Agent": _default_user_agent(),
         "Accept": "*/*",
     }
 
@@ -175,8 +174,8 @@ def _cmd_download(
                 outpath = os.path.join(outdir, filename)
                 outpath = _noncolliding(outpath)
                 filename = _portable_basename(outpath)
-            req = urllib.request.Request(url, headers=headers)
-            with safe_opener.open(req, timeout=DOWNLOAD_TIMEOUT) as resp:
+            req = urllib.request.Request(url, headers={**headers, "User-Agent": user_agent_for_url(url)})
+            with polite_open(safe_opener, req, timeout=DOWNLOAD_TIMEOUT) as resp:
                 final_url = _response_url(resp)
                 if final_url and final_url != url:
                     try:

@@ -64,6 +64,9 @@ from bambu_cli.netsafety import (  # noqa: F401
     _dns_cache,
     _get_safe_connection,
     build_safe_opener,
+    platecli_user_agent,
+    polite_open,
+    user_agent_for_url,
 )
 from bambu_cli.printables import (  # noqa: F401
     _is_printables_model_url,
