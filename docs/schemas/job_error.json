@@ -10,6 +10,8 @@
     "exit_code": {"type": "integer"},
     "error": {"type": "string"},
     "failed_step": {"type": "string", "minLength": 1},
+    "printer_error_code": {"type": "integer"},
+    "printer_error_code_hex": {"type": "string"},
     "source": {},
     "normalized_source": {},
     "downloaded_path": {},

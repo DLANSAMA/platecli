@@ -834,7 +834,7 @@ class TestBambuCmdPrint(unittest.TestCase):
             execute_print_command(_test_printer(), "payload", "test.3mf", dry_run=False)
 
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 4)
-        mock_logger.error.assert_called_with("Print failed with error code 1234")
+        mock_logger.error.assert_called_with("Print failed with error code 1234 (hex 0x000004D2)")
 
     def test_generate_print_payload(self):
         from bambu_cli.job import generate_print_payload

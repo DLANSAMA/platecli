@@ -77,6 +77,11 @@ happened, so it exits `0` with `"status": "uploaded_not_printed"`.
 
 Domain code raises `BambuError` / `abort()`; only `cli.main()` calls `sys.exit`.
 
+When a print fails with a printer-reported code, the error envelope carries both
+`printer_error_code` (decimal, as the printer sends it) and `printer_error_code_hex`
+(e.g. `"0x0500C010"`). Bambu documents HMS/print error codes in hex, so use the hex
+form when looking a code up; the human-readable log line shows both.
+
 ## Schema inventory
 
 | Schema file | Covers |
