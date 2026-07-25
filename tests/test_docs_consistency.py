@@ -16,6 +16,8 @@ Drift guards for test/coverage numbers in docs:
   less than the floor without CI being broken).
 """
 
+from __future__ import annotations
+
 import re
 import subprocess
 import sys
@@ -95,6 +97,7 @@ def test_manual_toc_covers_every_section():
 # Drift guards for measured test/coverage numbers
 # ---------------------------------------------------------------------------
 
+
 def _parse_ci_cov_floor() -> int:
     """Return the integer --cov-fail-under value from ci.yml."""
     ci_text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
@@ -125,8 +128,7 @@ def _collect_test_count() -> int:
     Uses -q so output is minimal; filters for the summary line.
     """
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/", "-q", "--collect-only",
-         "-m", "not live", "--no-header"],
+        [sys.executable, "-m", "pytest", "tests/", "-q", "--collect-only", "-m", "not live", "--no-header"],
         capture_output=True,
         text=True,
         cwd=ROOT,
@@ -157,8 +159,7 @@ def test_coverage_floor_matches_ci():
         floor = _parse_doc_cov_floor(text)
         assert floor is not None, f"{doc}: could not find 'floor NN' coverage floor citation"
         assert floor == ci_floor, (
-            f"{doc} cites coverage floor {floor} but ci.yml has --cov-fail-under={ci_floor}. "
-            "Update the doc to match."
+            f"{doc} cites coverage floor {floor} but ci.yml has --cov-fail-under={ci_floor}. Update the doc to match."
         )
 
 
@@ -181,9 +182,7 @@ def test_documented_test_count_within_tolerance():
     #   "**718** non-live tests passing" (quality-roadmap)
     #   "**718** passing" (test-backlog table cell)
     for doc, text in [("quality-roadmap.md", roadmap), ("test-backlog.md", backlog)]:
-        counts = [int(m) for m in re.findall(
-            r"\*\*(\d{3,4})\*\*\s+(?:non-live\s+)?(?:tests?\s+)?passing", text
-        )]
+        counts = [int(m) for m in re.findall(r"\*\*(\d{3,4})\*\*\s+(?:non-live\s+)?(?:tests?\s+)?passing", text)]
         assert counts, f"{doc}: could not find a bolded test count like **718** near 'passing'"
         for count in counts:
             drift = abs(count - actual) / actual
