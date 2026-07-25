@@ -11,6 +11,7 @@ The complete reference for `plate` — setup, configuration, slicing, monitoring
 - [OrcaSlicer](#orcaslicer)
 - [Usage](#usage)
 - [Monitoring a print](#monitoring-a-print)
+- [Camera snapshots](#camera-snapshots)
 - [Global flags](#global-flags)
 - [Slicing & AMS](#slicing--ams)
 - [Config reference](#config-reference)
@@ -30,7 +31,7 @@ pip install .
 
 `--sim` (simulation mode) replaces the real printer with a local stub, so an agent can develop, test, or exercise the full command surface without any hardware present.
 
-Destructive and physical actions — starting a print, stopping a job, deleting a file, or sending raw G-code — are gated behind an explicit `--confirm` flag. An agent that omits `--confirm` will receive an error rather than trigger an action on the printer, making accidental physical operations impossible by default.
+Destructive and physical actions — starting a print, pausing or resuming a print, stopping a job, deleting a file, or sending raw G-code — are gated behind an explicit `--confirm` flag. An agent that omits `--confirm` gets a refusal (exit code `5`, `"status": "confirmation_required"`) instead of a physical action, so accidental physical operations never happen. Note this is a gate against accidents, not an authorization boundary: anything that can run `plate` can also pass `--confirm`.
 
 ```bash
 # Inspect printer state without hardware
@@ -46,7 +47,7 @@ plate job <url> --json --confirm
 - **Printables downloads** — platecli fetches files from Printables *on your behalf*, from your own machine and network — the same file you would get by clicking Download. It identifies itself honestly as `platecli/<version>`, keeps at least one second between requests to the same host, and honors `Retry-After`. Your use is subject to [Printables' terms of service](https://www.printables.com/legal/terms-of-use) and to the individual model's own licence (often a Creative Commons variant with attribution, non-commercial, or no-derivatives conditions). platecli grants you no rights to any downloaded model — check the licence on the model page before printing, remixing, redistributing, or selling. The Printables API used for resolution is undocumented and may change or stop working without notice.
 - **Safe extraction** — ZIP archives containing model files are fully supported. Existing files are kept safe by creating a numbered sibling such as `model-1.stl`. URL downloads and ZIP extraction have a 2048 MB safety limit, adjustable via `--max-download-mb`.
 - **Modularity** — Run steps individually using `download`, `slice`, `upload`, or `print`.
-- **Safety first** — One-shot and print flows will not start a physical print unless `--confirm` is present. Stop, delete, and raw gcode also require `--confirm`.
+- **Safety first** — One-shot and print flows will not start a physical print unless `--confirm` is present. Pause, resume, stop, delete, and raw gcode also require `--confirm`, and refuse with exit code `5` without it.
 - **TLS pinning** — Pin the printer’s self-signed cert with `cert_fingerprint` (setup/doctor can capture it). Prefer this over `insecure_tls`.
 - **SSRF-hardened downloads** — Private/loopback targets are refused unless you pass `--allow-private-ips` for that invocation.
 - **Diagnostics** — Network, FTPS, and MQTT health checking with `doctor` and `preflight`.
