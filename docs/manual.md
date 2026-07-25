@@ -71,7 +71,7 @@ Inspect or check the resulting config at any time:
 ```bash
 plate config show       # print config path + contents (access code redacted)
 plate config validate   # check config values without contacting the printer
-plate doctor            # connectivity + live cert fingerprint
+plate doctor            # connectivity + cert-pin check (add -v for the LAN IP and full fingerprint)
 ```
 
 <picture>

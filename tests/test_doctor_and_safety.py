@@ -361,5 +361,128 @@ class TestBambuSecurity(unittest.TestCase):
         self.assertEqual(process_data["support_interface_pattern"], 'rectilinear", "malicious": "injected')
 
 
+class TestDoctorRedaction(unittest.TestCase):
+    """doctor's human output must not leak the LAN IP or a pinned cert fingerprint."""
+
+    @staticmethod
+    def _logged(mock_logger):
+        calls = list(mock_logger.info.call_args_list) + list(mock_logger.warning.call_args_list)
+        return [c[0][0] for c in calls if c[0]]
+
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)
+    @patch("bambu_cli.protocols.mqtt.get_status")
+    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_doctor_human_output_redacts_printer_ip_by_default(
+        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe
+    ):
+        import argparse
+        import tempfile
+
+        from bambu_cli.commands import cmd_doctor
+        from bambu_cli.context import current_settings
+
+        mock_get_status.return_value = {"hw_ver": "P1P", "sw_ver": "01.05.00.00"}
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+        settings = current_settings()
+        with tempfile.TemporaryDirectory() as td:
+            args = argparse.Namespace(json=False, output=os.path.join(td, "caps.json"))
+            cmd_doctor(args)
+
+        logged = self._logged(mock_logger)
+        self.assertIn(f"   [2/3] Verifying MQTT connectivity to <redacted>:{settings.mqtt_port}...", logged)
+        self.assertIn("   [3/3] Verifying FTPS connectivity to <redacted>:990...", logged)
+        self.assertFalse(
+            [line for line in logged if settings.printer_ip in line],
+            f"doctor human output leaked the printer IP {settings.printer_ip}",
+        )
+
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)
+    @patch("bambu_cli.protocols.mqtt.get_status")
+    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_doctor_human_output_shows_printer_ip_with_verbose(
+        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe
+    ):
+        """Guard for the -v escape hatch.
+
+        Honest note: this assertion also passes on pre-redaction main, so it is
+        not a regression proof -- it exists so a future change cannot silently
+        remove the way a user gets the real address back for debugging.
+        """
+        import argparse
+        import tempfile
+
+        from bambu_cli.commands import cmd_doctor
+        from bambu_cli.context import current_settings
+
+        mock_get_status.return_value = {"hw_ver": "P1P", "sw_ver": "01.05.00.00"}
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+        settings = current_settings()
+        with tempfile.TemporaryDirectory() as td:
+            args = argparse.Namespace(json=False, verbose=True, output=os.path.join(td, "caps.json"))
+            cmd_doctor(args)
+
+        logged = self._logged(mock_logger)
+        self.assertIn(f"   [2/3] Verifying MQTT connectivity to {settings.printer_ip}:{settings.mqtt_port}...", logged)
+        self.assertIn(f"   [3/3] Verifying FTPS connectivity to {settings.printer_ip}:990...", logged)
+        self.assertFalse([line for line in logged if "<redacted>:" in line])
+
+    @patch("bambu_cli.commands.doctor._expected_fingerprint", return_value="ab" * 32)
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="ab" * 32)
+    @patch("bambu_cli.protocols.mqtt.get_status")
+    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_doctor_hides_fingerprint_when_already_pinned(
+        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_expected
+    ):
+        import argparse
+        import tempfile
+
+        from bambu_cli.commands import cmd_doctor
+
+        mock_get_status.return_value = {"hw_ver": "P1P", "sw_ver": "01.05.00.00"}
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+        with tempfile.TemporaryDirectory() as td:
+            args = argparse.Namespace(json=False, output=os.path.join(td, "caps.json"))
+            cmd_doctor(args)
+
+        logged = self._logged(mock_logger)
+        self.assertFalse(
+            [line for line in logged if "ab" * 32 in line],
+            "doctor printed the pinned certificate fingerprint without -v",
+        )
+        self.assertIn(
+            "   \U0001f510 \u2705 Printer certificate matches the pinned cert_fingerprint in your config.", logged
+        )
+
+    @patch("bambu_cli.commands.doctor._offer_pin_fingerprint", return_value=False)
+    @patch("bambu_cli.commands.doctor._expected_fingerprint", return_value=None)
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="cd" * 32)
+    @patch("bambu_cli.protocols.mqtt.get_status")
+    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_doctor_shows_fingerprint_when_not_pinned(
+        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_expected, mock_offer
+    ):
+        import argparse
+        import tempfile
+
+        from bambu_cli.commands import cmd_doctor
+
+        mock_get_status.return_value = {"hw_ver": "P1P", "sw_ver": "01.05.00.00"}
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+        with tempfile.TemporaryDirectory() as td:
+            args = argparse.Namespace(json=False, output=os.path.join(td, "caps.json"))
+            cmd_doctor(args)
+
+        logged = self._logged(mock_logger)
+        hex_line = "   \U0001f510 Printer certificate SHA-256: " + "cd" * 32
+        hint = '      Add "cert_fingerprint": "<above>" to config.json to pin this connection.'
+        self.assertIn(hex_line, logged)
+        self.assertIn(hint, logged)
+        self.assertLess(logged.index(hex_line), logged.index(hint))
+
+
 if __name__ == "__main__":
     unittest.main()
