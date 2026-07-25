@@ -122,7 +122,7 @@ flatpak run com.orcaslicer.OrcaSlicer   # first run, to let it unpack resources
 
 **Linux — AppImage**
 
-Download the AppImage from the [OrcaSlicer releases page](https://github.com/SoftFever/OrcaSlicer/releases),
+Download the AppImage from the [OrcaSlicer releases page](https://github.com/OrcaSlicer/OrcaSlicer/releases),
 then extract it so the `profiles/BBL` directory is reachable (an un-extracted
 AppImage hides its resources):
 
