@@ -50,6 +50,18 @@ def cmd_pause(args, ctx=None):
     """Pause current print."""
 
     ctx = ctx or RuntimeContext.for_request(args)
+    if not getattr(args, "confirm", False):
+        logger.warning("⚠️  This will PAUSE the current print. Add --confirm to proceed.")
+        if bool(_namespace_get(args, "json", False)):
+            emit_json(
+                {
+                    "status": "confirmation_required",
+                    "command": "pause",
+                    "paused": False,
+                    "next_command": ["pause", "--confirm", "--json"],
+                }
+            )
+        abort("", exit_code=EXIT_COMMAND_ERROR)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "pause"}})
     printer = ctx.printer()
     if not printer.send_command(payload):
@@ -72,6 +84,18 @@ def cmd_resume(args, ctx=None):
     """Resume paused print."""
 
     ctx = ctx or RuntimeContext.for_request(args)
+    if not getattr(args, "confirm", False):
+        logger.warning("⚠️  This will RESUME the paused print. Add --confirm to proceed.")
+        if bool(_namespace_get(args, "json", False)):
+            emit_json(
+                {
+                    "status": "confirmation_required",
+                    "command": "resume",
+                    "resumed": False,
+                    "next_command": ["resume", "--confirm", "--json"],
+                }
+            )
+        abort("", exit_code=EXIT_COMMAND_ERROR)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "resume"}})
     printer = ctx.printer()
     if not printer.send_command(payload):

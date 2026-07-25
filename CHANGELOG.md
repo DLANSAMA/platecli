@@ -5,6 +5,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Added
+- `tests/test_docs_consistency.py`: guards against version drift in README /
+  `docs/api.md` / the bug-report template, and against `docs/manual.md` sections
+  missing from its Contents list.
+
+### Changed
+- README: stated the OrcaSlicer and Python 3.9+ prerequisites, qualified non-P1
+  printer support as best-effort, clarified that `plate snapshot` grabs P1/A1
+  cameras directly while X1-series needs the Docker streamer, and added
+  unattended-printing safety and maintenance-expectations sections.
+- Removed hardcoded version strings from README, `docs/api.md`, and the bug-report
+  template; the version is single-sourced from `pyproject.toml`.
+- Refreshed measured test/coverage numbers in `docs/quality-roadmap.md` and
+  `docs/test-backlog.md` (666 tests, 83.3%).
+- `AGENTS.md` retitled to the public product name.
+- `docs/api.md`: the `pause.json` / `resume.json` bullets now describe both the
+  success and the `confirmation_required` shape, matching the dual schemas.
+- CI runs weekly on a schedule (external drift: firmware, Printables API,
+  OrcaSlicer, new CVEs) and pins ruff/mypy/bandit/pip-audit versions.
+- Dependabot config added for GitHub Actions and uv dependencies.
+- New `docs/releasing.md` with the yank/rollback runbook.
+
+### Fixed
+- `plate doctor`'s reported `camera_snapshot_note` (and `camera.py`'s snapshot
+  docstring) claimed P1P/P1S snapshots go through the BambuP1Streamer container.
+  It is the reverse: P1/A1-class cameras are captured directly with no Docker,
+  and the container is the X1-series fallback.
+
+### Changed (BREAKING)
+- `pause` and `resume` now require `--confirm`, matching `stop`/`print`/`gcode`/`delete`.
+  Pausing mid-print parks a hot nozzle over the part; resuming an abandoned print
+  restarts motion unsupervised. Without `--confirm` they now refuse with exit code `5`
+  and (with `--json`) `"status": "confirmation_required"`. Scripts calling
+  `plate pause` / `plate resume` must add `--confirm`.
+- `print` without `--confirm` now exits `5` (`EXIT_COMMAND_ERROR`) instead of `0`.
+  The JSON payload is unchanged (`"status": "confirmation_required"`). This aligns it
+  with `stop`/`gcode`/`delete` and with the exit-code table in `docs/api.md`; a script
+  that treated exit `0` as "print started" was already silently wrong.
+
+### Fixed
+- README, AGENTS.md, SECURITY.md, docs/api.md, and docs/manual.md no longer claim a
+  universal `--confirm` gate that `pause`/`resume` did not implement; `--confirm` is
+  now documented as a deliberate-action gate rather than an authorization boundary.
+- `docs/schemas/pause.json` / `resume.json` accept the `confirmation_required` status.
+- Filenames containing square brackets (e.g. `part[v2].stl`, common in Printables model titles) no longer crash the CLI or get silently truncated in log output — the Rich log handler no longer parses log text as markup.
+- `--json` now always writes a parseable error envelope to stdout: the JSON envelope is emitted before the human-readable log line, so a logging failure can no longer leave stdout empty.
+
 ### Security
 - All GitHub Actions are pinned to immutable commit SHAs, enforced by
   `tests/ci_workflow_smoke.py`. Notably `pypa/gh-action-pypi-publish` was
@@ -12,13 +59,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   trusted-publishing `id-token: write` permission.
 - Releases now re-run the full CI matrix on the tagged commit before publishing,
   so a tag on a red commit can no longer reach PyPI.
-
-### Changed
-- CI runs weekly on a schedule (external drift: firmware, Printables API,
-  OrcaSlicer, new CVEs) and pins ruff/mypy/bandit/pip-audit versions.
-- Dependabot enabled for GitHub Actions and uv dependencies.
-- New docs/releasing.md with the yank/rollback runbook (contributor-only; not
-  shipped in the sdist).
 
 ## [0.2.2] - 2026-07-24
 

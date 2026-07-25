@@ -52,7 +52,7 @@ def cmd_print(args, ctx=None):
                     "next_command": _print_next_command(args, basename),
                 }
             )
-        return
+        abort("", exit_code=EXIT_COMMAND_ERROR)
 
     payload = generate_print_payload(
         basename,
