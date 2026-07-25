@@ -37,17 +37,23 @@ def _normalize_nozzle(nozzle):
     return nozzle
 
 
-def _atomic_secure_write(path, text):
-    """Write ``text`` to ``path`` atomically at mode 0600, keeping a ``.bak`` of the previous file.
+def _atomic_secure_write(path, text, *, backup=False):
+    """Write ``text`` to ``path`` atomically at mode 0600.
 
-    A crash mid-write must never leave a truncated config.json or access_code file:
-    write a sibling temp file, fsync it, back up the old file, then os.replace
-    (atomic on POSIX and on Windows for same-volume renames).
+    A crash mid-write must never leave a truncated file: write a sibling temp file,
+    fsync it, optionally back up the previous file, then os.replace (atomic on POSIX
+    and for same-volume renames on Windows).
 
-    ``tempfile.mkstemp`` already creates the temp file with O_EXCL at mode 0600, so the
-    secret is never world-readable even transiently; the explicit chmod below is only a
-    belt-and-braces guard for exotic umask/ACL setups. On Windows POSIX modes are not
-    enforced, which is why every chmod is best-effort rather than load-bearing.
+    ``tempfile.mkstemp`` creates the temp file with O_EXCL and honours the process umask,
+    so on a standard POSIX system it opens as 0600 from the outset — there is no window
+    where the file is world-readable. The explicit ``os.chmod(tmp_path, 0o600)`` below is
+    belt-and-braces for exotic umask/ACL setups. On Windows POSIX modes are not enforced,
+    which is why every chmod is best-effort rather than load-bearing.
+
+    ``backup=True`` copies the existing file to ``<path>.bak`` before replacing it.
+    Use only for config.json; do **not** pass ``backup=True`` for secret files (access
+    code) because a second copy of the credential on disk is a worse tradeoff than the
+    recovery convenience.
     """
     expanded = _expand_path(path)
     directory = os.path.dirname(expanded)
@@ -63,11 +69,11 @@ def _atomic_secure_write(path, text):
             os.chmod(tmp_path, 0o600)
         except OSError:
             pass
-        if os.path.exists(expanded):
-            backup = expanded + ".bak"
+        if backup and os.path.exists(expanded):
+            bak = expanded + ".bak"
             try:
-                shutil.copy2(expanded, backup)
-                os.chmod(backup, 0o600)
+                shutil.copy2(expanded, bak)
+                os.chmod(bak, 0o600)
             except OSError:
                 pass
         os.replace(tmp_path, expanded)
@@ -86,11 +92,14 @@ def _atomic_secure_write(path, text):
 def _secure_write_json(path, data):
     # Serialize before touching the filesystem: an unserializable payload must leave the
     # existing file intact rather than truncating it half-way through json.dump.
-    _atomic_secure_write(path, json.dumps(data, indent=2))
+    # backup=True keeps config.json.bak so a crash mid-write doesn't lose printer_ip/serial.
+    _atomic_secure_write(path, json.dumps(data, indent=2), backup=True)
 
 
 def _secure_write_text(path, text):
-    _atomic_secure_write(path, text)
+    # backup=False: a second copy of the printer access code on disk is a worse tradeoff
+    # than the recovery convenience (lost codes can be re-read from the printer).
+    _atomic_secure_write(path, text, backup=False)
 
 
 def _default_access_code_file_path():
