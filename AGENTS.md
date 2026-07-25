@@ -44,7 +44,7 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 
 **Package inventory is derived:** setuptools finds `bambu_cli*`; syntax smoke and CLI help smoke auto-discover modules/commands (`scripts/syntax_smoke.py`, `scripts/cli_help_smoke.py`). Adding a module under `bambu_cli/` or a subcommand in `cli.py` is enough — no triplicated lists.
 
-**Typing (mypy):** CI runs `uvx mypy -p bambu_cli` over the **whole package** with `check_untyped_defs = true`. There is **no residual exclude blocklist** — `printer.py` and `slicer/` are included. New modules are type-checked automatically.
+**Typing (mypy):** CI runs `uvx mypy@<pinned> -p bambu_cli` over the **whole package** with `check_untyped_defs = true` (CI pins the tool version in `.github/workflows/ci.yml`; running it unpinned locally is fine). There is **no residual exclude blocklist** — `printer.py` and `slicer/` are included. New modules are type-checked automatically.
 
 New command logic goes in `commands/` (or a new focused package) using `get_printer()` / `RuntimeContext` and injectable collaborators.
 
@@ -85,6 +85,8 @@ Published on PyPI as `platecli`; the installed command is `plate`.
 | Lint | `uvx ruff check bambu_cli` + `uvx ruff format --check bambu_cli` |
 | Types | `uvx mypy -p bambu_cli` |
 | Security lint | `uvx bandit -c pyproject.toml -r bambu_cli -ll` |
+
+CI pins these tool versions (see `.github/workflows/ci.yml`); running them unpinned locally is fine.
 | Mutation baseline | `./scripts/run_mutation_baseline.sh` — nightly / `workflow_dispatch` only; [docs/mutation-baseline.md](docs/mutation-baseline.md) |
 | Live printer | Opt-in only: `BAMBU_LIVE=1` + real config + `BAMBU_LIVE_SOURCE`. [docs/live-printer-smoke.md](docs/live-printer-smoke.md). Always ask the user before `--confirm` or `BAMBU_LIVE_PRINT_CONFIRM`. |
 

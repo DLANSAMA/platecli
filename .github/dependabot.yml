@@ -1,0 +1,31 @@
+# Dependabot keeps the SHA-pinned actions and uv.lock current.
+# NOTE: the Python ecosystem here is "uv" (not "pip") — this repo's lockfile is
+# uv.lock and CI runs `uv sync --frozen`; the pip ecosystem would not update it.
+# Do NOT add `dependency-type` inside the uv group: that group option is only
+# supported for bundler/composer/mix/maven/npm/pip and would make Dependabot
+# reject this file with a config error.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      python:
+        patterns: ["*"]
