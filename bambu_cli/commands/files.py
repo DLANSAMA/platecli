@@ -20,7 +20,7 @@ from bambu_cli.download.naming import (
     _safe_remote_name,
 )
 from bambu_cli.errors import abort
-from bambu_cli.logging_utils import logger
+from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.slicer import _directory_input_message, _is_directory_input
 from bambu_cli.utils import emit_json, emit_json_error
 
@@ -34,17 +34,17 @@ def cmd_upload(args, ctx=None):
     if filepath.startswith("-"):
         message = f"Invalid filepath: {_path_for_message(filepath)}"
         emit_json_error(args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if not os.path.exists(filepath):
         message = f"File not found: {_path_for_message(filepath)}"
         emit_json_error(args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if _is_directory_input(filepath):
         message = _directory_input_message(filepath)
         emit_json_error(args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
 
     filename = _portable_basename(filepath)
@@ -53,14 +53,14 @@ def cmd_upload(args, ctx=None):
         emit_json_error(
             args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath, remote_name=filename
         )
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if not _is_print_ready_name(filename):
         message = _print_ready_error_message(filename, "upload")
         emit_json_error(
             args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath, remote_name=filename
         )
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     try:
         filesize = os.path.getsize(filepath)
@@ -69,7 +69,7 @@ def cmd_upload(args, ctx=None):
         emit_json_error(
             args, "upload", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath, remote_name=filename
         )
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if filesize <= 0:
         message = f"Refusing to upload empty file: {_path_for_message(filepath)}"
@@ -83,7 +83,7 @@ def cmd_upload(args, ctx=None):
             remote_name=filename,
             bytes=filesize,
         )
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
 
     if getattr(args, "dry_run", False):
@@ -99,7 +99,7 @@ def cmd_upload(args, ctx=None):
             emit_json_error(
                 args, "upload", EXIT_NETWORK_ERROR, message, failed_step="dry_run", file=filepath, remote_name=filename
             )
-            logger.error(message)
+            safe_log_error(message)
             abort("", exit_code=EXIT_NETWORK_ERROR)
 
         logger.info(f"   ✅ Local file {_path_for_message(filepath)} exists ({filesize // 1024}KB)")
@@ -186,7 +186,7 @@ def cmd_upload(args, ctx=None):
             file=filepath,
             remote_name=filename,
         )
-        logger.error(f"❌ {message}")
+        safe_log_error(f"❌ {message}")
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
 
@@ -221,7 +221,7 @@ def cmd_files(args, ctx=None):
     except Exception as e:
         message = f"Error listing files: {e}"
         emit_json_error(args, "files", EXIT_NETWORK_ERROR, message, failed_step="ftps", files=[])
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)
 
 
@@ -234,7 +234,7 @@ def cmd_delete(args, ctx=None):
     if _safe_remote_name(filename) is None:
         message = f"Refusing to delete file with unsafe name: {_name_for_message(filename)!r}"
         emit_json_error(args, "delete", EXIT_FILE_ERROR, message, failed_step="validate", file=filename, deleted=False)
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if not args.confirm:
         logger.warning(f"⚠️  This will DELETE '{filename}' from the printer. Add --confirm to proceed.")
@@ -268,5 +268,5 @@ def cmd_delete(args, ctx=None):
     except Exception as e:
         message = f"Delete failed: {e}"
         emit_json_error(args, "delete", EXIT_NETWORK_ERROR, message, failed_step="ftps", file=filename, deleted=False)
-        logger.error(message)
+        safe_log_error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)

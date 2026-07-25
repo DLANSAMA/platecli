@@ -15,7 +15,7 @@ from bambu_cli.cli import (
 from bambu_cli.config import MODEL_MAPPING, _access_code_value_problem
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.errors import abort
-from bambu_cli.logging_utils import logger
+from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.setup_cmd.common import (
     _build_setup_config,
     _config_path,
@@ -393,8 +393,8 @@ def _cmd_setup(args):
             "  plate setup --printer-ip 192.168.1.42 --serial 01S00A000000000 "
             "--access-code-file ~/.bambu_access"
         )
-        logger.error(message)
         emit_json_error(args, "setup", EXIT_CONFIG_ERROR, message, failed_step="validate")
+        safe_log_error(message)
         abort("", exit_code=EXIT_CONFIG_ERROR)
 
     _cmd_setup_interactive(args)

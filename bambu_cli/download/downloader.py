@@ -40,7 +40,7 @@ from bambu_cli.download.validation import (
     _validate_max_download_mb_or_exit,
 )
 from bambu_cli.errors import BambuError, abort
-from bambu_cli.logging_utils import logger
+from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.netsafety import build_safe_opener, polite_open, user_agent_for_url
 from bambu_cli.printables import _is_printables_model_url, resolve_printables_url
 from bambu_cli.protocols.ftps import _download_partial_path, _noncolliding_path, _remove_partial_file
@@ -98,7 +98,6 @@ def _cmd_download(
     outdir = _expand_path(args.output) if args.output else tempfile.gettempdir()
     if outdir.startswith("-"):
         message = f"Invalid output directory: {_path_for_message(outdir)}"
-        logger.error(message)
         emit_json_error(
             args,
             "download",
@@ -109,6 +108,7 @@ def _cmd_download(
             normalized_source=normalized_source_report,
             output=outdir,
         )
+        safe_log_error(message)
         abort("", exit_code=EXIT_COMMAND_ERROR)
     try:
         _ensure_output_dir(outdir)
@@ -247,10 +247,6 @@ def _cmd_download(
                         )
                         continue
                     message = "HTML page did not contain a direct model file link."
-                    logger.error(message)
-                    logger.info(
-                        "   Use a Printables model page, a direct .stl/.step/.stp/.obj/.3mf/.gcode/.zip download URL, or a page with a direct model-file link."
-                    )
                     emit_json_error(
                         args,
                         "download",
@@ -260,6 +256,10 @@ def _cmd_download(
                         source=source_report,
                         normalized_source=normalized_source_report,
                         download_url=_redact_url_credentials(url),
+                    )
+                    safe_log_error(message)
+                    logger.info(
+                        "   Use a Printables model page, a direct .stl/.step/.stp/.obj/.3mf/.gcode/.zip download URL, or a page with a direct model-file link."
                     )
                     abort("", exit_code=EXIT_FILE_ERROR)
                 if not archive_download:
@@ -399,7 +399,6 @@ def _cmd_download(
                 if total_size is not None and downloaded < total_size:
                     _remove_partial_file(download_path)
                     message = f"Download ended early: received {downloaded} of {total_size} bytes."
-                    logger.error(message)
                     emit_json_error(
                         args,
                         "download",
@@ -413,6 +412,7 @@ def _cmd_download(
                         received_bytes=downloaded,
                         expected_bytes=total_size,
                     )
+                    safe_log_error(message)
                     abort("", exit_code=EXIT_NETWORK_ERROR)
 
             finished_path = cast(str, partial_path)
@@ -420,7 +420,6 @@ def _cmd_download(
             if size <= 0:
                 _remove_partial_file(finished_path)
                 message = "Downloaded file is empty; refusing to use it."
-                logger.error(message)
                 emit_json_error(
                     args,
                     "download",
@@ -433,6 +432,7 @@ def _cmd_download(
                     path=outpath,
                     bytes=size,
                 )
+                safe_log_error(message)
                 abort("", exit_code=EXIT_FILE_ERROR)
             if replace_on_success:
                 os.replace(finished_path, outpath)
@@ -446,7 +446,6 @@ def _cmd_download(
                 except OSError as exc:
                     _remove_partial_file(archive_path)
                     message = f"Failed to extract archive: {exc}"
-                    logger.error(message)
                     emit_json_error(
                         args,
                         "download",
@@ -458,12 +457,12 @@ def _cmd_download(
                         download_url=_redact_url_credentials(url),
                         path=archive_path,
                     )
+                    safe_log_error(message)
                     abort("", exit_code=EXIT_FILE_ERROR)
                 except ValueError as exc:
                     _remove_partial_file(archive_path)
                     partial_path = None
                     message = str(exc)
-                    logger.error(message)
                     emit_json_error(
                         args,
                         "download",
@@ -475,6 +474,7 @@ def _cmd_download(
                         download_url=_redact_url_credentials(url),
                         path=archive_path,
                     )
+                    safe_log_error(message)
                     abort("", exit_code=EXIT_FILE_ERROR)
                 _remove_partial_file(archive_path)
                 partial_path = None
@@ -511,7 +511,6 @@ def _cmd_download(
             return outpath
 
         message = "Could not resolve HTML page to a direct model file."
-        logger.error(message)
         emit_json_error(
             args,
             "download",
@@ -522,15 +521,11 @@ def _cmd_download(
             normalized_source=normalized_source_report,
             download_url=_redact_url_credentials(url),
         )
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     except urllib.error.HTTPError as e:
         _remove_partial_file(partial_path)
         message = f"Download failed: HTTP Error {e.code} ({e.reason})"
-        logger.error(message)
-        if e.code == 404:
-            logger.info("   The requested file or model does not exist. Check that the URL is correct.")
-        elif e.code == 403:
-            logger.info("   Access is forbidden. Printables or the host may be blocking automated requests.")
         emit_json_error(
             args,
             "download",
@@ -543,6 +538,11 @@ def _cmd_download(
             http_status=e.code,
             path=outpath,
         )
+        safe_log_error(message)
+        if e.code == 404:
+            logger.info("   The requested file or model does not exist. Check that the URL is correct.")
+        elif e.code == 403:
+            logger.info("   Access is forbidden. Printables or the host may be blocking automated requests.")
         try:
             e.close()
         except Exception:
@@ -553,7 +553,6 @@ def _cmd_download(
         err_msg = str(e.reason) if hasattr(e, "reason") else str(e)
         if "Security Error" in err_msg:
             message = f"SSRF Security Violation Blocked: {err_msg}"
-            logger.error(message)
             emit_json_error(
                 args,
                 "download",
@@ -565,10 +564,9 @@ def _cmd_download(
                 download_url=_redact_url_credentials(url),
                 path=outpath,
             )
+            safe_log_error(message)
             abort("", exit_code=EXIT_COMMAND_ERROR)
         message = f"Network error during download: {e}"
-        logger.error(message)
-        logger.info("   Please check your internet connection or verify the domain name resolves correctly.")
         emit_json_error(
             args,
             "download",
@@ -580,11 +578,12 @@ def _cmd_download(
             download_url=_redact_url_credentials(url),
             path=outpath,
         )
+        safe_log_error(message)
+        logger.info("   Please check your internet connection or verify the domain name resolves correctly.")
         abort("", exit_code=EXIT_NETWORK_ERROR)
     except OSError as e:
         _remove_partial_file(partial_path)
         message = f"Local file error during download: {_exception_for_message(e)}"
-        logger.error(message)
         emit_json_error(
             args,
             "download",
@@ -596,13 +595,13 @@ def _cmd_download(
             download_url=_redact_url_credentials(url),
             path=outpath,
         )
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     except BambuError:
         raise
     except Exception as e:
         _remove_partial_file(partial_path)
         message = f"Download failed: {e}"
-        logger.error(message)
         emit_json_error(
             args,
             "download",
@@ -614,4 +613,5 @@ def _cmd_download(
             download_url=_redact_url_credentials(url),
             path=outpath,
         )
+        safe_log_error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)

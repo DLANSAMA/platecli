@@ -12,7 +12,7 @@ from bambu_cli.config import MODEL_MAPPING, get_slicer_timeout
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_TIMEOUT
 from bambu_cli.context import current_settings
 from bambu_cli.errors import BambuError, abort
-from bambu_cli.logging_utils import logger
+from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.slicer.options import (
     _directory_input_message,
     _is_directory_input,
@@ -82,31 +82,31 @@ def cmd_slice(
         # a normal slice still requires it. Report failed_step="parse" to keep the
         # agent contract identical to argparse's own missing-required-arg error.
         message = "the following arguments are required: file"
-        logger.error(message)
         emit_json_error(args, "slice", EXIT_COMMAND_ERROR, message, failed_step="parse")
+        safe_log_error(message)
         abort("", exit_code=EXIT_COMMAND_ERROR)
     filepath = _expand_path(args.file)
     source_filepath = filepath
     if filepath.startswith("-"):
         message = f"Invalid filepath: {_path_for_message(filepath)}"
-        logger.error(message)
         emit_json_error(args, "slice", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if not os.path.exists(filepath):
         message = f"File not found: {_path_for_message(filepath)}"
-        logger.error(message)
         emit_json_error(args, "slice", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     if _is_directory_input(filepath):
         message = _directory_input_message(filepath)
-        logger.error(message)
         emit_json_error(args, "slice", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
+        safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
 
     slice_option_error = _validate_slice_options(args)
     if slice_option_error:
-        logger.error(slice_option_error)
         emit_json_error(args, "slice", EXIT_COMMAND_ERROR, slice_option_error, failed_step="validate", file=filepath)
+        safe_log_error(slice_option_error)
         abort("", exit_code=EXIT_COMMAND_ERROR)
     copies = getattr(args, "copies", 1)
 
@@ -153,10 +153,10 @@ def cmd_slice(
         outdir = _expand_path(args.output) if args.output else os.path.dirname(os.path.abspath(source_filepath))
         if outdir.startswith("-"):
             message = f"Invalid output directory: {_path_for_message(outdir)}"
-            logger.error(message)
             emit_json_error(
                 args, "slice", EXIT_COMMAND_ERROR, message, failed_step="validate", file=filepath, output=outdir
             )
+            safe_log_error(message)
             abort("", exit_code=EXIT_COMMAND_ERROR)
         try:
             _ensure_output_dir(outdir)
@@ -220,14 +220,9 @@ def cmd_slice(
             from bambu_cli.config import detect_orca_slicer
 
             message = slicer_problem
-            logger.error(message)
+            # The envelope needs detected_orca, so resolve it before emitting; the human
+            # log lines come afterwards so a failing handler cannot eat the envelope.
             detected_orca = detect_orca_slicer()
-            if detected_orca and detected_orca != settings.orca_slicer:
-                logger.info(
-                    f'Detected OrcaSlicer at {_display_path(detected_orca)} — set "orca_slicer" to this in config.json.'
-                )
-            else:
-                logger.info("Please update 'orca_slicer' in your config.json or place it in the tools/ directory.")
             emit_json_error(
                 args,
                 "slice",
@@ -238,6 +233,13 @@ def cmd_slice(
                 orca_slicer=settings.orca_slicer,
                 detected_orca_slicer=detected_orca,
             )
+            safe_log_error(message)
+            if detected_orca and detected_orca != settings.orca_slicer:
+                logger.info(
+                    f'Detected OrcaSlicer at {_display_path(detected_orca)} — set "orca_slicer" to this in config.json.'
+                )
+            else:
+                logger.info("Please update 'orca_slicer' in your config.json or place it in the tools/ directory.")
             abort("", exit_code=EXIT_CONFIG_ERROR)
 
         if not os.path.exists(process):
@@ -270,10 +272,8 @@ def cmd_slice(
         for path, name in [(machine, "machine"), (filament, "filament")]:
             if not os.path.exists(path):
                 message = f"Missing {name} profile: {_path_for_message(path)}"
-                logger.error(message)
+                # detected_profiles feeds the envelope, so diagnose first, emit, then log.
                 hint, detected_profiles = _profiles_dir_diagnostic(settings.profiles_dir)
-                if hint:
-                    logger.info(hint)
                 emit_json_error(
                     args,
                     "slice",
@@ -286,6 +286,9 @@ def cmd_slice(
                     profiles_dir=settings.profiles_dir,
                     detected_profiles_dir=detected_profiles,
                 )
+                safe_log_error(message)
+                if hint:
+                    logger.info(hint)
                 abort("", exit_code=EXIT_CONFIG_ERROR)
 
         try:
@@ -293,7 +296,6 @@ def cmd_slice(
             tmp_machine = _create_temp_machine(machine, settings.profiles_dir)
         except Exception as exc:
             message = f"Failed to prepare OrcaSlicer profiles: {_exception_for_message(exc)}"
-            logger.error(message)
             emit_json_error(
                 args,
                 "slice",
@@ -302,6 +304,7 @@ def cmd_slice(
                 failed_step="profiles",
                 file=filepath,
             )
+            safe_log_error(message)
             abort("", exit_code=EXIT_CONFIG_ERROR)
 
         cmd = _build_orcaslicer_cmd(
@@ -350,7 +353,6 @@ def cmd_slice(
             )
         except subprocess.TimeoutExpired:
             message = f"Slicing timed out after {slicer_timeout} seconds"
-            logger.error(message)
             emit_json_error(
                 args,
                 "slice",
@@ -360,10 +362,10 @@ def cmd_slice(
                 file=filepath,
                 output=outpath,
             )
+            safe_log_error(message)
             abort("", exit_code=EXIT_TIMEOUT)
         except OSError as exc:
             message = f"Failed to run OrcaSlicer: {_exception_for_message(exc)}"
-            logger.error(message)
             emit_json_error(
                 args,
                 "slice",
@@ -374,6 +376,7 @@ def cmd_slice(
                 orca_slicer=settings.orca_slicer,
                 output=outpath,
             )
+            safe_log_error(message)
             abort("", exit_code=EXIT_CONFIG_ERROR)
     finally:
         for tmp_file in (tmp_process, tmp_filament, tmp_machine):

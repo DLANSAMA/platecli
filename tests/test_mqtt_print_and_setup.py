@@ -289,11 +289,13 @@ def test_cmd_light_failure_raises():
     ],
 )
 def test_json_envelope_survives_logger_failure(cmd_name, args, capsys):
-    """A raising log handler must not be able to swallow the --json error envelope.
+    """A raising log handler must not corrupt the --json envelope OR the exit code.
 
     The domain error paths emit the machine-readable envelope BEFORE the human-readable
-    log line, so a handler that blows up while rendering a user-controlled string leaves
-    stdout parseable. Guards the ordering in bambu_cli/commands/device.py.
+    log line, and the log call goes through ``safe_log_error`` which absorbs any
+    exception the handler raises. A broken handler therefore leaves stdout parseable AND
+    the normal ``BambuError`` propagates (not a ``RuntimeError`` traceback). Guards the
+    ordering and the helper plumbing in ``bambu_cli/commands/device.py``.
     """
 
     printer = MagicMock()
@@ -302,19 +304,22 @@ def test_json_envelope_survives_logger_failure(cmd_name, args, capsys):
     broken_logger.error.side_effect = RuntimeError("handler exploded")
     with (
         patch("bambu_cli.commands.device.RuntimeContext.for_request") as fr,
-        patch("bambu_cli.commands.device.logger", broken_logger),
+        # Patch the shared backend, not the per-module binding, because safe_log_error
+        # resolves through the LoggerProxy, not the consumer module's import alias.
+        patch("bambu_cli.logging_utils._BACKEND", broken_logger),
     ):
         ctx = MagicMock()
         ctx.printer.return_value = printer
         fr.return_value = ctx
-        with pytest.raises(RuntimeError, match="handler exploded"):
+        with pytest.raises(BambuError):
             getattr(commands_mod, cmd_name)(args)
 
-    # The envelope reached stdout even though logging then failed.
+    # The envelope reached stdout even though the log handler exploded.
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "error"
     assert payload["command"] == cmd_name.removeprefix("cmd_")
     assert payload["failed_step"] == "mqtt"
+    # The handler really was called; safe_log_error absorbed its RuntimeError.
     broken_logger.error.assert_called_once()
 
 
