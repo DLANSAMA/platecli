@@ -63,6 +63,11 @@ downloads/
 *.gcode
 *.step
 
+# ...except the committed test fixtures, which are the only models in the repo
+# and let `job`/`print` be exercised by hand without dropping a stray model in.
+!tests/fixtures/*.stl
+!tests/fixtures/*.3mf
+
 # mutmut mutation testing artifacts
 mutants/
 .mutmut-cache
