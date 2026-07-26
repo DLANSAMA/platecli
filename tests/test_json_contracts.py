@@ -13,6 +13,7 @@ Ground rules followed (docs/test-backlog.md):
   `SystemExit`, capture stdout with `capsys`, and assert full payload shapes.
 """
 
+import argparse
 import json
 import sys
 import zipfile
@@ -29,7 +30,7 @@ sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli import bambu  # noqa: E402
 from bambu_cli import utils  # noqa: E402
-from bambu_cli.cli import main  # noqa: E402
+from bambu_cli.cli import build_parser, main  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +220,7 @@ def test_light_success_shape(monkeypatch, tmp_path, capsys):
 
 
 def test_pause_success_shape(monkeypatch, tmp_path, capsys):
-    exc = run_main(monkeypatch, tmp_path, ["--sim", "pause", "--json"])
+    exc = run_main(monkeypatch, tmp_path, ["--sim", "pause", "--confirm", "--json"])
     assert exc is None
     payload = read_json(capsys)
     assert_shape(
@@ -236,7 +237,7 @@ def test_pause_success_shape(monkeypatch, tmp_path, capsys):
 
 
 def test_resume_success_shape(monkeypatch, tmp_path, capsys):
-    exc = run_main(monkeypatch, tmp_path, ["--sim", "resume", "--json"])
+    exc = run_main(monkeypatch, tmp_path, ["--sim", "resume", "--confirm", "--json"])
     assert exc is None
     payload = read_json(capsys)
     assert_shape(
@@ -346,7 +347,7 @@ def test_delete_unsafe_name_error_shape(monkeypatch, tmp_path, capsys):
 
 def test_print_confirmation_required_shape(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, ["--sim", "print", "ready.3mf", "--json"])
-    assert exc is None  # cmd_print returns (no sys.exit) in the confirmation branch
+    assert exc is not None and exc.code == 5  # refusal == EXIT_COMMAND_ERROR, same as stop/delete
     payload = read_json(capsys)
     assert_shape(
         payload,
@@ -941,3 +942,52 @@ def test_config_error_shape_for_network_command(monkeypatch, tmp_path, capsys):
     payload = read_json(capsys)
     assert_shape(payload, base_error_spec("status"))
     assert payload["failed_step"] == "config"
+
+
+# ---------------------------------------------------------------------------
+# Parser-driven --confirm gate: locks the whole refusal contract in one place.
+# ---------------------------------------------------------------------------
+
+# subcommand -> (extra argv, payload key that must be False in the refusal)
+PHYSICAL_COMMANDS = {
+    "print": (["ready.3mf"], "printed"),
+    "stop": ([], "stopped"),
+    "pause": ([], "paused"),
+    "resume": ([], "resumed"),
+    "gcode": (["M105"], "sent"),
+    "delete": (["old.3mf"], "deleted"),
+}
+
+# Subcommands that expose --confirm but do NOT refuse without it: for job/send
+# the download/slice/upload really happened, so they exit 0 with
+# "uploaded_not_printed" (bambu_cli/job/orchestrate.py:448). Deliberate.
+NON_REFUSING_CONFIRM_COMMANDS = {"job", "send"}
+
+
+def _subcommands_with_confirm():
+    parser = build_parser()
+    names = set()
+    for action in parser._actions:
+        if not isinstance(action, argparse._SubParsersAction):
+            continue
+        for name, subparser in action.choices.items():
+            if any("--confirm" in a.option_strings for a in subparser._actions):
+                names.add(name)
+    return names
+
+
+def test_confirm_flag_inventory_matches_physical_commands():
+    """A new --confirm command must be classified here, or this fails."""
+    assert _subcommands_with_confirm() == set(PHYSICAL_COMMANDS) | NON_REFUSING_CONFIRM_COMMANDS
+
+
+@pytest.mark.parametrize("cmd", sorted(PHYSICAL_COMMANDS))
+def test_physical_commands_refuse_without_confirm(cmd, monkeypatch, tmp_path, capsys):
+    extra, false_key = PHYSICAL_COMMANDS[cmd]
+    exc = run_main(monkeypatch, tmp_path, ["--sim", cmd, *extra, "--json"])
+    assert exc is not None and exc.code == 5, f"{cmd} must refuse with EXIT_COMMAND_ERROR"
+    payload = read_json(capsys)
+    assert payload["status"] == "confirmation_required"
+    assert payload["command"] == cmd
+    assert payload[false_key] is False
+    assert "--confirm" in payload["next_command"]

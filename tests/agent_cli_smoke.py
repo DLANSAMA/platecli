@@ -681,7 +681,9 @@ def smoke_sim_lower_level_json(root):
     if upload.get("uploaded") is not False:
         assert False, f"upload dry-run JSON reported a side effect: {upload}"
 
-    print_required = json_stdout(run_cli(["--sim", "print", "ready.3mf", "--json"], env))
+    # print without --confirm refuses with EXIT_COMMAND_ERROR (5), matching the
+    # other physical commands. It previously exited 0.
+    print_required = json_stdout(run_cli(["--sim", "print", "ready.3mf", "--json"], env, expected_returncode=5))
     if print_required.get("status") != "confirmation_required" or print_required.get("command") != "print":
         assert False, f"print confirmation JSON is not self-describing: {print_required}"
     if print_required.get("printed") is not False:

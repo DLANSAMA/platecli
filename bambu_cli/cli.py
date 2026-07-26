@@ -397,10 +397,12 @@ def build_parser():
     )
 
     p_pause = sub.add_parser("pause", parents=[get_global_parser()], help="Pause current print")
+    p_pause.add_argument("--confirm", action="store_true", help="Confirm pausing the running print")
     p_pause.add_argument(
         "--json", action="store_true", default=argparse.SUPPRESS, help="Emit machine-readable pause summary"
     )
     p_resume = sub.add_parser("resume", parents=[get_global_parser()], help="Resume paused print")
+    p_resume.add_argument("--confirm", action="store_true", help="Confirm resuming the paused print")
     p_resume.add_argument(
         "--json", action="store_true", default=argparse.SUPPRESS, help="Emit machine-readable resume summary"
     )
