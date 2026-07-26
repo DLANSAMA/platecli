@@ -61,11 +61,18 @@ def _list_settings(args: argparse.Namespace, settings) -> str:
             }
         )
     else:
+        # The settings list is DATA, so it goes to stdout while the header and the
+        # closing hint stay on stderr as human chrome. Two reasons this is not a
+        # logger.info like the rest of the CLI: `logger` writes to stderr, so
+        # `slice --list-settings | grep layer_height` silently matched nothing; and
+        # Rich wrapped long values (e.g. the `description` key) mid-line, which
+        # breaks grep even when stderr is captured. Plain print keeps one setting
+        # per line and unwrapped.
         logger.info(f"🔧 Settable OrcaSlicer settings ({len(process)} process, {len(filament)} filament):")
         for key in sorted(process):
-            logger.info(f"   [process]  {key} = {process[key]}")
+            print(f"[process] {key} = {process[key]}")
         for key in sorted(filament):
-            logger.info(f"   [filament] {key} = {filament[key]}")
+            print(f"[filament] {key} = {filament[key]}")
         logger.info("   Override any of these with --set KEY=VALUE / --set-filament KEY=VALUE.")
     return profiles_dir
 

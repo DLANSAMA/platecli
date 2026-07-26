@@ -246,6 +246,16 @@ errors may include `profiles_dir` and `detected_profiles_dir`.
 
 `slice --list-settings [--json]`: [`slice_list_settings.json`](schemas/slice_list_settings.json).
 
+Without `--json`, the listing is written to **stdout** — one `[process]`/`[filament]`
+key per line, unwrapped — so it can be piped or redirected. The header and the
+closing hint go to stderr like other human chrome, which keeps a redirect to a file
+free of anything but data:
+
+```bash
+plate slice --list-settings | grep layer_height
+plate slice --list-settings > settings.txt
+```
+
 ### `download`
 
 Schema: [`download.json`](schemas/download.json).
