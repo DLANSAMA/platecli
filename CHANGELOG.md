@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Fixed
+- **`scripts/bambu.py` — the documented "run from a source checkout without
+  installing" entrypoint — never worked.** Python puts the script's own
+  directory (`scripts/`) on `sys.path`, not the repo root, so it died with
+  `ModuleNotFoundError: No module named 'bambu_cli'` on any clean checkout. It
+  now prepends the repo root before importing. This mattered more than it looks:
+  with the shim broken, the only way to run the CLI was an installed `plate`,
+  which is usually an older release than the checkout — so contributors and
+  agents were reporting the *released* behaviour as if it were the source's.
+
+### Changed
+- The in-development version now carries a `.devN` suffix (`0.3.0.dev0`).
+  Previously `main` advertised the same version as the last PyPI release while
+  behaving differently — `plate --version` could not distinguish a source build
+  from the release, which made bug reports ambiguous. Drop the suffix when
+  tagging.
+
+### Added
+- `tests/fixtures/cube.stl`, a 20 mm ASCII-STL cube — the only model committed
+  to the repo (`*.stl` / `*.3mf` remain gitignored, with a narrow negation for
+  `tests/fixtures/`). Gives `job` / `print` something to exercise by hand
+  without dropping a stray model into the tree.
+- AGENTS.md now states the stdout/stderr contract for `--json` (envelope on
+  stdout, Rich logs and `-v` diagnostics on stderr; parse stdout only) and warns
+  agents to confirm whether they are running an installed `plate` or the
+  checkout before reporting behaviour.
+
 ### Security
 - **`plate doctor` no longer prints your printer's LAN IP or full certificate
   SHA-256 in its human output by default.** doctor output is routinely pasted
