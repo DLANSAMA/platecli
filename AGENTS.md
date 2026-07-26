@@ -21,6 +21,7 @@ Core printer interaction is `BambuPrinter` in `bambu_cli/printer.py`. Agents and
 - `doctor` prints the live certificate fingerprint only when it is not yet pinned (or with `-v`); once pinned it prints a hex-free match confirmation, and the printer's LAN IP is redacted from human output unless `-v` is passed. `--json` always carries `certificate_fingerprint`. In an interactive TTY with no pin, doctor may offer to write `cert_fingerprint` into config.json. It never prompts in `--json` mode or non-interactive runs.
 - Secret-bearing files are tightened to `0600` automatically on POSIX: config.json on load, and the `access_code_file` when `load_access_code()` reads it. Windows relies on NTFS ACLs (see [SECURITY.md](SECURITY.md)).
 - Network operations support `timeout` and `retries` through `printer.send_command()` and `printer.status()`.
+- `printer.status()` returns a **complete** state snapshot, never a partial MQTT delta: the printer streams incremental updates on its report topic and only answers `pushall` with the whole state, so report messages are merged and the wait continues until `gcode_state`, `mc_percent`, `bed_temper`, and `nozzle_temper` are all present. If only deltas arrive it raises `PrinterStatusIncomplete` (exit `6`) instead of returning a partial — so `plate --json status` never emits a `printer` object missing `gcode_state`. Pass `require_complete=False` for liveness probes that only need to know MQTT works (this is what `doctor` and `print --dry-run` do).
 
 ### Module layout
 

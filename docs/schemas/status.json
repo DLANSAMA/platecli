@@ -10,7 +10,8 @@
     "command": {"const": "status"},
     "printer": {
       "type": "object",
-      "description": "Normalised printer state.",
+      "description": "Complete printer state. Merged from the MQTT report topic and guaranteed to be a full snapshot, never a partial delta; the command fails with exit code 6 rather than emitting an incomplete object.",
+      "required": ["gcode_state", "mc_percent", "bed_temper", "nozzle_temper"],
       "properties": {
         "gcode_state": {"type": "string"},
         "mc_percent": {"type": "number"},

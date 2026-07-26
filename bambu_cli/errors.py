@@ -28,6 +28,7 @@ __all__ = [
     "NetworkError",
     "FileError",
     "TimeoutError",
+    "PrinterStatusIncomplete",
     "PrinterError",
     "abort",
 ]
@@ -112,6 +113,18 @@ class TimeoutError(BambuError):  # noqa: A001 — deliberate domain name, not bu
 
     exit_code = EXIT_TIMEOUT
     failed_step = "timeout"
+
+
+class PrinterStatusIncomplete(TimeoutError):
+    """Raised when the printer sent only incremental deltas, never a full snapshot.
+
+    The printer publishes partial updates on the MQTT report topic and answers
+    ``pushall`` with the complete state. Returning a delta as if it were a
+    snapshot hands agents a `printer` object missing `gcode_state`, so this is
+    raised instead of emitting one.
+    """
+
+    failed_step = "status"
 
 
 class PrinterError(BambuError):
