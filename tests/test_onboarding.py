@@ -4,6 +4,7 @@ When the configured OrcaSlicer path is wrong, the tool should point the user at
 a real binary/profile it can actually find, rather than a generic "edit config".
 """
 
+import os
 from unittest.mock import patch
 
 from bambu_cli import config, setup_cmd
@@ -65,14 +66,20 @@ def test_windows_orca_candidates_include_hyphenated_installer_name():
     ):
         candidates = config._orca_binary_candidates()
 
-    program_files_entries = [c for c in candidates if c and c.startswith(r"C:\Program Files\OrcaSlicer")]
-    assert any(c.endswith("orca-slicer.exe") for c in program_files_entries)
-    assert any(c.endswith("OrcaSlicer.exe") for c in program_files_entries)
+    # Only sys.platform is patched, so os.path.join still uses the *host* separator
+    # and these assertions must be built the same way the production code builds the
+    # paths — hardcoding backslashes would pass on Windows and fail on Linux/macOS.
+    install_roots = [
+        os.path.join(r"C:\Program Files", "OrcaSlicer"),
+        os.path.join(r"C:\Users\u\AppData\Local", "Programs", "OrcaSlicer"),
+        os.path.join(r"C:\Program Files (x86)", "OrcaSlicer"),
+    ]
+    # Every install root is probed under both names.
+    for root in install_roots:
+        assert os.path.join(root, "orca-slicer.exe") in candidates
+        assert os.path.join(root, "OrcaSlicer.exe") in candidates
     # Hyphenated name is probed first so a stock install wins over a stale one.
-    assert program_files_entries[0].endswith("orca-slicer.exe")
-    # Every install root gets both names.
-    for root in (r"C:\Program Files", r"C:\Users\u\AppData\Local", r"C:\Program Files (x86)"):
-        assert any(c and c.startswith(root) and c.endswith("orca-slicer.exe") for c in candidates)
+    assert candidates[0] == os.path.join(install_roots[0], "orca-slicer.exe")
 
 
 def test_windows_orca_candidates_fall_back_to_path_lookup():
