@@ -14,7 +14,15 @@ keywords = ["bambu", "3d-printing", "agent", "cli", "orcaslicer"]
 dependencies = [
     "rich>=13.0.0",
   "paho-mqtt>=2.0,<3.0",
-  "zeroconf>=0.131,<1.0",
+  # Split by Python version: zeroconf >= 0.149.16 carries fixes for a set of
+  # LAN-local advisories (unbounded record cache, compression-pointer recursion,
+  # TC-deferred queue, exception-dedup retention, unvalidated rdlength) but
+  # requires Python >= 3.10. Users install from these constraints rather than
+  # uv.lock, so without the marker a 3.10+ user could still resolve a vulnerable
+  # build. 3.9 keeps the old floor because no patched release supports it — see
+  # SECURITY.md.
+  "zeroconf>=0.131,<1.0; python_version < '3.10'",
+  "zeroconf>=0.149.16,<1.0; python_version >= '3.10'",
 ]
 classifiers = [
   "Development Status :: 4 - Beta",

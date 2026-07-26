@@ -83,6 +83,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   that treated exit `0` as "print started" was already silently wrong.
 
 ### Fixed
+- **`job` now validates print options on every path, not just under `--confirm`.**
+  `_run_job` only checked `--use-ams` / `--ams-mapping` when `--confirm` was passed
+  and `--upload-only` was not, so the two paths agents use as a pre-check both
+  reported success for flags that would later be rejected. `job --dry-run
+  --ams-mapping 0,1` returned `dry_run_local_skipped` even though the same flags
+  fail without `--dry-run` — inconsistent with `--infill`, which was already caught
+  in dry-run. Worse, `job --upload-only --ams-mapping 0,1` uploaded and then handed
+  back a `next_command` of `["print", …, "--ams-mapping", "0,1"]` that `print`
+  rejects with exit `5`, so an agent following the documented handoff hit a
+  guaranteed failure *after* a real upload. Validation now runs for any supplied
+  print option and still passes when none are given.
 - **`status` no longer returns a partial MQTT delta as if it were a full state
   snapshot.** The printer publishes incremental updates on the `report` topic and
   only sends the complete state in reply to `pushall`, but `status` returned

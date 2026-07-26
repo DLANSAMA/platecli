@@ -96,6 +96,7 @@ Tracked for hardening; not all are “bugs” in the sense of broken claims.
 | **TOFU pin capture** | First-time fingerprint probe intentionally disables cert verification to *read* the pin. A MITM during setup can poison the pin if the LAN is already hostile. | Acknowledged |
 | **Agent auto-`--confirm`** | Process/policy issue; code cannot stop intentional confirmation. | Out of process scope |
 | **Third-party tools** | OrcaSlicer, gmsh, and the optional camera Docker image are outside this package’s SBOM boundary. | Out of scope |
+| **zeroconf / pytest on Python 3.9** | The newest `zeroconf` and `pytest` releases that still support Python 3.9 (`0.148.0`, `8.4.2`) carry open moderate advisories, and **every patched release requires Python >= 3.10**, so they cannot be upgraded on the 3.9 resolution branch. On 3.10+ the dependency floor requires patched `zeroconf` (see `pyproject.toml`). Exposure on 3.9 is limited: the advisories are LAN-local DoS / cache-corruption reachable only from a hostile device on the same network, `zeroconf` is imported lazily and used solely for optional mDNS discovery during `plate setup` (which degrades gracefully and can be skipped by passing printer details manually), and `pytest` is a test-only extra that is never installed for end users or shipped in the wheel. Revisit when Python 3.9 support is dropped. | Accepted (3.9 only) |
 
 ## Scope
 
