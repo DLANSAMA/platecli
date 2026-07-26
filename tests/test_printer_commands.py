@@ -550,6 +550,28 @@ class TestBambuCmdGcode(unittest.TestCase):
         mock_send.assert_not_called()
 
 
+def _full_status_snapshot(**overrides):
+    """A pushall reply: carries every key `status` treats as always-present."""
+    snapshot = {
+        "gcode_state": "RUNNING",
+        "mc_percent": 37,
+        "layer_num": 74,
+        "total_layer_num": 200,
+        "bed_temper": 60.0,
+        "bed_target_temper": 60.0,
+        "nozzle_temper": 219.9375,
+        "nozzle_target_temper": 220.0,
+    }
+    snapshot.update(overrides)
+    return snapshot
+
+
+def _mqtt_message(print_payload):
+    msg = MagicMock()
+    msg.payload = json.dumps({"print": print_payload}).encode()
+    return msg
+
+
 class TestBambuGetStatus(unittest.TestCase):
     @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
     @patch("bambu_cli.logging_utils._BACKEND")
@@ -603,6 +625,28 @@ class TestBambuGetStatus(unittest.TestCase):
         self.assertEqual(payload["command"], "status")
         self.assertEqual(payload["gcode_state"], "IDLE")
 
+    @patch("bambu_cli.commands.status.emit_json")
+    @patch("bambu_cli.protocols.mqtt.get_status")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_status_json_never_emits_partial_printer(self, mock_logger, mock_get_status, mock_emit_json):
+        """`--json status` must error rather than hand agents a printer map with no gcode_state."""
+        from bambu_cli.commands import cmd_status
+        from bambu_cli.errors import PrinterStatusIncomplete
+
+        mock_get_status.side_effect = PrinterStatusIncomplete(
+            "Printer returned only partial status updates, never a full snapshot (missing gcode_state).",
+            detail={"missing_keys": ["gcode_state"], "received_keys": ["nozzle_temper"]},
+        )
+
+        args = MagicMock()
+        args.json = True
+        args.monitor = False
+
+        with self.assertRaises(PrinterStatusIncomplete):
+            cmd_status(args)
+
+        mock_emit_json.assert_not_called()
+
     @patch("bambu_cli.protocols.mqtt.get_status")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_status_running_formatting(self, mock_logger, mock_get_status):
@@ -636,25 +680,23 @@ class TestBambuGetStatus(unittest.TestCase):
     @patch("time.sleep")
     def test_get_status_success(self, mock_sleep, mock_create_mqtt):
         from bambu_cli.protocols.mqtt import get_status
-        import json
 
         mock_client = MagicMock()
         mock_create_mqtt.return_value = mock_client
+        snapshot = _full_status_snapshot(gcode_state="IDLE", mc_percent=0)
 
         def mock_connect(*args, **kwargs):
             # Call on_connect directly
             mock_client.on_connect(mock_client, None, None, 0)
 
-            # Simulate a message arriving with 'print' data
-            msg = MagicMock()
-            msg.payload = json.dumps({"print": {"status": "idle"}}).encode()
-            mock_client.on_message(mock_client, None, msg)
+            # Simulate the pushall reply arriving with 'print' data
+            mock_client.on_message(mock_client, None, _mqtt_message(snapshot))
 
         mock_client.connect.side_effect = mock_connect
 
         result = get_status(_test_printer(), timeout=1)
 
-        self.assertEqual(result, {"status": "idle"})
+        self.assertEqual(result, snapshot)
         mock_create_mqtt.assert_called_once()
         mock_client.connect.assert_called_once()
         mock_client.subscribe.assert_called_once()
@@ -703,10 +745,10 @@ class TestBambuGetStatus(unittest.TestCase):
     @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
     def test_get_status_ignore_non_print_messages(self, mock_create_mqtt):
         from bambu_cli.protocols.mqtt import get_status
-        import json
 
         mock_client = MagicMock()
         mock_create_mqtt.return_value = mock_client
+        snapshot = _full_status_snapshot(gcode_state="RUNNING")
 
         def mock_connect(*args, **kwargs):
             mock_client.on_connect(mock_client, None, None, 0)
@@ -722,16 +764,120 @@ class TestBambuGetStatus(unittest.TestCase):
             mock_client.on_message(mock_client, None, msg2)
 
             # Send valid print message
-            msg3 = MagicMock()
-            msg3.payload = json.dumps({"print": {"status": "printing"}}).encode()
-            mock_client.on_message(mock_client, None, msg3)
+            mock_client.on_message(mock_client, None, _mqtt_message(snapshot))
 
         mock_client.connect.side_effect = mock_connect
 
         with patch("time.sleep"):
             result = get_status(_test_printer(), timeout=1)
 
-        self.assertEqual(result, {"status": "printing"})
+        self.assertEqual(result, snapshot)
+
+    @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
+    @patch("time.sleep")
+    def test_get_status_waits_through_delta_for_full_snapshot(self, mock_sleep, mock_create_mqtt):
+        """A delta arriving before the pushall reply must not be returned as the state.
+
+        Reproduces the live-printer intermittent: mid-print the report topic
+        delivers a lone nozzle_temper reading first, and returning it hands
+        agents a `printer` object with no gcode_state.
+        """
+        from bambu_cli.protocols.mqtt import get_status
+
+        mock_client = MagicMock()
+        mock_create_mqtt.return_value = mock_client
+        snapshot = _full_status_snapshot()
+
+        def mock_connect(*args, **kwargs):
+            mock_client.on_connect(mock_client, None, None, 0)
+            # Incremental delta first — exactly what was observed at ~37%.
+            mock_client.on_message(mock_client, None, _mqtt_message({"nozzle_temper": 219.9375}))
+            # Then the pushall reply.
+            mock_client.on_message(mock_client, None, _mqtt_message(snapshot))
+
+        mock_client.connect.side_effect = mock_connect
+
+        result = get_status(_test_printer(), timeout=1)
+
+        self.assertIn("gcode_state", result)
+        self.assertEqual(result["gcode_state"], "RUNNING")
+        self.assertEqual(result["mc_percent"], 37)
+        self.assertEqual(result["total_layer_num"], 200)
+
+    @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
+    @patch("time.sleep")
+    def test_get_status_merges_delta_over_earlier_snapshot(self, mock_sleep, mock_create_mqtt):
+        """Later values win when a delta follows the snapshot in the same window."""
+        from bambu_cli.protocols.mqtt import get_status
+
+        mock_client = MagicMock()
+        mock_create_mqtt.return_value = mock_client
+
+        def mock_connect(*args, **kwargs):
+            mock_client.on_connect(mock_client, None, None, 0)
+            # Snapshot missing one required key, so the wait continues...
+            partial_snapshot = _full_status_snapshot()
+            del partial_snapshot["bed_temper"]
+            mock_client.on_message(mock_client, None, _mqtt_message(partial_snapshot))
+            # ...and the next delta both completes and freshens the state.
+            mock_client.on_message(mock_client, None, _mqtt_message({"bed_temper": 61.0, "mc_percent": 38}))
+
+        mock_client.connect.side_effect = mock_connect
+
+        result = get_status(_test_printer(), timeout=1)
+
+        self.assertEqual(result["bed_temper"], 61.0)
+        self.assertEqual(result["mc_percent"], 38)
+        self.assertEqual(result["gcode_state"], "RUNNING")
+
+    @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    @patch("time.sleep")
+    def test_get_status_deltas_only_raises_instead_of_returning_partial(
+        self, mock_sleep, mock_logger, mock_create_mqtt
+    ):
+        """If no full snapshot ever arrives, error clearly rather than emit a partial."""
+        from bambu_cli.errors import PrinterStatusIncomplete
+        from bambu_cli.protocols.mqtt import get_status
+
+        mock_client = MagicMock()
+        mock_create_mqtt.return_value = mock_client
+
+        def mock_connect(*args, **kwargs):
+            mock_client.on_connect(mock_client, None, None, 0)
+            mock_client.on_message(mock_client, None, _mqtt_message({"nozzle_temper": 219.9375}))
+
+        mock_client.connect.side_effect = mock_connect
+
+        with self.assertRaises(PrinterStatusIncomplete) as cm:
+            get_status(_test_printer(), timeout=0.05, retries=1)
+
+        self.assertEqual(cm.exception.exit_code, 6)
+        self.assertEqual(cm.exception.failed_step, "status")
+        self.assertIn("gcode_state", cm.exception.detail["missing_keys"])
+        self.assertEqual(cm.exception.detail["received_keys"], ["nozzle_temper"])
+        # Every attempt re-issues pushall rather than settling for the delta.
+        self.assertEqual(mock_client.connect.call_count, 2)
+
+    @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
+    @patch("time.sleep")
+    def test_get_status_liveness_probe_accepts_partial(self, mock_sleep, mock_create_mqtt):
+        """doctor / --dry-run only prove MQTT works, so a delta is good enough."""
+        from bambu_cli.protocols.mqtt import get_status
+
+        mock_client = MagicMock()
+        mock_create_mqtt.return_value = mock_client
+
+        def mock_connect(*args, **kwargs):
+            mock_client.on_connect(mock_client, None, None, 0)
+            mock_client.on_message(mock_client, None, _mqtt_message({"nozzle_temper": 219.9375}))
+
+        mock_client.connect.side_effect = mock_connect
+
+        result = get_status(_test_printer(), timeout=1, require_complete=False)
+
+        self.assertEqual(result, {"nozzle_temper": 219.9375})
+        mock_client.connect.assert_called_once()
 
     @patch("bambu_cli.protocols.mqtt.create_mqtt_client")
     @patch("bambu_cli.logging_utils._BACKEND")

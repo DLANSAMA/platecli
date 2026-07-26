@@ -243,6 +243,44 @@ def test_monitor_non_sim_reaches_terminal(capsys):
     assert any("terminal" in ln or "FINISH" in ln for ln in lines)
 
 
+def test_monitor_merges_deltas_into_streamed_state(capsys):
+    """A delta must not stream as gcode_state=UNKNOWN at 0% — it updates the merged state."""
+    printer = _test_printer(simulation_mode=False)
+    client = MagicMock()
+
+    def connect(*a, **k):
+        if client.on_connect:
+            client.on_connect(client, None, None, 0)
+
+    def loop_start():
+        for payload in (
+            {"gcode_state": "RUNNING", "mc_percent": 37, "layer_num": 74, "total_layer_num": 200},
+            # Incremental delta: temperature only, no gcode_state.
+            {"nozzle_temper": 219.9375},
+            {"gcode_state": "FINISH", "mc_percent": 100},
+        ):
+            msg = MagicMock()
+            msg.payload = json.dumps({"print": payload}).encode()
+            client.on_message(client, {}, msg)
+
+    client.connect.side_effect = connect
+    client.loop_start.side_effect = loop_start
+    args = Namespace(json=True)
+    with (
+        patch("bambu_cli.printer.get_printer", return_value=printer),
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+    ):
+        mqtt_mod.monitor_status(args)
+
+    events = [json.loads(ln) for ln in capsys.readouterr().out.splitlines() if ln.strip()]
+    assert events, "expected at least one NDJSON event"
+    assert all(e["gcode_state"] != "UNKNOWN" for e in events)
+    # The delta keeps the print's layer context instead of resetting it to 0.
+    assert all(e["total_layer_num"] == 200 for e in events)
+    assert events[-1]["gcode_state"] == "FINISH"
+
+
 def test_execute_print_printer_error_code():
     printer = _test_printer(simulation_mode=False)
     client = MagicMock()

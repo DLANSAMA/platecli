@@ -7,7 +7,7 @@ import time
 from typing import Optional
 
 from bambu_cli.config import get_command_timeout
-from bambu_cli.errors import BambuError, abort
+from bambu_cli.errors import BambuError, PrinterStatusIncomplete, abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.utils import _resolve_ip, get_sequence_id
 
@@ -245,8 +245,34 @@ def send_command(
     return False
 
 
-def get_status(printer, timeout=None, retries=2):
-    """Get printer status via MQTT with retries."""
+# Keys a full state snapshot always carries. The printer publishes incremental
+# deltas on the report topic and only answers `pushall` with the complete state,
+# so "a message arrived" is not the same as "we have the state" — mid-print the
+# first thing to land is often a lone nozzle_temper reading. These four are what
+# both docs/schemas/status.json and the human renderer treat as always-present,
+# so they are the gate for telling a snapshot from a delta.
+_REQUIRED_STATUS_KEYS = ("gcode_state", "mc_percent", "bed_temper", "nozzle_temper")
+
+
+def status_is_complete(data):
+    """True when ``data`` is a full snapshot rather than an incremental delta."""
+    return isinstance(data, dict) and all(key in data for key in _REQUIRED_STATUS_KEYS)
+
+
+def get_status(printer, timeout=None, retries=2, *, require_complete=True):
+    """Get printer status via MQTT with retries.
+
+    Report-topic messages are merged into one accumulated state (later values
+    win) and we keep waiting — re-issuing ``pushall`` on each retry — until every
+    key in ``_REQUIRED_STATUS_KEYS`` is present, so callers never receive a
+    delta dressed up as a snapshot.
+
+    ``require_complete=False`` returns the first payload that arrives, for
+    callers using the reply only as a liveness probe (``doctor``, print
+    ``--dry-run``). With the default, a connection that yields nothing but
+    deltas raises ``PrinterStatusIncomplete`` rather than returning a partial;
+    a connection that yields nothing at all still returns ``None``.
+    """
     if timeout is None:
         timeout = printer.mqtt_timeout
 
@@ -283,29 +309,50 @@ def get_status(printer, timeout=None, retries=2):
             },
         }
 
+    # Accumulated across attempts: a retry re-issues pushall, and keys collected
+    # before the timeout are still the freshest we have.
+    merged: dict = {}
+    merged_lock = threading.Lock()
+
     for attempt in range(retries + 1):
-        result = {"data": None}
         status_received = threading.Event()
+        connect_failed = [False]
         client = create_mqtt_client(printer)
         client.user_data_set({})
 
-        def on_connect(client, userdata, flags, rc, properties=None):
+        # status_received / connect_failed are bound per attempt so a late
+        # callback from a previous attempt's client cannot wake this one.
+        def on_connect(
+            client,
+            userdata,
+            flags,
+            rc,
+            properties=None,
+            connect_failed=connect_failed,
+            status_received=status_received,
+        ):
             if rc == 0:
                 client.subscribe(f"device/{printer.serial}/report")
                 push = json.dumps({"pushing": {"sequence_id": get_sequence_id(), "command": "pushall"}})
                 client.publish(f"device/{printer.serial}/request", push)
             else:
                 logger.error(f"Connection failed: rc={rc}")
+                connect_failed[0] = True
                 status_received.set()
 
-        def on_message(client, userdata, msg):
+        def on_message(client, userdata, msg, status_received=status_received):
             try:
                 data = json.loads(msg.payload.decode("utf-8"))
-                if isinstance(data, dict) and "print" in data:
-                    result["data"] = data["print"]
-                    status_received.set()
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 logger.debug(f"MQTT decode error: {e}")
+                return
+            if not isinstance(data, dict) or not isinstance(data.get("print"), dict):
+                return
+            with merged_lock:
+                merged.update(data["print"])
+                complete = status_is_complete(merged)
+            if complete or not require_complete:
+                status_received.set()
 
         client.on_connect = on_connect
         client.on_message = on_message
@@ -315,7 +362,14 @@ def get_status(printer, timeout=None, retries=2):
             client.loop_start()
             try:
                 if status_received.wait(timeout):
-                    return result["data"]
+                    if connect_failed[0]:
+                        return None
+                    with merged_lock:
+                        snapshot = dict(merged)
+                    # Never hand back a falsy-but-not-None {}: callers treat the
+                    # return value as "reachable or not".
+                    if snapshot:
+                        return snapshot
             finally:
                 try:
                     client.loop_stop()
@@ -326,7 +380,14 @@ def get_status(printer, timeout=None, retries=2):
                 except Exception:
                     pass
             if attempt < retries:
-                logger.warning(f"MQTT status timeout on attempt {attempt + 1}. Retrying...")
+                with merged_lock:
+                    saw_partial = bool(merged)
+                if saw_partial:
+                    logger.warning(
+                        f"Printer sent only partial status on attempt {attempt + 1}. Re-requesting full state..."
+                    )
+                else:
+                    logger.warning(f"MQTT status timeout on attempt {attempt + 1}. Retrying...")
                 time.sleep(2**attempt)
         except (OSError, ssl.SSLError) as e:
             if attempt < retries:
@@ -335,6 +396,18 @@ def get_status(printer, timeout=None, retries=2):
             else:
                 logger.error(f"MQTT status error: {e}")
 
+    with merged_lock:
+        partial = dict(merged)
+    if partial and require_complete:
+        # We reached the printer, it just never answered pushall with a whole
+        # state. Emitting `partial` here is what hands agents a KeyError later.
+        missing = [key for key in _REQUIRED_STATUS_KEYS if key not in partial]
+        raise PrinterStatusIncomplete(
+            "Printer returned only partial status updates, never a full snapshot "
+            f"(missing {', '.join(missing)}). It may be busy mid-print; retry the command.",
+            detail={"missing_keys": missing, "received_keys": sorted(partial)},
+            next_command="plate status",
+        )
     return None
 
 
@@ -474,12 +547,16 @@ def monitor_status(args):
 
     last_state = [None]
     last_pct = [None]
+    # Same accumulation as get_status: report-topic messages are deltas, so a
+    # lone temperature update must not read as gcode_state=UNKNOWN at 0%.
+    merged: dict = {}
 
     def on_message(client, userdata, msg):
         try:
             data = json.loads(msg.payload.decode("utf-8"))
-            if isinstance(data, dict) and "print" in data:
-                p = data["print"]
+            if isinstance(data, dict) and isinstance(data.get("print"), dict):
+                merged.update(data["print"])
+                p = merged
                 state = p.get("gcode_state", "UNKNOWN")
                 pct = p.get("mc_percent", 0)
 
@@ -622,7 +699,7 @@ def execute_print_command(
                     )
                     abort("", exit_code=EXIT_FILE_ERROR)
             logger.info("   ✅ Printer reachable via MQTT (status check)...")
-            if printer.status(timeout=5):
+            if printer.status(timeout=5, require_complete=False):
                 logger.info("   ✅ MQTT connection verified.")
             else:
                 message = "MQTT connection failed."
