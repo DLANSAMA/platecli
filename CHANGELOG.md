@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-26
+
 ### Added
 - `tests/fixtures/cube.stl`, a 20 mm ASCII-STL cube — the only model committed
   to the repo (`*.stl` / `*.3mf` remain gitignored, with a narrow negation for
@@ -57,7 +59,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - Removed hardcoded version strings from README, `docs/api.md`, and the bug-report
   template; the version is single-sourced from `pyproject.toml`.
 - Refreshed measured test/coverage numbers in `docs/quality-roadmap.md` and
-  `docs/test-backlog.md` (666 tests, 83.3%).
+  `docs/test-backlog.md` (758 tests, 84.03%).
 - `AGENTS.md` retitled to the public product name.
 - `docs/api.md`: the `pause.json` / `resume.json` bullets now describe both the
   success and the `confirmation_required` shape, matching the dual schemas.
