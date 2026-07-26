@@ -353,6 +353,13 @@ def _cmd_snapshot(
 
     # --- Primary path: direct P1/A1 camera grab (no Docker). Falls through to the
     #     Docker/RTSP streamer below for X1-series or if no frame is obtained. ---
+    # Why the direct grab gave up, when it raised ("" when it simply returned no
+    # frame). Reported by the camera_direct_only gate below so the refusal names an
+    # actual cause. Held as str rather than the exception: it is only ever
+    # interpolated, and a plain str needs no annotation -- an ``Exception | None`` one
+    # would force a choice between ruff's UP037 and python_compat_smoke's PEP 604
+    # check, since this module has no ``from __future__ import annotations``.
+    _fallback_reason = ""
     try:
         printer = ctx.printer()
         _frame = _grab(printer)
@@ -379,9 +386,11 @@ def _cmd_snapshot(
             safe_log_error(message)
             abort("", exit_code=EXIT_NETWORK_ERROR)
         _frame = None
+        _fallback_reason = str(_exc)
         logger.debug(f"Direct camera grab unavailable ({_exc}); trying Docker streamer.")
     except Exception as _exc:
         _frame = None
+        _fallback_reason = str(_exc)
         logger.debug(f"Direct camera grab unavailable ({_exc}); trying Docker streamer.")
     if _frame:
         _write_snapshot_atomic(outpath, _frame)
@@ -402,6 +411,26 @@ def _cmd_snapshot(
                 }
             )
         return
+
+    # --- Single fail-closed choke point for camera_direct_only. ---
+    # Reached only when the direct grab produced no frame. Deliberately placed here
+    # rather than inside the except arms above, because the direct grab gives up via
+    # many routes that all land here: no cert_fingerprint configured, insecure_tls
+    # set (which skips verification entirely), a non-TLS network error such as a
+    # refused/reset port 6000, a desynced stream, or 30 headers with no valid JPEG on
+    # an otherwise verified connection. Gating once means a future route cannot
+    # silently reopen the downgrade to the unpinned streamer.
+    if ctx.settings.camera_direct_only:
+        _reason = f" ({_fallback_reason})" if _fallback_reason else ""
+        message = (
+            f"Direct camera grab produced no frame{_reason} and camera_direct_only is set, so "
+            "falling back to the Docker streamer was refused (the streamer ignores "
+            "cert_fingerprint). X1-series printers require the streamer: unset "
+            "camera_direct_only in your config to restore snapshots on those models."
+        )
+        emit_json_error(args, "snapshot", EXIT_NETWORK_ERROR, message, failed_step="grab", output=outpath)
+        safe_log_error(message)
+        abort("", exit_code=EXIT_NETWORK_ERROR)
 
     streamer_url = ctx.settings.camera_stream_url
     camera_image = ctx.settings.camera_image
