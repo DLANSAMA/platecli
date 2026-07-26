@@ -109,14 +109,15 @@ def _parse_ci_cov_floor() -> int:
 def _parse_doc_cov_floor(text: str) -> int | None:
     """Extract the CI coverage floor from doc text.
 
-    Matches patterns like 'floor 81', 'floor **81**', '--cov-fail-under=81'.
+    Matches patterns like 'floor 83', 'floor **83**', '--cov-fail-under=83'.
     Returns the first small-ish integer found after 'floor' (ignores mutation
     floor 40 or coverage-target 92 by picking the smallest value ≥ 50).
     """
     # Match 'floor' optionally followed by bold markers, then digits
     for m in re.finditer(r"floor\s+\*{0,2}(\d+)\*{0,2}", text):
         val = int(m.group(1))
-        # Skip mutation baseline floor (40%) and target (92) — CI floor is 81
+        # Skip mutation baseline floor (40%) and target (92); the CI floor is the
+        # only value in the 50-90 band
         if 50 <= val <= 90:
             return val
     return None
