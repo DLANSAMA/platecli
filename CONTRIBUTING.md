@@ -43,6 +43,31 @@ python scripts/cli_help_smoke.py
   patching module globals. Domain code raises `BambuError` / `abort`; `sys.exit` only in
   `bambu_cli/cli.py`.
 
+## Cleaning generated artifacts
+
+```bash
+python scripts/clean_artifacts.py             # __pycache__, *.pyc, tool caches, build/dist/wheelhouse, *.egg-info
+python scripts/clean_artifacts.py --dry-run   # list targets, delete nothing
+python scripts/clean_artifacts.py --venv      # ALSO delete .venv (asks first; -y skips the prompt)
+```
+
+`.venv` is **never** removed unless you pass `--venv` / `--all` — the script walks
+around `.git`, `.venv`, `venv`, `.claude` and `node_modules`. If you do remove it,
+recreate it with `uv sync --extra test` before the next `uv run`.
+
+Removal is verified rather than best-effort. On Windows a file that is in use (a
+running `python.exe`, an editor, another shell) makes deletion fail; the script
+reports the surviving path and exits non-zero instead of leaving a half-deleted
+tree. A `.venv` in that state makes every later `uv run` fail with
+`No pyvenv.cfg file` (exit code 106) — recover with:
+
+```bash
+python scripts/clean_artifacts.py --venv -y   # after closing whatever held the lock
+uv sync --extra test
+```
+
+CI runs the plain form before the release readiness smoke and never passes `--venv`.
+
 ## Lint and types (blocking in CI)
 
 ```bash

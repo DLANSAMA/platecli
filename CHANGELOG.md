@@ -83,6 +83,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   that treated exit `0` as "print started" was already silently wrong.
 
 ### Fixed
+- **`scripts/clean_artifacts.py` no longer deletes the developer's `.venv`.**
+  The script appended `.venv` to its removal list whenever `GITHUB_ACTIONS` was
+  unset — i.e. on every local run — and removed it with `ignore_errors=True`. On
+  Windows any locked file (a running `python.exe`) left a *partially* deleted
+  virtualenv, after which every `uv run` failed with `No pyvenv.cfg file` and
+  exit code 106, recoverable only by hand. Nothing warned about this, and the
+  name "clean_artifacts" does not suggest destroying the dev environment. The
+  deletion also served no purpose: `tests/release_readiness_smoke.py` skips any
+  path containing `.venv`, so a present `.venv` was never flagged. `.venv` is now
+  opt-in via `--venv` / `--all`, confirmed interactively (`-y` to skip), and the
+  walk no longer descends into `.git`, `.venv`, `venv`, `.claude` or
+  `node_modules`. Removal is verified instead of best-effort: a surviving path is
+  reported with recovery steps and a non-zero exit. Adds `--dry-run`, a docstring,
+  `argparse --help`, and `tests/test_clean_artifacts.py`. CI's invocation is
+  unchanged and never passed `--venv`.
 - **`job` now validates print options on every path, not just under `--confirm`.**
   `_run_job` only checked `--use-ams` / `--ams-mapping` when `--confirm` was passed
   and `--upload-only` was not, so the two paths agents use as a pre-check both
