@@ -8,6 +8,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ### Added
 
 - `camera_direct_only` config key (default `false`): when set, disables the Docker/RTSP streamer fallback so any direct port-6000 grab failure aborts instead of silently falling through to the unauthenticated streamer. Closes the remaining camera fallback residuals noted in SECURITY.md. X1-series printers still need the streamer; unset `camera_direct_only` for them.
+- Published JSON schemas for the last four `--json` commands that lacked them:
+  `upload.json`, `files.json`, `stop.json`, `setup.json`. README has claimed
+  "every command speaks `--json` with published schemas" for a while; that is now
+  true, and enforced rather than asserted.
+
+### Changed
+
+- Schema coverage is derived instead of hand-maintained. The contract suite reads
+  the subcommand list from `build_parser()` and fails if a command has no schema,
+  if a schema's `$id` disagrees with its filename, if a schema file is
+  unreferenced, or if the `docs/api.md` table omits one. The previous
+  hand-written list had already drifted — it omitted `status.json`.
+- `status_event.json` and `version.json` gained the `$id` and `title` fields the
+  other schemas already carried, so every published schema is self-identifying.
 
 ## [0.3.0] - 2026-07-26
 

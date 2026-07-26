@@ -1,11 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platecli.local/schemas/version.json",
+  "title": "platecli --version envelope",
   "type": "object",
-  "required": ["status", "command", "version"],
+  "required": [
+    "status",
+    "command",
+    "version"
+  ],
   "properties": {
-    "status": {"const": "ok"},
-    "command": {"const": "version"},
-    "version": {"type": "string", "minLength": 1}
+    "status": {
+      "const": "ok"
+    },
+    "command": {
+      "const": "version"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    }
   },
   "additionalProperties": false
 }

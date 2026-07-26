@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platecli.local/schemas/stop.json",
+  "title": "platecli stop success or confirmation envelope",
+  "type": "object",
+  "required": ["status", "command", "stopped"],
+  "properties": {
+    "status": {"enum": ["stopped", "confirmation_required"]},
+    "command": {"const": "stop"},
+    "stopped": {"type": "boolean"},
+    "next_command": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

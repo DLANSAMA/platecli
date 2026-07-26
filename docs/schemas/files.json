@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platecli.local/schemas/files.json",
+  "title": "platecli files listing envelope",
+  "type": "object",
+  "required": ["status", "command", "count", "files"],
+  "properties": {
+    "status": {"const": "ok"},
+    "command": {"const": "files"},
+    "count": {"type": "integer", "minimum": 0},
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path"],
+        "properties": {
+          "name": {"type": "string"},
+          "path": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

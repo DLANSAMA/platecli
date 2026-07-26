@@ -50,7 +50,13 @@ def _validate(instance, schema, path="$"):
             "boolean": bool,
             "array": list,
         }
-        assert isinstance(instance, mapping[t]), f"{path}: type {t} failed for {instance!r}"
+        # JSON Schema allows a list of types; setup.json needs it for the nullable
+        # model/nozzle fields, which are absent-as-null in a partial config.
+        allowed = t if isinstance(t, list) else [t]
+        matched = any(
+            instance is None if name == "null" else isinstance(instance, mapping[name]) for name in allowed
+        )
+        assert matched, f"{path}: type {t} failed for {instance!r}"
     if "minLength" in schema and isinstance(instance, str):
         assert len(instance) >= schema["minLength"], f"{path}: minLength"
     if isinstance(instance, dict):
@@ -74,29 +80,99 @@ def _reset():
     utils._LAST_ERROR_PAYLOAD = None
 
 
-def test_schemas_exist():
-    for name in (
-        "error_envelope.json",
-        "ok_envelope.json",
-        "version.json",
-        "status_event.json",
-        "job_ok.json",
-        "job_error.json",
-        "preflight.json",
-        "doctor.json",
-        "slice.json",
-        "download.json",
-        "config_cmd.json",
-        "gcode.json",
-        "snapshot.json",
-        "light.json",
-        "pause.json",
-        "resume.json",
-        "print.json",
-        "delete.json",
-        "slice_list_settings.json",
-    ):
-        assert (SCHEMA_DIR / name).is_file()
+# Which published schema(s) back each `--json`-emitting subcommand. README.md
+# advertises "every command speaks --json with published schemas", so this map is
+# what makes that claim enforceable rather than aspirational.
+#
+# Checked against build_parser() below instead of being a standalone list: a
+# hand-maintained inventory drifts (this test previously listed 19 names and had
+# already lost status.json), and CLAUDE.md forbids parallel hand-kept inventories.
+_COMMAND_SCHEMAS = {
+    "config": ["config_cmd.json"],
+    "delete": ["delete.json"],
+    "doctor": ["doctor.json"],
+    "download": ["download.json"],
+    "files": ["files.json"],
+    "gcode": ["gcode.json"],
+    "job": ["job_ok.json", "job_error.json"],
+    "light": ["light.json"],
+    "pause": ["pause.json"],
+    "preflight": ["preflight.json"],
+    "print": ["print.json"],
+    "resume": ["resume.json"],
+    # `send` is first-class but emits the same envelopes as `job`.
+    "send": ["job_ok.json", "job_error.json"],
+    "setup": ["setup.json"],
+    "slice": ["slice.json", "slice_list_settings.json"],
+    "snapshot": ["snapshot.json"],
+    "status": ["status.json", "status_event.json"],
+    "stop": ["stop.json"],
+    "upload": ["upload.json"],
+}
+
+# Schemas that are not tied to one subcommand: the shared envelopes plus
+# `--version`, which is a global flag rather than a subcommand.
+_SHARED_SCHEMAS = {"error_envelope.json", "ok_envelope.json", "version.json"}
+
+
+def _parser_subcommands():
+    """Same derivation idiom as scripts/cli_help_smoke.py, deliberately."""
+    from bambu_cli.cli import build_parser
+
+    parser = build_parser()
+    for action in parser._actions:
+        if getattr(action, "dest", None) == "command" or action.__class__.__name__ == "_SubParsersAction":
+            return set(getattr(action, "choices", None) or {})
+    raise AssertionError("could not derive subcommands from build_parser()")
+
+
+def test_every_subcommand_has_a_published_schema():
+    """Derived from the parser, so a new subcommand cannot ship schema-less.
+
+    If this fails after adding a command, add its schema to docs/schemas/ and map
+    it here -- do not delete the assertion. The README claim depends on it.
+    """
+    assert _parser_subcommands() == set(_COMMAND_SCHEMAS), (
+        "subcommands and schema map disagree; "
+        f"parser-only={sorted(_parser_subcommands() - set(_COMMAND_SCHEMAS))}, "
+        f"map-only={sorted(set(_COMMAND_SCHEMAS) - _parser_subcommands())}"
+    )
+    for command, names in _COMMAND_SCHEMAS.items():
+        for name in names:
+            assert (SCHEMA_DIR / name).is_file(), f"{command}: missing schema {name}"
+
+
+def test_every_schema_file_is_wellformed_and_self_identifying():
+    """Each schema parses, declares the required metadata, and its $id matches its
+    filename -- a copy-paste $id is otherwise invisible."""
+    found = sorted(p.name for p in SCHEMA_DIR.glob("*.json"))
+    assert found, "no schemas found"
+    for name in found:
+        schema = _load_schema(name)
+        for key in ("$schema", "$id", "title", "type"):
+            assert key in schema, f"{name}: missing {key!r}"
+        assert schema["$id"].rsplit("/", 1)[-1] == name, (
+            f"{name}: $id {schema['$id']!r} does not match filename"
+        )
+
+
+def test_no_orphan_schema_files():
+    """Every published schema is reachable from a subcommand or is a shared
+    envelope -- catches a schema left behind after a command is renamed."""
+    mapped = {name for names in _COMMAND_SCHEMAS.values() for name in names} | _SHARED_SCHEMAS
+    found = {p.name for p in SCHEMA_DIR.glob("*.json")}
+    assert not (found - mapped), f"unreferenced schema files: {sorted(found - mapped)}"
+
+
+def test_api_doc_lists_every_schema():
+    """docs/api.md carries a hand-written schema table that has drifted before.
+
+    README.md points agents at it, so a schema missing from the table is
+    effectively unpublished even though the file exists.
+    """
+    api = (ROOT / "docs" / "api.md").read_text(encoding="utf-8")
+    missing = [p.name for p in sorted(SCHEMA_DIR.glob("*.json")) if f"schemas/{p.name}" not in api]
+    assert not missing, f"schemas absent from docs/api.md: {missing}"
 
 
 def test_version_payload_matches_schema(monkeypatch, tmp_path, capsys):
@@ -267,6 +343,103 @@ def test_delete_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     _validate(payload, _load_schema("delete.json"))
     assert payload["status"] == "confirmation_required"
     assert payload["deleted"] is False
+
+
+def test_stop_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
+    config_path = tmp_path / "config" / "cfg.json"
+    _write_valid_config(config_path)
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "stop", "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    with pytest.raises(SystemExit):
+        main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("stop.json"))
+    assert payload["status"] == "confirmation_required"
+    assert payload["stopped"] is False
+
+
+def test_stop_success_fixture_matches_schema():
+    payload = {"status": "stopped", "command": "stop", "stopped": True}
+    _validate(payload, _load_schema("stop.json"))
+
+
+def test_files_listing_matches_schema(monkeypatch, tmp_path, capsys):
+    config_path = tmp_path / "config" / "cfg.json"
+    _write_valid_config(config_path)
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "files", "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("files.json"))
+    assert payload["count"] == len(payload["files"])
+
+
+def test_files_empty_listing_matches_schema():
+    """count/files must still validate when the printer holds nothing."""
+    _validate({"status": "ok", "command": "files", "count": 0, "files": []}, _load_schema("files.json"))
+
+
+def test_upload_matches_schema(monkeypatch, tmp_path, capsys):
+    config_path = tmp_path / "config" / "cfg.json"
+    _write_valid_config(config_path)
+    model = tmp_path / "probe.gcode.3mf"
+    model.write_bytes(b"probe payload")
+    monkeypatch.setattr(sys, "argv", ["plate", "--sim", "upload", str(model), "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    main()
+    payload = json.loads(capsys.readouterr().out)
+    _validate(payload, _load_schema("upload.json"))
+    assert payload["uploaded"] is True
+    assert payload["remote_name"] == "probe.gcode.3mf"
+
+
+def test_upload_dry_run_fixture_matches_schema():
+    payload = {
+        "status": "dry_run_ok",
+        "command": "upload",
+        "file": "/tmp/probe.gcode.3mf",
+        "remote_name": "probe.gcode.3mf",
+        "bytes": 13,
+        "uploaded": False,
+    }
+    _validate(payload, _load_schema("upload.json"))
+
+
+def test_setup_summary_matches_schema():
+    """Built by the real _setup_summary, not a hand-written fixture, so the schema
+    tracks the function rather than someone's memory of it."""
+    from bambu_cli.setup_cmd.common import _setup_summary
+
+    with_file = _setup_summary(
+        {
+            "printer_ip": "127.0.0.1",
+            "serial": "CONTRACTTESTSERIAL",
+            "access_code_file": "/tmp/access_code",
+            "model": "P1P",
+            "nozzle": "0.4",
+            "orca_slicer": "/opt/orca",
+            "profiles_dir": "/opt/profiles",
+            "cert_fingerprint": "aa" * 32,
+        }
+    )
+    _validate(with_file, _load_schema("setup.json"))
+    assert with_file["access_code_storage"] == "file"
+    assert with_file["access_code_file"] == "/tmp/access_code"
+
+    # Inline storage omits access_code_file entirely, and an empty config leaves
+    # model/nozzle null -- both must still validate.
+    inline = _setup_summary({"printer_ip": "127.0.0.1", "serial": "S", "access_code": "CODE"})
+    _validate(inline, _load_schema("setup.json"))
+    assert inline["access_code_storage"] == "inline"
+    assert "access_code_file" not in inline
+
+    # The summary must never carry the secret itself.
+    for payload in (with_file, inline):
+        assert "access_code" not in payload
+        assert "CODE" not in json.dumps(payload)
 
 
 def test_delete_success_fixture_matches_schema():

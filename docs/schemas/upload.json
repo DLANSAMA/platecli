@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platecli.local/schemas/upload.json",
+  "title": "platecli upload success or dry-run envelope",
+  "type": "object",
+  "required": ["status", "command", "file", "remote_name", "bytes", "uploaded"],
+  "properties": {
+    "status": {"enum": ["uploaded", "dry_run_ok"]},
+    "command": {"const": "upload"},
+    "file": {"type": "string"},
+    "remote_name": {"type": "string"},
+    "bytes": {"type": "integer", "minimum": 0},
+    "uploaded": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}

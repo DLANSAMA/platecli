@@ -56,8 +56,8 @@ Tracked in [SECURITY.md](../SECURITY.md) known limitations:
 
 | Gap | Notes |
 |-----|-------|
-| Schemas still thin / missing for | Dedicated `status` success (beyond envelope), `upload`, `files`, `stop`, `setup`; `send` is alias of `job` |
-| `docs/api.md` ↔ schemas | Keep hand-written api in sync when fields change (T5.3); optional generate later |
+| ~~Schemas missing for `upload`/`files`/`stop`/`setup`~~ | **Closed.** All four published; coverage is now derived from `build_parser()` so a new subcommand cannot ship schema-less. `send` intentionally shares `job`'s envelopes |
+| `docs/api.md` ↔ schemas | Presence is now guarded (`test_api_doc_lists_every_schema`), but *field-level* drift is not — keep the hand-written prose in sync when fields change (T5.3); optional generate later |
 | Monitor NDJSON goldens | `status_event.json` exists; add golden fixtures if not already covered |
 
 ### P3 — Suite maintainability & stretch
