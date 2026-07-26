@@ -204,6 +204,12 @@ def cmd_doctor(args, ctx=None):
             "camera_snapshot_note": (
                 "P1P/P1S capture directly from the printer camera and need no Docker; "
                 "X1-series fall back to the optional BambuP1Streamer container"
+                if not ctx.settings.camera_direct_only
+                else (
+                    "camera_direct_only is set: only the direct printer-camera grab is used "
+                    "(P1P/P1S). The BambuP1Streamer fallback is refused, so X1-series "
+                    "snapshots are unavailable until the option is unset"
+                )
             ),
         },
     }

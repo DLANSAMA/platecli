@@ -373,6 +373,175 @@ class TestBambuCmdSnapshot(unittest.TestCase):
             )
 
         mock_subproc.assert_called()
+        # Guards the default: camera_direct_only must be OFF unless opted in, or this
+        # existing fallback (and every X1-series user) would break.
+        from bambu_cli.context import Settings as _Settings
+
+        self.assertFalse(_Settings().camera_direct_only)
+
+    # --- camera_direct_only: the streamer fallback is refused entirely. ---
+    # SECURITY.md promises this option closes the two accepted camera residuals (the
+    # no-pin-configured fallback, and the non-TLS port-6000 failure fallback). The
+    # load-bearing assertion in each test below is that the docker/urlopen fakes were
+    # NEVER CALLED -- asserting only the exit code would still pass if the streamer ran.
+
+    def _direct_only_ctx(self, **overrides):
+        from bambu_cli.context import RuntimeContext, Settings
+
+        return RuntimeContext(settings=Settings(camera_direct_only=True, **overrides))
+
+    def _assert_direct_only_refusal(self, cm, mock_run, mock_urlopen, mock_logger):
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
+        # Never reached the streamer: no docker call, no HTTP request.
+        mock_run.assert_not_called()
+        mock_urlopen.assert_not_called()
+        self.assertTrue(
+            any("camera_direct_only" in c[0][0] for c in mock_logger.error.call_args_list),
+            "refusal message must name camera_direct_only so the user can find the cause",
+        )
+
+    def test_cmd_snapshot_direct_only_no_pin_ssl_error_fails_closed(self):
+        """Residual 1: with no pin configured an ssl.SSLError normally falls through
+        to the unpinned streamer. camera_direct_only must refuse instead."""
+        import ssl as ssl_mod
+
+        from bambu_cli.commands import cmd_snapshot
+
+        mock_logger, mock_run, mock_urlopen = MagicMock(), MagicMock(), MagicMock()
+        args = MagicMock()
+        args.output = "snap.jpg"
+
+        def _grab(printer):
+            raise ssl_mod.SSLError("no pin configured")
+
+        with (
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
+            self.assertRaises((SystemExit, BambuError)) as cm,
+        ):
+            cmd_snapshot(
+                args,
+                ctx=self._direct_only_ctx(cert_fingerprint=None, insecure_tls=False),
+                grab_frame=_grab,
+                which=lambda name: "/usr/bin/docker",
+                subprocess_run=mock_run,
+                urlopen=mock_urlopen,
+            )
+
+        self._assert_direct_only_refusal(cm, mock_run, mock_urlopen, mock_logger)
+
+    def test_cmd_snapshot_direct_only_network_error_fails_closed(self):
+        """Residual 2: a non-TLS port-6000 failure (refused/reset/timeout, which an
+        on-path attacker can induce) falls back even with a pin configured, because
+        X1-series printers legitimately refuse that port. camera_direct_only must
+        refuse instead."""
+        from bambu_cli.commands import cmd_snapshot
+
+        mock_logger, mock_run, mock_urlopen = MagicMock(), MagicMock(), MagicMock()
+        args = MagicMock()
+        args.output = "snap.jpg"
+
+        def _grab(printer):
+            raise ConnectionRefusedError("connection refused")
+
+        with (
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
+            self.assertRaises((SystemExit, BambuError)) as cm,
+        ):
+            cmd_snapshot(
+                args,
+                ctx=self._direct_only_ctx(cert_fingerprint="aa" * 32, insecure_tls=False),
+                grab_frame=_grab,
+                which=lambda name: "/usr/bin/docker",
+                subprocess_run=mock_run,
+                urlopen=mock_urlopen,
+            )
+
+        self._assert_direct_only_refusal(cm, mock_run, mock_urlopen, mock_logger)
+
+    def test_cmd_snapshot_direct_only_none_frame_fails_closed(self):
+        """The silent route: the grab returns no frame and raises nothing at all
+        (desynced stream, or 30 headers with no valid JPEG on an otherwise verified
+        connection). Today that downgrades to the unpinned streamer without any error,
+        which is the easiest case to miss."""
+        from bambu_cli.commands import cmd_snapshot
+
+        mock_logger, mock_run, mock_urlopen = MagicMock(), MagicMock(), MagicMock()
+        args = MagicMock()
+        args.output = "snap.jpg"
+
+        with (
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
+            self.assertRaises((SystemExit, BambuError)) as cm,
+        ):
+            cmd_snapshot(
+                args,
+                ctx=self._direct_only_ctx(cert_fingerprint="aa" * 32, insecure_tls=False),
+                grab_frame=lambda printer: None,
+                which=lambda name: "/usr/bin/docker",
+                subprocess_run=mock_run,
+                urlopen=mock_urlopen,
+            )
+
+        self._assert_direct_only_refusal(cm, mock_run, mock_urlopen, mock_logger)
+
+    def test_cmd_snapshot_direct_only_pin_mismatch_keeps_specific_message(self):
+        """A pin mismatch must keep its own, more specific message rather than being
+        swallowed by the generic direct-only refusal."""
+        from bambu_cli.camera import _CameraPinMismatch
+        from bambu_cli.commands import cmd_snapshot
+
+        mock_logger, mock_run, mock_urlopen = MagicMock(), MagicMock(), MagicMock()
+        args = MagicMock()
+        args.output = "snap.jpg"
+
+        def _grab(printer):
+            raise _CameraPinMismatch("Certificate fingerprint mismatch: expected aa, got bb")
+
+        with (
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
+            self.assertRaises((SystemExit, BambuError)) as cm,
+        ):
+            cmd_snapshot(
+                args,
+                ctx=self._direct_only_ctx(cert_fingerprint="aa" * 32, insecure_tls=False),
+                grab_frame=_grab,
+                which=lambda name: "/usr/bin/docker",
+                subprocess_run=mock_run,
+                urlopen=mock_urlopen,
+            )
+
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
+        mock_run.assert_not_called()
+        mock_urlopen.assert_not_called()
+        self.assertTrue(any("does not match pinned fingerprint" in c[0][0] for c in mock_logger.error.call_args_list))
+
+    def test_cmd_snapshot_direct_only_direct_success_unaffected(self):
+        """The happy path is untouched: a successful direct grab still saves the
+        snapshot and reports method=direct."""
+        from bambu_cli.commands import cmd_snapshot
+
+        mock_logger, mock_run, mock_urlopen = MagicMock(), MagicMock(), MagicMock()
+        args = MagicMock()
+        args.output = "snap.jpg"
+        args.json = False
+
+        with (
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
+            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("os.path.getsize", return_value=2048),
+        ):
+            cmd_snapshot(
+                args,
+                ctx=self._direct_only_ctx(cert_fingerprint="aa" * 32, insecure_tls=False),
+                grab_frame=lambda printer: b"\xff\xd8\xfffakejpeg",
+                which=lambda name: "/usr/bin/docker",
+                subprocess_run=mock_run,
+                urlopen=mock_urlopen,
+            )
+
+        # Saved via the direct path; the streamer was never involved.
+        mock_run.assert_not_called()
+        mock_urlopen.assert_not_called()
 
     def test_cmd_snapshot_start_container(self):
         from bambu_cli.commands import cmd_snapshot

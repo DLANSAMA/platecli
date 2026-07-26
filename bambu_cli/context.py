@@ -66,6 +66,7 @@ class Settings:
     camera_container_name: str = "bambu_camera"
     camera_port: str = "127.0.0.1:1985:1984"  # mirrors config.DEFAULT_CAMERA_PORT
     camera_stream_url: str = ""
+    camera_direct_only: bool = False
     allow_private_ips: bool = False
 
     @classmethod
@@ -112,6 +113,10 @@ class Settings:
             camera_container_name=cfg.get("camera_container_name", "bambu_camera"),
             camera_port=camera_port,
             camera_stream_url=camera_stream_url,
+            # Deliberately a sticky config key (unlike allow_private_ips below): it is a
+            # security opt-in, so it must survive across invocations. bool() so a JSON
+            # string cannot sneak through truthy.
+            camera_direct_only=bool(cfg.get("camera_direct_only", False)),
             # Always false from config: private-IP downloads are a per-invocation
             # CLI override only (``--allow-private-ips``), never a sticky config key.
             allow_private_ips=False,

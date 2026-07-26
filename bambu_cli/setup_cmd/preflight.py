@@ -256,7 +256,19 @@ def collect_preflight_checks():
     # Only X1-series need Docker for snapshots. P1/A1 capture directly over the
     # printer's TLS camera port (bambu_cli/camera.py:160-178), so warning them
     # that "camera snapshots will be unavailable" is simply false.
-    if shutil.which("docker"):
+    # camera_direct_only refuses the streamer outright, so Docker is irrelevant on every
+    # model -- reporting it as "available for snapshots" or warning that it is missing
+    # would both be misleading.
+    if settings.camera_direct_only:
+        checks.append(
+            _preflight_result(
+                "ok",
+                "docker",
+                "camera_direct_only is set, so snapshots never use Docker; the "
+                "BambuP1Streamer fallback is refused (X1-series snapshots are unavailable).",
+            )
+        )
+    elif shutil.which("docker"):
         checks.append(_preflight_result("ok", "docker", "Docker is available for optional camera snapshots."))
     elif settings.printer_model in _DIRECT_CAMERA_MODELS:
         checks.append(

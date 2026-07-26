@@ -299,6 +299,7 @@ or manually.
 | `camera_container_name` | no | `bambu_camera` | Docker container name |
 | `camera_port` | no | `127.0.0.1:1985:1984` | Docker publish mapping; loopback-only by default. Set to `0.0.0.0:1985:1984` to expose on the LAN (see [SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md)) |
 | `camera_stream_url` | no | derived | Must be localhost if set; used for Docker frame fetch |
+| `camera_direct_only` | no | `false` | When `true`, disables the Docker/RTSP streamer fallback — if the direct port-6000 grab fails for any reason, `snapshot` aborts instead of falling through. X1-series printers need the streamer; unset this to restore snapshots. Does not imply TLS verification — combine with `cert_fingerprint` for a verified direct-only camera. |
 | Timeouts | no | package defaults | Optional `network_timeout`, `slicer_timeout`, `command_timeout`, `upload_timeout` (seconds) |
 
 \* Either `access_code_file` or `access_code` is required. Inline `access_code` is deprecated and will be removed in a future release.
