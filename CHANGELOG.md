@@ -31,6 +31,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Fixed
 
+- Auto-repair of URL-derived filenames is now correct in four ways it was not, and
+  the repairer is guaranteed to produce names the printer-side check accepts.
+  Previously `_sanitize_download_filename` could emit a name `_safe_remote_name`
+  refused, meaning a model could download and then fail to upload.
+  - **Windows device names are detected before the first dot.** The check used
+    `os.path.splitext`, which strips only the last extension, so `aux.gcode.3mf`,
+    `con.gcode.3mf` and friends passed both functions — and `.gcode.3mf` is the
+    print-ready format this tool produces. On Windows those names are unusable.
+  - **The length cap is enforced in UTF-8 bytes, not characters.** 160 CJK
+    characters is 480 bytes and exceeded ext4's 255-byte limit, so the repairer
+    produced names the local filesystem rejected with `ENAMETOOLONG`. Truncation
+    stops on a codepoint boundary, so no mojibake.
+  - **A pathological extension no longer defeats truncation.** `"x." + "a" * 200`
+    left the stem limit at 1 and returned all 202 bytes untruncated.
+  - **Trailing whitespace/dots are stripped after truncating, not before**, since
+    truncation can land on a space — which Windows drops and the safety check
+    rejects.
+  Repaired names differ from before for these inputs (e.g. `aux.gcode.3mf` now
+  becomes `_aux.gcode.3mf`), so a re-download may land under a new name. Ordinary
+  names such as `USB-C Cover.stl` are untouched, and `#`/`%` remain legal.
 - `slice --list-settings` writes its listing to **stdout** instead of stderr, one
   key per line and unwrapped. It went through `logger.info`, so the obvious usage
   — `plate slice --list-settings | grep layer_height` — silently matched nothing,

@@ -16,7 +16,7 @@ Historical baseline (do not read as current), from the audit + full
 (1105 / 4973 stmts missed), **130** `sys.exit` sites in `bambu_cli/`, **7**
 `@mockable` sites (def + 6 uses), **1** `BambuError` raise in production.
 The "Baseline" column below is that snapshot. **Current measured (2026-07-26):
-758 passed, 84.03% branch coverage over 5555 statements.**
+920 passed, 84.32% branch coverage over 5595 statements.**
 
 | Area | Baseline | Gate to A | Gate to A+ | Primary evidence |
 |------|----------|-----------|------------|------------------|
@@ -56,7 +56,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **759** non-live tests passing (2026-07-26); **84.03%** coverage measured 2026-07-26 on Linux; CI floor **83**; per-module floors not enforced |
+| Tests | **A−** | **921** non-live tests collected / **920** passing (2026-07-26; the jump from 759 is mostly parametrised property tests over a hostile-filename corpus, not 160 new hand-written cases); **84.32%** coverage measured 2026-07-26 on Linux; CI floor **83**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
@@ -645,8 +645,9 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 > passing; 83.9% branch coverage over 5476 statements on Linux. Retained above as the
 > dated record.
 >
-> **Re-verified 2026-07-26**: **759** non-live tests passing; **83.6%** branch coverage
-> over **5555** statements on Windows (Windows runs slightly below the Linux figure).
+> **Re-verified 2026-07-26**: 759 non-live tests passing; 83.6% branch coverage over
+> 5555 statements on Windows (Windows runs slightly below the Linux figure). Retained
+> as the dated record; superseded later the same day by the scoreboard above.
 
 ### mockable count (burn-down)
 
