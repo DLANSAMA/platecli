@@ -23,6 +23,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `status_event.json` and `version.json` gained the `$id` and `title` fields the
   other schemas already carried, so every published schema is self-identifying.
 
+### Fixed
+
+- `plate setup` no longer silently deletes config keys it does not manage.
+  It rebuilt `config.json` from scratch, so re-running it for an unrelated reason
+  dropped hand-added settings — `camera_port`, the `*_timeout` tunables, and
+  security opt-ins such as `camera_direct_only`, which looked enabled afterwards
+  but was not. Setup now preserves unmanaged keys and lists the ones it kept.
+  Keys it *does* manage stay authoritative, so switching an inline `access_code`
+  to an `access_code_file` still removes the plaintext secret, and declining
+  `insecure_tls` still turns it off.
+
 ## [0.3.0] - 2026-07-26
 
 ### Added

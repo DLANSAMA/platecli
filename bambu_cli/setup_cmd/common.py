@@ -245,10 +245,69 @@ def _build_setup_config(
     return config
 
 
+# Keys the setup wizard owns. For these the freshly built config is authoritative,
+# including *absence*: declining insecure_tls, or moving an inline access_code into
+# an access_code_file, must REMOVE the stale key rather than preserve it. Every
+# other key found on disk is kept (see _merge_with_existing).
+_WIZARD_OWNED_KEYS = frozenset(
+    {
+        "printer_ip",
+        "serial",
+        "username",
+        "model",
+        "nozzle",
+        "orca_slicer",
+        "profiles_dir",
+        "access_code",
+        "access_code_file",
+        "cert_fingerprint",
+        "insecure_tls",
+    }
+)
+
+
+def _merge_with_existing(config, path=None):
+    """Carry over config keys the wizard does not manage.
+
+    ``_build_setup_config`` builds a dict from scratch, so writing it verbatim
+    silently dropped every hand-added key -- ``camera_port``, the ``*_timeout``
+    values, and security opt-ins such as ``camera_direct_only``. Losing a security
+    control because the user re-ran setup for an unrelated reason is the worst
+    case: it still looks enabled in their config history and is not in effect.
+
+    Only non-owned keys are carried over, so this cannot resurrect a secret or a
+    downgrade the wizard just removed.
+    """
+    path = path or _config_path()
+    try:
+        # utf-8-sig, matching config.load_config: Windows editors prepend a BOM.
+        with open(path, encoding="utf-8-sig") as f:
+            existing = json.load(f)
+    except FileNotFoundError:
+        return dict(config)
+    except (OSError, ValueError) as exc:
+        logger.warning(
+            f"⚠️  Could not read the existing config at {_display_path(str(path))} ({exc}); "
+            "settings that setup does not manage could not be preserved."
+        )
+        return dict(config)
+    if not isinstance(existing, dict):
+        return dict(config)
+
+    preserved = {key: value for key, value in existing.items() if key not in _WIZARD_OWNED_KEYS}
+    merged = dict(config)
+    # preserved excludes every owned key, so update() can never clobber a value
+    # the wizard just decided.
+    merged.update(preserved)
+    if preserved:
+        logger.info(f"   Kept existing settings that setup does not manage: {', '.join(sorted(preserved))}")
+    return merged
+
+
 def _write_setup_config(config, access_code_file_secret=None):
     if access_code_file_secret is not None:
         _secure_write_text(config["access_code_file"], access_code_file_secret.rstrip("\n") + "\n")
-    _secure_write_json(_config_path(), config)
+    _secure_write_json(_config_path(), _merge_with_existing(config))
     if sys.platform == "win32":
         logger.warning(
             "   ⚠️  On Windows, file mode 0600 is ignored. Consider storing the "
