@@ -31,6 +31,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Fixed
 
+- `slice --list-settings` writes its listing to **stdout** instead of stderr, one
+  key per line and unwrapped. It went through `logger.info`, so the obvious usage
+  — `plate slice --list-settings | grep layer_height` — silently matched nothing,
+  and Rich wrapped long values such as `description` across lines, defeating
+  `grep` even when stderr was captured. The header and closing hint stay on stderr
+  as human chrome, so redirecting stdout to a file yields only data. `--json`
+  output is unchanged.
 - `plate setup` no longer silently deletes config keys it does not manage.
   It rebuilt `config.json` from scratch, so re-running it for an unrelated reason
   dropped hand-added settings — `camera_port`, the `*_timeout` tunables, and

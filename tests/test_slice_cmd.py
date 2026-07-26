@@ -744,5 +744,76 @@ class TestCreateTempMachine(unittest.TestCase):
             _create_temp_machine(child_path, profiles_dir=self.tmpdir.name)
 
 
+class TestListSettingsStreams(unittest.TestCase):
+    """`slice --list-settings` is a discovery *query*, so its listing belongs on
+    stdout where it can be piped and grepped.
+
+    Regression: every setting was emitted via ``logger.info``, which writes to
+    stderr, so the obvious usage --
+
+        plate slice --list-settings | grep layer_height
+
+    -- silently matched nothing. Rich also wrapped long values (the ``description``
+    key) across lines, breaking grep even when stderr was captured.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        root = self.tmpdir.name
+        os.makedirs(os.path.join(root, "process"))
+        os.makedirs(os.path.join(root, "filament"))
+        with open(os.path.join(root, "process", "std.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "std", "layer_height": "0.2", "long_value": "a " * 80}, f)
+        with open(os.path.join(root, "filament", "pla.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "pla", "flow_ratio": "1.0"}, f)
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def _run(self):
+        import io
+        from contextlib import redirect_stdout
+
+        from bambu_cli.slicer.cmd import _list_settings
+
+        args = MagicMock()
+        args.json = False
+        args.list_settings = True
+        settings = MagicMock()
+        settings.profiles_dir = self.tmpdir.name
+        buf = io.StringIO()
+        with patch("bambu_cli.logging_utils._BACKEND") as mock_logger, redirect_stdout(buf):
+            _list_settings(args, settings)
+        return buf.getvalue(), mock_logger
+
+    def test_settings_go_to_stdout(self):
+        out, _ = self._run()
+        self.assertIn("[process] layer_height = 0.2", out)
+        self.assertIn("[filament] flow_ratio = 1.0", out)
+
+    def test_settings_are_not_logged_to_stderr(self):
+        """The listing must not ALSO go through the logger, or a piped stdout and a
+        captured stderr would disagree about what the settings are."""
+        _, mock_logger = self._run()
+        logged = " ".join(str(c) for c in mock_logger.info.call_args_list)
+        self.assertNotIn("[process] layer_height", logged)
+        self.assertNotIn("[filament] flow_ratio", logged)
+
+    def test_each_setting_is_one_unwrapped_line(self):
+        """A long value must stay on a single line so `grep` returns it whole."""
+        out, _ = self._run()
+        matches = [line for line in out.splitlines() if line.startswith("[process] long_value")]
+        self.assertEqual(len(matches), 1, f"expected exactly one long_value line, got {matches}")
+        self.assertIn("a a a", matches[0])
+
+    def test_header_and_hint_stay_on_stderr(self):
+        """Chrome stays off stdout so a redirect captures pure data."""
+        out, mock_logger = self._run()
+        self.assertNotIn("Settable OrcaSlicer settings", out)
+        self.assertNotIn("Override any of these", out)
+        logged = " ".join(str(c) for c in mock_logger.info.call_args_list)
+        self.assertIn("Settable OrcaSlicer settings", logged)
+
+
 if __name__ == "__main__":
     unittest.main()
