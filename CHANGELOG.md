@@ -22,6 +22,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   hand-written list had already drifted — it omitted `status.json`.
 - `status_event.json` and `version.json` gained the `$id` and `title` fields the
   other schemas already carried, so every published schema is self-identifying.
+- CI coverage floor raised **81 → 83**. Measured coverage had reached 84.10% on
+  Linux while the gate still accepted 81, leaving three points of silent
+  regression room; the existing drift guards pin the test count and the floor but
+  never the measured percentage. 83 rather than 84 because **Windows is the
+  binding leg at 83.85%** (Linux 84.10%, macOS 84.08%, Linux 3.9/3.12 ~84.3%), so
+  a floor of 84 would fail CI on Windows.
 
 ### Fixed
 

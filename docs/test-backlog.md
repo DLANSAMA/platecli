@@ -11,7 +11,7 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
 | Non-live tests collected | **759** passing (measured 2026-07-26) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **84.03%** Linux measured 2026-07-26; Windows runs slightly lower; **floor 81** | **≥92%** total; optional module floors |
+| Line/branch coverage (CI) | **84.10%** Linux / **83.85%** Windows measured 2026-07-26; **floor 83** (Windows is the binding leg) | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
@@ -20,7 +20,7 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 | Live printer | Documented opt-in harness | manual pre-release (optional scheduled lab) |
 | Product version | pre-1.0 Beta (single-sourced from `pyproject.toml`) | **v1.0.0** when roadmap §5 is complete |
 
-CI evidence: `.github/workflows/ci.yml` (`--cov-fail-under=81`, blocking ruff/mypy/bandit/pip-audit/purity greps).
+CI evidence: `.github/workflows/ci.yml` (`--cov-fail-under=83`, blocking ruff/mypy/bandit/pip-audit/purity greps).
 
 ## Ground rules for new tests
 
@@ -48,7 +48,7 @@ Tracked in [SECURITY.md](../SECURITY.md) known limitations:
 
 | Gap | Notes |
 |-----|-------|
-| Raise CI floor 81 → 85 → 88 → **92** | Residual: mqtt/ftps pin paths, pool recovery, wizard TTY, Orca process |
+| Raise CI floor 83 → 85 → 88 → **92** | Residual: mqtt/ftps pin paths, pool recovery, wizard TTY, Orca process |
 | Per-module floors (optional) | mqtt / ftps / netsafety / download / camera |
 | Hermetic fake Orca binary | Raises mutation kill rate on `slicer/output._finalize_slice`; slice unit tests less mock-heavy |
 

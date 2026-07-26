@@ -37,7 +37,7 @@ The "Baseline" column below is that snapshot. **Current measured (2026-07-26):
 
 Updated **2026-07-25** (docs truth pass; test/coverage numbers re-measured). Foundational phases
 (0/A/B) are done. Phase C **typing is done** (full package + `check_untyped_defs`);
-coverage floor is **81** (target 92). Phase D schemas largely landed but not
+coverage floor is **83** (target 92). Phase D schemas largely landed but not
 complete for every command. The camera Docker bind default and camera pin
 soft-fallback hardenings are now **fixed** (loopback-only default bind,
 fail-closed on pin mismatch and on `ssl.SSLError` during the handshake when a
@@ -56,8 +56,8 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **759** non-live tests passing (2026-07-26); **84.03%** coverage measured 2026-07-26 on Linux; CI floor **81**; per-module floors not enforced |
-| CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=81`** (A+ target remains 92) |
+| Tests | **A−** | **759** non-live tests passing (2026-07-26); **84.03%** coverage measured 2026-07-26 on Linux; CI floor **83**; per-module floors not enforced |
+| CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
 
@@ -66,7 +66,7 @@ architecture is A− until domain helpers leave `cli.py`. Remaining gap to A+ / 
 is coverage toward 92, schema completeness, B.4/B.5 layering, and documented camera
 hardenings. Tagging `v1.0.0` still requires §5.
 
-**Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09).
+**Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26; bound by the Windows leg at 83.85%, not Linux's 84.10%).
 Measured branch total is **84.03%** on Linux (2026-07-26; Windows historically ran ~0.4pt lower); the floor is set
 at the multi-OS minimum so the matrix does not flake while still denying ~2 points
 of silent rot vs the old 79 gate.
@@ -622,7 +622,7 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 | 0 Trust & truth | **done** | local | 2026-07-08 | allow-private-ips, bare except, version single-source |
 | A Testing foundation | **done** | local | 2026-07-08 | TLS suite, markers, transport tests, cov~80% |
 | B Error model & seams | **partial** | #11 | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed. **B.4** paths/jsonio/argutils extract and **B.5** single pin helper still open (2026-07-17 audit) |
-| C Coverage & typing | **in progress** | #18 | 2026-07-09 | full-package mypy + `check_untyped_defs` done; cov ~82% with CI floor **81** (target 92); per-module floors not enforced |
+| C Coverage & typing | **in progress** | #18 | 2026-07-09 | full-package mypy + `check_untyped_defs` done; cov ~84% with CI floor **83** (target 92); per-module floors not enforced |
 | D Contracts & 1.0 | **in progress** | local | — | schemas + contract harness + stability policy; remaining agent `--json` schemas land in follow-up PRs |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
 | Doc truth pass | **done** | local | 2026-07-24 | versions de-literalized, prerequisites stated, camera guidance corrected, test/coverage numbers re-measured |
