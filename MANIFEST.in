@@ -28,6 +28,10 @@ recursive-include bambu_cli *.py
 recursive-include scripts *.py
 recursive-include tests *.py
 
+# The one committed model fixture; without it, sdist tests and manual
+# `job`/`print` runs from an sdist have nothing to slice.
+recursive-include tests/fixtures *.stl
+
 # Defense in depth: never pull contributor-only docs if a future recursive rule expands.
 global-exclude CLAUDE.md
 global-exclude docs/quality-roadmap.md

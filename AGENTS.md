@@ -2,7 +2,13 @@
 
 Runs on Linux, macOS, and Windows.
 
-**Command:** `plate` (installed via pipx/pip/uv). From a source checkout, without installing: `python3 <repo>/scripts/bambu.py`.
+**Command:** `plate` (installed via pipx/pip/uv). From a source checkout, without installing: `python3 <repo>/scripts/bambu.py` — that runs the working tree, not whatever `plate` resolves to on `PATH`.
+
+> **Confirm which build you are running before reporting behaviour.** An installed `plate` is frequently an *older release* than the checkout you are reading, and the two can disagree — an unreleased fix changes which validation fires first, so the same command can exit `3` on the release and `5` on source. Tell them apart with `plate --version`: unreleased builds carry a `.devN` suffix, released ones do not. When behaviour contradicts this guide, re-run through `scripts/bambu.py` before filing a bug.
+
+**Reading `--json`:** the JSON envelope is written to **stdout**; Rich logging, progress, and `-v` diagnostics go to **stderr**. Parse stdout only — do not merge the streams, or log lines will corrupt the payload.
+
+**Model fixture:** `tests/fixtures/cube.stl` (a 20 mm cube) is the one model committed to the repo — `*.stl` / `*.3mf` are otherwise gitignored. Use it to exercise `job` / `print` instead of creating a stray model file.
 
 Prefer `job`/`send` for agent work. Always ask the user before running any command with `--confirm`.
 
