@@ -27,6 +27,9 @@ config.json
 
 # Runtime artifacts written by the CLI
 temp_leaked_study/
+# OrcaSlicer's CLI writes result.json (singular) into the working directory on
+# every slice. The `results.json` entry below never matched it.
+result.json
 results.json
 printer_capabilities.json
 printer_snap.png

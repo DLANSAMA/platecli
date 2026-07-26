@@ -202,6 +202,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `bambu_cli/bambu.py` looks up `reconfigure` via `getattr`, fixing the sole
   outstanding mypy error (`TextIO` has no `reconfigure`) without changing the
   Windows encoding hardening it performs.
+- `.gitignore` now ignores `result.json`, the slice-result file OrcaSlicer's CLI
+  drops in the working directory on every `plate slice`. The existing entry read
+  `results.json` (plural) and never matched, so the file showed up as untracked
+  in every working tree after a slice.
 
 ### Security
 - **`plate doctor` no longer prints your printer's LAN IP or full certificate
@@ -220,6 +224,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   trusted-publishing `id-token: write` permission.
 - Releases now re-run the full CI matrix on the tagged commit before publishing,
   so a tag on a red commit can no longer reach PyPI.
+- The four demo GIFs committed to the repo (`docs/demo-{dark,light}.gif`,
+  `docs/doctor-{dark,light}.gif`) previously had the maintainer's printer LAN IP
+  and full certificate SHA-256 **rasterised into the frames**, where no
+  code-level redaction could reach them. The GIFs are embedded in README.md and
+  docs/manual.md and served from raw.githubusercontent.com, making them the most
+  widely-read copy of that data. Re-recorded against the doctor redaction from
+  #61; the fingerprint now shows a hex-free match confirmation and the IP reads
+  `<redacted>`.
 
 ## [0.2.2] - 2026-07-24
 
