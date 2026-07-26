@@ -1,10 +1,10 @@
 name: CI
 
-# push is limited to master so PR branches don't run everything twice
+# push is limited to main so PR branches don't run everything twice
 # (once for the push, once for the pull_request event).
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
   # Weekly drift detector: firmware, the Printables GraphQL API, OrcaSlicer
   # flags and new CVEs (pip-audit) all move without a commit in this repo.

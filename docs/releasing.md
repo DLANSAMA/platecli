@@ -2,6 +2,12 @@
 
 ## Preconditions
 
+- **`main` is a protected branch.** Every change lands via pull request; direct pushes are
+  rejected by the branch ruleset. Each `test` matrix leg and the `lint` job are required
+  status checks, and merges are squash-only. There are 0 bypass actors, so no one can skip
+  the gate — including for a release. If you add or rename a job in `ci.yml`, update the
+  ruleset's required checks to match, or PRs will block forever waiting on a check that no
+  longer reports.
 - The commit you are about to tag is **green on CI** (`gh run list --branch main --limit 1`).
   Tags must only ever point at green commits: `release.yml` re-runs the full CI matrix
   via `uses: ./.github/workflows/ci.yml` before build/publish, so a red commit fails the
@@ -12,7 +18,9 @@
 
 ## Release
 
-1. Bump `version` in `pyproject.toml`, update `CHANGELOG.md`, merge to `main`, wait for green.
+1. Open a pull request containing the `version` bump in `pyproject.toml` and the
+   `CHANGELOG.md` `Unreleased` → version move. Wait for the required checks, then
+   squash-merge.
 2. `git tag vX.Y.Z && git push --tags`
 3. `release.yml` runs: CI matrix -> build (sdist+wheel, `twine check`, tag/version match)
    -> publish to PyPI via trusted publishing (`pypi` environment, `id-token: write`)
@@ -36,7 +44,11 @@ So a bad release is fixed by yanking it and shipping the next patch.
      unpublishable. Deletion breaks existing pins and still burns the version number.
 2. **Never reuse the version number.** Do not re-tag `vX.Y.Z`, do not force-push the tag,
    do not attempt to re-upload. The next release is `X.Y.Z+1`.
-3. **Fix forward.** Land the fix on `main`, confirm CI green, bump to `X.Y.Z+1`, tag, push.
+   (Note: re-tagging and force-moving `vX.Y.Z` tags is also **mechanically enforced** by the
+   `protect release tags` ruleset — git will reject those operations outright. If you hit
+   that error while trying to fix something, that is expected behaviour, not a bug.)
+3. **Fix forward.** Land the fix on `main` via a pull request (same PR-required flow as the
+   normal release), confirm CI green, bump to `X.Y.Z+1`, tag, push.
 4. **Changelog the yank.** Under the new version add:
    `### Fixed` / `- 0.2.3 was yanked from PyPI (<one-line reason>); use 0.2.4.`
    and leave the yanked version's own section in place with a `**Yanked.**` note. The

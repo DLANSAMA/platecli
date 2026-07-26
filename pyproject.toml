@@ -58,6 +58,7 @@ test = [
 Homepage = "https://github.com/DLANSAMA/platecli"
 Repository = "https://github.com/DLANSAMA/platecli"
 Issues = "https://github.com/DLANSAMA/platecli/issues"
+Discussions = "https://github.com/DLANSAMA/platecli/discussions"
 Changelog = "https://github.com/DLANSAMA/platecli/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md"
 
