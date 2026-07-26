@@ -56,7 +56,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **720** non-live tests passing; **83.9%** coverage measured 2026-07-25; CI floor **81**; per-module floors not enforced |
+| Tests | **A−** | **759** non-live tests passing (2026-07-26); **83.9%** coverage measured 2026-07-25 on Linux; CI floor **81**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=81`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
@@ -641,8 +641,12 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 > branch total now **83.3%** (666 non-live tests, 5386 stmts). Prior ~82.3% / ~81.9%
 > figures were accurate at 2026-07-17 and are retained above as the dated record.
 >
-> **Re-verified 2026-07-25** (second truth pass + drift guard): **720** non-live tests
-> passing; **83.9%** branch coverage over **5476** statements on Linux.
+> **Re-verified 2026-07-25** (second truth pass + drift guard): 720 non-live tests
+> passing; 83.9% branch coverage over 5476 statements on Linux. Retained above as the
+> dated record.
+>
+> **Re-verified 2026-07-26**: **759** non-live tests passing; **83.6%** branch coverage
+> over **5555** statements on Windows (Windows runs slightly below the Linux figure).
 
 ### mockable count (burn-down)
 
