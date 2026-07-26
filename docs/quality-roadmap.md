@@ -15,8 +15,8 @@ Historical baseline (do not read as current), from the audit + full
 `pytest --cov=bambu_cli` on 2026-07-08: **368 tests**, **78%** line coverage
 (1105 / 4973 stmts missed), **130** `sys.exit` sites in `bambu_cli/`, **7**
 `@mockable` sites (def + 6 uses), **1** `BambuError` raise in production.
-The "Baseline" column below is that snapshot. **Current measured (2026-07-25):
-720 passed, 83.9% branch coverage over 5476 statements.**
+The "Baseline" column below is that snapshot. **Current measured (2026-07-26):
+758 passed, 84.03% branch coverage over 5555 statements.**
 
 | Area | Baseline | Gate to A | Gate to A+ | Primary evidence |
 |------|----------|-----------|------------|------------------|
@@ -56,7 +56,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **759** non-live tests passing (2026-07-26); **83.9%** coverage measured 2026-07-25 on Linux; CI floor **81**; per-module floors not enforced |
+| Tests | **A−** | **759** non-live tests passing (2026-07-26); **84.03%** coverage measured 2026-07-26 on Linux; CI floor **81**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=81`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
@@ -67,7 +67,7 @@ is coverage toward 92, schema completeness, B.4/B.5 layering, and documented cam
 hardenings. Tagging `v1.0.0` still requires §5.
 
 **Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09).
-Measured branch total is **83.9%** on Linux (2026-07-25; Windows historically ran ~0.4pt lower); the floor is set
+Measured branch total is **84.03%** on Linux (2026-07-26; Windows historically ran ~0.4pt lower); the floor is set
 at the multi-OS minimum so the matrix does not flake while still denying ~2 points
 of silent rot vs the old 79 gate.
 

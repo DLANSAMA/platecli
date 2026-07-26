@@ -5,23 +5,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
-### Fixed
-- **`scripts/bambu.py` — the documented "run from a source checkout without
-  installing" entrypoint — never worked.** Python puts the script's own
-  directory (`scripts/`) on `sys.path`, not the repo root, so it died with
-  `ModuleNotFoundError: No module named 'bambu_cli'` on any clean checkout. It
-  now prepends the repo root before importing. This mattered more than it looks:
-  with the shim broken, the only way to run the CLI was an installed `plate`,
-  which is usually an older release than the checkout — so contributors and
-  agents were reporting the *released* behaviour as if it were the source's.
-
-### Changed
-- The in-development version now carries a `.devN` suffix (`0.3.0.dev0`).
-  Previously `main` advertised the same version as the last PyPI release while
-  behaving differently — `plate --version` could not distinguish a source build
-  from the release, which made bug reports ambiguous. Drop the suffix when
-  tagging.
-
 ### Added
 - `tests/fixtures/cube.stl`, a 20 mm ASCII-STL cube — the only model committed
   to the repo (`*.stl` / `*.3mf` remain gitignored, with a narrow negation for
@@ -31,26 +14,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   stdout, Rich logs and `-v` diagnostics on stderr; parse stdout only) and warns
   agents to confirm whether they are running an installed `plate` or the
   checkout before reporting behaviour.
-
-### Security
-- **`plate doctor` no longer prints your printer's LAN IP or full certificate
-  SHA-256 in its human output by default.** doctor output is routinely pasted
-  into issue reports and recorded into the README/PyPI demo GIFs. The IP now
-  reads `<redacted>`, and once a cert is pinned doctor prints a hex-free match
-  confirmation instead of the fingerprint. Pass `-v`/`--verbose` to see both.
-  The full fingerprint is still printed when the cert is *not* yet pinned (you
-  need it to pin), the MQTT-failure message still echoes the configured IP so a
-  typo is diagnosable, and the `--json` contract is unchanged.
-- The bug-report template now asks for `plate doctor --json` (which redacts the
-  LAN IP) instead of the human output.
-- All GitHub Actions are pinned to immutable commit SHAs, enforced by
-  `tests/ci_workflow_smoke.py`. Notably `pypa/gh-action-pypi-publish` was
-  tracking the mutable `release/v1` branch in the job that holds the PyPI
-  trusted-publishing `id-token: write` permission.
-- Releases now re-run the full CI matrix on the tagged commit before publishing,
-  so a tag on a red commit can no longer reach PyPI.
-
-### Added
 - `docs/troubleshooting.md`: a symptom-keyed troubleshooting guide organised
   around the errors the CLI emits (MQTT/FTPS connectivity, cert-pin mismatches,
   OrcaSlicer and profile paths, camera/Docker, SSRF-blocked downloads, config
@@ -71,6 +34,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   user's behalf, subject to Printables' terms and each model's own licence.
 
 ### Changed
+- The in-development version now carries a `.devN` suffix (`0.3.0.dev0`).
+  Previously `main` advertised the same version as the last PyPI release while
+  behaving differently — `plate --version` could not distinguish a source build
+  from the release, which made bug reports ambiguous. Drop the suffix when
+  tagging.
 - `docs/manual.md`: the OrcaSlicer section now covers per-OS installation, the
   exact auto-detected default paths, and how to override them.
 - platecli now identifies itself honestly when talking to Printables:
@@ -110,6 +78,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   that treated exit `0` as "print started" was already silently wrong.
 
 ### Fixed
+- **`scripts/bambu.py` — the documented "run from a source checkout without
+  installing" entrypoint — never worked.** Python puts the script's own
+  directory (`scripts/`) on `sys.path`, not the repo root, so it died with
+  `ModuleNotFoundError: No module named 'bambu_cli'` on any clean checkout. It
+  now prepends the repo root before importing. This mattered more than it looks:
+  with the shim broken, the only way to run the CLI was an installed `plate`,
+  which is usually an older release than the checkout — so contributors and
+  agents were reporting the *released* behaviour as if it were the source's.
 - **`scripts/clean_artifacts.py` no longer deletes the developer's `.venv`.**
   The script appended `.venv` to its removal list whenever `GITHUB_ACTIONS` was
   unset — i.e. on every local run — and removed it with `ignore_errors=True`. On
@@ -226,6 +202,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `bambu_cli/bambu.py` looks up `reconfigure` via `getattr`, fixing the sole
   outstanding mypy error (`TextIO` has no `reconfigure`) without changing the
   Windows encoding hardening it performs.
+
+### Security
+- **`plate doctor` no longer prints your printer's LAN IP or full certificate
+  SHA-256 in its human output by default.** doctor output is routinely pasted
+  into issue reports and recorded into the README/PyPI demo GIFs. The IP now
+  reads `<redacted>`, and once a cert is pinned doctor prints a hex-free match
+  confirmation instead of the fingerprint. Pass `-v`/`--verbose` to see both.
+  The full fingerprint is still printed when the cert is *not* yet pinned (you
+  need it to pin), the MQTT-failure message still echoes the configured IP so a
+  typo is diagnosable, and the `--json` contract is unchanged.
+- The bug-report template now asks for `plate doctor --json` (which redacts the
+  LAN IP) instead of the human output.
+- All GitHub Actions are pinned to immutable commit SHAs, enforced by
+  `tests/ci_workflow_smoke.py`. Notably `pypa/gh-action-pypi-publish` was
+  tracking the mutable `release/v1` branch in the job that holds the PyPI
+  trusted-publishing `id-token: write` permission.
+- Releases now re-run the full CI matrix on the tagged commit before publishing,
+  so a tag on a red commit can no longer reach PyPI.
 
 ## [0.2.2] - 2026-07-24
 

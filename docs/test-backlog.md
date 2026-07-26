@@ -11,7 +11,7 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
 | Non-live tests collected | **759** passing (measured 2026-07-26) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **83.9%** Linux measured 2026-07-25; Windows runs slightly lower; **floor 81** | **≥92%** total; optional module floors |
+| Line/branch coverage (CI) | **84.03%** Linux measured 2026-07-26; Windows runs slightly lower; **floor 81** | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
