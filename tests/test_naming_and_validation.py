@@ -46,6 +46,162 @@ def test_sanitize_download_filename_reserved_and_controls():
     assert name.upper().startswith("_") or name != "CON.stl"
 
 
+# Names that broke one of the two functions, or plausibly could. Kept as one corpus
+# so the round-trip property below covers every case the individual tests assert.
+_HOSTILE_NAMES = [
+    # Windows device names before the FIRST dot. splitext() only strips the last
+    # extension, so every <device>.gcode.3mf -- the project's print-ready format --
+    # slipped through both functions.
+    "aux.gcode.3mf",
+    "CON.gcode.3mf",
+    "com1.gcode.3mf",
+    "lpt9.3mf",
+    "nul.tar.gz",
+    "aux",
+    "AUX.",
+    "aux.GCODE.3MF",
+    "prn.stl",
+    # A pathological "extension" consumed the whole budget, leaving the result over
+    # the cap entirely untruncated.
+    "x." + "a" * 200,
+    # Truncation used to run last and could leave a trailing space, or shorten a
+    # stem back into a reserved device name.
+    "a" * 159 + " " + "b" * 50,
+    "a" * 158 + "." + "b" * 50,
+    "AUX" + "Z" * 10 + "." + "c" * 156,
+    # Length was capped in characters; 160 CJK chars is 480 UTF-8 bytes and exceeds
+    # ext4's 255-byte limit (ENAMETOOLONG on write). The bare form is the one that
+    # discriminates: at exactly 160 characters a char-based cap sees nothing wrong.
+    "日" * 160,
+    "日" * 160 + ".3mf",
+    "🖨" * 100 + ".stl",
+    # Traversal, separators, control characters, CRLF command smuggling.
+    "../../etc/passwd",
+    "..%2f..%2fx.stl",
+    "%2e%2e%2fetc%2fpasswd.stl",
+    "%252e%252e%252f.stl",
+    "%00.stl",
+    "evil%0d%0aSTOR x.stl",
+    "model\r\n.stl",
+    "model\x00.stl",
+    "C:\\Windows\\model.stl",
+    "/abs/path/model.stl",
+    # Degenerate.
+    ".",
+    "..",
+    "",
+    "   ",
+    "...",
+    # Legal names that must survive intact.
+    "USB-C Cover.stl",
+    "part #3.stl",
+    "50%off.stl",
+    "Ünïcodé Mödel.stl",
+]
+
+
+@pytest.mark.parametrize("raw", _HOSTILE_NAMES)
+def test_sanitized_names_are_always_accepted_by_the_remote_check(raw):
+    """The repairer must never emit a name the printer-side check refuses.
+
+    This is the load-bearing invariant: `_sanitize_download_filename` runs on the
+    download path and `_safe_remote_name` guards upload, so any disagreement means
+    a file that downloads cannot then be uploaded -- `job` would fail after a
+    successful download. Three such disagreements existed (oversized extension,
+    trailing space after truncation, truncation re-creating a reserved stem).
+    """
+    fixed = N._sanitize_download_filename(raw)
+    assert N._safe_remote_name(fixed) is not None, f"{raw!r} repaired to {fixed!r}, which _safe_remote_name rejects"
+
+
+@pytest.mark.parametrize("raw", _HOSTILE_NAMES)
+def test_sanitize_is_idempotent(raw):
+    """Re-sanitizing must be a no-op, or the same model downloaded twice could land
+    under two different names."""
+    once = N._sanitize_download_filename(raw)
+    assert N._sanitize_download_filename(once) == once
+
+
+@pytest.mark.parametrize("raw", _HOSTILE_NAMES)
+def test_sanitized_names_carry_no_dangerous_characters(raw):
+    """Separators and the FTP command delimiters must never survive repair."""
+    fixed = N._sanitize_download_filename(raw)
+    for char in ("/", "\\", "\r", "\n", "\0"):
+        assert char not in fixed, f"{raw!r} repaired to {fixed!r}, which still contains {char!r}"
+    assert fixed == fixed.strip(" ."), f"{fixed!r} has a leading/trailing space or dot"
+    assert fixed not in (".", "..", "")
+
+
+def test_reserved_device_names_are_caught_before_the_first_dot():
+    """Regression: `aux.gcode.3mf` passed both functions because splitext() left the
+    stem as `aux.gcode`. Windows reserves the segment before the first dot."""
+    assert N._reserved_device_stem("aux.gcode.3mf") is True
+    assert N._reserved_device_stem("AUX.stl") is True
+    assert N._reserved_device_stem("com1.gcode.3mf") is True
+    assert N._reserved_device_stem("auxiliary.stl") is False
+    assert N._reserved_device_stem("my-aux.stl") is False
+    # Both functions must agree, or the round-trip breaks.
+    assert N._sanitize_download_filename("aux.gcode.3mf") == "_aux.gcode.3mf"
+    assert N._safe_remote_name("aux.gcode.3mf") is None
+
+
+# Inputs that correctly yield "model.stl": the degenerate ones, plus two whose real
+# basename simply *is* model.stl. Anything else must keep something of the original.
+_EXPECTED_FALLBACKS = {".", "..", "", "   ", "...", "C:\\Windows\\model.stl", "/abs/path/model.stl"}
+
+
+@pytest.mark.parametrize("raw", [n for n in _HOSTILE_NAMES if n not in _EXPECTED_FALLBACKS])
+def test_repair_never_degrades_a_usable_name(raw):
+    """`_sanitize_download_filename` ends with a validate-or-fall-back-to-model.stl
+    guard. That guarantees safety but would silently discard the user's filename if
+    the repair steps above it regressed, and the round-trip test alone cannot see
+    that (model.stl is perfectly safe). So assert the fallback is never reached for
+    an input that can be repaired.
+    """
+    assert N._sanitize_download_filename(raw) != "model.stl"
+
+
+def test_name_budget_is_bytes_not_characters():
+    """160 CJK characters is 480 UTF-8 bytes, which ext4 refuses (ENAMETOOLONG).
+
+    Uses the bare 160-character form deliberately: with a trailing ``.3mf`` the name
+    is 164 characters and a character-based cap would truncate it too, so that input
+    cannot tell the two rules apart.
+    """
+    from bambu_cli.constants import MAX_DOWNLOAD_FILENAME_LENGTH as MAX
+
+    raw = "日" * 160
+    assert len(raw) <= MAX, "input must be within the CHARACTER cap for this test to discriminate"
+    assert len(raw.encode("utf-8")) > MAX, "input must exceed the BYTE cap"
+
+    fixed = N._sanitize_download_filename(raw)
+    assert len(fixed.encode("utf-8")) <= MAX
+    # Truncation must not split a codepoint into mojibake.
+    assert fixed == fixed.encode("utf-8").decode("utf-8")
+    # The rejecter has to use the same rule, or the round-trip breaks.
+    assert N._safe_remote_name(raw) is None
+
+
+def test_ordinary_names_are_left_alone():
+    """Repair must not churn names that were already fine -- users would see files
+    renamed for no reason."""
+    for name in ("USB-C Cover.stl", "part #3.stl", "50%off.stl", "benchy.gcode.3mf"):
+        assert N._sanitize_download_filename(name) == name
+
+
+def test_content_disposition_percent_is_not_double_decoded():
+    """A literal `%20` in a plain `filename=` param is not an escape sequence, so it
+    must survive. Adding unquote() to the shared sanitizer would have decoded it."""
+    got = N._filename_from_content_disposition('attachment; filename="save%20file.stl"')
+    assert got == "save%20file.stl"
+
+
+def test_content_disposition_rfc5987_still_decodes():
+    """The RFC 5987 `filename*` path does its own decoding and must keep working."""
+    got = N._filename_from_content_disposition("attachment; filename*=UTF-8''%E6%97%A5%E6%9C%AC.3mf")
+    assert got == "日本.3mf"
+
+
 def test_is_print_ready_name():
     assert N._is_print_ready_name("a.3mf") is True
     assert N._is_print_ready_name("a.gcode") is True

@@ -64,19 +64,65 @@ def _download_target_filename(args, url, resolved_name=None):
     return _download_filename_with_extension(filename, url, fallback_name=resolved_name)
 
 
+def _reserved_device_stem(filename):
+    """True if *filename* begins with a Windows reserved device name.
+
+    Windows reserves the segment before the **first** dot, so ``aux.gcode.3mf`` is
+    every bit as reserved as ``aux.stl``. ``os.path.splitext`` strips only the last
+    extension, which let every ``<device>.gcode.3mf`` — this project's primary
+    print-ready extension — through both the repairer and the safety check.
+    """
+    return filename.split(".", 1)[0].upper() in WINDOWS_RESERVED_FILENAMES
+
+
+def _utf8_truncate(value, budget):
+    """Trim *value* to at most *budget* UTF-8 bytes without splitting a codepoint."""
+    encoded = value.encode("utf-8")
+    if len(encoded) <= budget:
+        return value
+    return encoded[:budget].decode("utf-8", errors="ignore")
+
+
+def _within_name_budget(filename):
+    """Filename length is capped in **bytes**, not characters.
+
+    160 CJK characters encode to 472 UTF-8 bytes, which exceeds ext4's 255-byte
+    per-name limit, so a character-based cap happily produced names the local
+    filesystem then refused with ``ENAMETOOLONG``.
+    """
+    return len(filename.encode("utf-8")) <= MAX_DOWNLOAD_FILENAME_LENGTH
+
+
 def _sanitize_download_filename(filename):
+    """Repair an arbitrary (often URL-derived) name into a portable, safe one.
+
+    Guarantees the result is accepted by ``_safe_remote_name``, so a file that
+    downloads can always be uploaded. That did not hold before: truncation ran
+    after the reserved-name check and ignored the extension length, so it could
+    emit a name over the cap, ending in a space, or shortened back into ``AUX`` —
+    each of which the printer-side check then rejected.
+    """
     filename = _portable_basename(filename)
     filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", filename).strip(" .")
     if filename in (".", "..") or not filename:
         return "model.stl"
-    stem, ext = os.path.splitext(filename)
-    if stem.upper() in WINDOWS_RESERVED_FILENAMES:
+    if _reserved_device_stem(filename):
         filename = f"_{filename}"
+    if not _within_name_budget(filename):
         stem, ext = os.path.splitext(filename)
-    if len(filename) > MAX_DOWNLOAD_FILENAME_LENGTH:
-        stem_limit = max(1, MAX_DOWNLOAD_FILENAME_LENGTH - len(ext))
-        filename = f"{stem[:stem_limit]}{ext}"
-    return filename
+        # Cap the share of the budget an "extension" may claim. Without this, a
+        # pathological name like "x." + "a" * 200 left stem_limit at 1 and returned
+        # the whole 202-byte string untruncated, over the cap.
+        ext_budget = min(len(ext.encode("utf-8")), MAX_DOWNLOAD_FILENAME_LENGTH // 2)
+        stem = _utf8_truncate(stem, max(1, MAX_DOWNLOAD_FILENAME_LENGTH - ext_budget))
+        filename = f"{stem}{_utf8_truncate(ext, ext_budget)}"
+    # Strip AFTER truncating, not before: truncation can land on a space or dot,
+    # which _safe_remote_name rejects.
+    filename = filename.strip(" .")
+    # Enforce the invariant rather than trusting the ordering above. Falling back
+    # loses the original name, so `test_repair_never_degrades_a_usable_name` asserts
+    # this path is not reached for any input that can be repaired.
+    return filename if _safe_remote_name(filename) else "model.stl"
 
 
 def _filename_from_content_disposition(value):
@@ -127,10 +173,13 @@ def _safe_remote_name(filename):
         return None
     if filename != filename.strip(" ."):
         return None
-    if len(filename) > MAX_DOWNLOAD_FILENAME_LENGTH:
+    # Byte budget and first-dot device check, matching _sanitize_download_filename.
+    # These two rules must stay identical in both functions: the repairer validates
+    # its own output against this check, so any divergence means a file that
+    # downloads cannot be uploaded.
+    if not _within_name_budget(filename):
         return None
-    stem, _ = os.path.splitext(filename)
-    if stem.upper() in WINDOWS_RESERVED_FILENAMES:
+    if _reserved_device_stem(filename):
         return None
     return filename
 
