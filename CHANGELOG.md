@@ -345,4 +345,11 @@ Initial development version: LAN-mode printer control (MQTT/FTPS), one-shot `job
 - Expanded unit coverage for netsafety handlers, setup helpers, slicer pure paths, wizard guided flows.
 
 ### Removed
-- `requirements.txt`, which duplicated the `dependencies` already declared in `pyproject.toml`. Install with `uv pip install -e .` (or `pip install bambu-local-cli`) instead.
+- `requirements.txt`, which duplicated the `dependencies` already declared in `pyproject.toml`. Install with `uv pip install -e .` (or `pip install platecli`) instead.
+
+[Unreleased]: https://github.com/DLANSAMA/platecli/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/DLANSAMA/platecli/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/DLANSAMA/platecli/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/DLANSAMA/platecli/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/DLANSAMA/platecli/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/DLANSAMA/platecli/releases/tag/v0.1.0
