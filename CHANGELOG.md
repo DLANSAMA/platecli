@@ -83,6 +83,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   that treated exit `0` as "print started" was already silently wrong.
 
 ### Fixed
+- **`setup` and `--migrate-access-code` no longer fail outright when the config
+  directory is behind filesystem virtualization.** Windows MSIX/AppContainer
+  redirection of `%APPDATA%` makes `os.replace` report `ERROR_NOT_SAME_DEVICE`
+  (`WinError 17`) even for two paths in the *same* directory, so every config and
+  access-code write raised `Could not migrate access code: [WinError 17] ...` and
+  platecli could not persist configuration at all on such a machine. The atomic
+  temp-file-plus-rename path is unchanged and still the default; only on that
+  specific errno (`EXDEV` / winerror 17) does it fall back to writing the file in
+  place, and it warns that the write is not crash-safe. The fallback writes the
+  target directly rather than copying the temp file over it, so a secret is never
+  left in a second location. Reproduced and verified against a real redirected
+  `%APPDATA%\bambu`.
+- **OrcaSlicer auto-detection now finds stock Windows installs.** The current
+  Windows installer lays the binary down as `orca-slicer.exe`, but detection only
+  probed `OrcaSlicer.exe`, so `plate setup` missed every default install and users
+  had to set `orca_slicer` by hand. Both names are now probed under each install
+  root (hyphenated first), plus a `PATH` lookup for custom locations. Found on a
+  real Windows box with OrcaSlicer 2.4.2.
+- When no OrcaSlicer exists anywhere on the machine, the `orca-slicer` /
+  `profiles-dir` errors from `preflight`, `config validate`, and `slice` now append
+  a ready-to-run install command for the host platform (`winget` / `brew` /
+  `flatpak`) instead of only suggesting a config edit — there is nothing to point
+  the config at until something is installed. When an install *is* present, the
+  existing "detected at <path>" hint still wins.
+- `tests/live_printer_smoke.py` now decodes CLI subprocess output as UTF-8 instead of
+  the platform default. On a Windows box with a cp1252 codepage the harness's reader
+  threads died with `UnicodeDecodeError` on the CLI's emoji output, losing stdout/stderr
+  while the run still reported success. `tests/agent_cli_smoke.py` already carried this
+  fix; the live harness had been missed.
 - README, AGENTS.md, SECURITY.md, docs/api.md, and docs/manual.md no longer claim a
   universal `--confirm` gate that `pause`/`resume` did not implement; `--confirm` is
   now documented as a deliberate-action gate rather than an authorization boundary.

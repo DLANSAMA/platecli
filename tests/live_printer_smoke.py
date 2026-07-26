@@ -115,6 +115,11 @@ def run_cli(args, expected_returncode=0, timeout=180):
             command,
             capture_output=True,
             text=True,
+            # Decode child output as UTF-8 rather than the platform default
+            # (cp1252 on Windows), which cannot decode the CLI's emoji output and
+            # would kill the reader thread, leaving result.stdout/stderr as None.
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
         )
@@ -293,7 +298,16 @@ def validate_gcode_requires_confirm():
     # Intentionally omit --confirm. Expect confirmation_required (JSON) or non-success
     # that does not claim sent=true.
     command = CLI + ["gcode", "M105", "--json"]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=60, check=False)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        # Same UTF-8 decode requirement as run_cli above.
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        check=False,
+    )
     # Must not claim the gcode was sent.
     if result.stdout.strip():
         try:

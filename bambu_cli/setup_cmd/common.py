@@ -1,5 +1,6 @@
 """Shared setup helpers: config path, secure writes, prompts, config building."""
 
+import errno
 import getpass
 import json
 import os
@@ -54,6 +55,15 @@ def _atomic_secure_write(path, text, *, backup=False):
     Use only for config.json; do **not** pass ``backup=True`` for secret files (access
     code) because a second copy of the credential on disk is a worse tradeoff than the
     recovery convenience.
+
+    One environment defeats the rename: when the target directory is behind a
+    filesystem-virtualization boundary (Windows MSIX/AppContainer redirection of
+    ``%APPDATA%``, some sandboxes), ``os.replace`` reports ``EXDEV`` /
+    ``ERROR_NOT_SAME_DEVICE`` even though both paths are in the *same* directory. There
+    the atomic write cannot succeed at all, so rather than fail every config and
+    access-code write we fall back to writing the target in place. That fallback is
+    **not** crash-safe — see :func:`_write_in_place` — so it is taken only for that
+    specific errno and it warns.
     """
     expanded = _expand_path(path)
     directory = os.path.dirname(expanded)
@@ -76,7 +86,21 @@ def _atomic_secure_write(path, text, *, backup=False):
                 os.chmod(bak, 0o600)
             except OSError:
                 pass
-        os.replace(tmp_path, expanded)
+        try:
+            os.replace(tmp_path, expanded)
+        except OSError as exc:
+            if not _is_cross_device_error(exc):
+                raise
+            logger.warning(
+                f"⚠️  Atomic replace is unavailable for {_display_path(expanded)} "
+                "(the directory is redirected across a filesystem boundary); writing in "
+                "place instead. An interrupted write could leave this file incomplete."
+            )
+            _write_in_place(expanded, text)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
     except BaseException:
         try:
             os.unlink(tmp_path)
@@ -87,6 +111,33 @@ def _atomic_secure_write(path, text, *, backup=False):
         os.chmod(expanded, 0o600)
     except OSError:
         pass
+
+
+def _is_cross_device_error(exc):
+    """True when an OSError is a cross-device rename refusal.
+
+    Windows raises ``ERROR_NOT_SAME_DEVICE`` (winerror 17) for a redirected directory;
+    POSIX uses ``EXDEV``. Python maps winerror 17 to ``errno.EXDEV`` inconsistently
+    across versions, so check both.
+    """
+    if getattr(exc, "errno", None) == errno.EXDEV:
+        return True
+    return getattr(exc, "winerror", None) == 17
+
+
+def _write_in_place(expanded, text):
+    """Write ``text`` straight to ``expanded`` at mode 0600, without a rename.
+
+    Deliberately not crash-safe: it truncates the target before writing, so an
+    interrupted write loses the previous contents. Used only where the atomic path is
+    impossible. Writing directly (rather than copying the temp file over) avoids
+    leaving a second copy of a secret on disk.
+    """
+    fd = os.open(expanded, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
 
 
 def _secure_write_json(path, data):

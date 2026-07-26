@@ -175,7 +175,7 @@ def collect_preflight_checks():
     settings = current_settings()
     cfg_for_paths = cfg or current_config() or {}
     from bambu_cli.commands.doctor import _DIRECT_CAMERA_MODELS
-    from bambu_cli.config import detect_orca_slicer, detect_profiles_dir
+    from bambu_cli.config import detect_orca_slicer, detect_profiles_dir, orca_install_hint
 
     orca_path = _expand_path(cfg_for_paths.get("orca_slicer", settings.orca_slicer))
     if not orca_path:
@@ -189,6 +189,8 @@ def collect_preflight_checks():
             message += (
                 f' Detected an OrcaSlicer at {_display_path(detected)} — set "orca_slicer" to this in config.json.'
             )
+        else:
+            message += f" {orca_install_hint()}"
         checks.append(_preflight_result("error", "orca-slicer", message))
     else:
         orca_problem = _slicer_executable_problem(orca_path)
@@ -200,6 +202,8 @@ def collect_preflight_checks():
                 orca_problem += (
                     f' Detected an OrcaSlicer at {_display_path(detected)} — set "orca_slicer" to this in config.json.'
                 )
+            # When nothing is detected, _slicer_executable_problem already
+            # appended the install hint.
             checks.append(_preflight_result("error", "orca-slicer", orca_problem))
 
     profiles_dir = _expand_path(cfg_for_paths.get("profiles_dir", settings.profiles_dir))
@@ -214,6 +218,8 @@ def collect_preflight_checks():
             message += (
                 f' Detected profiles at {_display_path(detected_profiles)} — set "profiles_dir" to this in config.json.'
             )
+        else:
+            message += f" {orca_install_hint()}"
         checks.append(_preflight_result("error", "profiles-dir", message))
     elif os.path.isdir(profiles_dir):
         checks.append(
@@ -226,6 +232,8 @@ def collect_preflight_checks():
             message += (
                 f' Detected profiles at {_display_path(detected_profiles)} — set "profiles_dir" to this in config.json.'
             )
+        elif not detected_profiles:
+            message += f" {orca_install_hint()}"
         checks.append(_preflight_result("error", "profiles-dir", message))
 
     if shutil.which("gmsh"):

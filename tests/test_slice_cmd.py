@@ -537,7 +537,11 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
             with self.assertRaises((SystemExit, BambuError)):
                 cmd_slice(args)
 
-        mock_logger.error.assert_called_with("OrcaSlicer not found at /tmp/missing_orca")
+        # The stubbed os.path.exists hides every OrcaSlicer candidate, so detection
+        # finds nothing and the message appends the platform install one-liner.
+        message = mock_logger.error.call_args[0][0]
+        assert message.startswith("OrcaSlicer not found at /tmp/missing_orca")
+        assert "then run `plate setup`" in message
 
     @patch("os.listdir")
     @patch("os.path.isdir")

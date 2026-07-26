@@ -34,6 +34,14 @@ model URL or file  →  download  →  slice (OrcaSlicer)  →  upload  →  pri
 
 **Requirements:** Python 3.9+, and [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/releases) installed locally if you want to slice. `plate slice` and `plate job` shell out to the OrcaSlicer binary; `download`, `status`, `upload`, and `print` do not need it. `plate setup` auto-detects the usual install locations (macOS app bundle, Windows Program Files, and on Linux a `$PATH` binary, Flatpak export, or AppImage), and `plate preflight` (or `plate config validate`) tells you if it can't find one.
 
+Fastest way to get OrcaSlicer, if you don't have it:
+
+```bash
+winget install --id SoftFever.OrcaSlicer          # Windows
+brew install --cask orcaslicer                    # macOS
+flatpak install -y flathub com.orcaslicer.OrcaSlicer   # Linux
+```
+
 ```bash
 pipx install platecli
 # or

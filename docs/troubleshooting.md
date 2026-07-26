@@ -30,6 +30,7 @@ the `plate doctor` output — but check first that no access code is visible.
 - [Print failed with error code 83935248](#print-failed-with-error-code-83935248)
 - [Downloads: DNS resolution failed, or no safe/reachable IP addresses found](#downloads-dns-resolution-failed-or-no-safereachable-ip-addresses-found)
 - [Access code problems: missing file, or an inline code in config.json](#access-code-problems-missing-file-or-an-inline-code-in-configjson)
+- ["Atomic replace is unavailable ... writing in place instead"](#atomic-replace-is-unavailable--writing-in-place-instead)
 - [Config not found — and where the config file actually lives](#config-not-found--and-where-the-config-file-actually-lives)
 - [Missing dependency: paho-mqtt](#missing-dependency-paho-mqtt)
 - [Nothing happens when I run a print command](#nothing-happens-when-i-run-a-print-command)
@@ -208,6 +209,26 @@ plate setup --orca-slicer /path/to/orca-slicer --profiles-dir /path/to/resources
 On Linux/macOS the binary must also be executable; if it is not, `preflight`
 says so and suggests `chmod +x`.
 
+### If OrcaSlicer is not installed at all
+
+When there is no OrcaSlicer anywhere on the machine there is nothing to point
+the config at, so `preflight` and `slice` instead print the one-liner for your
+platform. The fastest way to get it:
+
+| Platform | Command |
+|----------|---------|
+| Windows | `winget install --id SoftFever.OrcaSlicer` |
+| macOS | `brew install --cask orcaslicer` |
+| Linux | `flatpak install -y flathub com.orcaslicer.OrcaSlicer` |
+
+Or download a build from [the releases page](https://github.com/OrcaSlicer/OrcaSlicer/releases).
+Then run `plate setup` — it auto-detects the install and writes both paths for
+you. Verify with `plate preflight`.
+
+> On Windows the installer lays the binary down as `orca-slicer.exe` (older
+> builds used `OrcaSlicer.exe`); auto-detection probes both names, so you
+> should not need to set the path by hand.
+
 Full per-OS install instructions, the auto-detected default locations, and the
 Flatpak/AppImage caveats live in the user guide:
 [OrcaSlicer](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md#orcaslicer).
@@ -381,6 +402,30 @@ plate setup --migrate-access-code
 
 `preflight` also checks the file's permissions. On Linux/macOS keep it at `0600`
 (`chmod 600 ~/.config/bambu/access_code`).
+
+## "Atomic replace is unavailable ... writing in place instead"
+
+A warning, not an error — the write still succeeds and no action is required.
+
+`plate` normally saves `config.json` and the access-code file by writing a temp
+file alongside the target and renaming it over the top, so an interrupted write
+can never leave a half-written file. Some Windows environments virtualize
+`%APPDATA%`: if you run `plate` from inside an MSIX-packaged app or a sandbox,
+your config directory is a reparse point into the package's private storage, and
+Windows refuses the rename with `ERROR_NOT_SAME_DEVICE` (`WinError 17`) even
+though both paths look like the same folder.
+
+When `plate` sees that specific error it writes the file directly instead and
+prints this warning. The tradeoff is real but small: that single write is no
+longer crash-safe, so if the machine loses power at exactly the wrong moment the
+file could be left incomplete. `config.json.bak` still holds the previous config.
+
+If you would rather keep atomic writes, run `plate` from an ordinary terminal
+(PowerShell, Windows Terminal, cmd) rather than from inside the packaged app, or
+point the config somewhere outside the redirected tree.
+
+Earlier versions failed outright here with
+`Could not migrate access code: [WinError 17] ...` and could not save config at all.
 
 ## Config not found — and where the config file actually lives
 

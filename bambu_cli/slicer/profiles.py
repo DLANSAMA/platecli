@@ -41,17 +41,22 @@ def _profiles_dir_diagnostic(profiles_dir):
 
 def _slicer_executable_problem(path: str | None) -> str | None:
     """Return a human-readable OrcaSlicer path problem, or None when usable."""
+    from bambu_cli.config import detect_orca_slicer, orca_install_hint
 
     if not path or not str(path).strip():
-        return (
-            "OrcaSlicer is not configured. Install OrcaSlicer "
-            "(https://github.com/SoftFever/OrcaSlicer/releases), then run `plate setup`, "
-            'or set "orca_slicer" in your config.json.'
-        )
+        if not detect_orca_slicer():
+            # Nothing installed: installing is the first step, and `plate setup`
+            # picks up the paths afterwards, so don't also suggest a config edit.
+            return f"OrcaSlicer is not configured. {orca_install_hint()}"
+        return 'OrcaSlicer is not configured. Run `plate setup`, or set "orca_slicer" in your config.json.'
     expanded = _expand_path(path)
     display = _display_path(expanded)
     if not os.path.exists(expanded):
-        return f"OrcaSlicer not found at {display}"
+        message = f"OrcaSlicer not found at {display}"
+        # Nothing anywhere on this machine — a config edit cannot fix that.
+        if not detect_orca_slicer():
+            message += f". {orca_install_hint()}"
+        return message
     if sys.platform != "win32" and not os.access(expanded, os.X_OK):
         return (
             f"OrcaSlicer is not executable at {display}; run `chmod +x {display}` or update orca_slicer in config.json."
