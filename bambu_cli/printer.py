@@ -51,9 +51,16 @@ class BambuPrinter:
         """Send a JSON command payload via MQTT."""
         return mqtt_protocol.send_command(self, payload, timeout=timeout, retries=retries)
 
-    def status(self, timeout: Optional[float] = None, retries: int = 2) -> Optional[dict[str, Any]]:
-        """Get the printer status via MQTT."""
-        return mqtt_protocol.get_status(self, timeout=timeout, retries=retries)
+    def status(
+        self, timeout: Optional[float] = None, retries: int = 2, *, require_complete: bool = True
+    ) -> Optional[dict[str, Any]]:
+        """Get the printer status via MQTT.
+
+        Returns a merged, complete state snapshot. Pass ``require_complete=False``
+        to accept the first report-topic message instead, for liveness probes
+        that do not read individual fields.
+        """
+        return mqtt_protocol.get_status(self, timeout=timeout, retries=retries, require_complete=require_complete)
 
     @contextlib.contextmanager
     def get_ftp_client(self, timeout: Optional[float] = None):

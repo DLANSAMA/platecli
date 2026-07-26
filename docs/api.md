@@ -163,6 +163,25 @@ One-shot query returns printer state, temperatures, and a normalized AMS block:
 
 Top-level keys also mirror common fields from the raw printer map for convenience.
 
+`printer` is always a complete state snapshot. The printer publishes incremental
+deltas on its MQTT report topic and answers `pushall` with the whole state, so
+`status` merges report messages and keeps waiting (re-requesting on each retry)
+until `gcode_state`, `mc_percent`, `bed_temper`, and `nozzle_temper` are all
+present. If the printer is too busy to answer with a full snapshot before the
+timeout, `status` fails with exit code `6` and
+`"failed_step": "status"` rather than emitting a partial `printer` object:
+
+```json
+{
+  "status": "error",
+  "command": "status",
+  "exit_code": 6,
+  "error": "Printer returned only partial status updates, never a full snapshot (missing gcode_state, mc_percent). It may be busy mid-print; retry the command.",
+  "failed_step": "status",
+  "detail": {"missing_keys": ["gcode_state", "mc_percent"], "received_keys": ["nozzle_temper"]}
+}
+```
+
 ### `status --monitor` (NDJSON)
 
 Streams one JSON object per line until a terminal state. Schema:

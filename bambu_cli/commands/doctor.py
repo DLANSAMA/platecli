@@ -142,7 +142,9 @@ def cmd_doctor(args, ctx=None):
     logger.info(f"   [2/3] Verifying MQTT connectivity to {shown_ip()}:{ctx.settings.mqtt_port}...")
     printer = ctx.printer()
     net_timeout = get_network_timeout(args)
-    status = printer.status(timeout=net_timeout, retries=0)
+    # Connectivity probe only: any report-topic reply proves MQTT works, so don't
+    # fail the check just because the printer answered with a mid-print delta.
+    status = printer.status(timeout=net_timeout, retries=0, require_complete=False)
     if status:
         logger.info("   ✅ MQTT connection established. Printer identified.")
     else:

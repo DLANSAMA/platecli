@@ -83,6 +83,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   that treated exit `0` as "print started" was already silently wrong.
 
 ### Fixed
+- **`status` no longer returns a partial MQTT delta as if it were a full state
+  snapshot.** The printer publishes incremental updates on the `report` topic and
+  only sends the complete state in reply to `pushall`, but `status` returned
+  whichever message arrived first. Mid-print that was intermittently a single
+  `nozzle_temper` reading, so `plate --json status` emitted a `printer` object
+  with no `gcode_state`, `mc_percent`, or `layer_num` — a random `KeyError` for
+  any agent reading those fields. Report messages are now merged into one
+  accumulated state and `status` keeps waiting (re-issuing `pushall` on each
+  retry, honouring the existing timeout and retry count) until the state is
+  complete. If only deltas ever arrive, it now fails with a clear error naming
+  the missing keys and exit code `6` instead of emitting an incomplete object.
+  `doctor` and `print --dry-run`, which use the reply only as a liveness probe,
+  still accept the first message.
+- `status --monitor` merges deltas the same way, so a temperature-only update no
+  longer streams as `"gcode_state": "UNKNOWN"` at 0% mid-print.
 - **`setup` and `--migrate-access-code` no longer fail outright when the config
   directory is behind filesystem virtualization.** Windows MSIX/AppContainer
   redirection of `%APPDATA%` makes `os.replace` report `ERROR_NOT_SAME_DEVICE`

@@ -25,6 +25,7 @@ the `plate doctor` output — but check first that no access code is visible.
 - [zeroconf is not installed, so auto-discovery is disabled](#zeroconf-is-not-installed-so-auto-discovery-is-disabled)
 - [Docker not found in PATH when taking a snapshot](#docker-not-found-in-path-when-taking-a-snapshot)
 - [The camera TLS certificate does not match the pinned fingerprint](#the-camera-tls-certificate-does-not-match-the-pinned-fingerprint)
+- [Printer returned only partial status updates](#printer-returned-only-partial-status-updates)
 - [The file was not found on the printer](#the-file-was-not-found-on-the-printer)
 - [Timed out waiting for the printer to acknowledge print start](#timed-out-waiting-for-the-printer-to-acknowledge-print-start)
 - [Print failed with error code 83935248](#print-failed-with-error-code-83935248)
@@ -330,6 +331,25 @@ unpinned Docker path. After a firmware update, re-pin with `plate doctor` as in
 If you have no pin at all, `plate` warns that no `cert_fingerprint` is pinned
 for the camera connection and tells you to run `plate setup` to pin one. Pin it
 — don't set `insecure_tls`.
+
+## Printer returned only partial status updates
+
+```
+Printer returned only partial status updates, never a full snapshot
+(missing gcode_state, mc_percent). It may be busy mid-print; retry the command.
+```
+
+Exit code `6`. The printer publishes incremental updates on its MQTT report
+topic and sends the complete state only in reply to a `pushall` request.
+`plate status` merges what arrives and re-requests on each retry, but if a full
+snapshot never lands before the timeout it fails here rather than printing a
+half-empty state — an incomplete `printer` object in `--json` output is worse
+than an error, because it silently breaks anything reading `gcode_state`.
+
+Usually transient and worth a straight retry — it is most often seen mid-print,
+while the printer is busy. To follow a running print, prefer
+`plate status --monitor` (which streams merged updates) over polling one-shot
+`status`.
 
 ## The file was not found on the printer
 
