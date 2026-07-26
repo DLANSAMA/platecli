@@ -153,6 +153,18 @@ def collect_preflight_checks():
             checks.append(
                 _preflight_result("error", "access-code", "Config must contain access_code or access_code_file.")
             )
+    elif os.path.exists(_config_path()):
+        # The file is right there — it just did not parse. Saying "not found"
+        # here sends the user to `setup`, which would overwrite it.
+        checks.append(
+            _preflight_result(
+                "error",
+                "config",
+                f"Config at {_display_path(_config_path())} exists but could not be read as JSON. "
+                "Fix the file (a UTF-8 byte-order mark or a trailing comma is the usual cause) "
+                "rather than re-running `setup`, which would overwrite it.",
+            )
+        )
     else:
         checks.append(
             _preflight_result(
@@ -162,6 +174,7 @@ def collect_preflight_checks():
 
     settings = current_settings()
     cfg_for_paths = cfg or current_config() or {}
+    from bambu_cli.commands.doctor import _DIRECT_CAMERA_MODELS
     from bambu_cli.config import detect_orca_slicer, detect_profiles_dir
 
     orca_path = _expand_path(cfg_for_paths.get("orca_slicer", settings.orca_slicer))
@@ -232,10 +245,28 @@ def collect_preflight_checks():
                 _preflight_result("warning", "xvfb-run", "xvfb-run not found; headless Linux slicing may fail.")
             )
 
+    # Only X1-series need Docker for snapshots. P1/A1 capture directly over the
+    # printer's TLS camera port (bambu_cli/camera.py:160-178), so warning them
+    # that "camera snapshots will be unavailable" is simply false.
     if shutil.which("docker"):
         checks.append(_preflight_result("ok", "docker", "Docker is available for optional camera snapshots."))
+    elif settings.printer_model in _DIRECT_CAMERA_MODELS:
+        checks.append(
+            _preflight_result(
+                "ok",
+                "docker",
+                f"Docker not found, but {settings.printer_model} captures snapshots directly; Docker is not needed.",
+            )
+        )
     else:
-        checks.append(_preflight_result("warning", "docker", "Docker not found; camera snapshots will be unavailable."))
+        checks.append(
+            _preflight_result(
+                "warning",
+                "docker",
+                "Docker not found; camera snapshots are unavailable on X1-series printers, which need the "
+                "BambuP1Streamer container.",
+            )
+        )
 
     return checks
 

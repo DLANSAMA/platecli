@@ -112,6 +112,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - Device, file, print and G-code commands now emit the `--json` error envelope before
   writing the human-readable log line, so a failure in the logging layer can no longer
   leave stdout without a parseable envelope.
+- **A UTF-8 byte-order mark on `config.json` silently voided the entire config.**
+  PowerShell's `Set-Content -Encoding utf8`, Notepad's "Save as UTF-8", and most
+  Windows editors write a BOM. `json.load` then failed, the error was swallowed,
+  and every command reported `Printer IP is not configured. Please run 'plate
+  setup' first.` — advice that would have overwritten the config the user was
+  trying to repair. Config files are now read as `utf-8-sig`, which handles BOM
+  and BOM-less files identically.
+- A config that exists but fails to parse is no longer reported as *missing*.
+  `load_config` always logs the real parse error, and `plate preflight` now says
+  the file exists and could not be read rather than `Config not found at …`.
+- `plate preflight`'s Docker check is now model-aware: it no longer warns P1/A1
+  owners that "camera snapshots will be unavailable" when those printers capture
+  directly over the printer's TLS camera port. (The matching `doctor` note was
+  already corrected; this was the remaining copy of the same wrong claim.)
+- `bambu_cli/bambu.py` looks up `reconfigure` via `getattr`, fixing the sole
+  outstanding mypy error (`TextIO` has no `reconfigure`) without changing the
+  Windows encoding hardening it performs.
 
 ## [0.2.2] - 2026-07-24
 

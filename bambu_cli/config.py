@@ -84,13 +84,27 @@ def load_config(exit_on_fail=True):
                 from bambu_cli.constants import EXIT_CONFIG_ERROR
 
                 abort("", exit_code=EXIT_CONFIG_ERROR)
-        with open(config_path, encoding="utf-8") as f:
+        # utf-8-sig, not utf-8: PowerShell's `Set-Content -Encoding utf8`, Notepad's
+        # "Save as UTF-8" and most Windows editors prepend a BOM. Plain utf-8 leaves
+        # it as ﻿, json.load raises, and the user is told their config does not
+        # exist. utf-8-sig reads BOM and BOM-less files identically.
+        with open(config_path, encoding="utf-8-sig") as f:
             cfg = json.load(f)
             apply_config(cfg)
             return cfg
 
     except BambuError:
         raise
+    except json.JSONDecodeError as e:
+        # A malformed config is NOT a missing config. Always say so out loud —
+        # otherwise callers report "not configured" and send the user to
+        # `setup`, which would overwrite the very file they are repairing.
+        # Still returns None (rather than raising) when exit_on_fail is False,
+        # because `preflight` needs to *report* this, not die on it.
+        logger.error(f"Error loading config: {_display_path(config_path)} exists but is not valid JSON: {e}")
+        if not exit_on_fail:
+            return None
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     except Exception as e:
         if not exit_on_fail:
             return None
