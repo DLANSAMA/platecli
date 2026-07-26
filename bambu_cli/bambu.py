@@ -22,8 +22,14 @@ import sys
 # Best-effort: make emoji/unicode output work on Windows consoles that default to cp1252.
 if sys.platform == "win32":
     for _stream in (sys.stdout, sys.stderr):
+        # getattr rather than a direct call: sys.stdout is typed TextIO, which
+        # has no reconfigure(), and it can legitimately be replaced by a stream
+        # that lacks it (pytest capture, a pipe wrapper).
+        _reconfigure = getattr(_stream, "reconfigure", None)
+        if _reconfigure is None:
+            continue
         try:
-            _stream.reconfigure(encoding="utf-8", errors="replace")
+            _reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, OSError):
             pass
 

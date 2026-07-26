@@ -5,6 +5,7 @@ No real network/printer. Asserts observable outcomes only.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import io
 import json
@@ -375,6 +376,65 @@ def test_secure_write_json_is_atomic_and_backs_up(tmp_path):
     assert sec.read_text() == "CCCCDDDD"
     # No .bak must exist — not even transiently from this implementation.
     assert not (tmp_path / "access_code.bak").exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_secure_write_falls_back_when_rename_crosses_a_device_boundary(tmp_path):
+    """A redirected directory must not make config/secret writes impossible.
+
+    Under Windows MSIX/AppContainer redirection of %APPDATA%, os.replace reports
+    ERROR_NOT_SAME_DEVICE even for two paths in the *same* directory, which used to
+    make `plate setup` and `--migrate-access-code` fail outright.
+    """
+    from bambu_cli.setup_cmd import common as common
+
+    for exc in (
+        OSError(errno.EXDEV, "Invalid cross-device link"),
+        _winerror_oserror(),
+    ):
+        cfg = tmp_path / "c.json"
+        sec = tmp_path / "access_code"
+        for leftover in tmp_path.glob("*"):
+            leftover.unlink()
+
+        with patch.object(common.os, "replace", side_effect=exc):
+            common._secure_write_json(str(cfg), {"a": 1})
+            common._secure_write_text(str(sec), "AAAABBBB")
+
+        assert json.loads(cfg.read_text()) == {"a": 1}
+        assert sec.read_text() == "AAAABBBB"
+        # The fallback must still clean up its temp file and not leak the secret.
+        assert list(tmp_path.glob("*.tmp")) == []
+        if sys.platform != "win32":
+            assert (sec.stat().st_mode & 0o777) == 0o600
+
+
+def _winerror_oserror():
+    """An OSError shaped like Windows ERROR_NOT_SAME_DEVICE (winerror 17)."""
+    exc = OSError("The system cannot move the file to a different disk drive")
+    exc.winerror = 17
+    return exc
+
+
+def test_cross_device_fallback_overwrites_existing_content(tmp_path):
+    """The in-place path must fully replace, not append to, a shorter/longer file."""
+    from bambu_cli.setup_cmd import common as common
+
+    sec = tmp_path / "access_code"
+    common._secure_write_text(str(sec), "LONG-ORIGINAL-VALUE")
+    with patch.object(common.os, "replace", side_effect=_winerror_oserror()):
+        common._secure_write_text(str(sec), "SHORT")
+    assert sec.read_text() == "SHORT"
+
+
+def test_secure_write_still_raises_on_unrelated_oserror(tmp_path):
+    """Only cross-device failures degrade; a real error must not be swallowed."""
+    from bambu_cli.setup_cmd import common as common
+
+    path = tmp_path / "c.json"
+    denied = OSError(errno.EACCES, "Permission denied")
+    with patch.object(common.os, "replace", side_effect=denied), pytest.raises(OSError):
+        common._secure_write_json(str(path), {"a": 1})
     assert list(tmp_path.glob("*.tmp")) == []
 
 

@@ -4,6 +4,7 @@ When the configured OrcaSlicer path is wrong, the tool should point the user at
 a real binary/profile it can actually find, rather than a generic "edit config".
 """
 
+import os
 from unittest.mock import patch
 
 from bambu_cli import config, setup_cmd
@@ -47,12 +48,103 @@ def test_linux_orca_candidates_include_path_flatpak_and_appimage():
     assert any(c and c.endswith("OrcaSlicer.AppImage") for c in candidates)  # AppImage
 
 
+def test_windows_orca_candidates_include_hyphenated_installer_name():
+    """The current Windows installer ships `orca-slicer.exe`, not `OrcaSlicer.exe`.
+
+    Probing only the CamelCase name made auto-detection miss every stock
+    Windows install, so both names must be candidates under each install root.
+    """
+    env = {
+        "PROGRAMFILES": r"C:\Program Files",
+        "LOCALAPPDATA": r"C:\Users\u\AppData\Local",
+        "PROGRAMFILES(X86)": r"C:\Program Files (x86)",
+    }
+    with (
+        patch("bambu_cli.config.sys.platform", "win32"),
+        patch.dict("bambu_cli.config.os.environ", env, clear=False),
+        patch("bambu_cli.config.shutil.which", return_value=None),
+    ):
+        candidates = config._orca_binary_candidates()
+
+    # Only sys.platform is patched, so os.path.join still uses the *host* separator
+    # and these assertions must be built the same way the production code builds the
+    # paths — hardcoding backslashes would pass on Windows and fail on Linux/macOS.
+    install_roots = [
+        os.path.join(r"C:\Program Files", "OrcaSlicer"),
+        os.path.join(r"C:\Users\u\AppData\Local", "Programs", "OrcaSlicer"),
+        os.path.join(r"C:\Program Files (x86)", "OrcaSlicer"),
+    ]
+    # Every install root is probed under both names.
+    for root in install_roots:
+        assert os.path.join(root, "orca-slicer.exe") in candidates
+        assert os.path.join(root, "OrcaSlicer.exe") in candidates
+    # Hyphenated name is probed first so a stock install wins over a stale one.
+    assert candidates[0] == os.path.join(install_roots[0], "orca-slicer.exe")
+
+
+def test_windows_orca_candidates_fall_back_to_path_lookup():
+    """A custom install location is still findable when it is on PATH."""
+    with (
+        patch("bambu_cli.config.sys.platform", "win32"),
+        patch(
+            "bambu_cli.config.shutil.which",
+            side_effect=lambda n: r"D:\tools\orca-slicer.exe" if n == "orca-slicer" else None,
+        ),
+    ):
+        candidates = config._orca_binary_candidates()
+    assert r"D:\tools\orca-slicer.exe" in candidates
+
+
 def test_linux_profiles_dir_candidates_include_flatpak():
     # Force the Linux branch regardless of the CI runner's OS.
     with patch("bambu_cli.config.sys.platform", "linux"):
         candidates = config._profiles_dir_candidates()
     assert any(c and "com.orcaslicer.OrcaSlicer" in c for c in candidates)  # current Flathub id
     assert any(c and "io.github.softfever.OrcaSlicer" in c for c in candidates)  # legacy id kept
+
+
+def test_orca_install_hint_is_platform_specific():
+    expected = {
+        "win32": "winget install --id SoftFever.OrcaSlicer",
+        "darwin": "brew install --cask orcaslicer",
+        "linux": "flatpak install -y flathub com.orcaslicer.OrcaSlicer",
+    }
+    for platform_name, command in expected.items():
+        with patch("bambu_cli.config.sys.platform", platform_name):
+            hint = config.orca_install_hint()
+        assert command in hint
+        assert config.ORCA_RELEASES_URL in hint
+        assert "plate setup" in hint
+
+
+def test_orca_install_hint_falls_back_for_unknown_platform():
+    with patch("bambu_cli.config.sys.platform", "freebsd14"):
+        hint = config.orca_install_hint()
+    assert config.ORCA_RELEASES_URL in hint
+
+
+def test_missing_orca_message_tells_you_how_to_install_it():
+    """With no OrcaSlicer anywhere, "edit your config" is not an actionable fix."""
+    from bambu_cli import slicer
+
+    with (
+        patch("bambu_cli.config.detect_orca_slicer", return_value=None),
+        patch("bambu_cli.config.sys.platform", "win32"),
+    ):
+        msg = slicer._slicer_executable_problem(r"C:\nope\orca-slicer.exe")
+    assert msg is not None
+    assert "winget install --id SoftFever.OrcaSlicer" in msg
+
+
+def test_missing_orca_message_prefers_detected_path_over_install_hint():
+    """When a real binary exists, point at it rather than telling them to install."""
+    from bambu_cli import slicer
+
+    with patch("bambu_cli.config.detect_orca_slicer", return_value="/found/orca-slicer"):
+        msg = slicer._slicer_executable_problem("/bad/orca")
+    assert msg is not None
+    assert "winget" not in msg
+    assert "flatpak" not in msg
 
 
 def test_preflight_suggests_detected_orca_when_configured_path_bad():

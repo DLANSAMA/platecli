@@ -61,6 +61,8 @@ When adding tests, follow [docs/test-backlog.md](docs/test-backlog.md) and the q
 
 ## Agent usage
 
+**OrcaSlicer missing?** Slicing needs it. When no install exists anywhere, the `orca-slicer` / `profiles-dir` errors from `preflight` and `slice` carry a ready-to-run install command for the host platform (`winget install --id SoftFever.OrcaSlicer` on Windows, `brew install --cask orcaslicer` on macOS, `flatpak install -y flathub com.orcaslicer.OrcaSlicer` on Linux). Run it, then `plate setup` — auto-detection writes both paths. When an install *is* present but the configured path is stale, the same errors instead name the detected path (and `slice --json` carries `detected_orca_slicer` / `detected_profiles_dir`), so prefer that over installing again.
+
 Agents may place `--json` before or after the subcommand; `plate --json --version` emits machine-readable version details. Slicing accepts meshes in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. AMS slot mappings are zero-or-positive integers. When a slice fails because OrcaSlicer profiles are missing, the `--json` error includes `profiles_dir` (configured) and `detected_profiles_dir` (a real BBL profiles directory found on disk, or null) so the fix is machine-actionable.
 
 JSON contracts: human reference [docs/api.md](docs/api.md); machine schemas in [docs/schemas/](docs/schemas/).

@@ -45,7 +45,7 @@ def load_config(exit_on_fail=True):
             return None
         logger.error(f"Config not found. Create {_display_path(config_path)}:")
         if sys.platform == "win32":
-            orca_example = r"C:\Program Files\OrcaSlicer\OrcaSlicer.exe"
+            orca_example = r"C:\Program Files\OrcaSlicer\orca-slicer.exe"
             profiles_example = r"C:\Program Files\OrcaSlicer\resources\profiles\BBL"
         elif sys.platform == "darwin":
             orca_example = "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer"
@@ -84,13 +84,27 @@ def load_config(exit_on_fail=True):
                 from bambu_cli.constants import EXIT_CONFIG_ERROR
 
                 abort("", exit_code=EXIT_CONFIG_ERROR)
-        with open(config_path, encoding="utf-8") as f:
+        # utf-8-sig, not utf-8: PowerShell's `Set-Content -Encoding utf8`, Notepad's
+        # "Save as UTF-8" and most Windows editors prepend a BOM. Plain utf-8 leaves
+        # it as ﻿, json.load raises, and the user is told their config does not
+        # exist. utf-8-sig reads BOM and BOM-less files identically.
+        with open(config_path, encoding="utf-8-sig") as f:
             cfg = json.load(f)
             apply_config(cfg)
             return cfg
 
     except BambuError:
         raise
+    except json.JSONDecodeError as e:
+        # A malformed config is NOT a missing config. Always say so out loud —
+        # otherwise callers report "not configured" and send the user to
+        # `setup`, which would overwrite the very file they are repairing.
+        # Still returns None (rather than raising) when exit_on_fail is False,
+        # because `preflight` needs to *report* this, not die on it.
+        logger.error(f"Error loading config: {_display_path(config_path)} exists but is not valid JSON: {e}")
+        if not exit_on_fail:
+            return None
+        abort("", exit_code=EXIT_CONFIG_ERROR)
     except Exception as e:
         if not exit_on_fail:
             return None
@@ -122,19 +136,23 @@ def _orca_binary_candidates():
             "~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
         ]
     if sys.platform == "win32":
-        candidates = [
-            os.path.join(os.environ.get("PROGRAMFILES", r"C:\Program Files"), "OrcaSlicer", "OrcaSlicer.exe"),
+        # The current Windows installer lays down `orca-slicer.exe`; older builds
+        # shipped `OrcaSlicer.exe`. Probe both per directory, hyphenated first.
+        exe_names = ("orca-slicer.exe", "OrcaSlicer.exe")
+        roots = [
+            os.path.join(os.environ.get("PROGRAMFILES", r"C:\Program Files"), "OrcaSlicer"),
             os.path.join(
                 os.environ.get("LOCALAPPDATA", os.path.join("~", "AppData", "Local")),
                 "Programs",
                 "OrcaSlicer",
-                "OrcaSlicer.exe",
             ),
         ]
         program_files_x86 = os.environ.get("PROGRAMFILES(X86)")
         if program_files_x86:
-            candidates.append(os.path.join(program_files_x86, "OrcaSlicer", "OrcaSlicer.exe"))
-        return candidates
+            roots.append(os.path.join(program_files_x86, "OrcaSlicer"))
+        # A PATH entry is the fallback for an install in a custom location.
+        on_path = [shutil.which(name) for name in ("orca-slicer", "OrcaSlicer")]
+        return [os.path.join(root, name) for root in roots for name in exe_names] + on_path
     # Linux: anything already on PATH (distro package or Flatpak-exported wrapper)
     # first, then common package / Flatpak / AppImage install spots.
     candidates = [shutil.which(name) for name in ("orca-slicer", "OrcaSlicer", "orcaslicer")]
@@ -229,6 +247,28 @@ def detect_profiles_dir():
         if path and os.path.isdir(_expand_path(path)):
             return _expand_path(path)
     return None
+
+
+ORCA_RELEASES_URL = "https://github.com/OrcaSlicer/OrcaSlicer/releases"
+
+# Fastest one-liner per platform, so a stuck user (or agent) gets a runnable
+# command instead of a "go find a download page" dead end.
+_ORCA_INSTALL_COMMANDS = {
+    "win32": "winget install --id SoftFever.OrcaSlicer",
+    "darwin": "brew install --cask orcaslicer",
+    "linux": "flatpak install -y flathub com.orcaslicer.OrcaSlicer",
+}
+
+
+def orca_install_hint():
+    """Return a one-line, platform-appropriate 'how to install OrcaSlicer' hint.
+
+    Both `slice` and `preflight` append this when no OrcaSlicer exists anywhere
+    on the machine — at that point suggesting a config edit is useless, because
+    there is nothing to point the config at.
+    """
+    command = _ORCA_INSTALL_COMMANDS.get(sys.platform, _ORCA_INSTALL_COMMANDS["linux"])
+    return f"Install it with `{command}` (or download from {ORCA_RELEASES_URL}), then run `plate setup`."
 
 
 _DEFAULT_ORCA = _default_orca_path()

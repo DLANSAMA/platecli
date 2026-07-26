@@ -19,6 +19,11 @@ from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.utils import _ensure_parent_dir, _redacted_serial
 
+# Printer families whose camera is captured with the direct port-6000 TLS grab
+# (bambu_cli/camera.py:160-178). These need no Docker; X1-series fall back to
+# the BambuP1Streamer RTSP container instead.
+_DIRECT_CAMERA_MODELS = ("P1P", "P1S", "A1", "A1M")
+
 
 def _offer_pin_fingerprint(
     fp, config_path, json_mode, interactive=None
