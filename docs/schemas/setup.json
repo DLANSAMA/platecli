@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platecli.local/schemas/setup.json",
+  "title": "platecli setup summary envelope",
+  "description": "Reports whether each setting is configured rather than its value, so the summary stays safe to paste into a bug report. The access code itself is never included; access_code_storage says only where it lives.",
+  "type": "object",
+  "required": [
+    "status",
+    "command",
+    "config_path",
+    "printer_ip_configured",
+    "serial_configured",
+    "access_code_storage",
+    "orca_slicer_configured",
+    "profiles_dir_configured",
+    "cert_fingerprint_configured",
+    "insecure_tls"
+  ],
+  "properties": {
+    "status": {"const": "configured"},
+    "command": {"const": "setup"},
+    "config_path": {"type": "string"},
+    "printer_ip_configured": {"type": "boolean"},
+    "serial_configured": {"type": "boolean"},
+    "access_code_storage": {"enum": ["file", "inline"]},
+    "model": {"type": ["string", "null"]},
+    "nozzle": {"type": ["string", "null"]},
+    "orca_slicer_configured": {"type": "boolean"},
+    "profiles_dir_configured": {"type": "boolean"},
+    "cert_fingerprint_configured": {"type": "boolean"},
+    "insecure_tls": {"type": "boolean"},
+    "access_code_file": {"type": "string"}
+  },
+  "additionalProperties": true
+}

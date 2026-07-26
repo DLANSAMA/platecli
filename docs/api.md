@@ -105,12 +105,18 @@ form when looking a code up; the human-readable log line shows both.
 | [`light.json`](schemas/light.json) | `light` |
 | [`pause.json`](schemas/pause.json) | `pause` |
 | [`resume.json`](schemas/resume.json) | `resume` |
+| [`stop.json`](schemas/stop.json) | `stop` (incl. confirmation_required) |
 | [`snapshot.json`](schemas/snapshot.json) | `snapshot` |
+| [`upload.json`](schemas/upload.json) | `upload` success / `--dry-run` |
+| [`files.json`](schemas/files.json) | `files` listing |
+| [`setup.json`](schemas/setup.json) | `setup` summary |
 
-**Not yet dedicated schema files** (may still emit JSON; contract coverage is
-lighter or via envelopes): one-shot `status` success (beyond envelope + AMS
-fields documented below), `upload`, `files`, `stop`, `setup`. Tracked in
-[test-backlog.md](test-backlog.md).
+Every `--json`-emitting subcommand now has a dedicated schema. That is enforced,
+not asserted: `tests/contracts/test_schema_validation.py` derives the subcommand
+list from `build_parser()` and fails if any command lacks a schema, if a schema's
+`$id` does not match its filename, if a schema file is unreferenced, or if this
+table omits one. Payloads are validated against the published files, mostly from
+real `--sim` invocations rather than hand-written fixtures.
 
 Contract tests: `tests/contracts/test_schema_validation.py` and
 `tests/test_json_contracts.py`.
