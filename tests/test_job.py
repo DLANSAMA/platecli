@@ -260,6 +260,75 @@ def test_uploaded_next_command_includes_ams_and_flags(tmp_path, capsys):
     ]
 
 
+def _bad_ams_argv(source, *extra):
+    """--ams-mapping without --use-ams: rejected by `print`, so job must reject it too."""
+    return ["job", str(source), "--json", "--ams-mapping", "0,1", *extra]
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        pytest.param(("--dry-run",), id="dry-run"),
+        pytest.param(("--upload-only",), id="upload-only"),
+        pytest.param((), id="plain"),
+    ],
+)
+def test_print_options_validated_without_confirm(tmp_path, capsys, extra):
+    """Print options were only validated under --confirm, so the paths agents
+    actually use as a pre-check reported success for flags that later fail.
+
+    --dry-run is documented as no-side-effect validation, and --upload-only hands
+    back a next_command carrying these same flags.
+    """
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(_bad_ams_argv(ready, *extra))
+    steps = JobSteps(upload=fake_upload("model.3mf"))
+    with contextlib.suppress(SystemExit, BambuError):
+        _run_job(_ctx(), args, steps)
+    payload = _read_json(capsys)
+    assert payload["status"] == "error"
+    assert payload["failed_step"] == "validate"
+    assert payload["error"] == "--ams-mapping requires --use-ams"
+    # Nothing may have happened before the rejection.
+    assert payload["uploaded"] is False
+    assert payload["printed"] is False
+    assert payload["next_command"] is None
+
+
+def test_upload_only_next_command_is_itself_valid(tmp_path, capsys):
+    """Whatever next_command we hand back must survive `print`'s own validation.
+
+    The upload-only path previously emitted `--ams-mapping` with no `--use-ams`,
+    which `print` rejects with exit 5 — a guaranteed failure after a real upload.
+    """
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--upload-only", "--json", "--use-ams", "--ams-mapping", "0,1"])
+    steps = JobSteps(upload=fake_upload("model.3mf"))
+    _run_job(_ctx(), args, steps)
+    next_command = _read_json(capsys)["next_command"]
+
+    # Re-parse the emitted command and run it through the same validator `print` uses.
+    from bambu_cli.job import _parse_print_options
+
+    replayed = _parse([c for c in next_command if c != "--json"] + ["--json"])
+    _, error = _parse_print_options(replayed)
+    assert error is None, f"job emitted a next_command that print rejects: {error}"
+
+
+def test_valid_and_absent_print_options_still_pass(tmp_path, capsys):
+    """The new validation must not reject the ordinary cases."""
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    for argv in (
+        ["job", str(ready), "--dry-run", "--json"],
+        ["job", str(ready), "--dry-run", "--json", "--use-ams", "--ams-mapping", "0"],
+    ):
+        _run_job(_ctx(), _parse(argv), JobSteps(upload=fake_upload("model.3mf")))
+        assert _read_json(capsys)["status"] == "dry_run_local_skipped"
+
+
 def test_printed_success(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)

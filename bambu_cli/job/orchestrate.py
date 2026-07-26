@@ -110,10 +110,15 @@ def _run_job(ctx, args, steps=None):
     if slice_option_error:
         _job_fail(args, summary, "validate", EXIT_COMMAND_ERROR, slice_option_error)
 
-    if getattr(args, "confirm", False) and not getattr(args, "upload_only", False):
-        _, print_option_error = _parse_print_options(args)
-        if print_option_error:
-            _job_fail(args, summary, "validate", EXIT_COMMAND_ERROR, print_option_error)
+    # Validate print options on every path, not just `--confirm`. `--dry-run` is
+    # documented as no-side-effect validation and is the intended agent pre-check, so
+    # it must not report success for flags that will later be rejected. `--upload-only`
+    # emits a next_command carrying these same flags, so an invalid combination has to
+    # fail here rather than when the caller runs the command we just handed them.
+    # `_parse_print_options` returns no error when neither flag was supplied.
+    _, print_option_error = _parse_print_options(args)
+    if print_option_error:
+        _job_fail(args, summary, "validate", EXIT_COMMAND_ERROR, print_option_error)
 
     if _looks_like_url(source) and not _is_http_url(source):
         try:
