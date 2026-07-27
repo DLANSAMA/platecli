@@ -2,44 +2,103 @@
 
 from __future__ import annotations
 
-import os
 import zipfile
 
 import pytest
 
 from bambu_cli.slicer.estimate import Estimate, format_estimate, read_3mf_estimate
 
-FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
-
-
-def fixture(name: str) -> str:
-    return os.path.join(FIXTURES, name)
-
+# Sample .3mf files are BUILT AT TEST TIME rather than committed: privacy_smoke
+# rejects any committed .3mf as a generated printer-ready artifact, and that guard
+# is worth more than the convenience of checked-in binaries. They are tiny
+# hand-written zips anyway, and building them here keeps the expected values
+# visible next to the assertions instead of hidden inside an opaque file.
 
 # ---------------------------------------------------------------------------
-# read_3mf_estimate — fixture-based
+# read_3mf_estimate — whole-file behavior
 # ---------------------------------------------------------------------------
 
 
-def test_full_estimate():
-    est = read_3mf_estimate(fixture("estimate_full.3mf"))
-    assert est == Estimate(seconds=6120, grams=13.05)
+def _write_zip(path, members: dict) -> str:
+    with zipfile.ZipFile(str(path), "w") as zf:
+        for name, data in members.items():
+            zf.writestr(name, data)
+    return str(path)
 
 
-def test_gcode_only_estimate():
+SLICE_INFO_FULL = (
+    b'<?xml version="1.0" encoding="UTF-8"?>\n'
+    b"<config>\n  <plate>\n"
+    b'    <metadata key="prediction" value="6120"/>\n'
+    b'    <metadata key="weight" value="13.05"/>\n'
+    b"  </plate>\n</config>\n"
+)
+
+
+def test_full_estimate(tmp_path):
+    path = _write_zip(tmp_path / "full.3mf", {"Metadata/slice_info.config": SLICE_INFO_FULL})
+    assert read_3mf_estimate(path) == Estimate(seconds=6120, grams=13.05)
+
+
+def test_gcode_only_estimate(tmp_path):
     # 2h 5m 30s = 7200 + 300 + 30 = 7530
-    est = read_3mf_estimate(fixture("estimate_gcode_only.3mf"))
-    assert est == Estimate(seconds=7530, grams=25.50)
+    gcode = b"; model printing time: 2h 5m 30s\n; total filament weight [g] : 25.50\nG28\n"
+    path = _write_zip(tmp_path / "gcode_only.3mf", {"Metadata/plate_1.gcode": gcode})
+    assert read_3mf_estimate(path) == Estimate(seconds=7530, grams=25.50)
 
 
-def test_corrupt_never_raises():
-    est = read_3mf_estimate(fixture("estimate_corrupt.3mf"))
-    assert est == Estimate(None, None)
+def test_corrupt_never_raises(tmp_path):
+    path = tmp_path / "corrupt.3mf"
+    path.write_bytes(b"not a zip")
+    assert read_3mf_estimate(str(path)) == Estimate(None, None)
 
 
-def test_missing_sources():
-    est = read_3mf_estimate(fixture("estimate_missing.3mf"))
-    assert est == Estimate(None, None)
+def test_missing_sources(tmp_path):
+    """A valid zip carrying no estimate-bearing member."""
+    path = _write_zip(tmp_path / "missing.3mf", {"3D/3dmodel.model": b"<model/>"})
+    assert read_3mf_estimate(path) == Estimate(None, None)
+
+
+def test_unparseable_slice_info_falls_back_to_gcode(tmp_path):
+    """Malformed XML must not shadow a readable gcode header."""
+    path = _write_zip(
+        tmp_path / "broken_xml.3mf",
+        {
+            "Metadata/slice_info.config": b"<config><plate>truncated",
+            "Metadata/plate_1.gcode": b"; model printing time: 45m 0s\n",
+        },
+    )
+    assert read_3mf_estimate(path).seconds == 2700
+
+
+def test_slice_info_with_only_implausible_values_falls_back_to_gcode(tmp_path):
+    """A well-formed config carrying junk must not shadow a good gcode header."""
+    bad_config = (
+        b"<config>\n  <plate>\n"
+        b'    <metadata key="prediction" value="0"/>\n'
+        b'    <metadata key="weight" value="-5"/>\n'
+        b"  </plate>\n</config>\n"
+    )
+    path = _write_zip(
+        tmp_path / "implausible.3mf",
+        {
+            "Metadata/slice_info.config": bad_config,
+            "Metadata/plate_1.gcode": b"; model printing time: 1h 0m 0s\n",
+        },
+    )
+    assert read_3mf_estimate(path).seconds == 3600
+
+
+def test_later_plate_used_when_first_has_no_header(tmp_path):
+    """An early plate with no usable header must not end the search."""
+    path = _write_zip(
+        tmp_path / "multiplate.3mf",
+        {
+            "Metadata/plate_1.gcode": b"G28\nG1 X0 Y0\n",
+            "Metadata/plate_2.gcode": b"; model printing time: 30m 0s\n",
+        },
+    )
+    assert read_3mf_estimate(path).seconds == 1800
 
 
 def test_nonexistent_file_never_raises():

@@ -116,15 +116,29 @@ def read_3mf_estimate(path: str) -> Estimate:
             if slice_info_name is not None:
                 xml_text = zf.read(slice_info_name).decode("utf-8", errors="replace")
                 seconds, grams = _parse_slice_info(xml_text)
-                return Estimate(seconds, grams)
+                if seconds is not None or grams is not None:
+                    return Estimate(seconds, grams)
+                # slice_info.config was present but yielded nothing usable
+                # (malformed XML, or only implausible values).  Fall through to
+                # the gcode header rather than reporting "unknown" -- a truncated
+                # config next to a perfectly readable gcode header is exactly the
+                # case the fallback exists for.
 
-            # Fallback: first .gcode file under Metadata/
-            for n in names:
-                normalised = n.replace("\\", "/")
-                parts = normalised.split("/")
-                if len(parts) == 2 and parts[0] == "Metadata" and parts[1].endswith(".gcode"):
-                    gcode_bytes = zf.read(n)
-                    seconds, grams = _parse_gcode_header(gcode_bytes)
+            # Fallback: gcode members under Metadata/, in plate order.  Keep
+            # trying later plates if an earlier one carries no usable header.
+            gcode_members = sorted(
+                n
+                for n in names
+                if len(n.replace("\\", "/").split("/")) == 2
+                and n.replace("\\", "/").split("/")[0] == "Metadata"
+                and n.replace("\\", "/").split("/")[1].endswith(".gcode")
+            )
+            for n in gcode_members:
+                # Read only the header window; a real plate gcode can be tens of MB.
+                with zf.open(n) as fh:
+                    gcode_bytes = fh.read(GCODE_READ_BYTES)
+                seconds, grams = _parse_gcode_header(gcode_bytes)
+                if seconds is not None or grams is not None:
                     return Estimate(seconds, grams)
 
     except Exception:  # noqa: BLE001 — never raise, degrade gracefully
