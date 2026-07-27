@@ -15,6 +15,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- `main` now carries a `.devN` version between releases (`0.4.0.dev0`). It kept the
+  released version after 0.3.0, so `plate --version` from a source checkout printed
+  `0.3.0` while running seven commits of unreleased code — and the bug-report
+  template asks users to paste exactly that string. `docs/releasing.md` gains a
+  post-release step so this cannot recur, and step 1 now says explicitly to drop the
+  suffix when releasing, since `release.yml` compares the tag to `pyproject.toml`
+  exactly.
 - Schema coverage is derived instead of hand-maintained. The contract suite reads
   the subcommand list from `build_parser()` and fails if a command has no schema,
   if a schema's `$id` disagrees with its filename, if a schema file is

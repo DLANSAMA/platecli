@@ -18,9 +18,12 @@
 
 ## Release
 
-1. Open a pull request containing the `version` bump in `pyproject.toml` and the
-   `CHANGELOG.md` `Unreleased` → version move. Wait for the required checks, then
-   squash-merge.
+1. Open a pull request that sets `version` in `pyproject.toml` to the release version
+   — **dropping the `.devN` suffix** main carries between releases — and moves the
+   `CHANGELOG.md` `Unreleased` entries under the new version heading. Wait for the
+   required checks, then squash-merge. `release.yml` compares the tag to
+   `pyproject.toml` exactly, so `v0.4.0` against a `0.4.0.dev0` version fails the
+   build.
 2. `git tag vX.Y.Z && git push --tags`
 3. `release.yml` runs: CI matrix -> build (sdist+wheel, `twine check`, tag/version match)
    -> publish to PyPI via trusted publishing (`pypi` environment, `id-token: write`)
@@ -28,6 +31,12 @@
 4. Verify: `pip install --no-cache-dir platecli==X.Y.Z && plate --version`.
 5. If the release touched FTPS, gcode confirm, slice validation, or job upload, run the
    [live-printer smoke](live-printer-smoke.md) with a printer attached.
+6. **Bump main to the next dev version** (e.g. `0.5.0.dev0`) in a follow-up PR.
+   Without this, `main` keeps claiming to be the released version: a contributor or
+   agent running from a source checkout reports `plate X.Y.Z` while executing
+   unreleased code, and the bug-report template asks for exactly that string. This
+   step was missed after 0.3.0, which is why main spent a day identifying as 0.3.0
+   while seven commits ahead of the tag.
 
 ## Rollback: there is no rollback, only yank + forward
 
