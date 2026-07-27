@@ -7,6 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Added
 
+- Foundations for interactive guided-print mode (`plate go`), landing in 0.4.0.
+  This is internal groundwork only — no new subcommand, no prompts, and no change
+  to any existing command's behavior. The wizard itself follows in a later release.
+  - `bambu_cli/slicer/estimate.py` reads print time and filament weight from an
+    OrcaSlicer-produced `.3mf`, so a future preview can show an estimate before
+    anything is sent to the printer. It prefers `Metadata/slice_info.config` and
+    falls back to the header of `Metadata/plate_N.gcode`. It never raises —
+    callers get `Estimate(None, None)` on any failure — and time and weight
+    degrade independently, so a half-readable file still yields the half it has.
+    Implausible values (non-positive, over 30 days, over 10 kg) are treated as
+    unparsed on the principle that a wrong estimate is worse than a missing one.
+  - `bambu_cli/interactive/presets.py` maps friendly material and quality choices
+    onto the flags `job` already accepts, so the wizard can expose zero slicer
+    knobs. Material presets carry their own nozzle and bed temperatures, sourced
+    from the Bambu `@base` filament profiles.
 - `camera_direct_only` config key (default `false`): when set, disables the Docker/RTSP streamer fallback so any direct port-6000 grab failure aborts instead of silently falling through to the unauthenticated streamer. Closes the remaining camera fallback residuals noted in SECURITY.md. X1-series printers still need the streamer; unset `camera_direct_only` for them.
 - Published JSON schemas for the last four `--json` commands that lacked them:
   `upload.json`, `files.json`, `stop.json`, `setup.json`. README has claimed
@@ -38,6 +53,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Fixed
 
+- Material presets for the upcoming `plate go` wizard name their filament profile
+  in full (`Bambu ABS @base`) rather than by bare material (`ABS`). `slice` matches
+  `--filament` as a case-insensitive substring against every `@base` profile and
+  takes the first `os.listdir` hit, so a bare `ABS` also matches
+  `Bambu Support for ABS @base.json` — support-interface filament — and `TPU`
+  matches `Generic TPU for AMS`. Because `os.listdir` order is filesystem-dependent,
+  the profile chosen could differ between Linux and Windows. Caught before the
+  wizard shipped; a regression test pins each preset to exactly one profile. The
+  underlying substring matching in `slice`/`job` is unchanged and still matches
+  loosely by design — only the preset values are now unambiguous.
 - Auto-repair of URL-derived filenames is now correct in four ways it was not, and
   the repairer is guaranteed to produce names the printer-side check accepts.
   Previously `_sanitize_download_filename` could emit a name `_safe_remote_name`
