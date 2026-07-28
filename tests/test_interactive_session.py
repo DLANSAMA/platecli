@@ -26,9 +26,7 @@ from bambu_cli import utils  # noqa: E402
 from bambu_cli.context import RuntimeContext, Settings  # noqa: E402
 from bambu_cli.errors import BambuError  # noqa: E402
 from bambu_cli.interactive import prompts as prompts_mod  # noqa: E402
-from bambu_cli.interactive import session as session_mod  # noqa: E402
 from bambu_cli.interactive.session import GoDeps, GoSteps, cmd_go  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Test doubles
@@ -251,9 +249,7 @@ def test_decline_both_calls_nothing_and_keeps_file(tmp_path):
     job = Recorder(return_value=sliced)
     steps = GoSteps(download=Recorder(return_value=stl), slice=Recorder(return_value=sliced), job=job)
 
-    prompts = ScriptedPrompts(
-        ["https://example.com/cube.stl", True, "PLA", "standard", False, False, False]
-    )
+    prompts = ScriptedPrompts(["https://example.com/cube.stl", True, "PLA", "standard", False, False, False])
     monkeypatch_cwd = tmp_path / "cwd"
     monkeypatch_cwd.mkdir()
     old = os.getcwd()
@@ -480,3 +476,246 @@ def test_cli_go_non_tty_exits_5(monkeypatch, tmp_path):
     with pytest.raises(SystemExit) as ei:
         main()
     assert ei.value.code == 5
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: AMS-aware material default (through the injected ams_material seam)
+# ---------------------------------------------------------------------------
+
+
+def test_ams_detected_material_becomes_default(tmp_path):
+    """A loaded AMS material matching a preset key is offered as the prompt default."""
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+
+    seen_defaults = {}
+
+    class RecordingPrompts(ScriptedPrompts):
+        def choice(self, message, choices, *, default=None):
+            seen_defaults[message] = default
+            return super().choice(message, choices, default=default)
+
+    steps = GoSteps(
+        download=Recorder(return_value=stl),
+        slice=Recorder(return_value=sliced),
+        job=Recorder(return_value=sliced),
+        ams_material=lambda args: "PETG",  # detected material
+    )
+    prompts = RecordingPrompts(["https://example.com/cube.stl", True, "PETG", "standard", False, True])
+    cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
+
+    assert seen_defaults["Material"] == "PETG"  # AMS detection drove the default
+    # The "(detected in AMS)" note appears on the PETG line, not PLA.
+    assert any("PETG —" in m and "detected in AMS" in m for m in prompts.printed)
+    assert not any("PLA —" in m and "detected in AMS" in m for m in prompts.printed)
+
+
+def test_ams_detection_failure_falls_back_to_pla(tmp_path):
+    """When the reader returns None (any failure), the step falls back to PLA."""
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+
+    seen_defaults = {}
+
+    class RecordingPrompts(ScriptedPrompts):
+        def choice(self, message, choices, *, default=None):
+            seen_defaults[message] = default
+            return super().choice(message, choices, default=default)
+
+    steps = GoSteps(
+        download=Recorder(return_value=stl),
+        slice=Recorder(return_value=sliced),
+        job=Recorder(return_value=sliced),
+        ams_material=lambda args: None,  # MQTT error / timeout / no AMS -> None
+    )
+    prompts = RecordingPrompts(["https://example.com/cube.stl", True, "PLA", "standard", False, True])
+    cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
+
+    assert seen_defaults["Material"] == "PLA"
+    assert not any("detected in AMS" in m for m in prompts.printed)
+
+
+def test_ams_unknown_material_falls_back_to_pla(tmp_path):
+    """A loaded material with no matching preset key falls back to PLA."""
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+
+    seen_defaults = {}
+
+    class RecordingPrompts(ScriptedPrompts):
+        def choice(self, message, choices, *, default=None):
+            seen_defaults[message] = default
+            return super().choice(message, choices, default=default)
+
+    steps = GoSteps(
+        download=Recorder(return_value=stl),
+        slice=Recorder(return_value=sliced),
+        job=Recorder(return_value=sliced),
+        ams_material=lambda args: None,  # PLA-CF etc. resolves to None upstream
+    )
+    prompts = RecordingPrompts(["https://example.com/cube.stl", True, "PLA", "standard", False, True])
+    cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
+    assert seen_defaults["Material"] == "PLA"
+
+
+def test_read_loaded_ams_material_matches_sim_active_slot(tmp_path, monkeypatch):
+    """The real reader resolves the sim printer's active tray (slot 0 = PLA)."""
+    from bambu_cli.interactive.session import _read_loaded_ams_material
+
+    settings = _install_ready_settings(tmp_path)
+    # Install a simulation context: the reader reads simulation off the installed
+    # RuntimeContext (via for_request), and under --sim the fake status reports
+    # tray_now "0" -> PLA in slot 0.
+    _context.set_current(RuntimeContext(settings=settings, simulation=True))
+    assert _read_loaded_ams_material(_args(sim=True)) == "PLA"
+
+
+def test_read_loaded_ams_material_swallows_errors(tmp_path, monkeypatch):
+    """The reader NEVER raises: a failing printer.status() yields None."""
+    from bambu_cli.interactive.session import _read_loaded_ams_material
+
+    _install_ready_settings(tmp_path)
+
+    class BoomPrinter:
+        def status(self):
+            raise RuntimeError("mqtt down")
+
+    monkeypatch.setattr("bambu_cli.context.RuntimeContext.printer", lambda self: BoomPrinter())
+    assert _read_loaded_ams_material(_args()) is None
+
+
+def test_match_material_preset_maps_known_and_unknown():
+    from bambu_cli.interactive.session import _match_material_preset
+
+    assert _match_material_preset("pla") == "PLA"
+    assert _match_material_preset("PETG") == "PETG"
+    assert _match_material_preset(" abs ") == "ABS"
+    assert _match_material_preset("PLA-CF") is None
+    assert _match_material_preset(None) is None
+    assert _match_material_preset("") is None
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: bare `plate` -> wizard on a TTY, help + exit 5 otherwise
+# ---------------------------------------------------------------------------
+
+
+def _bare_plate_setup(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "argv", ["plate"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+
+
+def test_bare_plate_tty_launches_wizard(monkeypatch, tmp_path):
+    from bambu_cli import commands as commands_mod
+    from bambu_cli.cli import main
+
+    _bare_plate_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+    called = {}
+
+    def fake_cmd_go(args):
+        called["cmd"] = getattr(args, "cmd", None)
+
+    monkeypatch.setattr(commands_mod, "cmd_go", fake_cmd_go)
+    main()  # returns cleanly; the wizard handler ran instead of help
+    assert called["cmd"] == "go"
+
+
+def test_bare_plate_non_tty_prints_help_and_exits_5(monkeypatch, tmp_path):
+    from bambu_cli import commands as commands_mod
+    from bambu_cli.cli import main
+
+    _bare_plate_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+    def boom(args):  # the wizard must NOT run on a non-TTY
+        raise AssertionError("wizard launched on non-TTY stdin")
+
+    monkeypatch.setattr(commands_mod, "cmd_go", boom)
+    with pytest.raises(SystemExit) as ei:
+        main()
+    assert ei.value.code == 5
+
+
+def test_bare_plate_tty_stdin_but_redirected_stdout_prints_help(monkeypatch, tmp_path):
+    """A TTY stdin with a redirected stdout is a script pattern -> keep help path."""
+    from bambu_cli import commands as commands_mod
+    from bambu_cli.cli import main
+
+    _bare_plate_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+
+    monkeypatch.setattr(commands_mod, "cmd_go", lambda args: (_ for _ in ()).throw(AssertionError()))
+    with pytest.raises(SystemExit) as ei:
+        main()
+    assert ei.value.code == 5
+
+
+def test_bare_plate_json_forces_help_path(monkeypatch, tmp_path):
+    """Bare `plate --json` must NOT launch the wizard (machine-use flag)."""
+    from bambu_cli import commands as commands_mod
+    from bambu_cli.cli import main
+
+    monkeypatch.setattr(sys, "argv", ["plate", "--json"])
+    monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
+    monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+    monkeypatch.setattr(commands_mod, "cmd_go", lambda args: (_ for _ in ()).throw(AssertionError()))
+    with pytest.raises(SystemExit) as ei:
+        main()
+    assert ei.value.code == 5  # the existing bare `plate --json` error envelope path
+
+
+def test_bare_plate_wizard_bambu_error_exits_with_its_code(monkeypatch, tmp_path):
+    """A BambuError from the bare-plate wizard is handled -> exit with its code."""
+    from bambu_cli import commands as commands_mod
+    from bambu_cli.cli import main
+
+    _bare_plate_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+    def raise_bambu(args):
+        raise BambuError("boom", exit_code=3, failed_step="validate")
+
+    monkeypatch.setattr(commands_mod, "cmd_go", raise_bambu)
+    with pytest.raises(SystemExit) as ei:
+        main()
+    assert ei.value.code == 3
+
+
+def test_bare_plate_wizard_ctrl_c_exits_5(monkeypatch, tmp_path):
+    """Ctrl-C bubbling from the bare-plate wizard exits 5 with a cancel message."""
+    from bambu_cli import commands as commands_mod
+    from bambu_cli.cli import main
+
+    _bare_plate_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+    def raise_ctrl_c(args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(commands_mod, "cmd_go", raise_ctrl_c)
+    with pytest.raises(SystemExit) as ei:
+        main()
+    assert ei.value.code == 5
+
+
+def test_help_epilog_advertises_go(capsys):
+    from bambu_cli.cli import build_parser
+
+    build_parser().print_help()
+    out = capsys.readouterr().out
+    assert "plate go" in out
+    assert "walks you through printing from a URL" in out

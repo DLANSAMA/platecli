@@ -108,6 +108,10 @@ def _default_job() -> Callable[..., Any]:
     return cmd_job
 
 
+def _default_ams_material() -> Callable[..., Any]:
+    return _read_loaded_ams_material
+
+
 @dataclass
 class GoSteps:
     """Injectable pipeline collaborators for the wizard (mirrors ``JobSteps``)."""
@@ -116,6 +120,7 @@ class GoSteps:
     download: Callable[..., Any] | None = None
     slice: Callable[..., Any] | None = None
     job: Callable[..., Any] | None = None
+    ams_material: Callable[..., Any] | None = None
 
     def _resolve(
         self, value: Callable[..., Any] | None, factory: Callable[[], Callable[..., Any]]
@@ -133,6 +138,9 @@ class GoSteps:
 
     def get_job(self) -> Callable[..., Any]:
         return self._resolve(self.job, _default_job)
+
+    def get_ams_material(self) -> Callable[..., Any]:
+        return self._resolve(self.ams_material, _default_ams_material)
 
 
 @dataclass
@@ -299,11 +307,66 @@ def _step_printer(args: argparse.Namespace, deps: GoDeps, state: WizardState) ->
 # ---------------------------------------------------------------------------
 
 
+def _read_loaded_ams_material(args: argparse.Namespace) -> str | None:
+    """Best-effort read of the currently-loaded AMS filament type.
+
+    Returns a ``MATERIAL_PRESETS`` key (e.g. ``"PLA"``) matching the active AMS
+    tray's material, or ``None`` on ANY failure — MQTT/timeout error, no AMS,
+    empty active slot, or an unknown material. NEVER raises and never invents a
+    timeout: it relies on the existing ``printer.status()`` machinery (which
+    carries its own ``mqtt_timeout``) so the wizard is not perceptibly slowed.
+    """
+    try:
+        from bambu_cli.ams import parse_ams
+        from bambu_cli.context import RuntimeContext
+
+        ctx = RuntimeContext.for_request(args)
+        data = ctx.printer().status()
+        if not data:
+            return None
+        ams = parse_ams(data)
+        if not ams or not ams.get("units"):
+            return None
+        active = ams.get("active_tray")
+        loaded_type: str | None = None
+        for unit in ams["units"]:
+            for tray in unit.get("trays", []):
+                if tray.get("empty"):
+                    continue
+                if active is not None and tray.get("active"):
+                    loaded_type = tray.get("type")
+                    break
+                if loaded_type is None:
+                    # Fall back to the first non-empty tray when nothing is marked
+                    # active (e.g. no tray_now reported).
+                    loaded_type = tray.get("type")
+            if active is not None and loaded_type is not None:
+                break
+        return _match_material_preset(loaded_type)
+    except Exception:
+        # AMS detection is a nicety — never let it block or break the wizard.
+        return None
+
+
+def _match_material_preset(loaded_type: str | None) -> str | None:
+    """Map a reported AMS filament type onto a MATERIAL_PRESETS key, or None."""
+    if not loaded_type:
+        return None
+    normalized = str(loaded_type).strip().upper()
+    for key in _MATERIAL_CHOICES:
+        if normalized == key:
+            return key
+    return None
+
+
 def _step_material(args: argparse.Namespace, deps: GoDeps, state: WizardState) -> None:
     prompts = deps.get_prompts()
+    detected = deps.get_steps().get_ams_material()(args)
+    default = detected if detected in _MATERIAL_CHOICES else "PLA"
     for name in _MATERIAL_CHOICES:
-        prompts.print(f"  {name} — {_MATERIAL_GUIDANCE[name]}")
-    answer = _check(prompts.choice("Material", _MATERIAL_CHOICES, default="PLA"))
+        note = "  (detected in AMS)" if name == detected else ""
+        prompts.print(f"  {name} — {_MATERIAL_GUIDANCE[name]}{note}")
+    answer = _check(prompts.choice("Material", _MATERIAL_CHOICES, default=default))
     state.material = str(answer)
 
 

@@ -40,8 +40,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   - New package `bambu_cli/interactive/` (`prompts.py`, the only module that touches
     interactive input, and `session.py`, the linear state machine). Both the prompt
     layer and the pipeline collaborators are injectable, so the whole flow is tested
-    without a TTY, a printer, a network, or a real slicer. Bare `plate` and
-    AMS-aware material defaults are deliberately left for a later phase.
+    without a TTY, a printer, a network, or a real slicer.
+  - Bare `plate` (no subcommand) now launches the wizard when stdin **and** stdout
+    are both TTYs and `--json` was not passed. Every non-interactive context — CI,
+    pipes, `subprocess`, `plate | less`, `--json` — keeps the previous behavior
+    (help to stderr, exit `5`), so no script or agent can observe a change. The
+    top-level `--help` epilog now advertises `plate go`.
+  - The material step is AMS-aware: it reads the loaded filament from printer status
+    and, when it matches a preset (PLA/PETG/ABS/TPU), offers it as the prompt default
+    marked "(detected in AMS)". The read is best-effort through the existing status
+    machinery — any MQTT error, timeout, missing AMS, or unknown material falls back
+    silently to the plain PLA default and never blocks the wizard.
 - `camera_direct_only` config key (default `false`): when set, disables the Docker/RTSP streamer fallback so any direct port-6000 grab failure aborts instead of silently falling through to the unauthenticated streamer. Closes the remaining camera fallback residuals noted in SECURITY.md. X1-series printers still need the streamer; unset `camera_direct_only` for them.
 - Published JSON schemas for the last four `--json` commands that lacked them:
   `upload.json`, `files.json`, `stop.json`, `setup.json`. README has claimed
