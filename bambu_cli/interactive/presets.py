@@ -3,7 +3,31 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 from typing import Any
+
+from bambu_cli.constants import EXIT_COMMAND_ERROR
+from bambu_cli.errors import abort
+
+
+def parse_args_or_abort(parser: argparse.ArgumentParser, argv: list[str]) -> argparse.Namespace:
+    """Run ``parser.parse_args`` but turn argparse's ``SystemExit`` into a ``BambuError``.
+
+    Domain code must never ``sys.exit`` (only ``cli.py`` may). ``argparse`` calls
+    ``sys.exit(2)`` on a parse error, so callers building a namespace from inside
+    the wizard route through here to keep the abort/BambuError contract intact.
+    """
+    stderr = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(stderr):
+            return parser.parse_args(argv)
+    except SystemExit as exc:
+        detail = stderr.getvalue().strip()
+        message = detail or f"Could not build a valid command from: {' '.join(argv)}"
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="parse")
+        raise AssertionError("unreachable") from exc  # abort always raises
+
 
 # Quality presets map user-facing names to --quality values
 QUALITY_PRESETS: dict[str, dict[str, Any]] = {
@@ -60,7 +84,7 @@ def preset_to_job_args(material: str, quality: str, supports: bool, source: str)
     qual = QUALITY_PRESETS[quality]
     parser = build_parser()
     # Parse with a dummy source to get all defaults
-    ns = parser.parse_args(["job", source])
+    ns = parse_args_or_abort(parser, ["job", source])
     # Apply preset overrides
     ns.filament = mat["filament"]
     ns.nozzle_temp = mat["nozzle_temp"]

@@ -37,7 +37,7 @@ from bambu_cli.constants import (
     SLICEABLE_EXTENSIONS,
 )
 from bambu_cli.errors import BambuError, abort
-from bambu_cli.interactive.presets import preset_to_job_args
+from bambu_cli.interactive.presets import parse_args_or_abort, preset_to_job_args
 from bambu_cli.interactive.prompts import Prompts, is_cancelled
 from bambu_cli.slicer.estimate import format_estimate, read_3mf_estimate
 
@@ -82,6 +82,7 @@ class WizardState:
     workdir: str | None = None
     printable_path: str | None = None
     kept_path: str | None = None
+    sliced: bool = False
 
 
 def _default_setup() -> Callable[..., Any]:
@@ -180,6 +181,15 @@ def _step_preflight(args: argparse.Namespace, deps: GoDeps) -> None:
             deps.get_steps().get_setup()(args)
             load_config(exit_on_fail=False)
             settings = current_settings()
+            # Re-check rather than trusting cmd_setup to have aborted on failure:
+            # if setup returned without configuring an IP, stop here with a clear
+            # message instead of proceeding into the pipeline with the sentinel.
+            if settings.printer_ip == "0.0.0.0":
+                abort(
+                    "Setup did not configure a printer. Run 'plate setup', then 'plate go'.",
+                    exit_code=EXIT_CONFIG_ERROR,
+                    failed_step="config",
+                )
         else:
             abort(
                 "Run 'plate setup' when ready, then 'plate go'.",
@@ -221,13 +231,13 @@ def _validate_source(raw: str) -> tuple[str | None, str | None]:
 
     source = _normalize_url_input(value)
 
+    # A leading dash would be parsed as an option flag by the downstream job
+    # parser (mirrors _run_job's guard at orchestrate.py). Reject it up front so
+    # a file literally named "-foo.stl" cannot detonate argparse mid-wizard.
+    if source.startswith("-"):
+        return None, f"Source cannot start with '-': {source}"
+
     if _looks_like_url(source) or _is_http_url(source):
-        if not _is_http_url(source):
-            try:
-                _validate_http_url_or_exit(source)
-            except BambuError as exc:
-                return None, str(exc) or "That URL is not valid."
-            return source, None
         try:
             _validate_http_url_or_exit(source)
         except BambuError as exc:
@@ -337,7 +347,7 @@ def _step_supports(args: argparse.Namespace, deps: GoDeps, state: WizardState) -
 
 
 def _step_prepare(args: argparse.Namespace, deps: GoDeps, state: WizardState) -> None:
-    from bambu_cli.download import _is_http_url
+    from bambu_cli.download import _extract_zip_model, _is_http_url
     from bambu_cli.download.naming import _file_extension
     from bambu_cli.job.predict import _slice_args_for_job
 
@@ -376,6 +386,24 @@ def _step_prepare(args: argparse.Namespace, deps: GoDeps, state: WizardState) ->
             failed_step="download",
         )
 
+    # A local .zip never went through the download layer's extraction, so extract
+    # its model member the same way _run_job does — reusing _extract_zip_model —
+    # so the extracted model flows through the normal slice path below with the
+    # user's preset namespace. Without this the raw .zip would fall to the
+    # "printer-ready" branch and later be sliced by cmd_job at PLA defaults,
+    # silently discarding the chosen material (see plan §11 Q3).
+    if _file_extension(model_path) in ARCHIVE_DOWNLOAD_EXTENSIONS:
+        utils._LAST_ERROR_PAYLOAD = None
+        try:
+            extracted_path, _filename, _entry, _size = _extract_zip_model(
+                model_path,
+                workdir,
+                argparse.Namespace(name=None, max_download_mb=DEFAULT_MAX_DOWNLOAD_MB),
+            )
+        except ValueError as exc:
+            abort(str(exc), exit_code=EXIT_FILE_ERROR, failed_step="extract")
+        model_path = extracted_path
+
     ext = _file_extension(model_path)
     preset_ns = preset_to_job_args(state.material, state.quality, state.supports, source)
 
@@ -388,9 +416,12 @@ def _step_prepare(args: argparse.Namespace, deps: GoDeps, state: WizardState) ->
                 exc.next_command = ["slice", model_path, "-v"]
             raise
         state.printable_path = printable_path
+        state.sliced = True
     else:
-        # .3mf / .gcode: already printer-ready, no slicing.
+        # .3mf / .gcode: already printer-ready, no slicing. The preset material
+        # was NOT applied — the preview flags this so we don't imply otherwise.
         state.printable_path = model_path
+        state.sliced = False
 
     _render_preview(prompts, state, source, model_path)
 
@@ -422,9 +453,13 @@ def _render_preview(prompts: Any, state: WizardState, source: str, model_path: s
     prompts.print(f"Model      {name}")
     prompts.print(f"Printer    {full_name}, {settings.nozzle_size}mm nozzle")
     supports_label = "yes" if state.supports else "no"
-    prompts.print(
-        f"Material   {state.material}  ·  Quality: {state.quality} ({quality_layer})  ·  Supports: {supports_label}"
-    )
+    if state.sliced:
+        prompts.print(
+            f"Material   {state.material}  ·  Quality: {state.quality} ({quality_layer})  ·  Supports: {supports_label}"
+        )
+    else:
+        # Pre-sliced source: the wizard's material/quality choices were not applied.
+        prompts.print("Material   (pre-sliced — material settings not applied)")
     prompts.print(f"Estimate   {estimate_line}")
     prompts.print("")
 
@@ -440,12 +475,19 @@ def _run_print(args: argparse.Namespace, deps: GoDeps, state: WizardState, *, co
 
     assert state.printable_path is not None  # noqa: S101
     parser = build_parser()
-    job_ns = parser.parse_args(["job", state.printable_path])
+    # parse_args raises SystemExit(2) on failure; parse_args_or_abort converts
+    # that to a BambuError so the wizard never bypasses the abort/BambuError
+    # contract (domain code must not sys.exit). The path here is a
+    # slicer-produced or already-validated file, so a failure would be an
+    # internal bug, but we surface it cleanly regardless.
+    job_ns = parse_args_or_abort(parser, ["job", state.printable_path])
     job_ns.confirm = confirm
     # Carry global request flags (sim / verbose) through so the same simulated
     # printer path runs end to end.
     if bool(getattr(args, "sim", False)):
         job_ns.sim = True
+    if bool(getattr(args, "verbose", False)):
+        job_ns.verbose = True
     utils._LAST_ERROR_PAYLOAD = None
     utils._LAST_DOWNLOAD_PAYLOAD = None
     deps.get_steps().get_job()(job_ns)
@@ -470,30 +512,51 @@ def _step_confirm_print(args: argparse.Namespace, deps: GoDeps, state: WizardSta
         _run_print(args, deps, state, confirm=False)
         raise _GoDone(0)
 
-    # Nothing sent. Preserve the sliced file outside the temp workdir so the path
-    # we print survives cleanup.
+    # Nothing sent. Preserve the printable file outside the temp workdir so the
+    # path we print survives cleanup (a user's own pre-sliced file stays put).
     kept = _preserve_printable(state)
     if kept:
-        prompts.print(f"Nothing sent. Sliced file kept at {kept}")
+        label = "File kept at" if not state.sliced else "Sliced file kept at"
+        prompts.print(f"Nothing sent. {label} {kept}")
     else:
         prompts.print("Nothing sent.")
     raise _GoDone(0)
 
 
-def _preserve_printable(state: WizardState) -> str | None:
-    """Move the sliced file out of the temp workdir into cwd; return its path.
+def _under_workdir(path: str, workdir: str | None) -> bool:
+    """Return True iff ``path`` lives inside ``workdir`` (the temp dir we own)."""
+    if not workdir:
+        return False
+    abs_path = os.path.abspath(path)
+    abs_workdir = os.path.abspath(workdir)
+    return abs_path == abs_workdir or abs_path.startswith(abs_workdir + os.sep)
 
-    Never print a path that is about to be deleted (§10). If the move fails, we
-    fall back to keeping the whole workdir (return None so the message omits a
-    path rather than naming a doomed one).
+
+def _preserve_printable(state: WizardState) -> str | None:
+    """Return the path where the printable file will survive cleanup.
+
+    Only files that live *inside our temp workdir* are relocated into cwd — a
+    user-supplied pre-sliced .3mf/.gcode that never entered the workdir stays
+    exactly where it is (we just report its existing path; never move or
+    overwrite the user's own file). When relocating from the workdir we pick a
+    non-clobbering name so a same-named file already in cwd is never overwritten.
+    If the move fails, we keep the whole workdir (return None so the message
+    omits a path rather than naming a doomed one).
     """
+    from bambu_cli.protocols.ftps import _noncolliding_path
+
     if not state.printable_path or not os.path.exists(state.printable_path):
         return None
+
+    # Pre-existing user file outside our workdir: leave it in place.
+    if not _under_workdir(state.printable_path, state.workdir):
+        state.kept_path = state.printable_path
+        return state.printable_path
+
     try:
-        dest = os.path.join(os.getcwd(), os.path.basename(state.printable_path))
-        if os.path.abspath(dest) == os.path.abspath(state.printable_path):
-            state.kept_path = dest
-            return dest
+        dest = _noncolliding_path(os.path.join(os.getcwd(), os.path.basename(state.printable_path)))
+        # _noncolliding_path already created (reserved) dest as an empty file, so
+        # this move replaces our own placeholder — never a pre-existing user file.
         shutil.move(state.printable_path, dest)
         state.kept_path = dest
         return dest
