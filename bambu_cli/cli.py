@@ -379,7 +379,11 @@ def get_global_parser():
 
 
 def build_parser():
-    parser = JsonArgumentParser(description="Bambu Lab local printer control", parents=[get_global_parser()])
+    parser = JsonArgumentParser(
+        description="Bambu Lab local printer control",
+        epilog="Tip: 'plate go' walks you through printing from a URL.",
+        parents=[get_global_parser()],
+    )
     parser.add_argument("--version", action="store_true", help="Print version and exit")
     sub = parser.add_subparsers(dest="cmd", parser_class=JsonArgumentParser)
 
@@ -577,6 +581,24 @@ def _json_mode_requested(args):
     return bool(getattr(args, "json", False))
 
 
+def _bare_plate_should_launch_wizard(args):
+    """Decide whether bare `plate` (no subcommand) launches the guided wizard.
+
+    Plan §11 Q1 (binding): launch only when stdin AND stdout are both TTYs and
+    --json was not passed. Requiring both streams keeps the script pattern
+    "TTY stdin, redirected stdout" on today's help path. --json forces help too,
+    since interactive mode has no machine contract. Any machine-use context
+    (CI, pipes, subprocess) is therefore unaffected — a zero-breakage default flip.
+    """
+    if getattr(args, "cmd", None):
+        return False
+    if getattr(args, "version", False):
+        return False
+    if _json_mode_requested(args):
+        return False
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
 def _requires_printer_dns_check(args):
     if bool(getattr(args, "sim", False)):
         return False
@@ -757,6 +779,25 @@ def main():
                 )
             _safe_log_error(f"Uncaught exception: {exc}", exc_info=True)
             sys.exit(EXIT_COMMAND_ERROR)
+    elif _bare_plate_should_launch_wizard(args):
+        # Bare `plate` on an interactive terminal (both stdin and stdout are TTYs)
+        # and without --json launches the guided wizard — the highest-leverage
+        # ease-of-use win for someone who just installed `plate` and typed it to
+        # see what happens (plan §11 Q1). Any machine-use flag (--json) or a
+        # non-TTY stream (CI, pipes, subprocess, `plate | less`) keeps today's
+        # exact behavior below: help to stderr, EXIT_COMMAND_ERROR.
+        _go = _resolve_command("go")
+        if _go is None:  # pragma: no cover -- go is always registered
+            parser.print_help(sys.stderr)
+            sys.exit(EXIT_COMMAND_ERROR)
+        args.cmd = "go"
+        try:
+            _go(args)
+        except (KeyboardInterrupt, EOFError):
+            print("\nOperation cancelled by user.")
+            sys.exit(EXIT_COMMAND_ERROR)
+        except BambuError as exc:
+            _handle_bambu_error(exc, "go")
     else:
         parser.print_help(sys.stderr)
         sys.exit(EXIT_COMMAND_ERROR)

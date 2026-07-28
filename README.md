@@ -93,6 +93,17 @@ plate job "https://www.printables.com/model/3161-3d-benchy" --confirm
 
 `--confirm` is required for anything that moves the printer or destroys data on it: `print`, `stop`, `pause`, `resume`, `gcode`, `delete`, and the print step of `job`. Leave it off and the command refuses with exit code `5` — nothing on the printer moves. (`light` is exempt; an LED is not a physical action.)
 
+### Prefer a guided walk-through?
+
+If you'd rather not think about flags, run the wizard — or just type `plate` on its own:
+
+```bash
+plate go     # or: plate go "https://www.printables.com/model/3161-3d-benchy"
+plate        # bare `plate` on a terminal launches the same wizard
+```
+
+It walks you from a model URL (or local file) to a running print without touching a slicer: paste a source, confirm the printer, pick a material and quality preset, answer one supports question, then see a time and filament preview before a final confirm. If your printer has an AMS, the material step defaults to whatever filament is loaded. It drives the same `download` → `slice` → `job` pipeline as `plate job`, so the result is identical — it just asks the questions for you. `plate go` needs an interactive terminal; for scripts and agents, use `plate job <url> --confirm`.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-dark.gif">
   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-light.gif">
