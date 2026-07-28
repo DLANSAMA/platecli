@@ -94,6 +94,8 @@ _COMMAND_SCHEMAS = {
     "download": ["download.json"],
     "files": ["files.json"],
     "gcode": ["gcode.json"],
+    # `go` is interactive-only: `--json` always emits the error envelope in go.json.
+    "go": ["go.json"],
     "job": ["job_ok.json", "job_error.json"],
     "light": ["light.json"],
     "pause": ["pause.json"],

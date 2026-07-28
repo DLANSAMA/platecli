@@ -444,6 +444,13 @@ def build_parser():
     )
     _add_job_arguments(p_send)
 
+    p_go = sub.add_parser(
+        "go",
+        parents=[get_global_parser()],
+        help="Interactive guided print: URL in, plastic out — no slicer knowledge needed",
+    )
+    p_go.add_argument("source", nargs="?", help="Model URL or local file (skips the first prompt)")
+
     p_slice = sub.add_parser("slice", parents=[get_global_parser()], help="Slice a model file into .3mf")
     p_slice.add_argument("file", nargs="?", help="Path to .stl, .step, .stp, or .obj file")
     p_slice.add_argument("--quality", default="standard", help="draft/standard/high (default: standard)")

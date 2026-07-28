@@ -21,6 +21,7 @@ from bambu_cli.commands.files import (  # noqa: F401
     cmd_upload,
 )
 from bambu_cli.commands.gcode import cmd_gcode  # noqa: F401
+from bambu_cli.commands.go import cmd_go  # noqa: F401
 from bambu_cli.commands.print_cmd import cmd_print  # noqa: F401
 from bambu_cli.commands.setup_wrappers import (  # noqa: F401
     cmd_config,
