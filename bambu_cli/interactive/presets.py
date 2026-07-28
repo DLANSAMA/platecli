@@ -14,9 +14,9 @@ from bambu_cli.errors import abort
 def parse_args_or_abort(parser: argparse.ArgumentParser, argv: list[str]) -> argparse.Namespace:
     """Run ``parser.parse_args`` but turn argparse's ``SystemExit`` into a ``BambuError``.
 
-    Domain code must never ``sys.exit`` (only ``cli.py`` may). ``argparse`` calls
-    ``sys.exit(2)`` on a parse error, so callers building a namespace from inside
-    the wizard route through here to keep the abort/BambuError contract intact.
+    Domain code must never exit the process (only ``cli.py`` may). ``argparse``
+    raises ``SystemExit(2)`` on a parse error, so callers building a namespace from
+    inside the wizard route through here to keep the abort/BambuError contract intact.
     """
     stderr = io.StringIO()
     try:
