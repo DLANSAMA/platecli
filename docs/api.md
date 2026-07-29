@@ -110,6 +110,7 @@ form when looking a code up; the human-readable log line shows both.
 | [`upload.json`](schemas/upload.json) | `upload` success / `--dry-run` |
 | [`files.json`](schemas/files.json) | `files` listing |
 | [`setup.json`](schemas/setup.json) | `setup` summary |
+| [`go.json`](schemas/go.json) | `go` error envelope (`--json` always errors) |
 
 Every `--json`-emitting subcommand now has a dedicated schema. That is enforced,
 not asserted: `tests/contracts/test_schema_validation.py` derives the subcommand
@@ -305,6 +306,14 @@ Success / dry-run: [`job_ok.json`](schemas/job_ok.json).
 Failure: [`job_error.json`](schemas/job_error.json).
 
 Print start requires `--confirm`; without it the job may upload but will not print.
+
+### `go`
+
+`go` is the interactive guided-print wizard and has **no machine contract**: it
+requires a TTY and drives real prompts. With `--json` it never runs the wizard —
+it emits the error envelope in [`go.json`](schemas/go.json) (`exit_code` 5,
+`failed_step` `parse`) and exits. Piped/non-TTY stdin is refused the same way.
+Agents should use `job` / `send` with `--confirm` instead.
 
 ### `gcode`
 

@@ -7,6 +7,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Added
 
+- Foundations for interactive guided-print mode (`plate go`), landing in 0.4.0.
+  This is internal groundwork only — no new subcommand, no prompts, and no change
+  to any existing command's behavior. The wizard itself follows in a later release.
+  - `bambu_cli/slicer/estimate.py` reads print time and filament weight from an
+    OrcaSlicer-produced `.3mf`, so a future preview can show an estimate before
+    anything is sent to the printer. It prefers `Metadata/slice_info.config` and
+    falls back to the header of `Metadata/plate_N.gcode`. It never raises —
+    callers get `Estimate(None, None)` on any failure — and time and weight
+    degrade independently, so a half-readable file still yields the half it has.
+    Implausible values (non-positive, over 30 days, over 10 kg) are treated as
+    unparsed on the principle that a wrong estimate is worse than a missing one.
+  - `bambu_cli/interactive/presets.py` maps friendly material and quality choices
+    onto the flags `job` already accepts, so the wizard can expose zero slicer
+    knobs. Material presets carry their own nozzle and bed temperatures, sourced
+    from the Bambu `@base` filament profiles.
+- Interactive guided-print wizard `plate go`. It walks you from a model URL (or
+  local file) to a running print without touching a slicer: paste a source, confirm
+  the printer, pick a material and quality preset, answer one supports question, see
+  a time/filament preview, then a default-No confirm before anything is sent. It is a
+  front-end over the existing pipeline — it drives the same `download` → `slice` →
+  `job` machinery `plate job` uses, so slicing is bit-identical. Notes:
+  - Interactive by design: `go` requires a TTY on stdin. Piped/non-interactive stdin
+    is refused with a pointer to `plate job <url> --confirm` for scripts, and `--json`
+    always emits the error envelope (schema `docs/schemas/go.json`) and exits 5 —
+    interactive mode has no machine contract. `go` is a local command, so an
+    unconfigured printer reaches the wizard, which offers to run `plate setup` itself
+    rather than hard-failing at the network gate.
+  - The confirm step defaults to No; answering Yes is the deliberate-action gate,
+    equivalent to `job --confirm`. Declining offers an upload-only path, and declining
+    that keeps the sliced file rather than deleting it.
+  - New package `bambu_cli/interactive/` (`prompts.py`, the only module that touches
+    interactive input, and `session.py`, the linear state machine). Both the prompt
+    layer and the pipeline collaborators are injectable, so the whole flow is tested
+    without a TTY, a printer, a network, or a real slicer.
+  - Bare `plate` (no subcommand) now launches the wizard when stdin **and** stdout
+    are both TTYs and `--json` was not passed. Every non-interactive context — CI,
+    pipes, `subprocess`, `plate | less`, `--json` — keeps the previous behavior
+    (help to stderr, exit `5`), so no script or agent can observe a change. The
+    top-level `--help` epilog now advertises `plate go`.
+  - The material step is AMS-aware: it reads the loaded filament from printer status
+    and, when it matches a preset (PLA/PETG/ABS/TPU), offers it as the prompt default
+    marked "(detected in AMS)". The read is best-effort through the existing status
+    machinery — any MQTT error, timeout, missing AMS, or unknown material falls back
+    silently to the plain PLA default and never blocks the wizard.
 - `camera_direct_only` config key (default `false`): when set, disables the Docker/RTSP streamer fallback so any direct port-6000 grab failure aborts instead of silently falling through to the unauthenticated streamer. Closes the remaining camera fallback residuals noted in SECURITY.md. X1-series printers still need the streamer; unset `camera_direct_only` for them.
 - Published JSON schemas for the last four `--json` commands that lacked them:
   `upload.json`, `files.json`, `stop.json`, `setup.json`. README has claimed
@@ -37,6 +81,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   a floor of 84 would fail CI on Windows.
 
 ### Fixed
+
+- Material presets for the upcoming `plate go` wizard name their filament profile
+  in full (`Bambu ABS @base`) rather than by bare material (`ABS`). `slice` matches
+  `--filament` as a case-insensitive substring against every `@base` profile and
+  takes the first `os.listdir` hit, so a bare `ABS` also matches
+  `Bambu Support for ABS @base.json` — support-interface filament — and `TPU`
+  matches `Generic TPU for AMS`. Because `os.listdir` order is filesystem-dependent,
+  the profile chosen could differ between Linux and Windows. Caught before the
+  wizard shipped; a regression test pins each preset to exactly one profile. The
+  underlying substring matching in `slice`/`job` is unchanged and still matches
+  loosely by design — only the preset values are now unambiguous.
 
 - `tests/privacy_smoke.py` no longer treats the tokens of a GitHub noreply email
   as local account names. It split `user.email` on every non-alphanumeric

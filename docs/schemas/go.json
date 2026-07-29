@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platecli.local/schemas/go.json",
+  "title": "platecli go error envelope (interactive command; --json always errors)",
+  "type": "object",
+  "required": ["status", "command", "exit_code", "error", "failed_step"],
+  "properties": {
+    "status": {"const": "error"},
+    "command": {"const": "go"},
+    "exit_code": {"const": 5},
+    "error": {"type": "string", "minLength": 1},
+    "failed_step": {"const": "parse"}
+  },
+  "additionalProperties": true
+}

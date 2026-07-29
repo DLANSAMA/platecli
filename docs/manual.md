@@ -10,6 +10,7 @@ The complete reference for `plate` — setup, configuration, slicing, monitoring
 - [Setup](#setup)
 - [OrcaSlicer](#orcaslicer)
 - [Usage](#usage)
+- [Guided mode (plate go)](#guided-mode-plate-go)
 - [Monitoring a print](#monitoring-a-print)
 - [Camera snapshots](#camera-snapshots)
 - [Global flags](#global-flags)
@@ -205,6 +206,29 @@ For programmatic checks, `plate --json --version` emits JSON version details.
 # --confirm is required for any command that begins printing.
 plate job "https://www.printables.com/model/3161-3d-benchy" --confirm --json
 ```
+
+## Guided mode (plate go)
+
+`plate go` is an interactive wizard for printing from a URL without touching a slicer. It is a front-end over the same pipeline as `plate job` — it collects your answers, builds the same request `job` would, and drives `download` → `slice` → `job` — so the result is identical; it just asks the questions instead of taking flags.
+
+```bash
+plate go                                                   # prompts for everything
+plate go "https://www.printables.com/model/3161-3d-benchy" # skips the first prompt
+```
+
+Bare `plate` (no subcommand) on an interactive terminal launches the same wizard. This is a convenience for people who just installed `plate` and typed it to see what happens; it only triggers when **both** stdin and stdout are TTYs and `--json` was not passed. In every non-interactive context — CI, pipes, `subprocess`, `plate | less`, or with `--json` — bare `plate` keeps its previous behavior: print help to stderr and exit `5`.
+
+The wizard walks these steps:
+
+1. **Source** — paste a Printables page, a direct STL/3MF/ZIP link, or a local file path (re-prompts on a bad URL, up to three tries).
+2. **Printer** — shows the configured printer and asks you to confirm it. If no printer is configured yet, it offers to run `plate setup` for you first.
+3. **Material** — `PLA` / `PETG` / `ABS` / `TPU`. Each preset carries the correct nozzle and bed temperatures. If your printer has an AMS, the currently-loaded filament is detected and offered as the default (marked *(detected in AMS)*); if that read fails for any reason, it falls back to `PLA` without slowing you down.
+4. **Quality** — `draft` / `standard` / `fine` (mapping to OrcaSlicer's 0.28 / 0.20 / 0.12 mm profiles).
+5. **Supports** — one yes/no question for models with big overhangs.
+6. **Preview** — it downloads and slices, then shows an estimated print time and filament weight *before* anything is sent.
+7. **Confirm** — a default-**No** gate. Answering Yes is the deliberate-action equivalent of `job --confirm` and starts the print. Declining offers an upload-only path; declining that keeps the sliced file rather than deleting it.
+
+The wizard never exposes raw slicer knobs (infill, walls, speeds, seams, `--set` overrides). For that level of control, or for scripts and AI agents, use `plate job <url> --confirm` directly — `plate go` deliberately requires an interactive terminal and `plate go --json` always errors with exit `5` (interactive mode has no machine contract).
 
 ## Monitoring a print
 
