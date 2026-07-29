@@ -73,7 +73,7 @@ Per-module (approx. killed / accounted on a clean run):
 | `download/naming.py` | ~55–56% | Injection + sanitize properties; CD/header edges survive |
 | `job/predict.py` | ~33% | Dry-run heuristics under-specified; many equivalent branches |
 | `download/validation.py` | ~30–31% | Message/emit paths + normalize edge strings |
-| `slicer/output.py` | ~21% | **Low:** `_finalize_slice` I/O/logging mutates with little unit signal; `_is_valid_sliced_3mf` itself is much better covered |
+| `slicer/output.py` | ~21% baseline; **not yet re-measured** since the C.4 hermetic Orca stub landed | **Was low:** `_finalize_slice` I/O/logging mutated with little unit signal. `tests/test_slice_stub_integration.py` (roadmap C.4) now drives its benign-GL / empty / corrupt / missing-output / real-error branches through the real slicer subprocess (line coverage 79.8%→~93%), so a re-run of `mutmut` on this module should score materially higher — update this row after the next mutation run. |
 
 **Honest reading:** the overall score **dropped vs Phase 1** because scope **widened** into harder modules (especially `output._finalize_slice` and `predict`/`validation` emit paths). That is intentional. Do **not** restore a high score by shrinking back to only well-covered files.
 
@@ -92,7 +92,7 @@ Enforced by `./scripts/run_mutation_baseline.sh` after `mutmut export-cicd-stats
 Categories (not an exhaustive dump of 861 IDs):
 
 1. **Equivalent / cosmetic** — error-message string literals, log format, `getattr` default when tests always set the attribute, `ZipFile(..., "r")` vs default mode.
-2. **`_finalize_slice` (output.py)** — subprocess exit interpretation, JSON emit, path display. Deferred: needs hermetic fake-Orca fixtures; not pure safety. Dominates the low output.py score.
+2. **`_finalize_slice` (output.py)** — subprocess exit interpretation, JSON emit, path display. **Addressed (C.4):** `tests/fakes/orca_stub` + `tests/test_slice_stub_integration.py` now run these branches against a real fake-slicer subprocess. Residual survivors here should be cosmetic (log strings / path display); re-measure before treating any as "accepted".
 3. **DNS cache / hop bookkeeping (netsafety)** — TTL, cache size clear, attribute names on redirect requests. Core `is_global` refuse path is well killed.
 4. **URL normalize / Content-Disposition edges (validation/naming)** — ambiguous scheme-less inputs and RFC2231 header tuples; behavior partially covered; full combinatorial matrix deferred.
 5. **Dry-run prediction (predict.py)** — Printables/archive/extension branches that return `None` early; many mutants are observationally equivalent under the focused suite.
@@ -121,4 +121,4 @@ Artifacts (`mutants/`, `.mutmut-cache`, `.hypothesis/`) are gitignored.
 
 - mutmut 3.x needs Python ≥ 3.10 (CI mutation job uses 3.12).
 - Hypothesis property tests live in `tests/test_properties_safety.py` and are part of the focused mutmut suite.
-- Raising the score further: add hermetic tests for `_finalize_slice` decision branches, or move pure 3mf validation to a tiny module so mutmut does not spend budget on I/O.
+- Raising the score further: the hermetic `_finalize_slice` tests now exist (C.4, `tests/test_slice_stub_integration.py`); re-run `mutmut` on `slicer/output.py` and update the per-module row. Optionally still move pure 3mf validation to a tiny module so mutmut does not spend budget on I/O.
