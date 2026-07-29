@@ -111,7 +111,7 @@ def create_mqtt_client(printer, client_id=""):
         client.tls_set(cert_reqs=ssl.CERT_NONE)
         client.tls_insecure_set(True)
     elif printer.cert_fingerprint:
-        expected_fp = printer.cert_fingerprint.lower()
+        expected_fp = printer.cert_fingerprint
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
@@ -120,15 +120,11 @@ def create_mqtt_client(printer, client_id=""):
 
         def wrap_socket_with_pinning(*args, **kwargs):
             tls_sock = orig_wrap(*args, **kwargs)
-            from bambu_cli.config import fingerprint_sha256
+            from bambu_cli.tlspin import verify_cert_fingerprint
 
             def _verify_pin():
                 der = tls_sock.getpeercert(binary_form=True)
-                if der is None:
-                    raise ssl.SSLError("No peer certificate to verify fingerprint against")
-                actual = fingerprint_sha256(der).lower()
-                if actual != expected_fp:
-                    raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {expected_fp}, got {actual}")
+                verify_cert_fingerprint(der, expected_fp)
 
             # paho wraps with do_handshake_on_connect=False, so the peer cert
             # is not available yet; defer verification to handshake completion.
@@ -640,13 +636,10 @@ def _get_and_verify_cert_pem(host, port, expected_fingerprint, timeout=5):
     ctx.verify_mode = ssl.CERT_NONE
     with socket.create_connection((host, port), timeout) as raw, ctx.wrap_socket(raw, server_hostname=host) as tls:
         der = tls.getpeercert(binary_form=True)
-        from bambu_cli.config import fingerprint_sha256
+        from bambu_cli.tlspin import verify_cert_fingerprint
 
-        if der is None:
-            raise ssl.SSLError("No peer certificate to export as PEM")
-        actual = fingerprint_sha256(der)
-        if actual.lower() != expected_fingerprint.lower():
-            raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {expected_fingerprint}, got {actual}")
+        verify_cert_fingerprint(der, expected_fingerprint)
+        assert der is not None  # verify_cert_fingerprint raises on a missing cert
         pem = "-----BEGIN CERTIFICATE-----\n"
         b64 = base64.b64encode(der).decode("ascii")
         for i in range(0, len(b64), 64):
