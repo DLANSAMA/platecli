@@ -4,12 +4,7 @@ import os
 import re
 from urllib.parse import unquote, urlparse
 
-from bambu_cli.cli import (
-    _expand_path,
-    _looks_like_schemeless_credential_url,
-    _namespace_get,
-    _redact_url_credentials,
-)
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DEFAULT_MAX_DOWNLOAD_MB,
@@ -21,7 +16,10 @@ from bambu_cli.constants import (
 )
 from bambu_cli.download.naming import _file_extension, _portable_basename
 from bambu_cli.errors import BambuError, abort
+from bambu_cli.jsonio import looks_like_schemeless_credential_url as _looks_like_schemeless_credential_url
+from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import safe_log_error
+from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.utils import emit_json_error
 
 

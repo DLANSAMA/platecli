@@ -44,7 +44,8 @@ sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 from bambu_cli import bambu  # noqa: E402
 from bambu_cli import job  # noqa: E402
 from bambu_cli import utils  # noqa: E402
-from bambu_cli.cli import _display_path, build_parser  # noqa: E402
+from bambu_cli.cli import build_parser  # noqa: E402
+from bambu_cli.paths import display_path as _display_path  # noqa: E402
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR  # noqa: E402
 from bambu_cli.context import RuntimeContext  # noqa: E402
 from bambu_cli.job import JobSteps, _run_job  # noqa: E402

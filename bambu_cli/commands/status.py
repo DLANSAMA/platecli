@@ -1,6 +1,6 @@
 """Printer status command."""
 
-from bambu_cli.cli import _namespace_get
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.context import RuntimeContext
 from bambu_cli.errors import PrinterConnectionError
 from bambu_cli.logging_utils import logger

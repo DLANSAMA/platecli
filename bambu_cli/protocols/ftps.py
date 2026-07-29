@@ -179,7 +179,7 @@ def _download_partial_path(outpath):
 
 
 def _noncolliding_path(path):
-    from bambu_cli.cli import _path_for_message
+    from bambu_cli.paths import path_for_message as _path_for_message
 
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)

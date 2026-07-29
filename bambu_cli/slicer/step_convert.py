@@ -8,8 +8,9 @@ import subprocess
 import sys
 import tempfile
 
-from bambu_cli.cli import _exception_for_message, _expand_path
 from bambu_cli.logging_utils import logger
+from bambu_cli.paths import exception_for_message as _exception_for_message
+from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.slicer.options import _safe_temp_prefix
 
 GMSH_MESH_SCALE = "0.5"

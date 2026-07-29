@@ -74,7 +74,7 @@ class Settings:
         """Build a Settings from a config dict, using the same key names and
         parsing that ``bambu_cli.config.apply_config`` uses.
         """
-        from bambu_cli.cli import _expand_path
+        from bambu_cli.paths import expand_path as _expand_path
 
         cfg = cfg or {}
 
@@ -173,7 +173,7 @@ class RuntimeContext:
         """
         ctx = get_current()
         if args is not None:
-            from bambu_cli.cli import _json_mode_requested
+            from bambu_cli.jsonio import json_mode_requested as _json_mode_requested
 
             ctx.json_mode = _json_mode_requested(args)
         return ctx

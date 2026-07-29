@@ -20,7 +20,8 @@ def _ensure_output_dir(path):
     try:
         _secure_makedirs(path, exist_ok=True)
     except OSError as e:
-        from bambu_cli.cli import _exception_for_message, _path_for_message
+        from bambu_cli.paths import exception_for_message as _exception_for_message
+        from bambu_cli.paths import path_for_message as _path_for_message
 
         logger.error(f"Could not create output directory {_path_for_message(path)}: {_exception_for_message(e)}")
         abort("", exit_code=EXIT_FILE_ERROR)
@@ -28,7 +29,7 @@ def _ensure_output_dir(path):
 
 def _ensure_parent_dir(path):
     """Create the parent directory for an output file when one was supplied."""
-    from bambu_cli.cli import _expand_path
+    from bambu_cli.paths import expand_path as _expand_path
 
     parent = os.path.dirname(_expand_path(path))
     if parent:

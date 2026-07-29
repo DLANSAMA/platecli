@@ -10,13 +10,7 @@ import zipfile
 from urllib.parse import urlparse
 
 from bambu_cli import utils
-from bambu_cli.cli import (
-    _exception_for_message,
-    _expand_path,
-    _namespace_get,
-    _path_for_message,
-    _redact_url_credentials,
-)
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DEFAULT_MAX_DOWNLOAD_MB,
@@ -61,7 +55,11 @@ from bambu_cli.job.support import (
     _prepare_job_output_dir,
     _validate_predicted_remote_name_or_fail,
 )
+from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import logger
+from bambu_cli.paths import exception_for_message as _exception_for_message
+from bambu_cli.paths import expand_path as _expand_path
+from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.slicer import _directory_input_message, _is_directory_input, _validate_slice_options
 from bambu_cli.utils import emit_json
 

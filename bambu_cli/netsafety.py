@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
-from bambu_cli.cli import _redact_url_credentials
+from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import logger
 
 _dns_cache: dict = {}

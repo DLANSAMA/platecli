@@ -14,9 +14,10 @@ import stat
 from functools import lru_cache
 from typing import Any
 
-from bambu_cli.cli import _namespace_get, _path_for_message
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.download.naming import _portable_basename
 from bambu_cli.logging_utils import logger
+from bambu_cli.paths import path_for_message as _path_for_message
 
 # Profile bookkeeping fields that are not user-tunable print settings; excluded
 # from discovery (``--list-settings``) and unknown-key validation.
@@ -232,7 +233,7 @@ def _directory_input_message(path: str) -> str:
 
 
 def _validate_slice_options(args: argparse.Namespace) -> str | None:
-    from bambu_cli.cli import _namespace_get
+    from bambu_cli.argutils import namespace_get as _namespace_get
     from bambu_cli.constants import (
         MAX_BED_TEMP_C,
         MAX_NOZZLE_TEMP_C,

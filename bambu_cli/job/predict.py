@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from urllib.parse import urlparse
 
-from bambu_cli.cli import _namespace_get
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DOWNLOADABLE_EXTENSIONS,

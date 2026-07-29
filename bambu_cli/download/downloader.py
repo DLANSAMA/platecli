@@ -7,13 +7,7 @@ import urllib.request
 from typing import cast
 from urllib.parse import urlparse
 
-from bambu_cli.cli import (
-    _exception_for_message,
-    _expand_path,
-    _namespace_get,
-    _path_for_message,
-    _redact_url_credentials,
-)
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
     DOWNLOAD_TIMEOUT,
     EXIT_COMMAND_ERROR,
@@ -40,8 +34,12 @@ from bambu_cli.download.validation import (
     _validate_max_download_mb_or_exit,
 )
 from bambu_cli.errors import BambuError, abort
+from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.netsafety import build_safe_opener, polite_open, user_agent_for_url
+from bambu_cli.paths import exception_for_message as _exception_for_message
+from bambu_cli.paths import expand_path as _expand_path
+from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.printables import _is_printables_model_url, resolve_printables_url
 from bambu_cli.protocols.ftps import _download_partial_path, _noncolliding_path, _remove_partial_file
 from bambu_cli.utils import _ensure_output_dir, _record_download_success, emit_json_error

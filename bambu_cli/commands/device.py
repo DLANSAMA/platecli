@@ -2,7 +2,7 @@
 
 import json
 
-from bambu_cli.cli import _namespace_get
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.context import RuntimeContext
 from bambu_cli.errors import abort

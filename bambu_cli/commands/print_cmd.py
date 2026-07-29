@@ -1,7 +1,8 @@
 """Start a print of a file already on the printer."""
 
 from bambu_cli import utils
-from bambu_cli.cli import _exit_code_from_system_exit, _namespace_get
+from bambu_cli.argutils import exit_code_from_system_exit as _exit_code_from_system_exit
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
 from bambu_cli.context import RuntimeContext
 from bambu_cli.download.naming import (

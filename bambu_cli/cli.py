@@ -1,9 +1,7 @@
 import argparse
 import logging
-import os
 import socket
 import sys
-from urllib.parse import urlparse, urlunparse
 
 import bambu_cli.utils as utils
 from bambu_cli.errors import BambuError
@@ -11,6 +9,11 @@ from bambu_cli.errors import BambuError
 # Logging
 from bambu_cli.logging_utils import logger, safe_log_error
 
+# Path / JSON / argparse helpers extracted from this module (roadmap B.4).
+# Aliased to their historical underscore names for internal use here.
+from .argutils import exit_code_from_system_exit as _exit_code_from_system_exit
+from .argutils import namespace_get as _namespace_get
+from .argutils import setup_args_provided as _setup_args_provided
 from .constants import (
     DEFAULT_MAX_DOWNLOAD_MB,
     EXIT_COMMAND_ERROR,
@@ -18,6 +21,7 @@ from .constants import (
     EXIT_SUCCESS,
     PRINTER_NETWORK_COMMANDS,
 )
+from .jsonio import json_mode_requested as _json_mode_requested
 from .utils import emit_json, emit_json_error
 
 
@@ -95,129 +99,6 @@ class JsonArgumentParser(argparse.ArgumentParser):
             }
         )
         self.exit(EXIT_COMMAND_ERROR)
-
-
-def _expand_path(path):
-    """Expand user and environment variables in local filesystem paths."""
-    if path is None:
-        return None
-    return os.path.expandvars(os.path.expanduser(str(path)))
-
-
-_HOME_DIR = os.path.expanduser("~")
-_NORM_HOME_DIR = None
-
-
-def _get_norm_home_dir():
-    global _NORM_HOME_DIR
-    if _NORM_HOME_DIR is None:
-        try:
-            _NORM_HOME_DIR = os.path.normcase(os.path.abspath(_HOME_DIR))
-        except (TypeError, ValueError, OSError):
-            _NORM_HOME_DIR = _HOME_DIR
-    return _NORM_HOME_DIR
-
-
-def _display_path(path):
-    """Return a user-facing path with the current home directory compacted."""
-    if path is None:
-        return None
-    text = str(path)
-
-    # Inline _expand_path for speed and caching
-    expanded = os.path.expandvars(os.path.expanduser(text))
-    if not os.path.isabs(expanded):
-        return text
-
-    norm_home = _get_norm_home_dir()
-    try:
-        norm_expanded = os.path.normcase(os.path.abspath(expanded))
-    except (TypeError, ValueError, OSError):
-        return text
-
-    if norm_expanded == norm_home:
-        return "~"
-    prefix = norm_home + os.sep
-    if norm_expanded.startswith(prefix):
-        return "~" + os.sep + os.path.relpath(expanded, _HOME_DIR)
-    return text
-
-
-def _path_for_message(path):
-    """Return a local path suitable for human and agent-facing messages."""
-    display = _display_path(path)
-    if display is None or os.sep == "/":
-        return display
-    return display.replace(os.sep, "/")
-
-
-def _exception_for_message(exc):
-    """Return exception text with local filesystem paths compacted for output."""
-    message = str(exc)
-    for attr in ("filename", "filename2"):
-        path = getattr(exc, attr, None)
-        if path is not None:
-            message = message.replace(str(path), _display_path(path))
-    return message
-
-
-def _looks_like_schemeless_credential_url(value):
-    """Detect userinfo-bearing URLs where the user omitted https://."""
-    text = str(value or "")
-    if "\\" in text or any(char.isspace() for char in text):
-        return False
-    if "@" not in text or text.startswith(("/", ".", "~", "$")):
-        return False
-    try:
-        parsed = urlparse(f"https://{text}")
-        host = parsed.hostname or ""
-        return bool(parsed.netloc and (parsed.username is not None or parsed.password is not None) and "." in host)
-    except Exception:
-        return False
-
-
-def _redact_url_credentials(value):
-    """Return URL text with any userinfo removed before logging or JSON output."""
-    text = str(value or "")
-    if "@" not in text:
-        return value
-    parsed = urlparse(text)
-    if "://" not in text and _looks_like_schemeless_credential_url(text):
-        redacted = _redact_url_credentials(f"https://{text}")
-        prefix = "https://"
-        return redacted[len(prefix) :] if isinstance(redacted, str) and redacted.startswith(prefix) else redacted
-    if not parsed.scheme or not parsed.netloc or (parsed.username is None and parsed.password is None):
-        return value
-    host = parsed.hostname or ""
-    if ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    try:
-        port = parsed.port
-    except ValueError:
-        port = None
-    if port is not None:
-        host = f"{host}:{port}"
-    return urlunparse((parsed.scheme, host, parsed.path, parsed.params, parsed.query, parsed.fragment))
-
-
-def _namespace_get(args, name, default=None):
-    """Read argparse.Namespace values without treating MagicMock attributes as set."""
-    try:
-        return vars(args).get(name, default)
-    except TypeError:
-        return default
-
-
-def _exit_code_from_system_exit(exc, default=EXIT_COMMAND_ERROR):
-    """Normalize SystemExit / BambuError codes for machine-readable summaries."""
-    code = getattr(exc, "exit_code", None)
-    if code is None:
-        code = getattr(exc, "code", None)
-    if isinstance(code, int):
-        return code
-    if code is None:
-        return EXIT_SUCCESS
-    return default
 
 
 def _add_slice_override_args(parser):
@@ -577,10 +458,6 @@ def build_parser():
     return parser
 
 
-def _json_mode_requested(args):
-    return bool(getattr(args, "json", False))
-
-
 def _bare_plate_should_launch_wizard(args):
     """Decide whether bare `plate` (no subcommand) launches the guided wizard.
 
@@ -614,13 +491,6 @@ def _json_setup_should_be_noninteractive(args):
         and not _namespace_get(args, "migrate_access_code", False)
         and not _setup_args_provided(args)
         and not sys.stdin.isatty()
-    )
-
-
-def _setup_args_provided(args):
-    return any(
-        _namespace_get(args, attr) is not None
-        for attr in ("printer_ip", "serial", "access_code", "access_code_env", "access_code_file", "model", "nozzle")
     )
 
 

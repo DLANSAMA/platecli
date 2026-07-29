@@ -10,7 +10,7 @@ from bambu_cli.logging_utils import logger
 def _default_config_path():
     """Return the platform-native default config path, preferring an existing
     legacy ``~/.config/bambu/config.json`` for back-compat across installs."""
-    from bambu_cli.cli import _expand_path
+    from bambu_cli.paths import expand_path as _expand_path
 
     if os.environ.get("XDG_CONFIG_HOME") and sys.platform not in ("win32", "darwin"):
         return os.path.join(_expand_path(os.environ["XDG_CONFIG_HOME"]), "bambu", "config.json")
@@ -35,9 +35,10 @@ def load_config(exit_on_fail=True):
     Uses the module-level ``CONFIG_PATH`` (tests may patch
     ``bambu_cli.config.CONFIG_PATH``).
     """
-    from bambu_cli.cli import _display_path, _exception_for_message
     from bambu_cli.constants import EXIT_CONFIG_ERROR
     from bambu_cli.errors import abort
+    from bambu_cli.paths import display_path as _display_path
+    from bambu_cli.paths import exception_for_message as _exception_for_message
 
     config_path = CONFIG_PATH
     if not os.path.exists(config_path):
@@ -117,7 +118,7 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _first_existing_path(candidates):
     """Return the first existing path, otherwise the first candidate expanded."""
-    from bambu_cli.cli import _expand_path
+    from bambu_cli.paths import expand_path as _expand_path
 
     expanded = [_expand_path(path) for path in candidates if path]
     if not expanded:
@@ -231,7 +232,7 @@ def detect_orca_slicer():
     Unlike :func:`_default_orca_path` this never falls back to a non-existent
     first candidate, so a truthy result is a real, actionable path to suggest.
     """
-    from bambu_cli.cli import _expand_path
+    from bambu_cli.paths import expand_path as _expand_path
 
     for path in _orca_binary_candidates():
         if path and os.path.exists(_expand_path(path)):
@@ -241,7 +242,7 @@ def detect_orca_slicer():
 
 def detect_profiles_dir():
     """Return the first OrcaSlicer BBL profiles directory that exists, or None."""
-    from bambu_cli.cli import _expand_path
+    from bambu_cli.paths import expand_path as _expand_path
 
     for path in _profiles_dir_candidates():
         if path and os.path.isdir(_expand_path(path)):
@@ -376,9 +377,11 @@ def _enforce_secret_file_permissions(path, display):
 
 
 def load_access_code():
-    from bambu_cli.cli import _display_path, _exception_for_message, _expand_path
     from bambu_cli.constants import EXIT_CONFIG_ERROR
     from bambu_cli.context import current_config
+    from bambu_cli.paths import display_path as _display_path
+    from bambu_cli.paths import exception_for_message as _exception_for_message
+    from bambu_cli.paths import expand_path as _expand_path
 
     cfg = current_config()
     if "access_code" in cfg:
@@ -450,7 +453,7 @@ def fingerprint_sha256(der_cert):
 
 def _timeout_from(args, key, default):
     """Resolve a timeout from CLI args, then config, then the default."""
-    from bambu_cli.cli import _namespace_get
+    from bambu_cli.argutils import namespace_get as _namespace_get
     from bambu_cli.context import current_config
 
     if args:

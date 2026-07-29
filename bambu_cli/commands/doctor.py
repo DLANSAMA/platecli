@@ -5,18 +5,16 @@ import os
 import sys
 import tempfile
 
-from bambu_cli.cli import (
-    _display_path,
-    _exception_for_message,
-    _expand_path,
-    _namespace_get,
-    _path_for_message,
-)
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.config import CONFIG_PATH, MODEL_MAPPING, _expected_fingerprint, get_network_timeout, load_config
 from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.context import RuntimeContext
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
+from bambu_cli.paths import display_path as _display_path
+from bambu_cli.paths import exception_for_message as _exception_for_message
+from bambu_cli.paths import expand_path as _expand_path
+from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.utils import _ensure_parent_dir, _redacted_serial
 
 # Printer families whose camera is captured with the direct port-6000 TLS grab
