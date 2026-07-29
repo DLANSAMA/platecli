@@ -49,7 +49,10 @@ and (b) explicit model downloads you request. Key properties:
   and FTPS. Pin it with `cert_fingerprint` (SHA-256), which `plate setup`
   / `doctor` can capture for you. When a fingerprint is set and does not match,
   the connection is refused on MQTT, FTPS (control + data channel), and the
-  direct camera path. `insecure_tls: true` disables verification entirely and
+  direct camera path. All three transports verify through one shared checker
+  (`bambu_cli.tlspin.verify_cert_fingerprint`, constant-time compare on normalized
+  hex) so there is a single, audited fail-closed code path rather than three
+  hand-written copies. `insecure_tls: true` disables verification entirely and
   exists only as a last resort — it is never the default and the CLI warns when
   it is used.
   - **Camera (port 6000):** the *direct* grab refuses to proceed if neither pin nor

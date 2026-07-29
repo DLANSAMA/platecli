@@ -206,14 +206,13 @@ def _grab_camera_frame_direct(
 
         # TLS Verification
         if not printer.insecure_tls and printer.cert_fingerprint:
-            der = tls.getpeercert(binary_form=True)
-            from bambu_cli.config import fingerprint_sha256
+            from bambu_cli.tlspin import verify_cert_fingerprint
 
-            actual = fingerprint_sha256(der)
-            if actual.lower() != printer.cert_fingerprint.lower():
-                raise _CameraPinMismatch(
-                    f"Certificate fingerprint mismatch: expected {printer.cert_fingerprint}, got {actual}"
-                )
+            der = tls.getpeercert(binary_form=True)
+            # A mismatch (or unobtainable peer cert) is a security failure, not a
+            # transient error: raise _CameraPinMismatch so the caller hard-aborts
+            # instead of silently falling back to the unpinned Docker streamer.
+            verify_cert_fingerprint(der, printer.cert_fingerprint, exc_factory=_CameraPinMismatch)
         elif not printer.insecure_tls and not printer.cert_fingerprint:
             raise ssl.SSLError(
                 "No cert_fingerprint pinned for camera connection; run 'plate setup' to pin one, or set insecure_tls to bypass (not recommended)"
