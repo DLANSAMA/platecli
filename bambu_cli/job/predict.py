@@ -13,6 +13,7 @@ from bambu_cli.constants import (
     SLICEABLE_EXTENSIONS,
 )
 from bambu_cli.download import (
+    _download_source_extension,
     _download_target_filename,
     _file_extension,
     _is_printables_model_url,
@@ -20,6 +21,41 @@ from bambu_cli.download import (
     _sanitize_download_filename,
 )
 from bambu_cli.slicer import _sliced_output_path
+
+
+def _ext_would_slice(ext):
+    """The one slicing predicate shared by the dry-run predictor and the real run.
+
+    Given the extension of the file that will actually be handed to the
+    upload/print pipeline — the downloaded file, the selected ZIP member, or the
+    local file — return whether job/send will slice it. The ``--dry-run``
+    prediction and the real run both route through this, so ``would_slice`` in a
+    dry-run payload cannot disagree with what the real run does. ``ext`` must be a
+    single-suffix, lowercased extension from ``_file_extension`` so that, e.g.,
+    ``foo.gcode.3mf`` is treated as print-ready ``.3mf`` on both sides.
+    """
+    return ext in SLICEABLE_EXTENSIONS
+
+
+def _predicted_download_slice_extension(url, args):
+    """Predict the extension a URL download hands to the slicer, matching the doer.
+
+    The real run decides ``would_slice`` from the *downloaded* file's extension
+    (orchestrate.py). Offline we cannot resolve Printables pages, redirects, or
+    Content-Disposition, so we reuse the downloader's own inference,
+    ``_download_source_extension``: it takes an extension from the URL path when
+    one is present and otherwise falls back to ``.stl`` — exactly what the real
+    download lands for a model source with no determinable extension (Printables
+    model pages, ``?id=`` links). Predicting that same ``.stl`` fallback is what
+    makes ``would_slice`` agree with the real run instead of defaulting to False.
+
+    ``--name`` is deliberately ignored here: the real download overrides the
+    ``--name`` extension with the URL/resolved-name extension
+    (``_download_filename_with_extension``), so honoring it in the predictor would
+    reintroduce a divergence. Archive (``.zip``) URLs keep their real extension so
+    callers can report ``would_extract`` instead.
+    """
+    return _download_source_extension(url)
 
 
 def _slice_args_for_job(filepath, args, output_dir):
