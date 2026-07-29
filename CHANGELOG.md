@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Security
+
+- Consolidated TLS certificate-fingerprint pin verification into a single shared
+  `bambu_cli.tlspin.verify_cert_fingerprint`, used by MQTT, FTPS (control and data
+  channels), and the direct camera grab. Previously each transport carried its own
+  hand-written copy of the security-critical compare. The shared verifier fails
+  closed on a missing pin, a mismatched pin, or an unobtainable peer certificate,
+  and uses a constant-time comparison (`hmac.compare_digest`) on normalized hex.
+  Behaviour is equivalent at each call site with one hardening: the camera path now
+  fails closed on a missing peer certificate instead of raising an unhandled
+  `AttributeError` that previously fell through to the unpinned Docker streamer.
+
 ## [0.4.0] - 2026-07-29
 
 ### Added
