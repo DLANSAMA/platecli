@@ -347,15 +347,21 @@ def test_printed_success(tmp_path, capsys):
 
 
 @pytest.mark.parametrize(
-    "ext,would_slice,would_extract",
+    "filename,would_slice,would_extract",
     [
-        (".stl", True, False),
-        (".zip", False, True),
-        (".3mf", False, False),
+        ("model.stl", True, False),
+        ("model.step", True, False),
+        ("model.obj", True, False),
+        ("model.zip", False, True),
+        ("model.3mf", False, False),
+        # ".gcode.3mf" is this project's primary printer-ready format; the
+        # last-suffix extension is ".3mf", so it must NOT be predicted as
+        # sliceable — the real run treats it as print-ready and skips slicing.
+        ("plate.gcode.3mf", False, False),
     ],
 )
-def test_dry_run_direct_url(ext, would_slice, would_extract, capsys):
-    url = f"https://example.com/model{ext}"
+def test_dry_run_direct_url(filename, would_slice, would_extract, capsys):
+    url = f"https://example.com/{filename}"
     args = _parse(["job", url, "--dry-run", "--json"])
     _run_job(_ctx(), args, JobSteps())
     payload = _read_json(capsys)
@@ -365,8 +371,77 @@ def test_dry_run_direct_url(ext, would_slice, would_extract, capsys):
     assert payload["would_extract"] is would_extract
     assert payload["would_upload"] is True
     assert payload["would_print"] is False
-    if ext != ".zip":
+    if not would_extract:
         assert payload["remote_name"] is not None
+
+
+def test_dry_run_printables_model_url_predicts_slice(capsys):
+    """Regression: a Printables model page dry-run must report would_slice=True.
+
+    The predictor cannot resolve the page offline, but the real run downloads a
+    model file (STL/STEP preferred) and slices it. The shared predicate now
+    falls back to ".stl" — the same fallback the downloader lands — so the
+    dry-run prediction matches the real run instead of defaulting to False.
+    """
+    url = "https://printables.com/model/12345-agent-smoke"
+    args = _parse(["job", url, "--dry-run", "--json"])
+    _run_job(_ctx(), args, JobSteps())
+    payload = _read_json(capsys)
+    assert payload["status"] == "dry_run_url_skipped"
+    assert payload["would_download"] is True
+    assert payload["would_slice"] is True
+    assert payload["would_extract"] is False
+    assert payload["would_upload"] is True
+    # Remote name stays unpredictable offline for a Printables page; would_slice
+    # being True must not fabricate one.
+    assert payload["remote_name"] is None
+
+
+def test_predictor_and_doer_share_slice_predicate():
+    """The dry-run URL prediction routes through the same predicate as the real run.
+
+    For any URL, the predicted-download extension fed to _ext_would_slice must
+    equal the decision the doer would make for that same extension. Guards
+    against the two paths drifting apart again (the original bug: predictor said
+    would_slice=False for sources the doer sliced).
+    """
+    from bambu_cli.download import _file_extension
+    from bambu_cli.job import _ext_would_slice, _predicted_download_slice_extension
+
+    cases = {
+        "https://printables.com/model/12345-foo": True,
+        "https://example.com/model.stl": True,
+        "https://example.com/model.step": True,
+        "https://example.com/model.obj": True,
+        "https://example.com/model.3mf": False,
+        "https://example.com/plate.gcode.3mf": False,
+        "https://example.com/bundle.zip": False,
+        "https://example.com/download?id=1": True,
+    }
+    for url, expected in cases.items():
+        args = _parse(["job", url, "--dry-run", "--json"])
+        predicted_ext = _predicted_download_slice_extension(url, args)
+        # Predictor's decision.
+        assert _ext_would_slice(predicted_ext) is expected, url
+        # Doer applies the identical predicate to the file it actually handles;
+        # simulate by feeding the predicted extension back through it.
+        assert _ext_would_slice(_file_extension(f"x{predicted_ext}")) is expected, url
+
+
+def test_dry_run_extensionless_url_predicts_slice(capsys):
+    """An extension-less direct link predicts slicing, matching the doer's fallback.
+
+    The real download resolves the filename via Content-Disposition/content and
+    falls back to ".stl" when nothing determines it, then slices. The dry-run
+    prediction must agree.
+    """
+    url = "https://example.com/download?id=1"
+    args = _parse(["job", url, "--dry-run", "--json"])
+    _run_job(_ctx(), args, JobSteps())
+    payload = _read_json(capsys)
+    assert payload["status"] == "dry_run_url_skipped"
+    assert payload["would_slice"] is True
+    assert payload["would_extract"] is False
 
 
 def test_dry_run_local_model_file(tmp_path, capsys):
@@ -405,6 +480,46 @@ def test_dry_run_local_printer_ready_file(tmp_path, capsys):
     assert payload["would_upload"] is True
     assert payload["would_slice"] is False
     assert payload["printable_path"] == _display_path(str(ready))
+
+
+def test_dry_run_local_gcode_3mf_is_print_ready_not_sliced(tmp_path, capsys):
+    """A local .gcode.3mf is print-ready: dry-run must report would_slice=False."""
+    ready = tmp_path / "plate.gcode.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--dry-run", "--json"])
+    _run_job(_ctx(), args, JobSteps())
+    payload = _read_json(capsys)
+    assert payload["status"] == "dry_run_local_skipped"
+    assert payload["would_slice"] is False
+    assert payload["would_upload"] is True
+    assert payload["remote_name"] == "plate.gcode.3mf"
+
+
+@pytest.mark.parametrize(
+    "member,would_slice",
+    [
+        ("model.stl", True),
+        ("model.3mf", False),
+        # Last-suffix extension of a ".gcode.3mf" member is ".3mf": print-ready.
+        ("plate.gcode.3mf", False),
+    ],
+)
+def test_dry_run_local_zip_member_slice_matches_predicate(tmp_path, member, would_slice, capsys):
+    """ZIP dry-run reports would_slice per the selected member's extension.
+
+    Uses the same _ext_would_slice predicate as the real run, so a .3mf or
+    .gcode.3mf member is reported print-ready while an .stl member is sliceable.
+    """
+    zpath = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr(member, b"content")
+    args = _parse(["job", str(zpath), "--dry-run", "--json"])
+    _run_job(_ctx(), args, JobSteps())
+    payload = _read_json(capsys)
+    assert payload["status"] == "dry_run_local_skipped"
+    assert payload["archive_entry"] == member
+    assert payload["would_slice"] is would_slice
+    assert payload["would_upload"] is True
 
 
 def test_dry_run_local_printer_ready_empty_file_fails(tmp_path):

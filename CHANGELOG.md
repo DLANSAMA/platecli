@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Fixed
+
+- `plate job/send <url> --dry-run` now reports `would_slice` consistently with
+  the real run. The dry-run predictor previously returned `would_slice: false`
+  for sources whose extension it could not read from the URL path (Printables
+  model pages, extension-less direct links), even though the real run downloads
+  a model file (falling back to `.stl`) and slices it. The prediction and the
+  real run now share one slicing predicate, so a dry-run pre-check no longer
+  disagrees with what actually happens.
+
 ### Security
 
 - Consolidated TLS certificate-fingerprint pin verification into a single shared

@@ -14,6 +14,8 @@ from bambu_cli.job.payload import (  # noqa: F401
     generate_print_payload,
 )
 from bambu_cli.job.predict import (  # noqa: F401
+    _ext_would_slice,
+    _predicted_download_slice_extension,
     _predicted_sliced_remote_name,
     _predicted_url_download_extension,
     _predicted_url_remote_name,
