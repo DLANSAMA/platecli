@@ -411,6 +411,11 @@ def smoke_url_job_dry_run_json(root):
         assert False, f"URL dry-run payload did not report planned download/upload: {payload}"
     if payload.get("would_print") is not True:
         assert False, f"URL dry-run payload did not report planned print: {payload}"
+    # A Printables model page cannot be resolved offline, but the real run
+    # downloads a model file (STL/STEP preferred) and slices it, so the dry-run
+    # prediction must report would_slice=True rather than defaulting to False.
+    if payload.get("would_slice") is not True or payload.get("would_extract") is not False:
+        assert False, f"Printables model URL dry-run did not predict slicing: {payload}"
     if payload.get("downloaded_path") or payload.get("uploaded") or payload.get("printed"):
         assert False, f"URL dry-run payload reported side effects: {payload}"
     print("url-job-dry-run-json smoke ok")

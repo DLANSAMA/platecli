@@ -46,8 +46,9 @@ from bambu_cli.download import (
 from bambu_cli.errors import BambuError
 from bambu_cli.job.payload import _parse_print_options, _print_next_command
 from bambu_cli.job.predict import (
+    _ext_would_slice,
+    _predicted_download_slice_extension,
     _predicted_sliced_remote_name,
-    _predicted_url_download_extension,
     _predicted_url_remote_name,
     _slice_args_for_job,
 )
@@ -175,10 +176,17 @@ def _run_job(ctx, args, steps=None):
             logger.info("   Re-run without --dry-run to download and prepare the model.")
             summary["status"] = "dry_run_url_skipped"
             summary["would_download"] = True
-            source_ext = _predicted_url_download_extension(source, args)
+            # Predict the extension the download will actually hand to the
+            # pipeline, then decide via the SAME predicate the real run uses
+            # below (`_ext_would_slice`). `_predicted_download_slice_extension`
+            # mirrors the downloader's own fallback to ".stl" for sources whose
+            # extension is unknowable offline (Printables pages, ?id= links), so
+            # would_slice here matches what the real run does instead of
+            # defaulting to False.
+            source_ext = _predicted_download_slice_extension(source, args)
             if source_ext in ARCHIVE_DOWNLOAD_EXTENSIONS:
                 summary["would_extract"] = True
-            elif source_ext in SLICEABLE_EXTENSIONS:
+            elif _ext_would_slice(source_ext):
                 summary["would_slice"] = True
             summary["remote_name"] = predicted_remote_name
             summary["would_upload"] = True
@@ -296,7 +304,7 @@ def _run_job(ctx, args, steps=None):
                 )
                 summary["status"] = "dry_run_local_skipped"
                 summary["archive_entry"] = member_filename
-                summary["would_slice"] = member_ext in SLICEABLE_EXTENSIONS
+                summary["would_slice"] = _ext_would_slice(member_ext)
                 summary["remote_name"] = predicted_remote_name
                 summary["would_upload"] = True
                 summary["would_print"] = bool(getattr(args, "confirm", False)) and not bool(
@@ -320,7 +328,7 @@ def _run_job(ctx, args, steps=None):
             summary["extracted_path"] = extracted_path
             summary["archive_entry"] = archive_entry
 
-        if ext in SLICEABLE_EXTENSIONS:
+        if _ext_would_slice(ext):
             summary["would_slice"] = True
             predicted_remote_name = _predicted_sliced_remote_name(source_path, getattr(args, "copies", 1))
             if _safe_remote_name(predicted_remote_name) is None:
