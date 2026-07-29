@@ -1,6 +1,5 @@
 import atexit
 import ftplib
-import hashlib
 import os
 import socket
 import ssl
@@ -111,12 +110,10 @@ class ImplicitFTPS(ftplib.FTP_TLS):
                 ctx.load_default_certs()
             self.sock = ctx.wrap_socket(self.sock, server_hostname=self.host)
             if pin:
+                from bambu_cli.tlspin import verify_cert_fingerprint
+
                 peer_der = self.sock.getpeercert(binary_form=True)
-                if peer_der is None:
-                    raise ssl.SSLError("No peer certificate to verify fingerprint against")
-                actual = hashlib.sha256(peer_der).hexdigest().lower()
-                if actual != pin.lower():
-                    raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {pin.lower()}, got {actual}")
+                verify_cert_fingerprint(peer_der, pin)
             self.file = self.sock.makefile("r", encoding=self.encoding)
             self.welcome = self.getresp()
         except Exception:
@@ -141,18 +138,19 @@ class ImplicitFTPS(ftplib.FTP_TLS):
             printer = self.printer
             pin = printer.cert_fingerprint if printer is not None else None
             if pin:
+                from bambu_cli.tlspin import verify_cert_fingerprint
+
                 peer_der = conn.getpeercert(binary_form=True)
-                if peer_der is None:
-                    raise ssl.SSLError("No peer certificate to verify fingerprint against")
-                actual = hashlib.sha256(peer_der).hexdigest().lower()
-                if actual != pin.lower():
-                    # Close the data socket before re-raising so a pin mismatch
+                try:
+                    verify_cert_fingerprint(peer_der, pin)
+                except ssl.SSLError:
+                    # Close the data socket before re-raising so a pin failure
                     # does not leak the FD (no try/finally around wrap otherwise).
                     try:
                         conn.close()
                     except OSError:
                         pass
-                    raise ssl.SSLError(f"Certificate fingerprint mismatch: expected {pin.lower()}, got {actual}")
+                    raise
             # Bambu firmware never answers the TLS close-notify on the data
             # channel, so ftplib's storbinary/retrbinary hang in
             # conn.unwrap() until the socket times out (and then treat the

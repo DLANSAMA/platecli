@@ -253,3 +253,34 @@ def test_ftps_data_channel_pin_mismatch_closes_socket():
         ftp.ntransfercmd("STOR /model/x.3mf")
 
     data_tls.close.assert_called_once()
+
+
+def test_ftps_data_channel_malformed_pin_closes_socket():
+    """A malformed (non-ASCII) pin must also fail closed as an ssl.SSLError and
+    close the data socket — not escape as a raw TypeError that skips the
+    close-before-raise and leaks the FD."""
+    ftp = ftps_mod.ImplicitFTPS()
+    # 64 chars incl. a Cyrillic 'а' — survives normalize, non-ASCII.
+    ftp.printer = _test_printer(cert_fingerprint="а" + "b" * 63, insecure_tls=False)
+    ftp.host = "192.168.1.1"
+    ftp._prot_p = True
+
+    control_tls = MagicMock(spec=ssl.SSLSocket)
+    control_tls.session = object()
+    control_ctx = MagicMock()
+    control_tls.context = control_ctx
+    ftp.sock = control_tls
+
+    data_raw = MagicMock()
+    data_tls = MagicMock()
+    data_tls.getpeercert.return_value = _DER
+    data_tls.close = MagicMock()
+    control_ctx.wrap_socket.return_value = data_tls
+
+    with (
+        patch.object(ftps_mod.ftplib.FTP, "ntransfercmd", return_value=(data_raw, 100)),
+        pytest.raises(ssl.SSLError, match="[Mm]alformed"),
+    ):
+        ftp.ntransfercmd("STOR /model/x.3mf")
+
+    data_tls.close.assert_called_once()

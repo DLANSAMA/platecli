@@ -56,7 +56,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **1032** non-live tests collected / **1031** passing (2026-07-29; latest additions are the C.4 hermetic fake-OrcaSlicer slice tests exercising the real slicer subprocess); **84.8%** coverage measured 2026-07-29 on Linux; CI floor **83**; per-module floors not enforced |
+| Tests | **A−** | **1065** non-live tests collected / **1064** passing (2026-07-29; latest additions are the C.4 hermetic fake-OrcaSlicer slice tests exercising the real slicer subprocess, and the shared `verify_cert_fingerprint` TLS pin checker incl. malformed/non-ASCII fail-closed cases); **84.9%** coverage measured 2026-07-29 on Linux; CI floor **83**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |

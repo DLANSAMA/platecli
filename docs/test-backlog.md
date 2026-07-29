@@ -10,8 +10,8 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **1032** collected / **1031** passing (measured 2026-07-29; +13 hermetic Orca slice tests, C.4) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **84.8%** Linux measured 2026-07-29 (was 84.32% on 2026-07-26; +C.4 hermetic Orca tests lift `slicer/output.py` 79.8%→92.7%); ~**83.9%** Windows measured 2026-07-26; **floor 83** (Windows is the binding leg) | **≥92%** total; optional module floors |
+| Non-live tests collected | **1065** collected / **1064** passing (measured 2026-07-29; incl. the C.4 hermetic Orca slice tests and the shared TLS-pin checker tests) | ≥550 with zero known flakes ✅ size |
+| Line/branch coverage (CI) | **84.9%** Linux measured 2026-07-29 (C.4 hermetic Orca tests lift `slicer/output.py` 79.8%→92.7%); ~**83.9%** Windows measured 2026-07-26; **floor 83** (Windows is the binding leg) | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
@@ -42,7 +42,7 @@ Tracked in [SECURITY.md](../SECURITY.md) known limitations:
 |-----|-------|
 | Camera Docker bind default | **Done.** Defaults to `127.0.0.1:…` publish; `camera_port` → stream URL parsing fixed; bind-parse tests in place |
 | Camera pin soft-fallback | **Done.** Aborts on pin mismatch and on `ssl.SSLError` from the handshake when a pin is configured; no Docker fallthrough in either case; regression tests in `tests/test_camera_cmd.py` |
-| Single TLS pin helper | One `verify_cert_fingerprint` used by mqtt/ftps/camera + unit suite |
+| Single TLS pin helper | **Done.** One `verify_cert_fingerprint` (`bambu_cli/tlspin.py`, constant-time compare) used by mqtt/ftps/camera; direct unit suite in `tests/test_tlspin.py` + per-transport fail-closed tests |
 
 ### P1 — Coverage ratchet & transport residual
 

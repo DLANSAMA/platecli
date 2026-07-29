@@ -1,3 +1,5 @@
+import hashlib
+
 from tests.bambu_test_base import *  # noqa: F401,F403
 from bambu_cli.errors import BambuError
 
@@ -75,14 +77,14 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         # (not the bare socket) must be closed or the fd leaks.
         mock_tls.close.assert_called_once()
 
-    @patch("bambu_cli.config.fingerprint_sha256")
-    def test_grab_camera_frame_direct_with_pin(self, mock_fp):
+    def test_grab_camera_frame_direct_with_pin(self):
         from bambu_cli.camera import _grab_camera_frame_direct
 
+        der = b"der_cert"
+        good_fp = hashlib.sha256(der).hexdigest()
         create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
-        mock_tls.getpeercert.return_value = b"der_cert"
-        mock_fp.return_value = "mock_fingerprint"
-        printer = _test_printer(ip="192.168.1.100", access_code="my_secret_code", cert_fingerprint="mock_fingerprint")
+        mock_tls.getpeercert.return_value = der
+        printer = _test_printer(ip="192.168.1.100", access_code="my_secret_code", cert_fingerprint=good_fp)
 
         res = _grab_camera_frame_direct(
             printer,
@@ -92,20 +94,69 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         self.assertEqual(res, b"\xff\xd8\xff\xd9")
 
         mock_tls.getpeercert.assert_called_once_with(binary_form=True)
-        mock_fp.assert_called_once_with(b"der_cert")
 
-    @patch("bambu_cli.config.fingerprint_sha256")
-    def test_grab_camera_frame_direct_pin_mismatch(self, mock_fp):
+    def test_grab_camera_frame_direct_pin_mismatch(self):
         from bambu_cli.camera import _CameraPinMismatch, _grab_camera_frame_direct
 
         create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
         mock_tls.getpeercert.return_value = b"der_cert"
-        mock_fp.return_value = "wrong_fingerprint"
-        printer = _test_printer(ip="192.168.1.100", access_code="my_secret_code", cert_fingerprint="mock_fingerprint")
+        # Pin the SHA-256 of a *different* cert so the real compare fails.
+        printer = _test_printer(
+            ip="192.168.1.100",
+            access_code="my_secret_code",
+            cert_fingerprint=hashlib.sha256(b"a_different_cert").hexdigest(),
+        )
 
         # A mismatching pin raises a dedicated security error (not a generic
         # SSLError) so the snapshot command can fail closed instead of falling
         # back to the Docker streamer, which would ignore the pin.
+        with self.assertRaises(_CameraPinMismatch):
+            _grab_camera_frame_direct(
+                printer,
+                create_connection=create_connection,
+                ssl_context_factory=ssl_factory,
+            )
+        mock_tls.sendall.assert_not_called()
+
+    def test_grab_camera_frame_direct_pin_no_peer_cert(self):
+        """A pin configured but no peer cert must fail closed (missing cert is not
+        a Docker-fallback signal). Regression: the old code called .lower() on a
+        None fingerprint and crashed with AttributeError instead of a clean pin
+        failure that the snapshot command recognizes as fail-closed."""
+        from bambu_cli.camera import _CameraPinMismatch, _grab_camera_frame_direct
+
+        create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
+        mock_tls.getpeercert.return_value = None
+        printer = _test_printer(
+            ip="192.168.1.100",
+            access_code="my_secret_code",
+            cert_fingerprint=hashlib.sha256(b"der_cert").hexdigest(),
+        )
+
+        with self.assertRaises(_CameraPinMismatch):
+            _grab_camera_frame_direct(
+                printer,
+                create_connection=create_connection,
+                ssl_context_factory=ssl_factory,
+            )
+        mock_tls.sendall.assert_not_called()
+
+    def test_grab_camera_frame_direct_malformed_nonascii_pin(self):
+        """A malformed/non-ASCII pin must raise _CameraPinMismatch (fail closed),
+        NOT a raw TypeError from hmac.compare_digest that would escape into the
+        broad except-Exception fallback and silently use the unpinned Docker
+        streamer."""
+        from bambu_cli.camera import _CameraPinMismatch, _grab_camera_frame_direct
+
+        create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
+        mock_tls.getpeercert.return_value = b"der_cert"
+        # 64 chars but with a Cyrillic 'а' — survives normalize, non-ASCII.
+        printer = _test_printer(
+            ip="192.168.1.100",
+            access_code="my_secret_code",
+            cert_fingerprint="а" + "b" * 63,
+        )
+
         with self.assertRaises(_CameraPinMismatch):
             _grab_camera_frame_direct(
                 printer,
