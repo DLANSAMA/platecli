@@ -92,6 +92,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   wizard shipped; a regression test pins each preset to exactly one profile. The
   underlying substring matching in `slice`/`job` is unchanged and still matches
   loosely by design — only the preset values are now unambiguous.
+
+- `tests/privacy_smoke.py` no longer treats the tokens of a GitHub noreply email
+  as local account names. It split `user.email` on every non-alphanumeric
+  character, so a `<id>+<login>@users.noreply.github.com` address produced
+  `users`/`noreply`/`github` patterns that flagged every tracked file containing
+  the word "users" — destroying the "any tracked-file hit is a real leak" triage
+  rule. Email candidates are now mined only from the local part (before `@`),
+  numeric id prefixes are dropped, and `users`/`noreply`/`github` are in
+  `GENERIC_LOCAL_NAMES` as a backstop. Covered by a new hermetic regression test
+  (`tests/test_privacy_smoke_patterns.py`).
 - Auto-repair of URL-derived filenames is now correct in four ways it was not, and
   the repairer is guaranteed to produce names the printer-side check accepts.
   Previously `_sanitize_download_filename` could emit a name `_safe_remote_name`

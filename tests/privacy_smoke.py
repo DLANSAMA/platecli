@@ -10,7 +10,6 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 BASE_EXCLUDED_DIRS = {
@@ -36,10 +35,12 @@ GENERIC_LOCAL_NAMES = {
     "builder",
     "ci",
     "github",
+    "noreply",
     "runner",
     "root",
     "test",
     "user",
+    "users",
     "jules",
 }
 
@@ -80,7 +81,18 @@ def local_identity_patterns():
             value = ""
         if value:
             names.add(value)
-            names.update(part for part in re.split(r"[^A-Za-z0-9_-]+", value) if part)
+            # For emails, only mine the local part (before "@") for name candidates.
+            # Domain-derived tokens like "users"/"noreply"/"github" from a GitHub
+            # noreply address would otherwise become patterns and flag every tracked
+            # file that contains the word "users".
+            candidate_source = value.split("@", 1)[0] if "@" in value else value
+            names.update(
+                part
+                for part in re.split(r"[^A-Za-z0-9_-]+", candidate_source)
+                # Drop purely-numeric tokens; they carry no account name and would
+                # risk false positives on numeric ids in ordinary text.
+                if part and not part.isdigit()
+            )
 
     # Exclude repository owner from checks to avoid false positives on repo URLs
     try:
