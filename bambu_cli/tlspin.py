@@ -26,8 +26,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import ssl
 from typing import Callable
+
+# A normalized SHA-256 fingerprint: exactly 64 lowercase hex chars, no separators.
+_HEX64_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 
 
 def normalize_fingerprint(fp: str | None) -> str | None:
@@ -49,8 +53,9 @@ def verify_cert_fingerprint(
 ) -> str:
     """Verify a peer certificate's SHA-256 against a pinned fingerprint.
 
-    Fails closed: raises (never returns) when no pin is configured, when the
-    peer certificate is unavailable, or when the fingerprints differ. On a match
+    Fails closed: raises (never returns) when no pin is configured, when the pin
+    is malformed (not 64 hex chars after normalization), when the peer
+    certificate is unavailable, or when the fingerprints differ. On a match
     returns the normalized actual fingerprint (useful for callers that also want
     the value, e.g. to export the verified cert as PEM).
 
@@ -65,14 +70,27 @@ def verify_cert_fingerprint(
             ``ssl.SSLError``; domain callers pass a ``BambuError`` subclass.
 
     Raises:
-        Whatever ``exc_factory`` produces, on missing pin, missing peer cert, or
-        mismatch.
+        Whatever ``exc_factory`` produces, on a missing pin, a malformed pin, a
+        missing peer cert, or a mismatch. Never a raw ``TypeError``/``ValueError``
+        that would slip past a caller's transport-specific error handling.
     """
     expected = normalize_fingerprint(expected_fingerprint)
     if not expected:
         raise exc_factory("No certificate fingerprint pinned to verify against")
+    # Validate the pin is exactly 64 lowercase hex chars *before* comparing.
+    # normalize_fingerprint only strips ':' and ASCII spaces, so a stray
+    # non-ASCII char (a copy-pasted NBSP, a Cyrillic homoglyph, ...) or a
+    # wrong-length value would otherwise survive. hmac.compare_digest raises
+    # TypeError on a non-ASCII str, and that TypeError is *not* the caller's
+    # error type — in the camera path it would escape into the broad
+    # except-Exception fallback and silently downgrade to the unpinned Docker
+    # streamer. Fail closed here with the caller's own exception instead.
+    if not _HEX64_RE.match(expected):
+        raise exc_factory("Malformed certificate fingerprint pin (expected 64 hex chars for a SHA-256)")
     if not peer_der:
         raise exc_factory("No peer certificate to verify fingerprint against")
+    # ``actual`` comes from hexdigest(): always 64 lowercase ASCII hex chars,
+    # so it needs no validation before the constant-time compare.
     actual = hashlib.sha256(peer_der).hexdigest()
     if not hmac.compare_digest(actual, expected):
         raise exc_factory(f"Certificate fingerprint mismatch: expected {expected}, got {actual}")

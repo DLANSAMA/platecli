@@ -85,6 +85,37 @@ def test_no_pin_uses_exc_factory():
         verify_cert_fingerprint(_DER, None, exc_factory=_DomainError)
 
 
+# --- malformed pin (fail closed, must NOT raise TypeError/ValueError) ---
+
+
+@pytest.mark.parametrize(
+    "bad_pin",
+    [
+        "а" + "b" * 63,  # leading Cyrillic 'а' homoglyph (non-ASCII)
+        "ab" * 31 + "a ",  # trailing non-breaking space survives normalize
+        "xy" * 32,  # 64 chars but not hex
+        "ab" * 31,  # too short (62 chars)
+        "ab" * 33,  # too long (66 chars)
+        _FP + "cd",  # valid prefix, extra chars
+    ],
+)
+def test_malformed_pin_fails_closed_not_typeerror(bad_pin):
+    with pytest.raises(ssl.SSLError, match="[Mm]alformed"):
+        verify_cert_fingerprint(_DER, bad_pin)
+
+
+def test_malformed_pin_uses_exc_factory():
+    with pytest.raises(_DomainError, match="[Mm]alformed"):
+        verify_cert_fingerprint(_DER, "а" + "b" * 63, exc_factory=_DomainError)
+
+
+def test_non_ascii_pin_does_not_raise_typeerror():
+    """A non-ASCII pin must never reach hmac.compare_digest (which raises
+    TypeError on a non-ASCII str) — it must fail closed with exc_factory first."""
+    with pytest.raises(ssl.SSLError):
+        verify_cert_fingerprint(_DER, "аб" * 32)  # Cyrillic 'аб' x32
+
+
 # --- unobtainable peer cert (fail closed) ---
 
 

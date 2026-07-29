@@ -141,6 +141,30 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
             )
         mock_tls.sendall.assert_not_called()
 
+    def test_grab_camera_frame_direct_malformed_nonascii_pin(self):
+        """A malformed/non-ASCII pin must raise _CameraPinMismatch (fail closed),
+        NOT a raw TypeError from hmac.compare_digest that would escape into the
+        broad except-Exception fallback and silently use the unpinned Docker
+        streamer."""
+        from bambu_cli.camera import _CameraPinMismatch, _grab_camera_frame_direct
+
+        create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
+        mock_tls.getpeercert.return_value = b"der_cert"
+        # 64 chars but with a Cyrillic 'а' — survives normalize, non-ASCII.
+        printer = _test_printer(
+            ip="192.168.1.100",
+            access_code="my_secret_code",
+            cert_fingerprint="а" + "b" * 63,
+        )
+
+        with self.assertRaises(_CameraPinMismatch):
+            _grab_camera_frame_direct(
+                printer,
+                create_connection=create_connection,
+                ssl_context_factory=ssl_factory,
+            )
+        mock_tls.sendall.assert_not_called()
+
     def test_grab_camera_frame_direct_oversized_header_aborts(self):
         """An implausibly large frame length means the stream is desynced; the
         grab must give up (return None) instead of reading the skipped body as

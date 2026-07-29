@@ -13,7 +13,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   hand-written copy of the security-critical compare. The shared verifier fails
   closed on a missing pin, a mismatched pin, or an unobtainable peer certificate,
   and uses a constant-time comparison (`hmac.compare_digest`) on normalized hex.
-  Behaviour is equivalent at each call site with one hardening: the camera path now
+  The pin is validated to be exactly 64 hex characters before comparison, so a
+  malformed or non-ASCII pin (e.g. a copy-pasted homoglyph or non-breaking space)
+  fails closed with the caller's error type rather than raising a `TypeError` that
+  could escape into a transport's generic fallback. Behaviour is otherwise
+  equivalent at each call site, with one further hardening: the camera path now
   fails closed on a missing peer certificate instead of raising an unhandled
   `AttributeError` that previously fell through to the unpinned Docker streamer.
 
