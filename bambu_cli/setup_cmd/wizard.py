@@ -14,6 +14,7 @@ from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.paths import display_path as _display_path
 from bambu_cli.paths import exception_for_message as _exception_for_message
+from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.setup_cmd.common import (
     _build_setup_config,
     _config_path,
@@ -175,25 +176,11 @@ def _cmd_setup_noninteractive(args):
         abort("", exit_code=EXIT_CONFIG_ERROR)
     # Refuse to silently clobber an existing secret file when both --access-code
     # and --access-code-file are given (the existence check above is skipped in
-    # that case). Secret-file writes are backup=False, so the old credential —
-    # possibly shared with another printer profile — would be unrecoverable.
-    if (
-        access_code
-        and access_code_file
-        and not _namespace_get(args, "force", False)
-        and os.path.exists(expanded_access_code_file)
-    ):
-        try:
-            with open(expanded_access_code_file, encoding="utf-8-sig") as f:
-                existing_secret = f.read().strip()
-        except OSError:
-            existing_secret = None
-        if existing_secret is not None and existing_secret != access_code.strip():
-            message = (
-                f"Access code file already exists with different contents: "
-                f"{_display_path(expanded_access_code_file)}. Refusing to overwrite it "
-                "(pass --force to overwrite, or point --access-code-file at a new path)."
-            )
+    # that case). Fails closed on an unreadable existing file too.
+    if access_code and access_code_file and not _namespace_get(args, "force", False):
+        conflict = _access_code_file_overwrite_conflict(expanded_access_code_file, access_code)
+        if conflict:
+            message = f"{conflict} (pass --force to overwrite, or point --access-code-file at a new path)."
             logger.error(message)
             _setup_json_error(args, message, **_setup_path_details(access_code_file=expanded_access_code_file))
             abort("", exit_code=EXIT_CONFIG_ERROR)
@@ -211,6 +198,51 @@ def _cmd_setup_noninteractive(args):
         abort("", exit_code=EXIT_FILE_ERROR)
     if _namespace_get(args, "json", False):
         emit_json(_setup_summary(config))
+
+
+def _access_code_file_overwrite_conflict(expanded_access_code_file, new_code):
+    """Return a reason string if writing ``new_code`` would clobber an existing
+    secret file, else None.
+
+    Secret-file writes are backup=False, so an existing credential (possibly
+    shared with another printer profile or script) would be unrecoverable.
+    Fails **closed**: an existing file whose contents cannot be read is treated
+    as a conflict too — we must not overwrite what we cannot confirm is identical.
+    """
+    if not os.path.exists(expanded_access_code_file):
+        return None
+    try:
+        with open(expanded_access_code_file, encoding="utf-8-sig") as f:
+            existing_secret = f.read().strip()
+    except OSError:
+        return (
+            f"Access code file already exists and could not be read: "
+            f"{_display_path(expanded_access_code_file)}. Refusing to overwrite it."
+        )
+    if existing_secret != (new_code or "").strip():
+        return (
+            f"Access code file already exists with different contents: "
+            f"{_display_path(expanded_access_code_file)}. Refusing to overwrite it."
+        )
+    return None
+
+
+def _confirm_interactive_access_code_file_overwrite(args, expanded_access_code_file, new_code):
+    """Interactive guard: refuse to silently clobber a differing/unreadable
+    existing secret file. Prompts for explicit confirmation, defaulting to NO.
+
+    The interactive wizard's default target is a fixed path, so re-running it can
+    land on a secret file shared with another printer profile. Mirrors the
+    non-interactive --force gate with a confirmation prompt instead of a flag.
+    """
+    conflict = _access_code_file_overwrite_conflict(expanded_access_code_file, new_code)
+    if not conflict:
+        return
+    logger.warning(f"⚠️  {conflict}")
+    choice = _prompt_text("Overwrite the existing access code file? [y/N]: ", args).lower()
+    if choice not in ("y", "yes"):
+        logger.error("Aborted to avoid overwriting the existing access code file.")
+        abort("", exit_code=EXIT_CONFIG_ERROR)
 
 
 def _prompt_interactive_access_code(args, max_attempts=3):
@@ -369,6 +401,8 @@ def _cmd_setup_interactive(args):
     nozzle_input = _normalize_nozzle(_prompt_text("Enter nozzle size (0.2, 0.4, 0.6, 0.8) [default: 0.4]: ", args))
     access_code_file = _prompt_access_code_file_path(args)
     _validate_setup_access_code_file(args, access_code_file)
+    if access_code_file:
+        _confirm_interactive_access_code_file_overwrite(args, _expand_path(access_code_file), access_code)
 
     try:
         from bambu_cli.protocols.mqtt import probe_cert_fingerprint

@@ -83,7 +83,12 @@ def migrate_access_code(config_path=None, access_code_file_path=None):
     target = access_code_file_path or _default_access_code_file_path()
     expanded_target = _expand_path(target)
     inline_secret = str(inline_code).rstrip("\n") + "\n"
-    if os.path.exists(expanded_target):
+    # Whether the target existed BEFORE this call. Gates the orphan cleanup on a
+    # config-write failure: we may only unlink a secret file *we just created*,
+    # never a pre-existing identical file we resumed onto (that is a prior run's
+    # legitimate output and must survive for the retry).
+    target_preexisted = os.path.exists(expanded_target)
+    if target_preexisted:
         # A pre-existing target is normally a refusal (don't clobber an unrelated
         # secret). But a prior migration attempt that wrote the secret file and
         # then failed on the config write leaves *our own* identical output here;
@@ -114,9 +119,9 @@ def migrate_access_code(config_path=None, access_code_file_path=None):
     except OSError:
         # The config write failed but the secret file now exists. Best-effort
         # remove our own orphan so a retry is not blocked by "target already
-        # exists" — but only if we just created it this call (an identical
-        # pre-existing file we resumed onto is left untouched for the retry).
-        if existing_file is None:
+        # exists" — but only if we CREATED it this call. A pre-existing identical
+        # file we resumed onto is a prior run's output; leave it for the retry.
+        if not target_preexisted:
             try:
                 os.unlink(expanded_target)
             except OSError:

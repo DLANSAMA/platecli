@@ -146,6 +146,26 @@ class TestMigrationRetryable(unittest.TestCase):
         self.assertNotIn("access_code", cfg)
         self.assertEqual(cfg["access_code_file"], self.access_code_file)
 
+    def test_config_write_failure_preserves_preexisting_identical_secret_file(self):
+        # A prior run wrote the secret file; on the resumed attempt the config
+        # write fails. The pre-existing identical file must SURVIVE (it is a
+        # prior run's output), not be unlinked as if it were our own orphan.
+        self._write_config()
+        with open(self.access_code_file, "w", encoding="utf-8") as f:
+            f.write("SECRET123\n")
+        with patch(
+            "bambu_cli.setup_cmd.migrate._secure_write_json_no_secret_backup",
+            side_effect=OSError("disk full"),
+        ):
+            with self.assertRaises(OSError):
+                setup_cmd.migrate_access_code(
+                    config_path=self.config_path,
+                    access_code_file_path=self.access_code_file,
+                )
+        self.assertTrue(os.path.exists(self.access_code_file))
+        with open(self.access_code_file, encoding="utf-8") as f:
+            self.assertEqual(f.read().strip(), "SECRET123")
+
     def test_error_when_target_exists_with_different_contents(self):
         self._write_config()
         with open(self.access_code_file, "w", encoding="utf-8") as f:
@@ -302,6 +322,68 @@ class TestSetupBothFlagsNoClobber(unittest.TestCase):
         ):
             wizard_mod._cmd_setup_noninteractive(args)
         self.assertEqual(code_file.read_text(encoding="utf-8").strip(), "NEW_CODE")
+
+
+# --- Review item 2: overwrite guard fails closed on an unreadable file --------
+
+
+class TestOverwriteConflictFailsClosed(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.code_file = os.path.join(self.tmpdir, "secret")
+
+    def test_no_conflict_when_absent(self):
+        self.assertIsNone(wizard_mod._access_code_file_overwrite_conflict(self.code_file, "CODE"))
+
+    def test_no_conflict_when_identical(self):
+        with open(self.code_file, "w", encoding="utf-8") as f:
+            f.write("CODE\n")
+        self.assertIsNone(wizard_mod._access_code_file_overwrite_conflict(self.code_file, "CODE"))
+
+    def test_conflict_when_different(self):
+        with open(self.code_file, "w", encoding="utf-8") as f:
+            f.write("OTHER\n")
+        self.assertIsNotNone(wizard_mod._access_code_file_overwrite_conflict(self.code_file, "CODE"))
+
+    def test_conflict_when_unreadable(self):
+        # Fail closed: an existing file we cannot read is a conflict, not a green
+        # light to overwrite.
+        with open(self.code_file, "w", encoding="utf-8") as f:
+            f.write("CODE\n")
+        with patch("builtins.open", side_effect=OSError("EACCES")):
+            conflict = wizard_mod._access_code_file_overwrite_conflict(self.code_file, "CODE")
+        self.assertIsNotNone(conflict)
+        self.assertIn("could not be read", conflict)
+
+
+# --- Review item 3: interactive wizard confirms before clobbering -------------
+
+
+class TestInteractiveOverwriteConfirmation(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.code_file = os.path.join(self.tmpdir, "secret")
+        with open(self.code_file, "w", encoding="utf-8") as f:
+            f.write("OTHER_PRINTER_CODE\n")
+
+    def test_declining_aborts(self):
+        args = Namespace(json=False)
+        with patch.object(wizard_mod, "_prompt_text", return_value="n"):
+            with self.assertRaises(BambuError):
+                wizard_mod._confirm_interactive_access_code_file_overwrite(args, self.code_file, "NEW_CODE")
+
+    def test_confirming_proceeds(self):
+        args = Namespace(json=False)
+        with patch.object(wizard_mod, "_prompt_text", return_value="y"):
+            # Returns None (no raise) => the caller proceeds to write.
+            wizard_mod._confirm_interactive_access_code_file_overwrite(args, self.code_file, "NEW_CODE")
+
+    def test_identical_file_needs_no_prompt(self):
+        args = Namespace(json=False)
+        with open(self.code_file, "w", encoding="utf-8") as f:
+            f.write("SAME\n")
+        with patch.object(wizard_mod, "_prompt_text", side_effect=AssertionError("should not prompt")):
+            wizard_mod._confirm_interactive_access_code_file_overwrite(args, self.code_file, "SAME")
 
 
 if __name__ == "__main__":
