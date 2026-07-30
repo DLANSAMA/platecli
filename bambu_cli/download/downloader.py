@@ -171,11 +171,13 @@ def _cmd_download(
         """Stop tracking a reserved placeholder without deleting it (kept as real output)."""
         reserved_paths.discard(path)
 
-    def _cleanup_reserved(keep=None):
-        """Unlink every still-tracked placeholder except *keep*, ignoring errors."""
+    def _cleanup_reserved():
+        """Unlink every still-tracked placeholder, ignoring errors.
+
+        On success a kept output is removed from tracking first via
+        ``_release_reserved`` before this runs, so it is never unlinked here.
+        """
         for path in list(reserved_paths):
-            if keep is not None and path == keep:
-                continue
             try:
                 os.unlink(path)
             except OSError:

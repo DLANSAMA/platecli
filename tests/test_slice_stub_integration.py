@@ -325,6 +325,50 @@ def test_timeout_kills_whole_process_group(orca_env, tmp_path, monkeypatch):
     )
 
 
+@pytest.mark.skipif(os.name == "nt", reason="process-group kill is POSIX-only")
+def test_keyboard_interrupt_kills_whole_process_group(orca_env, tmp_path, monkeypatch):
+    """Ctrl-C mid-slice must reap the OrcaSlicer/Xvfb tree, not orphan it. Because
+    start_new_session removes the tree from the CLI's foreground group, terminal
+    SIGINT no longer reaches it, so _run_orcaslicer must kill the group on
+    KeyboardInterrupt (same as on timeout) before re-raising."""
+    import time as _time
+
+    import bambu_cli.slicer.orca as orca_mod
+
+    pidfile = tmp_path / "child.pid"
+    child_sleep = 30
+    real_monotonic = orca_mod.time.monotonic
+
+    def _interrupt_once_child_alive():
+        # Fire the interrupt from inside the pump loop, but only after the stub has
+        # actually spawned its child (so we prove the running tree gets reaped).
+        if pidfile.exists():
+            raise KeyboardInterrupt
+        return real_monotonic()
+
+    monkeypatch.setattr(orca_mod.time, "monotonic", _interrupt_once_child_alive)
+
+    args = _slice_args(orca_env.model, orca_env.outdir, slicer_timeout=600)
+    started = real_monotonic()
+    with pytest.raises(KeyboardInterrupt):
+        orca_env(
+            "spawn_child_then_hang",
+            args=args,
+            ORCA_STUB_SLEEP=child_sleep,
+            ORCA_STUB_CHILD_PIDFILE=str(pidfile),
+        )
+    elapsed = real_monotonic() - started
+    assert pidfile.exists(), "stub did not record its child PID"
+    child_pid = int(pidfile.read_text().strip())
+    deadline = real_monotonic() + 3
+    while _pid_alive(child_pid) and real_monotonic() < deadline:
+        _time.sleep(0.05)
+    assert not _pid_alive(child_pid), f"orphaned child {child_pid} survived the Ctrl-C kill"
+    # If the group were not killed, the inherited pipes would keep _run_orcaslicer
+    # blocked until the child slept out its full duration.
+    assert elapsed < child_sleep - 5, f"interrupt handling blocked {elapsed:.1f}s; the group was not killed"
+
+
 def test_hang_hits_slice_timeout(orca_env, monkeypatch):
     # get_slicer_timeout reads args.slicer_timeout; pin it tiny so the stub's
     # sleep trips the real subprocess.TimeoutExpired -> EXIT_TIMEOUT path.

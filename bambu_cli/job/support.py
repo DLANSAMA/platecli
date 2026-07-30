@@ -92,14 +92,19 @@ def _dir_is_writable(directory):
     read-only attribute, which directories don't meaningfully carry), so an
     ACL-denied location like ``C:\\Program Files`` passes ``os.access`` but fails
     the real ``os.makedirs`` on the actual run. A create-and-remove probe matches
-    real-run behaviour on every OS. Falls back to ``os.access`` only if the probe
-    itself cannot run for a non-permission reason.
+    real-run behaviour on every OS.
+
+    Note: this is NOT side-effect free — it creates and deletes a
+    ``.plate-writetest-*`` temp file. On the rare path where the create succeeds
+    but the unlink fails, that temp file is left behind (best effort).
     """
     import tempfile
 
     try:
         fd, tmp_path = tempfile.mkstemp(prefix=".plate-writetest-", dir=directory)
-    except (PermissionError, OSError):
+    except OSError:
+        # PermissionError (ACL/permission denial) and every other OSError mean the
+        # directory is not usably writable for the real run.
         return False
     try:
         os.close(fd)
@@ -114,8 +119,11 @@ def _dir_is_writable(directory):
 def _prepare_job_output_dir(args, summary):
     """Validate job/send working directory before expensive work starts.
 
-    In dry-run mode this is intentionally side-effect free: report that the
-    directory would be created instead of creating it.
+    In dry-run mode this does not create the requested output directory (it
+    reports that the directory *would* be created). The writability check for a
+    not-yet-existing directory does briefly create+remove a ``.plate-writetest-*``
+    temp file in the nearest existing ancestor (see ``_dir_is_writable``), so it
+    is not strictly side-effect free.
     """
     if not getattr(args, "output", None):
         return None

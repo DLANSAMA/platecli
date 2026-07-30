@@ -206,7 +206,11 @@ def _run_orcaslicer(  # pragma: no cover -- external process + rich TTY UI; cmd_
             _consume(name, text)
         if stdout_carry.strip():
             _handle_stdout_line(stdout_carry.strip())
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, KeyboardInterrupt):
+        # start_new_session put OrcaSlicer/Xvfb in their own process group, so a
+        # terminal SIGINT (Ctrl-C) no longer reaches them and a bare re-raise would
+        # orphan the whole tree. Kill the group explicitly on both timeout AND
+        # interrupt, then re-raise so the caller still sees the original signal.
         _kill_proc_tree()
         proc.wait()
         raise

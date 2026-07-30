@@ -88,10 +88,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   fresh output. `slice` now snapshots the output path before running OrcaSlicer
   and rejects a file the run did not rewrite, so a failed re-slice can no longer
   report success (and be uploaded/printed) with an outdated model.
-- `plate slice`: on a slice timeout the whole OrcaSlicer process group is now
-  killed (`start_new_session` + `os.killpg` on POSIX), so `xvfb-run`'s Xvfb and
-  OrcaSlicer children are reaped instead of surviving as orphans burning CPU.
-  Windows behaviour (plain `kill()`, no wrapper) is unchanged.
+- `plate slice`: on a slice timeout or Ctrl-C the whole OrcaSlicer process group
+  is now killed (`start_new_session` + `os.killpg` on POSIX), so `xvfb-run`'s
+  Xvfb and OrcaSlicer children are reaped instead of surviving as orphans burning
+  CPU. Windows behaviour (plain `kill()`, no wrapper) is unchanged.
 - `plate slice`: an unrecognized `--quality` value (e.g. a typo like `High`, or an
   unsupported layer height) now logs a loud warning before falling back to
   `0.20mm Standard`, instead of silently slicing at a different layer height.

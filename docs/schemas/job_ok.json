@@ -12,7 +12,8 @@
     "local_path": {"type": "string"},
     "remote_path": {"type": "string"},
     "print_started": {"type": "boolean"},
-    "dry_run": {"type": "boolean"}
+    "dry_run": {"type": "boolean"},
+    "copies_ignored": {"type": "boolean"}
   },
   "additionalProperties": true
 }

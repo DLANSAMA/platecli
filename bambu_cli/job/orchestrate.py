@@ -298,6 +298,15 @@ def _run_job(ctx, args, steps=None):
                 predicted_remote_name,
                 "ZIP member would produce unsafe printer filename",
             )
+            # --copies only multiplies models during slicing; a printer-ready ZIP
+            # member (.3mf/.gcode) prints once. Warn + flag, symmetric with the
+            # non-ZIP printer-ready branch. (Set before the dry-run emit so the
+            # dry-run summary carries it too.)
+            if member_ext in PRINT_READY_EXTENSIONS and getattr(args, "copies", 1) != 1:
+                logger.warning(
+                    "⚠️  --copies only applies when job slices a model; this printer-ready ZIP member will print once."
+                )
+                summary["copies_ignored"] = True
             if getattr(args, "dry_run", False):
                 max_bytes = int(_namespace_get(args, "max_download_mb", DEFAULT_MAX_DOWNLOAD_MB)) * 1024 * 1024
                 if info.file_size > max_bytes:
@@ -307,6 +316,17 @@ def _run_job(ctx, args, steps=None):
                         "extract",
                         EXIT_FILE_ERROR,
                         _archive_member_too_large_message(member_filename, info.file_size, max_bytes),
+                    )
+                # Symmetric 0-byte guard with the non-ZIP dry-run branches. A 0-byte
+                # member is already filtered by _select_zip_model_member, but guard
+                # explicitly so a knowable-offline empty input never reports success.
+                if info.file_size <= 0:
+                    _job_fail(
+                        args,
+                        summary,
+                        "extract",
+                        EXIT_FILE_ERROR,
+                        f"Refusing to dry-run an empty ZIP member: {member_filename}",
                     )
                 logger.info(
                     "🔍 Dry Run: ZIP archive contains a supported file; skipping extraction, slicing, upload, and print."

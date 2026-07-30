@@ -1142,6 +1142,47 @@ def test_dry_run_empty_model_file_fails(tmp_path):
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
 
 
+def test_zip_printer_ready_member_copies_ignored_flagged(tmp_path, capsys):
+    """Symmetry: a printer-ready ZIP member with --copies must warn + flag
+    copies_ignored, matching the non-ZIP printer-ready branch."""
+    zpath = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("plate.gcode.3mf", b"x" * 20)
+    args = _parse(["job", str(zpath), "--copies", "3", "--dry-run", "--json"])
+    with _capture_bambu_warnings() as records:
+        _run_job(_ctx(), args, JobSteps())
+    payload = _read_json(capsys)
+    assert payload["status"] == "dry_run_local_skipped"
+    assert payload["archive_entry"] == "plate.gcode.3mf"
+    assert payload["would_slice"] is False
+    assert payload.get("copies_ignored") is True
+    assert any("--copies only applies" in r.getMessage() for r in records)
+
+
+def test_zip_sliceable_member_copies_not_flagged(tmp_path, capsys):
+    zpath = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("model.stl", b"solid x")
+    args = _parse(["job", str(zpath), "--copies", "3", "--dry-run", "--json"])
+    _run_job(_ctx(), args, JobSteps())
+    payload = _read_json(capsys)
+    assert payload["status"] == "dry_run_local_skipped"
+    assert payload["would_slice"] is True
+    assert "copies_ignored" not in payload
+
+
+def test_zip_only_empty_member_fails_dry_run(tmp_path):
+    """A ZIP whose only model member is 0 bytes must fail dry-run (knowable
+    offline), not report success — symmetric with the empty-file checks."""
+    zpath = tmp_path / "empty_member.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("model.stl", b"")
+    args = _parse(["job", str(zpath), "--dry-run", "--json"])
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
+
+
 def test_dry_run_output_dir_writability_uses_real_probe(tmp_path, capsys, monkeypatch):
     """The dry-run output-dir writability check must use a real create-probe
     (tempfile.mkstemp), NOT os.access(W_OK) which ignores Windows ACLs. Model an
