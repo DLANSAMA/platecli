@@ -197,10 +197,21 @@ def send_command(
         client.user_data_set({})
         publish_done = threading.Event()
         success = [False]
+        # Once-flag so paho's auto-reconnect (loop_start -> loop_forever with
+        # reconnect_on_failure=True) can never fire on_connect a second time and
+        # re-publish this state-changing command (pause/stop/gcode_line) to the
+        # printer. Bound as a default arg so a stale callback from a previous
+        # attempt's client cannot re-publish either.
+        published = [False]
 
-        def on_connect(client, userdata, flags, rc, properties=None):
+        def on_connect(client, userdata, flags, rc, properties=None, published=published):
             if rc == 0:
-                client.publish(f"device/{printer.serial}/request", payload)
+                if not published[0]:
+                    published[0] = True
+                    # QoS 1: pairs on_publish with a broker PUBACK rather than a
+                    # bare local socket write. The Bambu broker is the printer,
+                    # so a PUBACK is real receipt, not "left our OS buffer".
+                    client.publish(f"device/{printer.serial}/request", payload, qos=1)
             else:
                 logger.error(f"Connection failed: rc={rc}")
                 publish_done.set()
@@ -726,14 +737,32 @@ def execute_print_command(
     client = _client_factory(printer, "bambu_print")
 
     print_error = [None]
+    reject_reason: list[Optional[str]] = [None]
     command_accepted = threading.Event()
+    # rc != 0 (bad CONNACK, e.g. wrong/rotated LAN access code) is delivered
+    # asynchronously via on_connect after loop_start, so _mqtt_connect cannot
+    # raise on it. Track it like get_status does and fail closed after the wait
+    # instead of setting command_accepted and falling through to "Print started".
+    connect_failed = [False]
+    # Once-flag so paho auto-reconnect can never re-fire on_connect and re-issue
+    # the print-start command to a printer that may already be running it.
+    published = [False]
+    # A stale, latched print_error from a *prior* job rides in on the printer's
+    # first periodic *full-state snapshot* (P1-series push the complete state on
+    # the report topic). Before our project_file ack lands, such a snapshot must
+    # not be blamed on this print. A genuine error for our command arrives either
+    # with/after the ack, or as a lone print_error delta (not a full snapshot).
+    ack_seen = [False]
 
     def on_connect(client, userdata, flags, rc, properties=None):
         if rc == 0:
-            client.subscribe(f"device/{printer.serial}/report")
-            client.publish(f"device/{printer.serial}/request", payload)
+            if not published[0]:
+                published[0] = True
+                client.subscribe(f"device/{printer.serial}/report")
+                client.publish(f"device/{printer.serial}/request", payload)
         else:
             logger.error(f"Connection failed: rc={rc}")
+            connect_failed[0] = True
             command_accepted.set()
 
     def on_message(client, userdata, msg):
@@ -742,11 +771,24 @@ def execute_print_command(
             data = json.loads(msg.payload.decode("utf-8"))
             if "print" in data:
                 p = data["print"]
+                is_ack = p.get("command") == "project_file"
+                if is_ack:
+                    ack_seen[0] = True
                 pe = p.get("print_error", 0)
-                if pe and pe != 0:
+                # Blame the error on this print unless it is a pre-existing value
+                # latched into a full-state snapshot that arrived before our ack
+                # (the classic stale-latch vector). Errors in/after the ack, or in
+                # a lone delta, are ours.
+                stale_snapshot = status_is_complete(p) and not ack_seen[0] and not is_ack
+                if pe and pe != 0 and not stale_snapshot:
                     print_error[0] = pe
                     command_accepted.set()
-                if p.get("command") == "project_file":
+                if is_ack:
+                    # A firmware rejection carries result=fail (+ optional
+                    # reason); do not report success for a rejected job.
+                    result = p.get("result")
+                    if isinstance(result, str) and result.strip().lower() not in ("", "success"):
+                        reject_reason[0] = str(p.get("reason") or result)
                     command_accepted.set()
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
             logger.debug(f"MQTT decode error: {e}")
@@ -786,6 +828,18 @@ def execute_print_command(
         logger.error(message)
         record_error_detail("print", EXIT_NETWORK_ERROR, message, failed_step="print", file=basename, printed=False)
         abort("", exit_code=EXIT_NETWORK_ERROR)
+
+    if connect_failed[0]:
+        message = f"Failed to connect to printer to start print for {basename} (check LAN access code)"
+        logger.error(message)
+        record_error_detail("print", EXIT_NETWORK_ERROR, message, failed_step="print", file=basename, printed=False)
+        abort("", exit_code=EXIT_NETWORK_ERROR)
+
+    if reject_reason[0]:
+        message = f"Printer rejected print of {basename}: {reject_reason[0]}"
+        logger.error(message)
+        record_error_detail("print", EXIT_PRINTER_ERROR, message, failed_step="print", file=basename, printed=False)
+        abort("", exit_code=EXIT_PRINTER_ERROR)
 
     if print_error[0]:
         error_hex = _printer_error_hex(print_error[0])
