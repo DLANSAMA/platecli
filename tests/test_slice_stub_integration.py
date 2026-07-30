@@ -156,6 +156,32 @@ def test_garbage_stdout_does_not_break_pump(orca_env):
     assert os.path.exists(result)
 
 
+# --- Unrecognized --quality warns loudly -------------------------------------
+
+
+def test_unrecognized_quality_warns(orca_env, caplog):
+    """A --quality value the map doesn't know (and not a 0.NN layer height) must
+    emit a loud warning before silently falling back to 0.20mm Standard."""
+    import logging
+
+    args = _slice_args(orca_env.model, orca_env.outdir, quality="High")
+    with caplog.at_level(logging.WARNING, logger="bambu"):
+        result = orca_env("success", args=args)
+    assert os.path.exists(result)
+    warned = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert any("Unrecognized --quality 'High'" in m for m in warned), warned
+
+
+def test_known_quality_does_not_warn(orca_env, caplog):
+    import logging
+
+    args = _slice_args(orca_env.model, orca_env.outdir, quality="standard")
+    with caplog.at_level(logging.WARNING, logger="bambu"):
+        orca_env("success", args=args)
+    warned = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert not any("Unrecognized --quality" in m for m in warned), warned
+
+
 # --- The benign non-zero (headless GL) branch --------------------------------
 
 
@@ -212,7 +238,91 @@ def test_missing_output_file_aborts(orca_env):
     assert not os.path.exists(orca_env.outpath)
 
 
+# --- Stale pre-existing output must not be accepted as fresh -----------------
+
+
+def _write_valid_3mf(path: str) -> None:
+    import zipfile
+
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
+        zf.writestr("3D/3dmodel.model", "<model/>")
+        zf.writestr("Metadata/plate_1.gcode", "; stale plate\nG28\n")
+
+
+def test_stale_output_not_written_this_run_is_rejected(orca_env):
+    """A valid *_sliced.3mf left by a prior run must be rejected when THIS run
+    exits non-zero with only GL noise and writes nothing new — otherwise the
+    stale artifact would be reported as a fresh, uploadable slice."""
+    # Seed a stale but structurally valid .3mf at the exact output path, with an
+    # old mtime so the freshness check has a clear pre-run snapshot to compare.
+    _write_valid_3mf(orca_env.outpath)
+    old = os.stat(orca_env.outpath)
+    os.utime(orca_env.outpath, ns=(old.st_atime_ns - 10_000_000_000, old.st_mtime_ns - 10_000_000_000))
+
+    with pytest.raises(BambuError):
+        orca_env("benign_gl_no_write")
+
+
+def test_stale_output_json_envelope_reports_slicer_failure(orca_env, capsys):
+    _write_valid_3mf(orca_env.outpath)
+    old = os.stat(orca_env.outpath)
+    os.utime(orca_env.outpath, ns=(old.st_atime_ns - 10_000_000_000, old.st_mtime_ns - 10_000_000_000))
+    args = _slice_args(orca_env.model, orca_env.outdir, json=True)
+    with pytest.raises(BambuError):
+        orca_env("benign_gl_no_write", args=args)
+    payload = _last_json_object(capsys.readouterr().out)
+    assert payload["status"] == "error"
+    assert payload["failed_step"] == "slicer"
+
+
 # --- Timeout -----------------------------------------------------------------
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+@pytest.mark.skipif(os.name == "nt", reason="process-group kill is POSIX-only")
+def test_timeout_kills_whole_process_group(orca_env, tmp_path, monkeypatch):
+    """On timeout, the fake slicer's spawned child (stand-in for Xvfb/OrcaSlicer
+    under xvfb-run) must be killed too — proving start_new_session + os.killpg
+    reap the tree instead of orphaning children with proc.kill()."""
+    import time as _time
+
+    pidfile = tmp_path / "child.pid"
+    child_sleep = 30
+    args = _slice_args(orca_env.model, orca_env.outdir, slicer_timeout=1)
+    started = _time.monotonic()
+    with pytest.raises(BambuError):
+        orca_env(
+            "spawn_child_then_hang",
+            args=args,
+            ORCA_STUB_SLEEP=child_sleep,
+            ORCA_STUB_CHILD_PIDFILE=str(pidfile),
+        )
+    elapsed = _time.monotonic() - started
+    assert pidfile.exists(), "stub did not record its child PID"
+    child_pid = int(pidfile.read_text().strip())
+    # Give the SIGKILL a beat to propagate through the group.
+    deadline = _time.monotonic() + 3
+    while _pid_alive(child_pid) and _time.monotonic() < deadline:
+        _time.sleep(0.05)
+    assert not _pid_alive(child_pid), f"orphaned child {child_pid} survived the timeout kill"
+    # Without killpg the child keeps the inherited stdout/stderr pipes open, so the
+    # reader threads (and thus _run_orcaslicer) block until the child sleeps out its
+    # full duration. Killing the group frees the pipes immediately, so the call
+    # returns far sooner than the child's sleep — assert we did not wait it out.
+    assert elapsed < child_sleep - 5, (
+        f"timeout handling blocked {elapsed:.1f}s (~child sleep); "
+        "the process group was not killed"
+    )
 
 
 def test_hang_hits_slice_timeout(orca_env, monkeypatch):

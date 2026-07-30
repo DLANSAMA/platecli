@@ -1070,3 +1070,105 @@ def test_predicted_sliced_remote_name_copies():
     assert "model" in name
     name3 = job._predicted_sliced_remote_name("/tmp/foo.stl", copies=3)
     assert "x3" in name3 or "foo" in name3
+
+
+# ---------------------------------------------------------------------------
+# Deep-audit regressions: job/orchestrate.py + job/support.py
+# ---------------------------------------------------------------------------
+
+
+def test_copies_ignored_warns_for_printer_ready(tmp_path, capsys):
+    """--copies only multiplies models during slicing; a printer-ready file must
+    warn (and flag copies_ignored) instead of silently printing one copy."""
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--copies", "3", "--upload-only", "--json"])
+    with _capture_bambu_warnings() as records:
+        _run_job(_ctx(), args, JobSteps(upload=fake_upload("model.3mf")))
+    payload = _read_json(capsys)
+    assert payload.get("copies_ignored") is True
+    assert any("--copies only applies" in r.getMessage() for r in records)
+
+
+def test_copies_ignored_flagged_in_dry_run(tmp_path, capsys):
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--copies", "2", "--dry-run", "--json"])
+    _run_job(_ctx(), args, JobSteps())
+    payload = _read_json(capsys)
+    assert payload["status"] == "dry_run_local_skipped"
+    assert payload.get("copies_ignored") is True
+
+
+def test_copies_one_does_not_flag_printer_ready(tmp_path, capsys):
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--upload-only", "--json"])
+    _run_job(_ctx(), args, JobSteps(upload=fake_upload("model.3mf")))
+    payload = _read_json(capsys)
+    assert "copies_ignored" not in payload
+
+
+def test_zip_oserror_routes_through_structured_failure(tmp_path, capsys, monkeypatch):
+    """An OSError opening the ZIP must emit the structured job-failure summary
+    (failed_step='extract'), not escape as a bare traceback."""
+    zpath = tmp_path / "model.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("model.stl", b"solid x")
+
+    real_zipfile = zipfile.ZipFile
+
+    def _boom(path, *a, **kw):
+        raise PermissionError("permission denied reading archive")
+
+    monkeypatch.setattr(zipfile, "ZipFile", _boom)
+    args = _parse(["job", str(zpath), "--json"])
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "extract"
+    assert payload["status"] == "error"
+
+
+def test_dry_run_empty_model_file_fails(tmp_path):
+    """Symmetric with the printer-ready branch: a 0-byte sliceable model must
+    fail dry-run instead of reporting would_slice success."""
+    stl = tmp_path / "empty.stl"
+    stl.write_bytes(b"")
+    args = _parse(["job", str(stl), "--dry-run", "--json"])
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
+
+
+def test_dry_run_output_dir_writability_uses_real_probe(tmp_path, capsys, monkeypatch):
+    """The dry-run output-dir writability check must use a real create-probe
+    (tempfile.mkstemp), NOT os.access(W_OK) which ignores Windows ACLs. Model an
+    ACL-denied ancestor by making the create-probe raise PermissionError while
+    os.access still reports writable: the dry-run must fail."""
+    import tempfile as _tempfile
+
+    stl = tmp_path / "model.stl"
+    stl.write_bytes(b"solid x")
+    missing_out = tmp_path / "child_dir"  # nearest existing ancestor is tmp_path
+
+    real_mkstemp = _tempfile.mkstemp
+
+    def _probe_denies_in_tmp(*a, **kw):
+        probe_dir = kw.get("dir") or (a[-1] if a else None)
+        if probe_dir and os.path.abspath(str(probe_dir)) == os.path.abspath(str(tmp_path)):
+            raise PermissionError("ACL denied")
+        return real_mkstemp(*a, **kw)
+
+    # os.access would say tmp_path is writable (it is), but the create-probe is
+    # denied — the fix must trust the probe, not os.access.
+    monkeypatch.setattr(_tempfile, "mkstemp", _probe_denies_in_tmp)
+    assert os.access(str(tmp_path), os.W_OK) is True  # the trap the old code fell into
+
+    args = _parse(["job", str(stl), "--dry-run", "--json", "--output", str(missing_out)])
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        _run_job(_ctx(), args, JobSteps())
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "validate"

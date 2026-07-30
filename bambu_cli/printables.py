@@ -23,9 +23,9 @@ def _select_printables_file(files, file_desc, type_key="stl"):
     if len(files) > 1:
         logger.info(f"   Found {len(files)} {file_desc} files:")
         for s in files:
-            logger.info(f"      • {s['name']} ({s.get('fileSize', 0) // 1024}KB)")
+            logger.info(f"      • {s.get('name', '?')} ({s.get('fileSize', 0) // 1024}KB)")
     file_to_use = max(files, key=lambda x: x.get("fileSize", 0))
-    logger.info(f"   → Using {file_desc}: {file_to_use['name']} ({file_to_use.get('fileSize', 0) // 1024}KB)")
+    logger.info(f"   → Using {file_desc}: {file_to_use.get('name', '?')} ({file_to_use.get('fileSize', 0) // 1024}KB)")
     return file_to_use, type_key
 
 
@@ -61,13 +61,30 @@ def _get_printables_file_info(model_id, gql_headers, opener):
         logger.error("Invalid Printables API response structure.")
         return None, None, None
 
-    model = result.get("data", {}).get("print")
-    if not model:
+    # The standard GraphQL error envelope is {"errors": [...], "data": null}: the
+    # "data" key EXISTS with value None, so `result.get("data", {})` returns None,
+    # not {}. Coerce with `or {}` (and the nested lists with `or []`) so an
+    # error-shaped response degrades to a clean "not found" instead of an
+    # AttributeError/TypeError that escapes the caller as a raw traceback.
+    if result.get("errors"):
+        first_err = result["errors"][0] if isinstance(result["errors"], list) and result["errors"] else None
+        detail = ""
+        if isinstance(first_err, dict) and first_err.get("message"):
+            detail = f": {first_err['message']}"
+        logger.error(f"Printables API returned an error for model #{model_id}{detail}")
+        return None, None, None
+
+    model = (result.get("data") or {}).get("print")
+    if not isinstance(model, dict):
         logger.error(f"Model #{model_id} not found on Printables")
         return None, None, None
 
-    stls_raw = model.get("stls", [])
-    gcodes_raw = model.get("gcodes", [])
+    stls_raw = model.get("stls") or []
+    gcodes_raw = model.get("gcodes") or []
+    if not isinstance(stls_raw, list):
+        stls_raw = []
+    if not isinstance(gcodes_raw, list):
+        gcodes_raw = []
 
     stls, steps, threemfs = [], [], []
     for s in stls_raw:
@@ -92,12 +109,17 @@ def _get_printables_file_info(model_id, gql_headers, opener):
         logger.warning("   ⚠️  No STL/STEP files — falling back to 3MF (cannot re-slice with custom settings)")
         file_to_use = max(threemfs, key=lambda x: x.get("fileSize", 0))
         file_type = "gcode" if file_to_use in gcodes_raw else "stl"
-        logger.info(f"   → Using 3MF: {file_to_use['name']} ({file_to_use.get('fileSize', 0) // 1024}KB)")
+        logger.info(f"   → Using 3MF: {file_to_use.get('name', '?')} ({file_to_use.get('fileSize', 0) // 1024}KB)")
     else:
         logger.error("No STL, STEP, or 3MF files found for this model")
         return None, None, None
 
-    return file_to_use["id"], file_type, file_to_use["name"]
+    file_id = file_to_use.get("id")
+    file_name = file_to_use.get("name")
+    if not file_id or not file_name:
+        logger.error(f"Selected Printables file for model #{model_id} is missing an id or name.")
+        return None, None, None
+    return file_id, file_type, file_name
 
 
 def _get_printables_download_link(file_id, model_id, file_type, stl_name, gql_headers, opener):

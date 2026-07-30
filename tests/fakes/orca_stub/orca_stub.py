@@ -121,6 +121,23 @@ def main(argv: list[str]) -> int:
         time.sleep(float(os.environ.get("ORCA_STUB_SLEEP", "3600")))
         return 0
 
+    if scenario == "spawn_child_then_hang":
+        # Model xvfb-run's behaviour: spawn a long-lived child (stand-in for the
+        # backgrounded Xvfb + OrcaSlicer) then block. The child records its PID so
+        # a test can assert the timeout kill reaped the WHOLE process group (child
+        # included), not just this top process. Requires start_new_session so the
+        # child shares our group.
+        import subprocess as _sp
+
+        child_pid_file = os.environ.get("ORCA_STUB_CHILD_PIDFILE")
+        sleep_s = os.environ.get("ORCA_STUB_SLEEP", "3600")
+        child = _sp.Popen([sys.executable, "-c", f"import time; time.sleep({float(sleep_s)})"])
+        if child_pid_file:
+            with open(child_pid_file, "w", encoding="utf-8") as fh:
+                fh.write(str(child.pid))
+        time.sleep(float(sleep_s))
+        return 0
+
     sleep_s = float(os.environ.get("ORCA_STUB_SLEEP", "0"))
     if sleep_s > 0:
         time.sleep(sleep_s)
@@ -168,6 +185,14 @@ def main(argv: list[str]) -> int:
             _write_valid_3mf(outpath)
         print("[GLFW] init opengl failed", file=stderr)
         print("[error] slicing error: model exceeds build volume", file=stderr)
+        rc = 1
+
+    elif scenario == "benign_gl_no_write":
+        # GL/thumbnail noise + non-zero exit but NO new output written. If a stale
+        # valid .3mf already sits at outpath, _finalize_slice must NOT accept it
+        # as this run's output (the stale-output guard).
+        print("slicing plate 1", file=stdout)
+        print("[GLFW] init OpenGL failed; skip thumbnail generation", file=stderr)
         rc = 1
 
     elif scenario == "empty_output":

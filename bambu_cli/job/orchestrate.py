@@ -266,6 +266,17 @@ def _run_job(ctx, args, steps=None):
                     info, member_filename = _select_zip_model_member(archive)
             except zipfile.BadZipFile:
                 _job_fail(args, summary, "extract", EXIT_FILE_ERROR, "ZIP archive is invalid or corrupt.")
+            except OSError as exc:
+                # An unreadable/permission-denied/IO-erroring zip must stay inside
+                # the structured job-failure contract (failed_step="extract"), not
+                # escape to cli.py's generic handler that drops the job summary.
+                _job_fail(
+                    args,
+                    summary,
+                    "extract",
+                    EXIT_FILE_ERROR,
+                    f"Could not read ZIP archive: {_exception_for_message(exc)}",
+                )
             if info is None:
                 _job_fail(
                     args,
@@ -321,6 +332,16 @@ def _run_job(ctx, args, steps=None):
                 )
             except ValueError as exc:
                 _job_fail(args, summary, "extract", EXIT_FILE_ERROR, str(exc))
+            except OSError as exc:
+                # Disk-full / permission error while writing the extracted member
+                # must also route through the structured failure contract.
+                _job_fail(
+                    args,
+                    summary,
+                    "extract",
+                    EXIT_FILE_ERROR,
+                    f"Could not extract ZIP member: {_exception_for_message(exc)}",
+                )
             source_path = extracted_path
             ext = _file_extension(source_path)
             summary["extracted_path"] = extracted_path
@@ -339,6 +360,28 @@ def _run_job(ctx, args, steps=None):
                 )
             logger.info("🚦 Job source is a model file; slicing before upload.")
             if getattr(args, "dry_run", False):
+                # Symmetry with the printer-ready dry-run branch: a 0-byte/unreadable
+                # model is knowable offline and the real run deterministically fails
+                # (OrcaSlicer errors on an empty STL), so dry-run must not report
+                # success for it.
+                try:
+                    model_size = os.path.getsize(source_path)
+                except OSError as exc:
+                    _job_fail(
+                        args,
+                        summary,
+                        "validate",
+                        EXIT_FILE_ERROR,
+                        f"Could not read file size for {_path_for_message(source_path)}: {_exception_for_message(exc)}",
+                    )
+                if model_size <= 0:
+                    _job_fail(
+                        args,
+                        summary,
+                        "validate",
+                        EXIT_FILE_ERROR,
+                        f"Refusing to dry-run an empty model file: {_path_for_message(source_path)}",
+                    )
                 logger.info("🔍 Dry Run: local model is valid; skipping slicing, upload, and print.")
                 summary["status"] = "dry_run_local_skipped"
                 summary["printable_path"] = source_path
@@ -380,6 +423,15 @@ def _run_job(ctx, args, steps=None):
                 logger.warning(
                     "⚠️  --output is only used when job/send downloads, extracts, or slices; ignoring it for a printer-ready local file."
                 )
+            if getattr(args, "copies", 1) != 1:
+                # --copies only multiplies models during slicing; a printer-ready
+                # .3mf/.gcode already fixes its plate layout, so it prints once.
+                # Warn (and flag in the dry-run summary) instead of silently
+                # printing 1 when N were requested.
+                logger.warning(
+                    "⚠️  --copies only applies when job slices a model; this printer-ready file will print once."
+                )
+                summary["copies_ignored"] = True
             logger.info("🚦 Job source is already printer-ready; upload will use it directly.")
             if getattr(args, "dry_run", False):
                 try:

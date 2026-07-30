@@ -84,6 +84,33 @@ def _last_error_for(command, ctx=None):
     return result
 
 
+def _dir_is_writable(directory):
+    """Probe whether *directory* is actually writable by creating+removing a temp
+    entry in it.
+
+    ``os.access(dir, os.W_OK)`` ignores NTFS ACLs on Windows (it only reflects the
+    read-only attribute, which directories don't meaningfully carry), so an
+    ACL-denied location like ``C:\\Program Files`` passes ``os.access`` but fails
+    the real ``os.makedirs`` on the actual run. A create-and-remove probe matches
+    real-run behaviour on every OS. Falls back to ``os.access`` only if the probe
+    itself cannot run for a non-permission reason.
+    """
+    import tempfile
+
+    try:
+        fd, tmp_path = tempfile.mkstemp(prefix=".plate-writetest-", dir=directory)
+    except (PermissionError, OSError):
+        return False
+    try:
+        os.close(fd)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+    return True
+
+
 def _prepare_job_output_dir(args, summary):
     """Validate job/send working directory before expensive work starts.
 
@@ -114,7 +141,7 @@ def _prepare_job_output_dir(args, summary):
                 if next_parent == parent:
                     break
                 parent = next_parent
-            if not parent or not os.path.isdir(parent) or not os.access(parent, os.W_OK):
+            if not parent or not os.path.isdir(parent) or not _dir_is_writable(parent):
                 _job_fail(
                     args,
                     summary,

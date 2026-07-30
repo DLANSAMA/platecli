@@ -167,6 +167,17 @@ def _numeric_values(value: Any) -> list[float]:
     return out
 
 
+def _is_bed_temp_key(key: str) -> bool:
+    """True for any bed-plate temperature filament key (``*_plate_temp`` or its
+    ``*_plate_temp_initial_layer`` companion), e.g. ``supertack_plate_temp``.
+
+    Bed temps must be range-checked against MAX_BED_TEMP_C regardless of plate
+    type; new Orca bed types (SuperTack, etc.) must not slip past validation just
+    because they are absent from the legacy BED_PLATE_TYPES list.
+    """
+    return isinstance(key, str) and (key.endswith("_plate_temp") or key.endswith("_plate_temp_initial_layer"))
+
+
 def _effective_override_temps(args: argparse.Namespace) -> tuple[list[float], list[float]]:
     """Nozzle and bed temps implied by generic overrides (filament *and* process).
 
@@ -205,7 +216,12 @@ def _effective_override_temps(args: argparse.Namespace) -> tuple[list[float], li
         for key, value in src.items():
             if key in ("nozzle_temperature", "nozzle_temperature_initial_layer"):
                 nozzle += _numeric_values(value)
-            elif key in bed_keys:
+            elif key in bed_keys or _is_bed_temp_key(key):
+                # Range-check ANY bed-plate temperature key, not just the four
+                # legacy plate types. OrcaSlicer 2.2+ added supertack_plate_temp
+                # (Cool Plate SuperTack); matching the *_plate_temp[_initial_layer]
+                # pattern keeps new bed types inside MAX_BED_TEMP_C without a
+                # constants edit each time.
                 bed += _numeric_values(value)
     return nozzle, bed
 

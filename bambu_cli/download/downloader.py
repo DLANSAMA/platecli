@@ -155,8 +155,38 @@ def _cmd_download(
     replace_on_success = False
     outpath = None
     safe_opener = _openers()
+    # `_noncolliding` reserves the final output name by CREATING a 0-byte file
+    # (ftps._noncolliding_path uses O_CREAT|O_EXCL). Every reservation is tracked
+    # here so an abandoned placeholder (retarget, HTML re-resolve, or any failure
+    # path) is unlinked instead of leaking a 0-byte model file with the requested
+    # name that a later run/agent could mistake for a real download.
+    reserved_paths: set[str] = set()
+
+    def _reserve(path):
+        reserved = _noncolliding(path)
+        reserved_paths.add(reserved)
+        return reserved
+
+    def _release_reserved(path):
+        """Stop tracking a reserved placeholder without deleting it (kept as real output)."""
+        reserved_paths.discard(path)
+
+    def _cleanup_reserved(keep=None):
+        """Unlink every still-tracked placeholder except *keep*, ignoring errors."""
+        for path in list(reserved_paths):
+            if keep is not None and path == keep:
+                continue
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+            reserved_paths.discard(path)
+
     try:
         for _html_resolution_attempt in range(3):
+            # A previous loop pass may have reserved a placeholder before deciding
+            # to re-resolve an HTML page; drop it so it never leaks.
+            _cleanup_reserved()
             archive_download = _is_archive_download(url, stl_name)
             if archive_download:
                 archive_temp = tempfile.NamedTemporaryFile(  # noqa: SIM115 — closed immediately; only the name is used
@@ -170,7 +200,7 @@ def _cmd_download(
             else:
                 filename = _download_target_filename(args, url, stl_name)
                 outpath = os.path.join(outdir, filename)
-                outpath = _noncolliding(outpath)
+                outpath = _reserve(outpath)
                 filename = _portable_basename(outpath)
             req = urllib.request.Request(url, headers={**headers, "User-Agent": user_agent_for_url(url)})
             with polite_open(safe_opener, req, timeout=DOWNLOAD_TIMEOUT) as resp:
@@ -202,15 +232,18 @@ def _cmd_download(
                         raise
                     url = final_url
                     if not stl_name and not _namespace_get(args, "name") and not archive_download:
+                        _cleanup_reserved()  # old-name placeholder is abandoned by the rename
                         filename = _download_target_filename(args, url, stl_name)
                         outpath = os.path.join(outdir, filename)
-                        outpath = _noncolliding(outpath)
+                        outpath = _reserve(outpath)
                         filename = _portable_basename(outpath)
                 content_type = _response_header(resp, "Content-Type")
                 archive_download = archive_download or _is_archive_download(url, stl_name, content_type)
                 if archive_download and not filename.startswith(".bambu-download-"):
                     if partial_path and partial_path != outpath:
                         _remove_partial_file(partial_path)
+                    # The resolved-name placeholder (if any) is abandoned for an archive temp.
+                    _cleanup_reserved()
                     archive_temp = tempfile.NamedTemporaryFile(  # noqa: SIM115 — closed immediately; only the name is used
                         prefix=".bambu-download-", suffix=".zip", dir=outdir, delete=False
                     )
@@ -266,40 +299,49 @@ def _cmd_download(
                 header_filename = _filename_from_content_disposition(_response_header(resp, "Content-Disposition"))
                 if header_filename and _is_archive_download(url, header_filename, content_type):
                     archive_download = True
-                if header_filename and (_namespace_get(args, "name") or not stl_name):
-                    if archive_download:
-                        if partial_path != outpath and partial_path:
-                            _remove_partial_file(partial_path)
-                        if outpath and filename.startswith(".bambu-download-"):
-                            _remove_partial_file(outpath)
-                        archive_temp = tempfile.NamedTemporaryFile(  # noqa: SIM115 — closed immediately; only the name is used
-                            prefix=".bambu-download-", suffix=".zip", dir=outdir, delete=False
+                # An archive upgrade (URL/content-type OR a Content-Disposition
+                # filename) always needs an archive temp to stream into. Creating
+                # it must NOT be gated on `--name`/stl_name: when stl_name is set
+                # and no --name is given that gate is False, so without this branch
+                # partial_path stays None and the transfer body would open(None).
+                if archive_download and not filename.startswith(".bambu-download-"):
+                    if partial_path != outpath and partial_path:
+                        _remove_partial_file(partial_path)
+                    # Drop the resolved-name placeholder reserved for this outpath.
+                    _cleanup_reserved()
+                    archive_temp = tempfile.NamedTemporaryFile(  # noqa: SIM115 — closed immediately; only the name is used
+                        prefix=".bambu-download-", suffix=".zip", dir=outdir, delete=False
+                    )
+                    outpath = archive_temp.name
+                    archive_temp.close()
+                    filename = _portable_basename(outpath)
+                    partial_path = outpath
+                    replace_on_success = False
+                # Non-archive Content-Disposition rename (the archive case is fully
+                # handled by the archive-temp block above).
+                if not archive_download and header_filename and (_namespace_get(args, "name") or not stl_name):
+                    _reject_unsupported_download_extension(
+                        args, source_url, normalized_source, url, header_filename, failed_step="download"
+                    )
+                    if _namespace_get(args, "name"):
+                        filename = _download_filename_with_extension(
+                            _sanitize_download_filename(_namespace_get(args, "name")),
+                            url,
+                            fallback_name=header_filename,
                         )
-                        outpath = archive_temp.name
-                        archive_temp.close()
-                        filename = _portable_basename(outpath)
-                        partial_path = outpath
-                        replace_on_success = False
                     else:
-                        _reject_unsupported_download_extension(
-                            args, source_url, normalized_source, url, header_filename, failed_step="download"
+                        filename = _download_filename_with_extension(
+                            header_filename, url, fallback_name=header_filename
                         )
-                        if _namespace_get(args, "name"):
-                            filename = _download_filename_with_extension(
-                                _sanitize_download_filename(_namespace_get(args, "name")),
-                                url,
-                                fallback_name=header_filename,
-                            )
-                        else:
-                            filename = _download_filename_with_extension(
-                                header_filename, url, fallback_name=header_filename
-                            )
-                        outpath = os.path.join(outdir, filename)
-                        outpath = _noncolliding(outpath)
-                        filename = _portable_basename(outpath)
+                    _cleanup_reserved()  # old-name placeholder abandoned by the CD rename
+                    outpath = os.path.join(outdir, filename)
+                    outpath = _reserve(outpath)
+                    filename = _portable_basename(outpath)
 
                 logger.info(f"⬇️  Downloading {filename}...")
-                if not archive_download:
+                # Safety net: an archive upgrade path may leave partial_path unset;
+                # a partial path must always exist before the transfer body opens it.
+                if not archive_download or partial_path is None:
                     partial_path, replace_on_success = _download_partial_path(outpath)
                 content_length = _response_header(resp, "Content-Length")
                 try:
@@ -417,6 +459,7 @@ def _cmd_download(
             size = os.path.getsize(finished_path)
             if size <= 0:
                 _remove_partial_file(finished_path)
+                _cleanup_reserved()  # drop the 0-byte reserved placeholder
                 message = "Downloaded file is empty; refusing to use it."
                 emit_json_error(
                     args,
@@ -435,6 +478,8 @@ def _cmd_download(
             if replace_on_success:
                 os.replace(finished_path, outpath)
                 partial_path = None
+                # outpath now holds the real bytes; keep it (stop tracking as a placeholder).
+                _release_reserved(outpath)
             if archive_download:
                 archive_path = outpath
                 try:
@@ -523,6 +568,7 @@ def _cmd_download(
         abort("", exit_code=EXIT_FILE_ERROR)
     except urllib.error.HTTPError as e:
         _remove_partial_file(partial_path)
+        _cleanup_reserved()
         message = f"Download failed: HTTP Error {e.code} ({e.reason})"
         emit_json_error(
             args,
@@ -548,6 +594,7 @@ def _cmd_download(
         abort("", exit_code=EXIT_NETWORK_ERROR)
     except urllib.error.URLError as e:
         _remove_partial_file(partial_path)
+        _cleanup_reserved()
         err_msg = str(e.reason) if hasattr(e, "reason") else str(e)
         if "Security Error" in err_msg:
             message = f"SSRF Security Violation Blocked: {err_msg}"
@@ -581,6 +628,7 @@ def _cmd_download(
         abort("", exit_code=EXIT_NETWORK_ERROR)
     except OSError as e:
         _remove_partial_file(partial_path)
+        _cleanup_reserved()
         message = f"Local file error during download: {_exception_for_message(e)}"
         emit_json_error(
             args,
@@ -596,9 +644,13 @@ def _cmd_download(
         safe_log_error(message)
         abort("", exit_code=EXIT_FILE_ERROR)
     except BambuError:
+        # Internal abort() paths (oversized, early-end, extract failure, etc.)
+        # raise BambuError; drop any 0-byte reserved placeholder they left behind.
+        _cleanup_reserved()
         raise
     except Exception as e:
         _remove_partial_file(partial_path)
+        _cleanup_reserved()
         message = f"Download failed: {e}"
         emit_json_error(
             args,
