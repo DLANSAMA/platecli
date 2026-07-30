@@ -61,20 +61,52 @@ def setup_logging(verbose=False, json_mode=False):
     logging_module.getLogger("paho").setLevel(logging_module.WARNING)
 
 
+class _SilentArgumentParser(argparse.ArgumentParser):
+    """A parser whose error()/exit() never terminate the process.
+
+    Used by the JSON-mode / command-guessing helpers below, which parse argv a
+    second time purely to introspect it. The stock argparse error() calls
+    exit(2) on a type-conversion failure (e.g. `--network-timeout abc`), which
+    would bypass JsonArgumentParser.error before it can emit the JSON envelope
+    and would classify the failure as exit 2 (EXIT_NETWORK_ERROR). Swallowing
+    those aborts lets the real JsonArgumentParser own the error path.
+    """
+
+    def error(self, message):  # pragma: no cover -- exercised via helpers below
+        raise _SilentParseError(message)
+
+    def exit(self, status=0, message=None):  # pragma: no cover -- see above
+        raise _SilentParseError(message or "")
+
+
+class _SilentParseError(Exception):
+    pass
+
+
 def _argv_json_requested(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-    parser = argparse.ArgumentParser(add_help=False, parents=[get_global_parser()])
-    args, _ = parser.parse_known_args(argv)
+    # Textual scan first: even a parse that later fails on a bad typed flag must
+    # still route through the JSON envelope when --json is present.
+    if "--json" in argv:
+        return True
+    parser = _SilentArgumentParser(add_help=False, parents=[get_global_parser()])
+    try:
+        args, _ = parser.parse_known_args(argv)
+    except _SilentParseError:
+        return False
     return getattr(args, "json", False)
 
 
 def _guess_command_from_argv(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-    parser = argparse.ArgumentParser(add_help=False, parents=[get_global_parser()])
+    parser = _SilentArgumentParser(add_help=False, parents=[get_global_parser()])
     parser.add_argument("command", nargs="?")
-    args, _ = parser.parse_known_args(argv)
+    try:
+        args, _ = parser.parse_known_args(argv)
+    except _SilentParseError:
+        return "main"
     return args.command or "main"
 
 
@@ -601,6 +633,22 @@ def main():
             _safe_log_error(msg)
         sys.exit(exc.exit_code)
 
+    def _handle_interrupt(interrupt_args, command_name):
+        # An agent may SIGINT a long `plate … --json` run on timeout. Keep stdout
+        # machine-parseable: emit the standard error envelope (like every other
+        # failure branch) and send the human line to stderr, not stdout.
+        message = "Operation cancelled by user."
+        if _json_mode_requested(interrupt_args) and not utils._JSON_EMITTED:
+            emit_json_error(
+                interrupt_args,
+                command_name,
+                EXIT_COMMAND_ERROR,
+                message,
+                failed_step="interrupted",
+            )
+        print(f"\n{message}", file=sys.stderr)
+        sys.exit(EXIT_COMMAND_ERROR)
+
     if _json_setup_should_be_noninteractive(args):
         try:
             _cmd_setup_noninteractive(args)
@@ -639,8 +687,7 @@ def main():
                 )
             raise
         except (KeyboardInterrupt, EOFError):
-            print("\nOperation cancelled by user.")
-            sys.exit(EXIT_COMMAND_ERROR)
+            _handle_interrupt(args, args.cmd)
         except BambuError as exc:
             _handle_bambu_error(exc, args.cmd)
         except Exception as exc:
@@ -669,8 +716,7 @@ def main():
         try:
             _go(args)
         except (KeyboardInterrupt, EOFError):
-            print("\nOperation cancelled by user.")
-            sys.exit(EXIT_COMMAND_ERROR)
+            _handle_interrupt(args, "go")
         except BambuError as exc:
             _handle_bambu_error(exc, "go")
     else:

@@ -83,6 +83,12 @@ class WizardState:
     printable_path: str | None = None
     kept_path: str | None = None
     sliced: bool = False
+    # The material the wizard detected loaded in the AMS (None when detection
+    # failed / no AMS / external spool). Used to decide use_ams at print time.
+    detected_ams_material: str | None = None
+    # The absolute AMS slot index (unit*4+slot) of the active tray the material
+    # was detected from, or None. Used as the ams_mapping when feeding from AMS.
+    detected_ams_slot: int | None = None
 
 
 def _default_setup() -> Callable[..., Any]:
@@ -317,7 +323,7 @@ def _step_printer(args: argparse.Namespace, deps: GoDeps, state: WizardState) ->
 # ---------------------------------------------------------------------------
 
 
-def _read_loaded_ams_material(args: argparse.Namespace) -> str | None:
+def _read_loaded_ams_material(args: argparse.Namespace, on_active_slot=None) -> str | None:
     """Best-effort read of the currently-loaded AMS filament type.
 
     Returns a ``MATERIAL_PRESETS`` key (e.g. ``"PLA"``) matching the active AMS
@@ -339,19 +345,36 @@ def _read_loaded_ams_material(args: argparse.Namespace) -> str | None:
             return None
         active = ams.get("active_tray")
         loaded_type: str | None = None
-        for unit in ams["units"]:
-            for tray in unit.get("trays", []):
-                if tray.get("empty"):
-                    continue
-                if active is not None and tray.get("active"):
+        if active is not None:
+            # An active slot is reported: trust ONLY the tray marked active, and
+            # scan ALL units to find it (the active tray may be in a later unit
+            # than a non-active spool in an earlier unit — never let an earlier
+            # unit's fallback shadow the real active tray). The active tray's
+            # absolute slot index equals ``active`` (parse_ams sets it that way),
+            # so record it for the ams_mapping used when feeding from the AMS.
+            for unit in ams["units"]:
+                for tray in unit.get("trays", []):
+                    if tray.get("empty"):
+                        continue
+                    if tray.get("active"):
+                        loaded_type = tray.get("type")
+                        if on_active_slot is not None:
+                            on_active_slot(active)
+                        break
+                if loaded_type is not None:
+                    break
+        else:
+            # Nothing is marked active (no tray_now, or an external-spool
+            # sentinel): fall back to the first non-empty tray. Do NOT record a
+            # slot — without a firm active tray we won't feed from the AMS.
+            for unit in ams["units"]:
+                for tray in unit.get("trays", []):
+                    if tray.get("empty"):
+                        continue
                     loaded_type = tray.get("type")
                     break
-                if loaded_type is None:
-                    # Fall back to the first non-empty tray when nothing is marked
-                    # active (e.g. no tray_now reported).
-                    loaded_type = tray.get("type")
-            if active is not None and loaded_type is not None:
-                break
+                if loaded_type is not None:
+                    break
         return _match_material_preset(loaded_type)
     except Exception:
         # AMS detection is a nicety — never let it block or break the wizard.
@@ -371,7 +394,22 @@ def _match_material_preset(loaded_type: str | None) -> str | None:
 
 def _step_material(args: argparse.Namespace, deps: GoDeps, state: WizardState) -> None:
     prompts = deps.get_prompts()
-    detected = deps.get_steps().get_ams_material()(args)
+    detector = deps.get_steps().get_ams_material()
+
+    slot_holder: dict[str, int] = {}
+
+    def _record_slot(slot):
+        slot_holder["slot"] = slot
+
+    # The real detector accepts an on_active_slot callback so we can capture the
+    # active AMS slot for the ams_mapping; injected test seams take only args, so
+    # fall back to the single-arg call for them.
+    try:
+        detected = detector(args, _record_slot)
+    except TypeError:
+        detected = detector(args)
+    state.detected_ams_material = detected if detected in _MATERIAL_CHOICES else None
+    state.detected_ams_slot = slot_holder.get("slot") if state.detected_ams_material is not None else None
     default = detected if detected in _MATERIAL_CHOICES else "PLA"
     for name in _MATERIAL_CHOICES:
         note = "  (detected in AMS)" if name == detected else ""
@@ -545,6 +583,22 @@ def _run_print(args: argparse.Namespace, deps: GoDeps, state: WizardState, *, co
     # internal bug, but we surface it cleanly regardless.
     job_ns = parse_args_or_abort(parser, ["job", state.printable_path])
     job_ns.confirm = confirm
+    # Feed from the AMS only when the wizard detected an AMS-loaded filament with
+    # a known active slot AND the user kept that detected material. In that case
+    # the material sitting in that AMS slot is exactly what we're about to print,
+    # so telling the printer to feed from the external spool (the --use-ams=false
+    # default) would stall or feed the wrong filament on an AMS-only machine. The
+    # job pipeline requires an explicit ams_mapping whenever use_ams is set (it
+    # refuses to let firmware pick a default tray), so we supply the detected
+    # active slot. If detection failed, the user picked a different material, or
+    # we have no firm active slot, keep the conservative external-spool default.
+    if (
+        state.detected_ams_material is not None
+        and state.detected_ams_slot is not None
+        and state.material == state.detected_ams_material
+    ):
+        job_ns.use_ams = True
+        job_ns.ams_mapping = str(state.detected_ams_slot)
     # Carry global request flags (sim / verbose) through so the same simulated
     # printer path runs end to end.
     if bool(getattr(args, "sim", False)):

@@ -88,8 +88,15 @@ _HOME_DIR = os.path.expanduser("~")
 def _display_path(path):
     if not path:
         return path
-    if path.startswith(_HOME_DIR):
-        return "~" + path[len(_HOME_DIR) :]
+    # Require a separator boundary after the home prefix so a sibling directory
+    # whose name merely starts with the home dir name (e.g. /home/user2 vs
+    # /home/user) is not mangled into "~2/…" — that path would not exist and
+    # could not be expanded back by a JSON consumer.
+    if path == _HOME_DIR:
+        return "~"
+    for sep in (os.sep, os.altsep):
+        if sep and path.startswith(_HOME_DIR + sep):
+            return "~" + path[len(_HOME_DIR) :]
     return path
 
 
@@ -202,21 +209,29 @@ def _resolve_ip(host, timeout=5.0):
         return _RESOLVE_IP_CACHE[host]
 
     result = [host]
+    resolved = [False]
 
     def _resolve():
         try:
             addr_info = socket.getaddrinfo(host, None)
             if addr_info:
                 result[0] = addr_info[0][4][0]
+                resolved[0] = True
         except Exception:
             pass
 
-    t = threading.Thread(target=_resolve)
-    t.daemon = True
+    t = threading.Thread(target=_resolve, daemon=True)
     t.start()
     t.join(timeout)
 
-    _RESOLVE_IP_CACHE[host] = result[0]
+    # Only cache a genuine success. A DNS failure or a join timeout (thread still
+    # hung in getaddrinfo) must NOT be cached permanently — otherwise a transient
+    # hiccup on the first resolve would skip pre-resolution for the whole process
+    # lifetime. On failure we return the unresolved host without caching so a
+    # later call retries; downstream (paho/ftplib) re-resolves anyway and TLS
+    # pinning still applies.
+    if resolved[0]:
+        _RESOLVE_IP_CACHE[host] = result[0]
     return result[0]
 
 

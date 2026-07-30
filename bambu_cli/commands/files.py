@@ -92,8 +92,22 @@ def cmd_upload(args, ctx=None):
             with printer.get_ftp_client(timeout=5):
                 pass
             logger.info("   ✅ Printer reachable.")
-        except Exception:
-            message = "Dry run failed: Could not reach printer."
+        except Exception as exc:
+            import ssl
+
+            # Surface the real cause: a cert-pin mismatch (ssl.SSLError from
+            # verify_cert_fingerprint), a bad access code (530 error_perm), and a
+            # printer that is simply off all reach this bare except, but they are
+            # NOT the same failure — reporting a fixed "Could not reach printer"
+            # hides a security-relevant TLS pin failure behind an off-printer
+            # diagnosis. Mirror doctor.py's FTPS probe: include the exception.
+            detail = _exception_for_message(exc)
+            message = f"Dry run failed: could not reach printer: {detail}"
+            if isinstance(exc, ssl.SSLError):
+                message += (
+                    " (a TLS error can mean the camera/FTPS certificate no longer matches a "
+                    "configured cert_fingerprint pin — verify the printer's certificate)"
+                )
             emit_json_error(
                 args, "upload", EXIT_NETWORK_ERROR, message, failed_step="dry_run", file=filepath, remote_name=filename
             )

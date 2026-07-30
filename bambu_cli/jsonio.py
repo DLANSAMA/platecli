@@ -49,6 +49,24 @@ def redact_url_credentials(value):
         redacted = redact_url_credentials(f"https://{text}")
         prefix = "https://"
         return redacted[len(prefix) :] if isinstance(redacted, str) and redacted.startswith(prefix) else redacted
+    # Scheme-relative URLs (//user:pass@host/…) parse with an empty scheme but a
+    # populated netloc; strip userinfo while preserving the leading "//".
+    if (
+        not parsed.scheme
+        and text.startswith("//")
+        and parsed.netloc
+        and (parsed.username is not None or parsed.password is not None)
+    ):
+        host = parsed.hostname or ""
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        try:
+            port = parsed.port
+        except ValueError:
+            port = None
+        if port is not None:
+            host = f"{host}:{port}"
+        return urlunparse(("", host, parsed.path, parsed.params, parsed.query, parsed.fragment))
     if not parsed.scheme or not parsed.netloc or (parsed.username is None and parsed.password is None):
         return value
     host = parsed.hostname or ""
