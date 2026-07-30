@@ -104,11 +104,8 @@ def migrate_access_code(config_path=None, access_code_file_path=None):
         # else: fall through — the file already holds exactly the code we would
         # write, so this is a resumed migration; finish the config write.
     else:
-        try:
-            _secure_write_text(expanded_target, inline_secret)
-        except OSError:
-            # Nothing written yet on the config side; surface as-is (no orphan).
-            raise
+        # If this raises, nothing was written on the config side yet — no orphan.
+        _secure_write_text(expanded_target, inline_secret)
 
     config["access_code_file"] = target
     del config["access_code"]
