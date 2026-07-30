@@ -133,7 +133,11 @@ def test_success_emits_json_envelope(orca_env, capsys):
     payload = _last_json_object(capsys.readouterr().out)
     assert payload["status"] == "sliced"
     assert payload["command"] == "slice"
-    assert payload["path"] == orca_env.outpath
+    # emit_json compacts $HOME to ~ in every string value; on Windows CI the
+    # pytest tmpdir lives under the user profile, so expect the display form.
+    from bambu_cli.utils import _display_path
+
+    assert payload["path"] == _display_path(orca_env.outpath)
     assert payload["filename"] == "model_sliced.3mf"
     assert payload["bytes"] > 0
     assert payload["step_converted"] is False
