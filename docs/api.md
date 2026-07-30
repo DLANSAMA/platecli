@@ -111,6 +111,7 @@ form when looking a code up; the human-readable log line shows both.
 | [`files.json`](schemas/files.json) | `files` listing |
 | [`setup.json`](schemas/setup.json) | `setup` summary |
 | [`go.json`](schemas/go.json) | `go` error envelope (`--json` always errors) |
+| [`tui.json`](schemas/tui.json) | `tui` error envelope (`--json` always errors) |
 
 Every `--json`-emitting subcommand now has a dedicated schema. That is enforced,
 not asserted: `tests/contracts/test_schema_validation.py` derives the subcommand
@@ -314,6 +315,16 @@ requires a TTY and drives real prompts. With `--json` it never runs the wizard â
 it emits the error envelope in [`go.json`](schemas/go.json) (`exit_code` 5,
 `failed_step` `parse`) and exits. Piped/non-TTY stdin is refused the same way.
 Agents should use `job` / `send` with `--confirm` instead.
+
+### `tui`
+
+`tui` is the full-screen terminal UI (Textual, installed via the optional
+`platecli[tui]` extra) and, like `go`, has **no machine contract**: it requires a
+TTY. With `--json` it never launches â€” it emits the error envelope in
+[`tui.json`](schemas/tui.json) (`exit_code` 5, `failed_step` `parse`) and exits.
+Piped/non-TTY stdin is refused the same way. Without the extra installed it
+aborts with `exit_code` 1 and an install hint. Agents should use `job` / `send`
+with `--confirm` instead.
 
 ### `gcode`
 

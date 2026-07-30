@@ -33,3 +33,4 @@ from bambu_cli.commands.setup_wrappers import (  # noqa: F401
     cmd_snapshot,
 )
 from bambu_cli.commands.status import cmd_status  # noqa: F401
+from bambu_cli.commands.tui_cmd import cmd_tui  # noqa: F401

@@ -1,0 +1,32 @@
+/* platecli TUI stylesheet (Phase 1: read-only dashboard).
+   Kept minimal and terminal-friendly; reviewed on a narrow 80x24 terminal. */
+
+Screen {
+    layout: vertical;
+}
+
+#dashboard-body {
+    height: 1fr;
+}
+
+StatusPanel {
+    width: 1fr;
+    height: 100%;
+    border: round $primary;
+    padding: 1 2;
+    content-align: left top;
+}
+
+AmsPanel {
+    width: 1fr;
+    height: 100%;
+    border: round $secondary;
+    padding: 1 2;
+    content-align: left top;
+}
+
+#dashboard-hint {
+    height: 1;
+    color: $text-muted;
+    padding: 0 2;
+}

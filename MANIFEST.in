@@ -25,6 +25,7 @@ include docs/troubleshooting.md
 recursive-include docs/schemas *.json
 
 recursive-include bambu_cli *.py
+recursive-include bambu_cli *.tcss
 recursive-include scripts *.py
 recursive-include tests *.py
 
