@@ -56,7 +56,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **1041** non-live tests collected / **1041** passing (2026-07-29; the latest additions cover the shared `verify_cert_fingerprint` TLS pin checker, incl. malformed/non-ASCII pin fail-closed cases); **84.6%** coverage measured 2026-07-29 on Linux; CI floor **83**; per-module floors not enforced |
+| Tests | **A−** | **1065** non-live tests collected / **1064** passing (2026-07-29; latest additions are the C.4 hermetic fake-OrcaSlicer slice tests exercising the real slicer subprocess, and the shared `verify_cert_fingerprint` TLS pin checker incl. malformed/non-ASCII fail-closed cases); **84.9%** coverage measured 2026-07-29 on Linux; CI floor **83**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
@@ -428,7 +428,7 @@ pytest -W error::ResourceWarning --cov=bambu_cli --cov-fail-under=85
 | C.1 | **T2** remaining wizard/mDNS cases |
 | C.2 | **T3** full download/extract matrix |
 | C.3 | **T4** slicer + doctor + print safety |
-| C.4 | Hermetic **fake OrcaSlicer** script in `tests/fakes/orca_stub` (exit codes, stdout, profile paths) |
+| C.4 | **Done.** Hermetic **fake OrcaSlicer** script in `tests/fakes/orca_stub` (exit codes, stdout, profile paths); `tests/test_slice_stub_integration.py` runs `cmd_slice` end-to-end through the real `_run_orcaslicer`/`_finalize_slice` instead of mocking `subprocess.Popen` |
 | C.5 | Coverage total ≥**92%**; module floors per scorecard A+ column for transport/setup/download |
 
 #### Typing
@@ -459,7 +459,7 @@ bandit + pip-audit blocking
 #### DoD
 
 - [ ] Scorecard **A** column green for Tests and Typing (Typing A− OK if strict not yet full-package).
-- [ ] Fake Orca used by default in slice unit tests.
+- [x] Fake Orca available (`tests/fakes/orca_stub`) and used by the hermetic slice suite (`tests/test_slice_stub_integration.py`); remaining `test_slice_cmd.py` unit tests keep their mocks where they assert argv assembly / profile-resolution branches.
 - [ ] `docs/test-backlog.md` reduced to “nice-to-have” only (or empty P1–P5).
 
 #### Score impact

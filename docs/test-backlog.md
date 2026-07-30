@@ -10,13 +10,13 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **1041** collected / **1041** passing (measured 2026-07-29) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **84.32%** Linux / ~**83.9%** Windows measured 2026-07-26; **floor 83** (Windows is the binding leg) | **≥92%** total; optional module floors |
+| Non-live tests collected | **1065** collected / **1064** passing (measured 2026-07-29; incl. the C.4 hermetic Orca slice tests and the shared TLS-pin checker tests) | ≥550 with zero known flakes ✅ size |
+| Line/branch coverage (CI) | **84.9%** Linux measured 2026-07-29 (C.4 hermetic Orca tests lift `slicer/output.py` 79.8%→92.7%); ~**83.9%** Windows measured 2026-07-26; **floor 83** (Windows is the binding leg) | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
 | JSON schemas | **19** files under `docs/schemas/` | every `--json` command + monitor goldens |
-| Mutation baseline | Pure safety modules; floor **40%** | optional raise after hermetic Orca stub |
+| Mutation baseline | Pure safety modules; floor **40%** | hermetic Orca stub landed (C.4); re-run `mutmut` on `slicer/output.py` to raise its row |
 | Live printer | Documented opt-in harness | manual pre-release (optional scheduled lab) |
 | Product version | pre-1.0 Beta (single-sourced from `pyproject.toml`) | **v1.0.0** when roadmap §5 is complete |
 
@@ -50,7 +50,7 @@ Tracked in [SECURITY.md](../SECURITY.md) known limitations:
 |-----|-------|
 | Raise CI floor 83 → 85 → 88 → **92** | Residual: mqtt/ftps pin paths, pool recovery, wizard TTY, Orca process |
 | Per-module floors (optional) | mqtt / ftps / netsafety / download / camera |
-| Hermetic fake Orca binary | Raises mutation kill rate on `slicer/output._finalize_slice`; slice unit tests less mock-heavy |
+| ~~Hermetic fake Orca binary~~ | **Done (C.4).** `tests/fakes/orca_stub` + `tests/test_slice_stub_integration.py` run `cmd_slice` end-to-end through the real slicer subprocess (`_run_orcaslicer`/`_finalize_slice`); `slicer/output.py` line coverage 79.8%→~93%. Mutation re-run on that module still pending. |
 
 ### P2 — Contracts & agent surface
 
