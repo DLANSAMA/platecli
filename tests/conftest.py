@@ -37,3 +37,20 @@ def _reset_runtime_context():
     install_baseline_context()
     yield
     install_baseline_context()
+
+
+@pytest.fixture(autouse=True)
+def _restore_sim_ftp_files():
+    """Snapshot and restore the module-level _SIM_FTP_FILES dict around every test.
+
+    Several tests (e.g. test_execute_print_simulation_ok) mutate this dict
+    directly via _SIM_FTP_FILES["key"] = value. Without a guard the mutation
+    persists for the rest of the process, making FTP-listing assertions
+    order-dependent.
+    """
+    from bambu_cli.protocols import ftps
+
+    snapshot = dict(ftps._SIM_FTP_FILES)
+    yield
+    ftps._SIM_FTP_FILES.clear()
+    ftps._SIM_FTP_FILES.update(snapshot)

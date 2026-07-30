@@ -160,9 +160,16 @@ def test_slicer_sliced_output_path():
 
 def test_slicer_validate_options_ok():
     args = Namespace(copies=1, infill=15, pattern="grid", walls=None, wall_type=None)
-    # may return None when valid
+    # Valid args must return None (no error message).
     err = slicer_mod._validate_slice_options(args)
-    assert err is None or isinstance(err, str)
+    assert err is None
+
+
+def test_slicer_validate_options_invalid():
+    # Invalid infill must produce an error string, not None.
+    args = Namespace(copies=1, infill=150, pattern="grid", walls=None, wall_type=None)
+    err = slicer_mod._validate_slice_options(args)
+    assert isinstance(err, str) and len(err) > 0
 
 
 def test_utils_sequence_id():
@@ -177,9 +184,15 @@ def test_printer_list_delete_sim():
     from bambu_cli.printer import BambuPrinter
 
     p = BambuPrinter("1.1.1.1", "S", "c", simulation_mode=True)
-    assert p.list_files() is not None or p.list_files() is None
-    assert p.delete_file("x.3mf") in (True, False)
-    assert p.status() is not None or p.simulation_mode
+    # list_files() must return a list (may be empty) in sim mode — never None.
+    files = p.list_files()
+    assert isinstance(files, list)
+    # delete_file returns True on success (even for absent paths, matching FTPS
+    # semantics where delete is fire-and-forget and the sim never raises).
+    # The important invariant is that it returns True, not None or an error string.
+    assert p.delete_file("simulated_file.3mf") is True
+    # status() must return a dict in sim mode (never None).
+    assert isinstance(p.status(), dict)
 
 
 def test_printer_upload_sim(tmp_path):
@@ -364,7 +377,10 @@ def test_json_envelope_survives_logger_failure(cmd_name, args, capsys):
 def test_slicer_process_profile_compatible(tmp_path):
     p = tmp_path / "p.json"
     p.write_text(json.dumps({"compatible_printers": ["X"]}), encoding="utf-8")
-    assert slicer_mod._process_profile_compatible(str(p), "X") in (True, False)
+    # Profile lists "X" as compatible — must return True, not just any bool.
+    assert slicer_mod._process_profile_compatible(str(p), "X") is True
+    # A printer not in the list must return False.
+    assert slicer_mod._process_profile_compatible(str(p), "Y") is False
 
 
 def test_setup_noninteractive_full_success(tmp_path, capsys):
@@ -490,9 +506,18 @@ def test_execute_print_real_accept():
         patch.object(mqtt_mod, "_mqtt_connect"),
     ):
         mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
-    # Accept path logs success and returns; publish or message handling must have run.
-    assert client.on_message is not None or client.publish.called or client.loop_start.called
+    # The accept path receives the print-started report via MQTT and returns without
+    # publishing (the print is FTP-triggered; the MQTT layer only monitors for ack).
+    # Discriminating checks: the event loop was started AND on_message was replaced
+    # with a real (non-MagicMock) callable by execute_print_command before loop_start.
+    # If execute_print_command forgets to wire up on_message, the simulated accept
+    # message goes nowhere and command_accepted.wait() times out — a real breakage.
     client.loop_start.assert_called()
+    from unittest.mock import MagicMock as _MagicMock
+    assert not isinstance(client.on_message, _MagicMock), (
+        "execute_print_command must assign a real handler to client.on_message; "
+        "a MagicMock default means the MQTT accept path is unwired"
+    )
 
 
 def test_cmd_pause_success(capsys):

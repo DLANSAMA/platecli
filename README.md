@@ -91,7 +91,7 @@ Now go from a link on the internet to plastic on the bed:
 plate job "https://www.printables.com/model/3161-3d-benchy" --confirm
 ```
 
-`--confirm` is required for anything that moves the printer or destroys data on it: `print`, `stop`, `pause`, `resume`, `gcode`, `delete`, and the print step of `job`. Leave it off and the command refuses with exit code `5` — nothing on the printer moves. (`light` is exempt; an LED is not a physical action.)
+`--confirm` is required for anything that moves the printer or destroys data on it: `print`, `stop`, `pause`, `resume`, `gcode`, and `delete`. Leave it off and the command refuses with exit code `5` — nothing on the printer moves. For `job` / `send`, omitting `--confirm` still runs the download → slice → upload pipeline and exits `0` with `"status": "uploaded_not_printed"`; only the print step is withheld. (`light` is exempt; an LED is not a physical action.)
 
 ### Prefer a guided walk-through?
 

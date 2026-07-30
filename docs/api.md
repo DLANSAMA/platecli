@@ -352,8 +352,10 @@ Without `--confirm` (schema: [`delete.json`](schemas/delete.json)):
 
 ### `stop`
 
-Requires `--confirm` (same intent pattern as delete/print). Dedicated schema file
-not yet published; treat as confirmation + ok/error envelopes until added.
+Requires `--confirm` (same intent pattern as delete/print). Schema: [`stop.json`](schemas/stop.json).
+
+Without `--confirm`: `"status": "confirmation_required"`, `"stopped": false`.
+With `--confirm`: `"status": "stopped"`, `"stopped": true`.
 
 ### `light` / `pause` / `resume`
 
