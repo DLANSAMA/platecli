@@ -655,11 +655,7 @@ def test_output_invalid_dash_prefixed_value_fails(tmp_path):
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
 
 
-def test_temp_workdir_cleanup_when_no_output_given(tmp_path, monkeypatch):
-    # tests/agent_cli_smoke.py sets BAMBU_KEEP_WORKDIR=1 at import time for
-    # its own scenarios; make sure that process-wide leak doesn't affect this
-    # assertion regardless of test collection/run order.
-    monkeypatch.delenv("BAMBU_KEEP_WORKDIR", raising=False)
+def test_temp_workdir_cleanup_when_no_output_given(tmp_path):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
     args = _parse(["job", str(stl), "--json"])
@@ -681,12 +677,11 @@ def test_temp_workdir_cleanup_when_no_output_given(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_url_job_reuses_download_workdir_and_cleans_up(tmp_path, monkeypatch):
+def test_url_job_reuses_download_workdir_and_cleans_up(tmp_path):
     # Regression test: a URL-sourced job that slices used to allocate a
     # *second* temp dir for slicing (leaking the first, which held the
     # downloaded model). The download workdir must be reused for slicing and
     # removed when the job finishes.
-    monkeypatch.delenv("BAMBU_KEEP_WORKDIR", raising=False)
     captured = {}
 
     def _download(download_args):

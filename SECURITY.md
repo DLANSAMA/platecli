@@ -79,11 +79,12 @@ and (b) explicit model downloads you request. Key properties:
   existing files are never overwritten (a numbered sibling such as `model-1.stl`
   is created instead).
 - **Printing and other physical/destructive actions require explicit intent.** Physical
-  print start, job print step, stop, pause, resume, delete, and raw gcode will not
-  proceed without `--confirm` (they refuse with exit code `5`). `--confirm` is a
-  deliberate-action gate against accidents, not an authorization boundary: the CLI
-  cannot distinguish a human's flag from an agent's. Agents must not invent confirm
-  flags without user approval.
+  print start, stop, pause, resume, delete, and raw gcode will not proceed without
+  `--confirm` (they refuse with exit code `5`). `job` / `send` without `--confirm`
+  still runs download → slice → upload and exits `0` with `"status": "uploaded_not_printed"`;
+  only the print step is withheld. `--confirm` is a deliberate-action gate against
+  accidents, not an authorization boundary: the CLI cannot distinguish a human's flag
+  from an agent's. Agents must not invent confirm flags without user approval.
 
 ## Known limitations
 

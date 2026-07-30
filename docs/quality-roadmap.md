@@ -50,9 +50,9 @@ security is not yet **A+**.
 
 | Area | Score | Evidence |
 |------|-------|----------|
-| Security mindset | **A** | allow-private-ips fixed; TLS pin suite (mismatch + handshake SSLError both fail closed); SSRF/redirect tests; bandit blocking; security markers; honest known-limitations table in SECURITY.md. A+ needs single pin helper |
+| Security mindset | **A** | allow-private-ips fixed; TLS pin suite (mismatch + handshake SSLError both fail closed); SSRF/redirect tests; bandit blocking; security markers; honest known-limitations table in SECURITY.md |
 | Architecture | **A** | `@mockable` = 0; abort error model; thin entrypoint; domain ↛ `sys.exit`. B.4 done: path/JSON/argparse helpers extracted to `paths`/`jsonio`/`argutils`, so no domain module imports private `_underscore` helpers from `cli` (only public `build_parser`/`main` remain). B.5 done: single `verify_cert_fingerprint` (PR #89) |
-| Agent JSON UX | **A** | ok/error envelopes + many per-command schemas + contract harness. Gaps: dedicated `status` success schema, upload/files/stop/setup |
+| Agent JSON UX | **A** | ok/error envelopes + full per-command schemas (all `--json` subcommands covered, incl. status/upload/files/stop/setup) + contract harness |
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
@@ -61,10 +61,9 @@ security is not yet **A+**.
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
 
-**Overall:** **solid A− / A** — error model, typing, and security *controls* are strong;
-architecture is A− until domain helpers leave `cli.py`. Remaining gap to A+ / `v1.0.0`
-is coverage toward 92, schema completeness, B.4/B.5 layering, and documented camera
-hardenings. Tagging `v1.0.0` still requires §5.
+**Overall:** **solid A− / A** — error model, typing, security controls, architecture
+(B.4/B.5 done), and schema coverage are all strong. Remaining gap to A+ / `v1.0.0`
+is coverage toward 92 and documented camera hardenings. Tagging `v1.0.0` still requires §5.
 
 **Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26; bound by the Windows leg at 83.85%, not Linux's 84.10%).
 Measured branch total is **84.03%** on Linux (2026-07-26; Windows historically ran ~0.4pt lower); the floor is set

@@ -9,9 +9,6 @@ an installed command.
 
 import json
 import os
-
-# Keep job/send temp workdirs so tests can inspect extracted/sliced outputs.
-os.environ["BAMBU_KEEP_WORKDIR"] = "1"
 import pathlib
 import re
 import shlex
@@ -97,6 +94,10 @@ def isolated_env(root):
             # Force UTF-8 stdio in the child so emoji output is emitted as UTF-8 even
             # on Windows consoles that default to cp1252 (matches the parent decode).
             "PYTHONIOENCODING": "utf-8",
+            # Keep job/send temp workdirs in the *subprocess* so smoke checks can
+            # inspect extracted/sliced outputs. Set here (not at module import
+            # time) so importing this module has no process-wide side effect.
+            "BAMBU_KEEP_WORKDIR": "1",
         }
     )
     return env

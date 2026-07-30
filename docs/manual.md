@@ -164,7 +164,7 @@ Best-match-first, exactly as auto-detection tries them:
 |---|---|---|
 | Linux | `orca-slicer` / `OrcaSlicer` / `orcaslicer` on `$PATH`, then `/usr/bin/orca-slicer`, `/usr/local/bin/orca-slicer`, `/opt/OrcaSlicer/orca-slicer`, `/var/lib/flatpak/exports/bin/io.github.softfever.OrcaSlicer`, `~/.local/share/flatpak/exports/bin/io.github.softfever.OrcaSlicer`, `~/Applications/OrcaSlicer.AppImage`, `~/tools/OrcaSlicer.AppImage` | `/usr/share/OrcaSlicer/resources/profiles/BBL`, `/opt/OrcaSlicer/resources/profiles/BBL`, `~/tools/squashfs-root/resources/profiles/BBL` |
 | macOS | `/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer`, `~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer` | the matching `.../Contents/Resources/profiles/BBL` |
-| Windows | `%PROGRAMFILES%\OrcaSlicer\OrcaSlicer.exe`, `%LOCALAPPDATA%\Programs\OrcaSlicer\OrcaSlicer.exe`, `%PROGRAMFILES(X86)%\OrcaSlicer\OrcaSlicer.exe` | the matching `...\OrcaSlicer\resources\profiles\BBL` |
+| Windows | Each of the three directories is probed for `orca-slicer.exe` first (current installer), then `OrcaSlicer.exe` (older builds): `%PROGRAMFILES%\OrcaSlicer\`, `%LOCALAPPDATA%\Programs\OrcaSlicer\`, `%PROGRAMFILES(X86)%\OrcaSlicer\` | the matching `...\OrcaSlicer\resources\profiles\BBL` |
 
 A checkout-relative `../tools/OrcaSlicer.AppImage` (and its `squashfs-root`
 profiles dir) is also probed, for running from a source tree.

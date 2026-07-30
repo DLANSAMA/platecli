@@ -62,7 +62,7 @@ When adding tests, follow [docs/test-backlog.md](docs/test-backlog.md) and the q
 
 ### Known architecture debt (honest)
 
-- TLS fingerprint verification is reimplemented in mqtt, ftps, and camera rather than one shared helper (roadmap B.5).
+- No remaining architecture debt tracked here. B.4 (cli extraction → paths/jsonio/argutils) and B.5 (single `verify_cert_fingerprint` in tlspin.py) both landed; see [docs/quality-roadmap.md](docs/quality-roadmap.md) for the current A+ gap list.
 
 ## Camera snapshots for agents
 
@@ -83,7 +83,7 @@ Published on PyPI as `platecli`; the installed command is `plate`.
 | Artifact | Contents |
 |----------|----------|
 | **Wheel** | Runtime `bambu_cli` package only — no docs, scripts, or tests |
-| **Sdist** | Runtime + tests/scripts + **ship docs**: `README.md`, `AGENTS.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/api.md`, `docs/schemas/*` |
+| **Sdist** | Runtime + tests/scripts + **ship docs**: `README.md`, `AGENTS.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/api.md`, `docs/manual.md`, `docs/troubleshooting.md`, `docs/schemas/*` |
 
 **Repo-only (never in sdist/wheel):** `CONTRIBUTING.md`, `docs/quality-roadmap.md`, `docs/test-backlog.md`, `docs/mutation-baseline.md`, `docs/live-printer-smoke.md`, and local agent notes (not in repo). Enforced by `MANIFEST.in` + `tests/package_contents_smoke.py`.
 
@@ -110,5 +110,5 @@ Full threat model: [SECURITY.md](SECURITY.md).
 - Prefer `cert_fingerprint` + never enable `insecure_tls` unless the user insists.
 - Prefer `access_code_file` over inline `access_code`.
 - Downloads block private/loopback targets unless `--allow-private-ips` (CLI-only, not sticky config).
-- Destructive/physical actions need `--confirm` and exit `5` without it: print, job print step, stop, pause, resume, delete, gcode. `light` is deliberately exempt (no motion/thermal/material effect). `--confirm` is a deliberate-action gate, not an authorization boundary — anything that can run `plate` can pass it.
+- Destructive/physical actions need `--confirm` and exit `5` without it: `print`, `stop`, `pause`, `resume`, `delete`, `gcode`. `job` / `send` without `--confirm` still uploads and exits `0` with `"status": "uploaded_not_printed"` — only the print step is withheld. `light` is deliberately exempt (no motion/thermal/material effect). `--confirm` is a deliberate-action gate, not an authorization boundary — anything that can run `plate` can pass it.
 - Camera Docker streamer (when used) publishes via `camera_port`, now loopback-only by default (`127.0.0.1:1985:1984`); the feed is unauthenticated, so only expose it on the LAN (`0.0.0.0:...`) deliberately (see SECURITY.md).

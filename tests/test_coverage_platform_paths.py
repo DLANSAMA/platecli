@@ -84,9 +84,19 @@ def test_preflight_permission_check(tmp_path):
     if sys.platform == "win32":
         assert preflight_mod._file_permission_check(str(f), "secret-file") is None
     else:
+        # 0o644 has group/other read bits set — must produce a warning with chmod hint.
         os.chmod(f, 0o644)
         res = preflight_mod._file_permission_check(str(f), "secret-file")
-        assert res["status"] in ("ok", "warning", "error")
+        assert res["status"] == "warning", (
+            "Expected 'warning' for world-readable file (0o644); got %r. "
+            "Deleting the 'if mode & 0o077:' branch in preflight.py would break this." % res["status"]
+        )
+        assert "chmod 600" in res["message"]
+
+        # 0o600 has no group/other bits — must produce 'ok'.
+        os.chmod(f, 0o600)
+        res_ok = preflight_mod._file_permission_check(str(f), "secret-file")
+        assert res_ok["status"] == "ok"
 
 
 def test_common_setup_json_error(capsys):

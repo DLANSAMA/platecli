@@ -109,7 +109,7 @@ def redact_sequence(values):
 
 
 def run_cli(args, expected_returncode=0, timeout=180):
-    command = CLI + list(args)
+    command = _cli() + list(args)
     try:
         result = subprocess.run(
             command,
@@ -297,7 +297,7 @@ def validate_gcode_requires_confirm():
     """Phase 0: raw gcode must not be sent without --confirm."""
     # Intentionally omit --confirm. Expect confirmation_required (JSON) or non-success
     # that does not claim sent=true.
-    command = CLI + ["gcode", "M105", "--json"]
+    command = _cli() + ["gcode", "M105", "--json"]
     result = subprocess.run(
         command,
         capture_output=True,
@@ -534,8 +534,19 @@ def test_live_printer_pre_release_suite(_live_gate):
     run_live_suite()
 
 
-# CLI is resolved at import for the script path; keep after helpers.
-CLI = default_cli()
+# CLI is resolved lazily on first use, not at import: pytest imports this module
+# during collection of EVERY run (python_files includes it), so resolving BAMBU_CLI
+# at import time would let a set-but-invalid BAMBU_CLI (e.g. containing --sim, or an
+# unbalanced quote) fail collection of the whole hermetic suite. Only live runs,
+# which actually call run_cli()/default_cli(), should ever parse BAMBU_CLI.
+_CLI = None
+
+
+def _cli():
+    global _CLI
+    if _CLI is None:
+        _CLI = default_cli()
+    return _CLI
 
 
 def main():

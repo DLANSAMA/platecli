@@ -490,6 +490,11 @@ def test_resume_confirmation_fixture_matches_schema():
 
 
 def test_snapshot_success_fixture_matches_schema():
+    """Hand-written fixture: snapshot requires injecting a real grab_frame + camera
+    TLS stack; the hermetic seam exists (tests/test_camera_cmd.py:855) but is not
+    imported here to keep the contract suite's dependency footprint minimal.
+    The fixture guards schema shape; the camera cmd test guards the real emitter.
+    """
     payload = {
         "status": "saved",
         "command": "snapshot",
@@ -588,7 +593,14 @@ def test_download_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
 
 
 def test_download_success_fixture_matches_schema():
-    """Success shape from download/downloader._record_download_success (cannot --sim network)."""
+    """Success shape from download/downloader._record_download_success.
+
+    Remains a hand-written fixture because download requires a real HTTP server;
+    --sim is not supported for the download subcommand. The fixture is cross-checked
+    against the schema to guard against schema-fixture drift, but won't catch drift
+    in the production _record_download_success payload shape. That shape is covered
+    by tests/test_download_hardening_p0.py which drives the real emitter.
+    """
     payload = {
         "status": "downloaded",
         "command": "download",
@@ -617,17 +629,68 @@ def test_download_archive_success_fixture_matches_schema():
     _validate(payload, _load_schema("download.json"))
 
 
-def test_slice_success_fixture_matches_schema():
-    """Success shape from slicer/output.py emit_json (Orca not hermetic in contract suite)."""
-    payload = {
-        "status": "sliced",
-        "command": "slice",
-        "file": "/tmp/cube.stl",
-        "path": "/tmp/cube.gcode.3mf",
-        "filename": "cube.gcode.3mf",
-        "bytes": 4096,
-        "step_converted": False,
-    }
+def test_slice_success_real_output_matches_schema(tmp_path, monkeypatch, capsys):
+    """Slice success envelope captured from real slicer/output.py emit_json via orca stub.
+
+    Previously validated a hand-written fixture; now drives the real emitter (the
+    fake OrcaSlicer launcher from tests/fakes/orca_stub) so schema drift in
+    slicer/output.py's ``emit_json`` payload fails this test, not just fixture drift.
+    """
+    import argparse
+
+    from bambu_cli.slicer import cmd_slice
+    from tests.bambu_test_base import settings_ctx
+    from tests.fakes.orca_stub import build_profiles_dir, make_orca_launcher, write_stl
+
+    # A DISPLAY makes _build_orcaslicer_cmd skip the xvfb-run prefix on Linux so
+    # the fake launcher runs directly; harmless on macOS/Windows.
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setenv("ORCA_STUB_SCENARIO", "success")
+
+    launcher = make_orca_launcher(str(tmp_path))
+    profiles = build_profiles_dir(str(tmp_path))
+    model = write_stl(str(tmp_path / "model.stl"))
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+
+    args = argparse.Namespace(
+        file=model,
+        output=str(outdir),
+        quality="standard",
+        copies=1,
+        infill=15,
+        pattern="3dhoneycomb",
+        supports=False,
+        nozzle_temp=220,
+        bed_temp=60,
+        filament="PLA Basic",
+        json=True,
+        threads=None,
+        list_settings=False,
+    )
+    with settings_ctx(orca_slicer=launcher, profiles_dir=profiles):
+        cmd_slice(args)
+
+    # emit_json pretty-prints (indent=2), so the envelope spans multiple lines;
+    # decode the last balanced JSON object from stdout.
+    out = capsys.readouterr().out
+    decoder = json.JSONDecoder()
+    payload = None
+    idx = 0
+    while idx < len(out):
+        brace = out.find("{", idx)
+        if brace == -1:
+            break
+        try:
+            obj, end = decoder.raw_decode(out, brace)
+        except json.JSONDecodeError:
+            idx = brace + 1
+            continue
+        payload = obj
+        idx = end
+    assert payload is not None and payload.get("status") == "sliced", (
+        f"No 'sliced' JSON envelope found in output:\n{out}"
+    )
     _validate(payload, _load_schema("slice.json"))
 
 

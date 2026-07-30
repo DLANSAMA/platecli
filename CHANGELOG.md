@@ -103,6 +103,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `redact_url_credentials` now strips userinfo from scheme-relative URLs
   (`//user:pass@host/…`), closing a gap where such a URL echoed into a log line
   or JSON error detail reached output with its password intact.
+- **Test-suite integrity (deep audit):** tautological assertions in
+  `test_mqtt_print_and_setup.py` replaced with discriminating checks
+  (`list_files()` must return a `list`, `delete_file()` must return `True`
+  (fire-and-forget FTPS semantics), `status()` must return a `dict`, `_validate_slice_options(valid)`
+  must return `None`, `_process_profile_compatible` asserts exact `True`/`False`);
+  `_SIM_FTP_FILES` dict now snapshot-restored around every test via autouse conftest
+  fixture; `test_coverage_platform_paths.py` permission test now asserts
+  `status == "warning"` and the `chmod 600` hint for a 0o644 file; contract suite
+  slice fixture replaced with real hermetic emitter output via orca stub.
+  `tests/agent_cli_smoke.py` no longer sets `BAMBU_KEEP_WORKDIR=1` at import time
+  (it now only lives in the subprocess env), so importing it can no longer suppress
+  workdir cleanup across the whole pytest process; the defensive `delenv` guards in
+  `test_job.py` were removed. `tests/live_printer_smoke.py` now resolves `BAMBU_CLI`
+  lazily on first use instead of at import, so a set-but-invalid `BAMBU_CLI` (e.g.
+  containing `--sim`) can no longer break collection of the hermetic suite.
+- **Docs honesty:** `AGENTS.md` architecture-debt section updated to reflect that
+  B.4/B.5 both landed; SECURITY.md and README corrected to clarify that `job`/`send`
+  without `--confirm` exits `0` with `uploaded_not_printed` (not exit 5); `docs/api.md`
+  `stop` section now references `schemas/stop.json` (published since 0.4.0);
+  `docs/quality-roadmap.md` schema-gaps and B.4/B.5 stale claims corrected;
+  `docs/test-backlog.md` schema count updated 19 → 25; `docs/manual.md` Windows
+  detection table corrected to list both `orca-slicer.exe` (current) and
+  `OrcaSlicer.exe` (older) per directory; `AGENTS.md` sdist table now includes
+  `docs/manual.md` and `docs/troubleshooting.md`.
 
 - `plate job/send <url> --dry-run` now reports `would_slice` consistently with
   the real run. The dry-run predictor previously returned `would_slice: false`

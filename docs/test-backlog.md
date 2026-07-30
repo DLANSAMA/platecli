@@ -15,7 +15,7 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
-| JSON schemas | **19** files under `docs/schemas/` | every `--json` command + monitor goldens |
+| JSON schemas | **25** files under `docs/schemas/` | every `--json` command + monitor goldens |
 | Mutation baseline | Pure safety modules; floor **40%** | hermetic Orca stub landed (C.4); re-run `mutmut` on `slicer/output.py` to raise its row |
 | Live printer | Documented opt-in harness | manual pre-release (optional scheduled lab) |
 | Product version | pre-1.0 Beta (single-sourced from `pyproject.toml`) | **v1.0.0** when roadmap §5 is complete |
