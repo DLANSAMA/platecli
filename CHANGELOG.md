@@ -66,6 +66,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   real run now share one slicing predicate, so a dry-run pre-check no longer
   disagrees with what actually happens.
 
+- `plate download`: fixed a crash when a `Content-Disposition: attachment;
+  filename="*.zip"` header upgraded a resolved-name download to an archive. The
+  archive temp file was never created on that path, so the transfer body did
+  `open(None, "wb")` and reported a spurious network error; archive downloads now
+  always get a temp path.
+- `plate download`: 0-byte placeholder files with the requested name (reserved by
+  the collision-avoidance step) are no longer left on disk when a download fails,
+  is re-targeted by a redirect/`Content-Disposition`, upgrades to an archive, or
+  re-resolves an HTML page. Previously an agent/user could slice or upload the
+  empty placeholder believing the download succeeded.
+- `plate download`: a Printables GraphQL error-shaped response (`{"errors": [...],
+  "data": null}`) now degrades to a clean resolve error instead of an unhandled
+  `AttributeError`/`TypeError` traceback. Null `stls`/`gcodes` fields and file
+  entries missing `id`/`name` are also handled gracefully.
+- `plate download`: a password-protected/encrypted ZIP member now reports an
+  extract failure (`EXIT_FILE_ERROR`) instead of a misleading network error — the
+  `RuntimeError` `zipfile` raises for encrypted members is mapped to the extract
+  path. The extraction placeholder is also cleaned up on member-write failures.
+- `plate slice`: a stale pre-existing `*_sliced.3mf` is no longer accepted as
+  fresh output. `slice` now snapshots the output path before running OrcaSlicer
+  and rejects a file the run did not rewrite, so a failed re-slice can no longer
+  report success (and be uploaded/printed) with an outdated model.
+- `plate slice`: on a slice timeout or Ctrl-C the whole OrcaSlicer process group
+  is now killed (`start_new_session` + `os.killpg` on POSIX), so `xvfb-run`'s
+  Xvfb and OrcaSlicer children are reaped instead of surviving as orphans burning
+  CPU. Windows behaviour (plain `kill()`, no wrapper) is unchanged.
+- `plate slice`: an unrecognized `--quality` value (e.g. a typo like `High`, or an
+  unsupported layer height) now logs a loud warning before falling back to
+  `0.20mm Standard`, instead of silently slicing at a different layer height.
+- `plate job/send`: `--copies` on a printer-ready source (`.3mf`/`.gcode`) now
+  warns that copies only apply when slicing (and flags `copies_ignored` in the
+  JSON/dry-run summary) instead of silently printing a single copy.
+- `plate job/send`: an unreadable/IO-erroring ZIP archive (e.g. `PermissionError`,
+  disk-full during member extraction) now emits the structured job-failure summary
+  (`failed_step: "extract"`) instead of escaping as an unstructured error.
+- `plate job/send <model> --dry-run`: a 0-byte/unreadable sliceable model now fails
+  the dry-run, matching the existing printer-ready empty-file check (dry-run parity).
+
 ### Security
 
 - `insecure_tls` is now coerced strictly and fails **closed**. A hand-edited
@@ -91,7 +129,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   silently overwrites an existing secret file (secret-file writes are backup=off,
   so the old credential — possibly shared with another printer profile — was
   unrecoverable). It now refuses unless `--force` is passed.
-
+- `plate slice`: the bed-temperature safety bound (`MAX_BED_TEMP_C`) is now applied
+  to any `*_plate_temp` / `*_plate_temp_initial_layer` override, not just the four
+  legacy plate types. OrcaSlicer 2.2+ `supertack_plate_temp` (Cool Plate SuperTack)
+  overrides previously bypassed the range check.
+- `plate job/send --dry-run`: the output-directory writability check now uses a real
+  create-and-remove probe instead of `os.access(W_OK)`, which ignores NTFS ACLs on
+  Windows — a dry-run against an ACL-denied location no longer falsely reports
+  success where the real run would fail.
 - Consolidated TLS certificate-fingerprint pin verification into a single shared
   `bambu_cli.tlspin.verify_cert_fingerprint`, used by MQTT, FTPS (control and data
   channels), and the direct camera grab. Previously each transport carried its own

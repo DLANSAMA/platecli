@@ -90,6 +90,15 @@ def _extract_zip_model(zip_path, outdir, args, *, noncolliding_path=None):
             outpath = _noncolliding(outpath)
             filename = _portable_basename(outpath)
             partial_path, replace_on_success = _download_partial_path(outpath)
+
+            def _cleanup_reservation():
+                # ``_noncolliding`` reserved ``outpath`` by creating a 0-byte file;
+                # remove that placeholder (in addition to the .part) on any failure
+                # so a partial extraction never leaves a 0-byte model file behind.
+                _remove_partial_file(partial_path)
+                if replace_on_success:
+                    _remove_partial_file(outpath)
+
             try:
                 with archive.open(info, "r") as src, open(partial_path, "wb") as dst:
                     extracted = 0
@@ -102,11 +111,11 @@ def _extract_zip_model(zip_path, outdir, args, *, noncolliding_path=None):
                             raise ValueError(_archive_member_exceeded_limit_message(member_filename, max_bytes))
                         dst.write(chunk)
             except Exception:
-                _remove_partial_file(partial_path)
+                _cleanup_reservation()
                 raise
             size = os.path.getsize(partial_path)
             if size <= 0:
-                _remove_partial_file(partial_path)
+                _cleanup_reservation()
                 raise ValueError(f"ZIP member is empty: {member_filename}")
             if replace_on_success:
                 os.replace(partial_path, outpath)
@@ -114,3 +123,9 @@ def _extract_zip_model(zip_path, outdir, args, *, noncolliding_path=None):
             return outpath, filename, member_filename, size
     except zipfile.BadZipFile as exc:
         raise ValueError("Downloaded ZIP archive is invalid or corrupt.") from exc
+    except RuntimeError as exc:
+        # zipfile raises RuntimeError (not a subclass of OSError/ValueError) for an
+        # encrypted/password-protected member. Map it to ValueError so the caller
+        # reports it as a completed-download extract failure (EXIT_FILE_ERROR)
+        # instead of a misleading network error.
+        raise ValueError(f"ZIP member is encrypted or unsupported: {exc}") from exc

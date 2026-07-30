@@ -186,6 +186,59 @@ class TestResolvePrintablesUrl(unittest.TestCase):
         mock_logger.error.assert_called_with("Failed to query Printables API: Generic Fetch Error")
 
     @patch("bambu_cli.logging_utils._BACKEND")
+    def test_get_printables_graphql_error_envelope(self, mock_logger):
+        """A GraphQL error envelope {"errors":[...], "data": null} must degrade to
+        (None, None, None), NOT raise AttributeError. `data` key exists with value
+        null, so `.get("data", {})` returns None and `.get("print")` would crash."""
+        from bambu_cli.printables import _get_printables_file_info
+        import json
+
+        mock_opener = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(
+            {"errors": [{"message": "Model not accessible"}], "data": None}
+        ).encode()
+        mock_opener.open.return_value.__enter__.return_value = mock_resp
+
+        # Before the fix this raised AttributeError; assert it returns cleanly.
+        fid, ftype, fname = _get_printables_file_info("123", {}, mock_opener)
+        self.assertIsNone(fid)
+        self.assertIsNone(ftype)
+        self.assertIsNone(fname)
+
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_get_printables_data_null_no_errors_key(self, mock_logger):
+        """`{"data": null}` with no top-level errors must also degrade cleanly."""
+        from bambu_cli.printables import _get_printables_file_info
+        import json
+
+        mock_opener = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"data": None}).encode()
+        mock_opener.open.return_value.__enter__.return_value = mock_resp
+
+        fid, ftype, fname = _get_printables_file_info("123", {}, mock_opener)
+        self.assertIsNone(fid)
+        mock_logger.error.assert_called_with("Model #123 not found on Printables")
+
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_get_printables_null_stls_field(self, mock_logger):
+        """A model with `stls: null` must not raise TypeError when iterated."""
+        from bambu_cli.printables import _get_printables_file_info
+        import json
+
+        mock_opener = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(
+            {"data": {"print": {"name": "Test", "stls": None, "gcodes": None}}}
+        ).encode()
+        mock_opener.open.return_value.__enter__.return_value = mock_resp
+
+        fid, ftype, fname = _get_printables_file_info("123", {}, mock_opener)
+        self.assertIsNone(fid)
+        mock_logger.error.assert_called_with("No STL, STEP, or 3MF files found for this model")
+
+    @patch("bambu_cli.logging_utils._BACKEND")
     def test_get_printables_download_link_error(self, mock_logger):
         from bambu_cli.printables import _get_printables_download_link
         import json

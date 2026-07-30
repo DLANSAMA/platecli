@@ -307,6 +307,26 @@ def test_validate_rejects_unsafe_settings_json_bed_temp():
     assert err is not None and "bed temperature override" in err
 
 
+def test_validate_rejects_unsafe_supertack_plate_temp():
+    """OrcaSlicer 2.2+ Cool Plate SuperTack (supertack_plate_temp) is a bed
+    temperature and must be range-checked against MAX_BED_TEMP_C even though it
+    is not in the legacy BED_PLATE_TYPES list — a printer-safety bound."""
+    args = _base_slice_args(set_filament=["supertack_plate_temp=[250]"])
+    err = S._validate_slice_options(args)
+    assert err is not None and "bed temperature override" in err
+
+
+def test_validate_rejects_unsafe_supertack_plate_temp_initial_layer():
+    args = _base_slice_args(settings_json='{"filament": {"supertack_plate_temp_initial_layer": "300"}}')
+    err = S._validate_slice_options(args)
+    assert err is not None and "bed temperature override" in err
+
+
+def test_validate_accepts_safe_supertack_plate_temp():
+    args = _base_slice_args(set_filament=["supertack_plate_temp=[45]"])
+    assert S._validate_slice_options(args) is None
+
+
 def test_validate_accepts_safe_overrides():
     args = _base_slice_args(
         set_process=["wall_loops=4"],

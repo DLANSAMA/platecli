@@ -25,7 +25,7 @@ from bambu_cli.slicer.options import (
     _validate_slice_options,
 )
 from bambu_cli.slicer.orca import _build_orcaslicer_cmd, _run_orcaslicer
-from bambu_cli.slicer.output import _finalize_slice
+from bambu_cli.slicer.output import _finalize_slice, _output_snapshot
 from bambu_cli.slicer.profiles import (
     _create_temp_machine,
     _create_temp_profiles,
@@ -158,7 +158,18 @@ def cmd_slice(
             "0.16": f"0.16mm Optimal @BBL {model_code}",
             "0.24": f"0.24mm Draft @BBL {model_code}",
         }
-        layer = quality_map.get(args.quality, f"0.20mm Standard @BBL {model_code}")
+        # --quality is free-form (no argparse choices). An unrecognized value
+        # silently falls back to 0.20mm Standard — warn loudly on stderr (human
+        # chrome, not stdout data) so the user is not slicing at a different layer
+        # height than they asked for. Values starting with "0." are layer heights
+        # Orca may support directly and are handled by _discover_process_profile.
+        requested_quality = getattr(args, "quality", "standard")
+        if requested_quality not in quality_map and not str(requested_quality).startswith("0."):
+            logger.warning(
+                f"⚠️  Unrecognized --quality '{requested_quality}'; falling back to 0.20mm Standard. "
+                "Use one of: draft, standard, high (or a supported layer height like 0.12, 0.20, 0.28)."
+            )
+        layer = quality_map.get(requested_quality, f"0.20mm Standard @BBL {model_code}")
         process_file = f"{layer}.json"
 
         outdir = _expand_path(args.output) if args.output else os.path.dirname(os.path.abspath(source_filepath))
@@ -355,6 +366,11 @@ def cmd_slice(
         # Dynamically get timeouts (A0530-NET-07)
         slicer_timeout = get_slicer_timeout(args)
 
+        # Snapshot any pre-existing output BEFORE the run so _finalize_slice can
+        # tell a freshly-written .3mf from a stale one left by an earlier run
+        # (re-slices target the same deterministic outpath).
+        pre_snapshot = _output_snapshot(outpath)
+
         try:
             result = _run_orcaslicer(
                 cmd,
@@ -402,4 +418,4 @@ def cmd_slice(
             # don't cause a leak the way a bare os.rmdir(empty-dir-only) would.
             shutil.rmtree(os.path.dirname(filepath), ignore_errors=True)
 
-    return _finalize_slice(result, outpath, args, filepath, step_converted)
+    return _finalize_slice(result, outpath, args, filepath, step_converted, pre_snapshot=pre_snapshot)

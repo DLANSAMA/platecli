@@ -86,15 +86,37 @@ def _run_orcaslicer(  # pragma: no cover -- external process + rich TTY UI; cmd_
     propagates OSError from Popen. Returns a text CompletedProcess on exit.
     """
     import queue
+    import signal
 
     # Interactive visual feedback logging (A0530-UI-05)
     logger.info("   Running OrcaSlicer background worker...")
+    # On POSIX the argv is prefixed with wrappers (xvfb-run is a shell script that
+    # backgrounds Xvfb; nice execs). Start a new session so the whole tree shares a
+    # process group we can SIGKILL on timeout — otherwise proc.kill() only reaps the
+    # top wrapper and leaves OrcaSlicer + Xvfb running as orphans. Windows prepends
+    # no wrapper and has no killpg; a plain kill() there is sufficient.
+    _new_session = sys.platform != "win32"
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=False,
+        start_new_session=_new_session,
     )
+
+    def _kill_proc_tree() -> None:
+        """SIGKILL the whole process group on POSIX; fall back to proc.kill()."""
+        if _new_session:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                return
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
 
@@ -184,8 +206,12 @@ def _run_orcaslicer(  # pragma: no cover -- external process + rich TTY UI; cmd_
             _consume(name, text)
         if stdout_carry.strip():
             _handle_stdout_line(stdout_carry.strip())
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    except (subprocess.TimeoutExpired, KeyboardInterrupt):
+        # start_new_session put OrcaSlicer/Xvfb in their own process group, so a
+        # terminal SIGINT (Ctrl-C) no longer reaches them and a bare re-raise would
+        # orphan the whole tree. Kill the group explicitly on both timeout AND
+        # interrupt, then re-raise so the caller still sees the original signal.
+        _kill_proc_tree()
         proc.wait()
         raise
     finally:

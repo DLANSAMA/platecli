@@ -59,19 +59,27 @@ def _slice_args(tmpdir, infile):
     )
 
 
-def _fake_popen_factory(returncode, stdout="", stderr=""):
+def _fake_popen_factory(returncode, stdout="", stderr="", touch_path=None):
     """Return a class that stands in for subprocess.Popen and yields the given result.
 
     cmd_slice now reads stdout/stderr via reader threads calling read1() on the
     raw byte pipes, so expose them as io.BytesIO streams plus poll()/wait()/kill().
+
+    ``touch_path`` (if given) simulates OrcaSlicer writing the output DURING the
+    run: its mtime is bumped so ``_finalize_slice``'s stale-output guard sees a
+    freshly-written file (the real slicer always rewrites outpath each run).
     """
     import io
+    import time as _t
 
     class _FakePopen:
         def __init__(self, *a, **k):
             self.returncode = returncode
             self.stdout = io.BytesIO(stdout.encode("utf-8"))
             self.stderr = io.BytesIO(stderr.encode("utf-8"))
+            if touch_path is not None and os.path.exists(touch_path):
+                now = _t.time() + 1
+                os.utime(touch_path, (now, now))
 
         def communicate(self, timeout=None):
             return stdout, stderr
@@ -133,7 +141,9 @@ def test_a_benign_gl_noise_nonzero_is_success():
         args = _slice_args(tmpdir, infile)
 
         stderr = "Failed to create GLFW window ... skip thumbnail"
-        FakePopen = _fake_popen_factory(1, stdout="", stderr=stderr)
+        # touch_path simulates OrcaSlicer rewriting outpath this run so the
+        # stale-output guard treats it as fresh (not a leftover from a prior run).
+        FakePopen = _fake_popen_factory(1, stdout="", stderr=stderr, touch_path=outpath)
 
         # Force every os.path.exists check True: the profile paths cmd_slice
         # constructs under PROFILES_DIR don't exist on disk, and the produced
@@ -173,7 +183,9 @@ def test_a_corrupt_3mf_rejected_despite_benign_gl_noise():
         args = _slice_args(tmpdir, infile)
 
         stderr = "Failed to create GLFW window ... skip thumbnail"
-        FakePopen = _fake_popen_factory(1, stdout="", stderr=stderr)
+        # Written this run (fresh), so it reaches the corrupt-3mf rejection rather
+        # than the stale-output guard.
+        FakePopen = _fake_popen_factory(1, stdout="", stderr=stderr, touch_path=outpath)
 
         with (
             patch.object(slicer.orca.subprocess, "Popen", FakePopen),

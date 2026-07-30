@@ -84,11 +84,46 @@ def _last_error_for(command, ctx=None):
     return result
 
 
+def _dir_is_writable(directory):
+    """Probe whether *directory* is actually writable by creating+removing a temp
+    entry in it.
+
+    ``os.access(dir, os.W_OK)`` ignores NTFS ACLs on Windows (it only reflects the
+    read-only attribute, which directories don't meaningfully carry), so an
+    ACL-denied location like ``C:\\Program Files`` passes ``os.access`` but fails
+    the real ``os.makedirs`` on the actual run. A create-and-remove probe matches
+    real-run behaviour on every OS.
+
+    Note: this is NOT side-effect free — it creates and deletes a
+    ``.plate-writetest-*`` temp file. On the rare path where the create succeeds
+    but the unlink fails, that temp file is left behind (best effort).
+    """
+    import tempfile
+
+    try:
+        fd, tmp_path = tempfile.mkstemp(prefix=".plate-writetest-", dir=directory)
+    except OSError:
+        # PermissionError (ACL/permission denial) and every other OSError mean the
+        # directory is not usably writable for the real run.
+        return False
+    try:
+        os.close(fd)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+    return True
+
+
 def _prepare_job_output_dir(args, summary):
     """Validate job/send working directory before expensive work starts.
 
-    In dry-run mode this is intentionally side-effect free: report that the
-    directory would be created instead of creating it.
+    In dry-run mode this does not create the requested output directory (it
+    reports that the directory *would* be created). The writability check for a
+    not-yet-existing directory does briefly create+remove a ``.plate-writetest-*``
+    temp file in the nearest existing ancestor (see ``_dir_is_writable``), so it
+    is not strictly side-effect free.
     """
     if not getattr(args, "output", None):
         return None
@@ -114,7 +149,7 @@ def _prepare_job_output_dir(args, summary):
                 if next_parent == parent:
                     break
                 parent = next_parent
-            if not parent or not os.path.isdir(parent) or not os.access(parent, os.W_OK):
+            if not parent or not os.path.isdir(parent) or not _dir_is_writable(parent):
                 _job_fail(
                     args,
                     summary,
