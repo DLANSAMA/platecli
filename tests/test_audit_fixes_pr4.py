@@ -211,7 +211,9 @@ def test_extract_encrypted_zip_raises_valueerror(tmp_path):
     try:
         with pytest.raises(ValueError) as ei:
             _extract_zip_model(str(zpath), str(tmp_path), args)
-        assert "could not be extracted" in str(ei.value).lower()
+        # Message comes from the shared RuntimeError→ValueError translation
+        # (merged with PR #96's variant): "ZIP member is encrypted or unsupported".
+        assert "encrypted" in str(ei.value).lower()
     finally:
         extract.zipfile.ZipFile = real_zipfile
 
