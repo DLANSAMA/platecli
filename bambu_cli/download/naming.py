@@ -6,7 +6,7 @@ import os
 import re
 from urllib.parse import unquote, urlparse
 
-from bambu_cli.cli import _namespace_get, _redact_url_credentials
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DOWNLOADABLE_EXTENSIONS,
@@ -16,6 +16,7 @@ from bambu_cli.constants import (
     WINDOWS_RESERVED_FILENAMES,
 )
 from bambu_cli.errors import abort
+from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import logger
 
 

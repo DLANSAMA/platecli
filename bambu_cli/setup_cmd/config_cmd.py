@@ -3,10 +3,13 @@
 import json
 import os
 
-from bambu_cli.cli import _display_path, _exception_for_message, _expand_path, _namespace_get
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_SUCCESS
 from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger, safe_log_error
+from bambu_cli.paths import display_path as _display_path
+from bambu_cli.paths import exception_for_message as _exception_for_message
+from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.setup_cmd.common import _config_path
 from bambu_cli.setup_cmd.preflight import collect_preflight_checks
 from bambu_cli.utils import emit_json, emit_json_error

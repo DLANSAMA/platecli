@@ -51,7 +51,7 @@ security is not yet **A+**.
 | Area | Score | Evidence |
 |------|-------|----------|
 | Security mindset | **A** | allow-private-ips fixed; TLS pin suite (mismatch + handshake SSLError both fail closed); SSRF/redirect tests; bandit blocking; security markers; honest known-limitations table in SECURITY.md. A+ needs single pin helper |
-| Architecture | **A−** | `@mockable` = 0; abort error model; thin entrypoint; domain ↛ `sys.exit`. **Still open:** domain→`cli` private helper imports (~40 sites); Phase B.4 extract not done; pin verify not single-sourced (B.5) |
+| Architecture | **A** | `@mockable` = 0; abort error model; thin entrypoint; domain ↛ `sys.exit`. B.4 done: path/JSON/argparse helpers extracted to `paths`/`jsonio`/`argutils`, so no domain module imports private `_underscore` helpers from `cli` (only public `build_parser`/`main` remain). B.5 done: single `verify_cert_fingerprint` (PR #89) |
 | Agent JSON UX | **A** | ok/error envelopes + many per-command schemas + contract harness. Gaps: dedicated `status` success schema, upload/files/stop/setup |
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
@@ -380,8 +380,8 @@ pytest -W error::ResourceWarning --cov=bambu_cli --cov-fail-under=85
 | B.1 | Expand `BambuError` usage: config, download, slice, upload, connect, auth | Keep exit codes identical |
 | B.2 | Replace `sys.exit` in `commands`, `job`, `download`, `slicer`, `setup_cmd`, `camera`, `config` with raises | Protocol layer returns errors or raises; no exit in mqtt/ftps |
 | B.3 | Ensure `main()` maps `BambuError` → JSON + exit (already mostly there) | |
-| B.4 | Extract `bambu_cli/paths.py`, `bambu_cli/jsonio.py`, `bambu_cli/argutils.py` from `cli.py` | Break domain → cli imports |
-| B.5 | Single `verify_cert_fingerprint(der, expected)` helper | mqtt + ftps + camera |
+| B.4 | **Done.** Extracted `bambu_cli/paths.py`, `bambu_cli/jsonio.py`, `bambu_cli/argutils.py` from `cli.py` | Domain → cli private-helper imports broken (only public `build_parser`/`main` remain) |
+| B.5 | **Done (PR #89).** Single `verify_cert_fingerprint(der, expected)` helper | mqtt + ftps + camera |
 | B.6 | Start deleting `@mockable` call sites as tests re-patch real modules | No new `@mockable` |
 
 #### Tests
@@ -621,7 +621,7 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 |-------|--------|-------|----------------|-------|
 | 0 Trust & truth | **done** | local | 2026-07-08 | allow-private-ips, bare except, version single-source |
 | A Testing foundation | **done** | local | 2026-07-08 | TLS suite, markers, transport tests, cov~80% |
-| B Error model & seams | **partial** | #11 | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed. **B.4** paths/jsonio/argutils extract and **B.5** single pin helper still open (2026-07-17 audit) |
+| B Error model & seams | **done** | #11 | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed. **B.4** paths/jsonio/argutils extract done (domain no longer imports private cli helpers); **B.5** single pin helper done (PR #89) |
 | C Coverage & typing | **in progress** | #18 | 2026-07-09 | full-package mypy + `check_untyped_defs` done; cov ~84% with CI floor **83** (target 92); per-module floors not enforced |
 | D Contracts & 1.0 | **in progress** | local | — | schemas + contract harness + stability policy; remaining agent `--json` schemas land in follow-up PRs |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |

@@ -26,7 +26,6 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from bambu_cli import utils
-from bambu_cli.cli import _expand_path
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DEFAULT_MAX_DOWNLOAD_MB,
@@ -39,6 +38,7 @@ from bambu_cli.constants import (
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.interactive.presets import parse_args_or_abort, preset_to_job_args
 from bambu_cli.interactive.prompts import Prompts, is_cancelled
+from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.slicer.estimate import format_estimate, read_3mf_estimate
 
 _NON_TTY_MESSAGE = "plate go is interactive; use 'plate job <url> --confirm' for scripts."

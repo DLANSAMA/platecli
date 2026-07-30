@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Changed
+
+- Internal refactor only — no user-visible change. Extracted the path,
+  JSON-mode/redaction, and argparse-coercion helpers out of `bambu_cli/cli.py`
+  into three focused modules (`bambu_cli/paths.py`, `bambu_cli/jsonio.py`,
+  `bambu_cli/argutils.py`), so domain modules no longer import private
+  `_underscore` helpers from the CLI entrypoint (roadmap B.4). Behaviour,
+  output, JSON envelopes, and exit codes are unchanged; `cli.py` re-imports the
+  same helpers from their new homes.
+
 ### Fixed
 
 - `plate job/send <url> --dry-run` now reports `would_slice` consistently with

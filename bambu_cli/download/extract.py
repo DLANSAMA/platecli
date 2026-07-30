@@ -4,7 +4,7 @@ import os
 import zipfile
 from urllib.parse import unquote, urlparse
 
-from bambu_cli.cli import _namespace_get, _path_for_message
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DEFAULT_MAX_DOWNLOAD_MB,
@@ -18,6 +18,7 @@ from bambu_cli.download.naming import (
     _sanitize_download_filename,
 )
 from bambu_cli.logging_utils import logger
+from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.protocols.ftps import _download_partial_path, _noncolliding_path, _remove_partial_file
 
 

@@ -7,12 +7,16 @@ import os
 import shutil
 import subprocess
 
-from bambu_cli.cli import _display_path, _exception_for_message, _expand_path, _namespace_get, _path_for_message
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.config import MODEL_MAPPING, get_slicer_timeout
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_TIMEOUT
 from bambu_cli.context import current_settings
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger, safe_log_error
+from bambu_cli.paths import display_path as _display_path
+from bambu_cli.paths import exception_for_message as _exception_for_message
+from bambu_cli.paths import expand_path as _expand_path
+from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.slicer.options import (
     _directory_input_message,
     _is_directory_input,

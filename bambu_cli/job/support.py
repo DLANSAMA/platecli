@@ -5,14 +5,12 @@ from __future__ import annotations
 import os
 
 from bambu_cli import utils
-from bambu_cli.cli import (
-    _expand_path,
-    _namespace_get,
-    _path_for_message,
-)
+from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
+from bambu_cli.paths import expand_path as _expand_path
+from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.utils import _ensure_output_dir
 
 

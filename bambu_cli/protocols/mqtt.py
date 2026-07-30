@@ -504,7 +504,7 @@ def monitor_status(args):
     can follow a print in real time. Otherwise a live human-readable progress
     bar is shown.
     """
-    from bambu_cli.cli import _namespace_get
+    from bambu_cli.argutils import namespace_get as _namespace_get
     from bambu_cli.printer import get_printer
     from bambu_cli.utils import emit_json_line
 

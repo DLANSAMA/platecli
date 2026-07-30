@@ -6,16 +6,14 @@ import socket
 import sys
 import threading
 
-from bambu_cli.cli import (
-    _display_path,
-    _exception_for_message,
-    _namespace_get,
-    _setup_args_provided,
-)
+from bambu_cli.argutils import namespace_get as _namespace_get
+from bambu_cli.argutils import setup_args_provided as _setup_args_provided
 from bambu_cli.config import MODEL_MAPPING, _access_code_value_problem
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger, safe_log_error
+from bambu_cli.paths import display_path as _display_path
+from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.setup_cmd.common import (
     _build_setup_config,
     _config_path,

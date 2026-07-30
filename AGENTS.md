@@ -35,7 +35,10 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 
 | Module / package | Role |
 |------------------|------|
-| `cli.py` | argparse, `main()` dispatch, path/JSON message helpers (also imported by domain — see tech debt below) |
+| `cli.py` | argparse, `main()` dispatch; re-imports the shared helpers from `paths`/`jsonio`/`argutils` |
+| `paths.py` | Filesystem path helpers (`expand_path`, `display_path`, `path_for_message`, `exception_for_message`) shared by CLI and domain |
+| `jsonio.py` | JSON-mode detection + URL-credential redaction for logs/JSON output |
+| `argutils.py` | argparse/`Namespace` coercion helpers (`namespace_get`, `exit_code_from_system_exit`, `setup_args_provided`) |
 | `commands/` | Printer subcommand handlers (`status`, `device`, `files`, `print_cmd`, `doctor`, `gcode`, thin `setup_wrappers`) |
 | `download/` | URL/filename validation, HTML scraping, ZIP extraction, `download` command |
 | `job/` | One-shot `job`/`send` orchestration, dry-run predict, print payloads, injectable `JobSteps` |
@@ -59,7 +62,6 @@ When adding tests, follow [docs/test-backlog.md](docs/test-backlog.md) and the q
 
 ### Known architecture debt (honest)
 
-- Domain modules still import private helpers from `bambu_cli.cli` (`_expand_path`, `_namespace_get`, path/JSON helpers). Target: extract `paths` / `jsonio` / `argutils` (roadmap Phase B.4).
 - TLS fingerprint verification is reimplemented in mqtt, ftps, and camera rather than one shared helper (roadmap B.5).
 
 ## Camera snapshots for agents

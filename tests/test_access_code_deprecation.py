@@ -44,7 +44,7 @@ class TestInlineAccessCodeWarning(ResetWarnFlagMixin, unittest.TestCase):
     def test_no_warning_when_access_code_file_used(self):
         with (
             config_ctx({"access_code_file": "/tmp/does-not-matter"}),
-            patch("bambu_cli.cli._expand_path", return_value="/tmp/does-not-matter"),
+            patch("bambu_cli.paths.expand_path", return_value="/tmp/does-not-matter"),
             patch("builtins.open", side_effect=lambda *a, **k: _fake_file("filecode\n")),
         ):
             # assertNoLogs needs Python 3.10+; assert via the logger mock instead.

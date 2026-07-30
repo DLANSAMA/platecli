@@ -10,8 +10,9 @@ import tempfile
 from functools import lru_cache
 from typing import IO
 
-from bambu_cli.cli import _display_path, _expand_path
 from bambu_cli.logging_utils import logger
+from bambu_cli.paths import display_path as _display_path
+from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.slicer.options import (
     _coerce_override_value,
     _generic_section_overrides,

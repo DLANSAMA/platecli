@@ -7,13 +7,16 @@ import shutil
 import stat
 import sys
 
-# load_config, _config_path, and _display_path are bound at module level so
-# tests can patch them here (bambu_cli.setup_cmd.preflight.<name>).
-from bambu_cli.cli import _display_path, _exception_for_message, _expand_path
 from bambu_cli.config import _access_code_value_problem, load_config
 from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_SUCCESS
 from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
+
+# load_config, _config_path, and _display_path are bound at module level so
+# tests can patch them here (bambu_cli.setup_cmd.preflight.<name>).
+from bambu_cli.paths import display_path as _display_path
+from bambu_cli.paths import exception_for_message as _exception_for_message
+from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.setup_cmd.common import _config_path, _looks_like_placeholder
 from bambu_cli.utils import emit_json
 
