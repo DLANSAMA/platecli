@@ -35,6 +35,42 @@ def _stream_host_port(camera_port: str, default: str = "1985") -> str:
     return default
 
 
+def _coerce_insecure_tls(value: Any) -> bool:
+    """Strictly resolve the ``insecure_tls`` opt-out, failing CLOSED.
+
+    Unlike ``camera_direct_only`` (a security opt-*in*, where ``bool()`` on a
+    truthy string harmlessly errs toward the safer, more-locked-down state),
+    ``insecure_tls`` is a security opt-*out*: any accidental truthiness disables
+    TLS validation and is fail-*open*. A hand-edited ``"insecure_tls": "false"``
+    is a truthy ``str`` and would silently disable certificate validation while
+    the user believes it is off.
+
+    So enable it only for the literal boolean ``True`` (JSON ``true``). The
+    common string spellings ``"true"``/``"1"``/``"yes"``/``"on"`` are also
+    accepted for convenience, since a user who typed them clearly meant to opt
+    in. Every other value — including any non-bool type — is treated as ``False``
+    (validation stays on) and warns, because a config that meant to disable TLS
+    but did not is the fail-safe outcome; one that meant to keep it on and
+    accidentally disabled it is not.
+    """
+    if value is True or value is False:
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+    from bambu_cli.logging_utils import logger
+
+    logger.warning(
+        f"⚠️  Ignoring non-boolean 'insecure_tls' value {value!r} in config; "
+        "TLS certificate validation stays ENABLED. Use a JSON boolean "
+        "(insecure_tls: true) to disable it deliberately."
+    )
+    return False
+
+
 def _normalize_fingerprint(fp: str | None) -> str | None:
     """Normalize a pinned SHA-256 fingerprint (lowercase, separator-free).
 
@@ -103,7 +139,10 @@ class Settings:
             serial=cfg.get("serial", "UNKNOWN"),
             username=cfg.get("username", "bblp"),
             mqtt_port=cfg.get("mqtt_port", 8883),
-            insecure_tls=cfg.get("insecure_tls", False),
+            # Strict, fail-CLOSED coercion: a JSON string ("false"/"no"/…) must
+            # NOT sneak through truthy and disable TLS validation. Contrast
+            # camera_direct_only below, a security opt-in where bool() is safe.
+            insecure_tls=_coerce_insecure_tls(cfg.get("insecure_tls", False)),
             cert_fingerprint=cfg.get("cert_fingerprint"),
             orca_slicer=orca_slicer,
             profiles_dir=profiles_dir,

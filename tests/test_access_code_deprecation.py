@@ -52,13 +52,21 @@ class TestInlineAccessCodeWarning(ResetWarnFlagMixin, unittest.TestCase):
                 config.load_access_code()
             mock_warn.assert_not_called()
 
-    def test_no_warning_when_both_inline_and_file_present(self):
-        # access_code branch is checked first, but if access_code_file is also
-        # configured we should not nag about migrating (nothing to migrate to).
-        with config_ctx({"access_code": "SECRET123", "access_code_file": "/tmp/somewhere"}):
-            with patch.object(config.logger, "warning") as mock_warn:
-                config.load_access_code()
-        mock_warn.assert_not_called()
+    def test_both_inline_and_file_uses_file_and_warns_of_conflict(self):
+        # Security fix (audit): when BOTH keys are present the FILE wins (matching
+        # the migration story) and a loud conflict warning is emitted, instead of
+        # silently authenticating with a possibly-stale inline value.
+        with (
+            config_ctx({"access_code": "STALE_INLINE", "access_code_file": "/tmp/somewhere"}),
+            patch("bambu_cli.paths.expand_path", return_value="/tmp/somewhere"),
+            patch("builtins.open", side_effect=lambda *a, **k: _fake_file("FRESH_FILE\n")),
+        ):
+            with self.assertLogs("bambu", level="WARNING") as cm:
+                code = config.load_access_code()
+        self.assertEqual(code, "FRESH_FILE")
+        joined = "\n".join(cm.output)
+        self.assertIn("BOTH", joined)
+        self.assertNotIn("STALE_INLINE", joined)
 
     def test_no_warning_with_no_config(self):
         # Simulation / no-config: empty config, neither key present -> error path,
@@ -195,7 +203,31 @@ class TestMigrateAccessCode(unittest.TestCase):
             cfg = json.load(f)
         self.assertNotIn("access_code_file", cfg)
 
-    def test_noop_when_access_code_file_already_set(self):
+    def test_noop_when_access_code_file_set_and_no_inline(self):
+        existing_file = os.path.join(self.tmpdir, "existing_secret")
+        with open(existing_file, "w", encoding="utf-8") as f:
+            f.write("already-there\n")
+        self._write_config(
+            {
+                "printer_ip": "127.0.0.1",
+                "serial": "MOCK",
+                "access_code_file": existing_file,
+            }
+        )
+        result = setup_cmd.migrate_access_code(
+            config_path=self.config_path,
+            access_code_file_path=self.access_code_file,
+        )
+        self.assertEqual(result["status"], "noop")
+        with open(self.config_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        self.assertNotIn("access_code", cfg)
+        self.assertEqual(cfg["access_code_file"], existing_file)
+
+    def test_strips_stale_inline_when_access_code_file_already_set(self):
+        # Security fix (audit): a both-keys config is exactly what migration
+        # exists to clean up. Instead of no-op'ing (leaving the plaintext inline
+        # secret forever), strip the stale inline key and keep the file.
         existing_file = os.path.join(self.tmpdir, "existing_secret")
         with open(existing_file, "w", encoding="utf-8") as f:
             f.write("already-there\n")
@@ -211,12 +243,16 @@ class TestMigrateAccessCode(unittest.TestCase):
             config_path=self.config_path,
             access_code_file_path=self.access_code_file,
         )
-        self.assertEqual(result["status"], "noop")
+        self.assertEqual(result["status"], "migrated")
         with open(self.config_path, encoding="utf-8") as f:
             cfg = json.load(f)
-        # Left untouched: still has the inline code + original file reference.
-        self.assertEqual(cfg["access_code"], "SECRET123")
+        self.assertNotIn("access_code", cfg)
         self.assertEqual(cfg["access_code_file"], existing_file)
+        # The file the config already pointed to is untouched.
+        with open(existing_file, encoding="utf-8") as f:
+            self.assertEqual(f.read().strip(), "already-there")
+        # No plaintext-secret .bak left behind.
+        self.assertFalse(os.path.exists(self.config_path + ".bak"))
 
     def test_error_when_target_file_already_exists(self):
         self._write_config(

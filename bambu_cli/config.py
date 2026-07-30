@@ -29,6 +29,26 @@ def _default_config_path():
 CONFIG_PATH = _default_config_path()
 
 
+def read_config_json(path):
+    """Read a config.json file into a dict, tolerant of a UTF-8 BOM.
+
+    The single canonical low-level config reader. Every command that re-opens
+    config.json (``config show``, ``--migrate-access-code``, doctor's pin write,
+    preflight) MUST route through here rather than calling ``open(...,
+    encoding="utf-8")`` directly, so a Windows-editor BOM (PowerShell
+    ``Set-Content -Encoding utf8``, Notepad "Save as UTF-8") does not make one
+    command reject the exact file every other command loads fine.
+
+    Mirrors ``load_config``'s ``utf-8-sig`` read. Raises ``FileNotFoundError``,
+    ``OSError``, or ``json.JSONDecodeError`` to the caller — it does not enforce
+    permissions or apply the config; use ``load_config`` for that.
+    """
+    from bambu_cli.paths import expand_path as _expand_path
+
+    with open(_expand_path(path), encoding="utf-8-sig") as f:
+        return json.load(f)
+
+
 def load_config(exit_on_fail=True):
     """Load printer config from the platform-native config path.
 
@@ -69,6 +89,11 @@ def load_config(exit_on_fail=True):
         abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
         if sys.platform != "win32":
+            # Best-effort permission hygiene: a chmod failure (EPERM on
+            # exFAT/vfat/NTFS mounts with fmask, some network shares, or a
+            # root-owned-but-readable file) must NOT block reading an otherwise
+            # valid config, and must NOT be misreported downstream as invalid
+            # JSON. Warn and continue — mirrors _enforce_secret_file_permissions.
             try:
                 st = os.stat(config_path)
                 if st.st_mode & 0o077:
@@ -76,12 +101,20 @@ def load_config(exit_on_fail=True):
                         f"⚠️  Config file '{_display_path(config_path)}' has insecure, world-readable permissions! "
                         "It is highly recommended to restrict access: run 'chmod 600' on this file."
                     )
-                    os.chmod(config_path, 0o600)
-                    logger.info(f"🔒 Automatically enforced 0600 permissions on {config_path}")
+                    try:
+                        os.chmod(config_path, 0o600)
+                        logger.info(f"🔒 Automatically enforced 0600 permissions on {config_path}")
+                    except OSError as e:
+                        logger.warning(
+                            f"Could not tighten permissions on {_display_path(config_path)} ({e}); "
+                            "the config is still readable, but its permissions could not be secured."
+                        )
             except OSError as e:
+                # stat() itself failed — we cannot even read the file; keep the
+                # original hard-fail semantics for that genuine error.
                 if not exit_on_fail:
                     return None
-                logger.error(f"❌ Failed to enforce secure permissions on config file: {e}")
+                logger.error(f"❌ Could not inspect config file permissions: {e}")
                 from bambu_cli.constants import EXIT_CONFIG_ERROR
 
                 abort("", exit_code=EXIT_CONFIG_ERROR)
@@ -384,9 +417,13 @@ def load_access_code():
     from bambu_cli.paths import expand_path as _expand_path
 
     cfg = current_config()
-    if "access_code" in cfg:
-        if not cfg.get("access_code_file"):
-            _warn_inline_access_code_once()
+    # Precedence: when BOTH keys are present, the FILE wins. The migration story
+    # is file-wins (setup --migrate-access-code moves the inline value out); the
+    # old inline-wins precedence meant a user who rotated the code in the file
+    # kept authenticating with a stale inline copy, silently. Warn loudly so the
+    # conflict is visible, then defer to the file branch below.
+    if "access_code" in cfg and not cfg.get("access_code_file"):
+        _warn_inline_access_code_once()
         access_code = str(cfg["access_code"]).strip()
         problem = _access_code_value_problem(access_code)
         if problem:
@@ -394,10 +431,18 @@ def load_access_code():
             abort("", exit_code=EXIT_CONFIG_ERROR)
         return access_code
     if "access_code_file" in cfg:
+        if "access_code" in cfg:
+            logger.warning(
+                "⚠️  config.json has BOTH an inline access_code and an access_code_file; "
+                "using the file and ignoring the stale inline value "
+                "(run: plate setup --migrate-access-code to remove the inline key)."
+            )
         path = _expand_path(cfg["access_code_file"])
         _enforce_secret_file_permissions(path, _display_path(path))
         try:
-            with open(path, encoding="utf-8") as f:
+            # utf-8-sig: a hand-created secret file may carry a BOM that .strip()
+            # would not remove, silently corrupting the access code.
+            with open(path, encoding="utf-8-sig") as f:
                 access_code = f.read().strip()
         except FileNotFoundError:
             logger.error(f"Access code file not found: {_display_path(path)}")

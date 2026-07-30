@@ -36,6 +36,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   seen.
 - `plate pause/stop`/gcode commands now publish at QoS 1, so success reflects a
   broker acknowledgement rather than a bare local socket write.
+- `plate config show`, `plate setup --migrate-access-code`, and `plate doctor`'s
+  interactive cert-fingerprint pin now read config.json tolerant of a UTF-8 BOM
+  (utf-8-sig), matching `load_config`. Previously these commands opened the file
+  as plain utf-8 and failed on a BOM'd config (PowerShell `Set-Content -Encoding
+  utf8`, Notepad "Save as UTF-8") that every other command loads fine — the
+  diagnostic tools contradicted the working commands, and the doctor pin silently
+  declined a security control the user had opted into. All config reads now route
+  through one shared `config.read_config_json`.
+- A failure to tighten config.json to 0600 (EPERM on exFAT/vfat/NTFS mounts,
+  network shares, or a root-owned-but-readable file) no longer aborts every
+  command. The chmod is now best-effort: it warns and still reads the (readable)
+  config, instead of hard-failing and having `preflight` misreport the file as
+  invalid JSON.
+- Access-code migration is now idempotent/retryable across its two writes. If the
+  config write fails after the secret file was written, the just-created orphan
+  secret file is cleaned up; a retry that finds an identical pre-existing secret
+  file (its own resumed output) now completes instead of wedging behind "target
+  already exists".
+- The interactive setup wizard now rejects an empty or placeholder access code
+  (re-prompting) instead of writing an immediately-broken config and, on a re-run,
+  replacing a working credential with the empty one.
+
 - `plate job/send <url> --dry-run` now reports `would_slice` consistently with
   the real run. The dry-run predictor previously returned `would_slice: false`
   for sources whose extension it could not read from the URL path (Printables
@@ -45,6 +67,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   disagrees with what actually happens.
 
 ### Security
+
+- `insecure_tls` is now coerced strictly and fails **closed**. A hand-edited
+  JSON string such as `"insecure_tls": "false"` (or `"no"`/`"0"`) is a truthy
+  Python string and previously silently DISABLED TLS certificate validation for
+  MQTT/FTPS/camera while the user believed it was off (fail-open). Only a JSON
+  boolean `true` (or the explicit string spellings `"true"`/`"1"`/`"yes"`/`"on"`)
+  now enables it; any other value keeps validation ON and warns. `preflight` /
+  `config validate` also flag a non-boolean `insecure_tls`.
+- Migrating an inline `access_code` out of config.json no longer leaves a
+  plaintext copy of the credential behind in `config.json.bak`. The backup that
+  `_secure_write_json` normally keeps for crash recovery is suppressed (and any
+  stale `.bak` scrubbed) whenever the previous config held an inline secret being
+  removed — for both `plate setup --migrate-access-code` and the wizard's
+  inline→file switch. Without this the migration was defeated: the secret it
+  removed from config.json persisted in the sibling `.bak`.
+- A config carrying BOTH an inline `access_code` and an `access_code_file` now
+  uses the **file** (matching the migration story) and warns loudly about the
+  conflict, instead of silently authenticating with the possibly-stale inline
+  value. `setup --migrate-access-code` now strips the stale inline key in that
+  state instead of no-op'ing, and `preflight` flags the lingering inline key.
+- `plate setup` with both `--access-code` and `--access-code-file` no longer
+  silently overwrites an existing secret file (secret-file writes are backup=off,
+  so the old credential — possibly shared with another printer profile — was
+  unrecoverable). It now refuses unless `--force` is passed.
 
 - Consolidated TLS certificate-fingerprint pin verification into a single shared
   `bambu_cli.tlspin.verify_cert_fingerprint`, used by MQTT, FTPS (control and data

@@ -119,7 +119,7 @@ def _cmd_setup_noninteractive(args):
             _setup_json_error(args, message, **_setup_path_details(access_code_file=expanded_access_code_file))
             abort("", exit_code=EXIT_CONFIG_ERROR)
         try:
-            with open(expanded_access_code_file, encoding="utf-8") as f:
+            with open(expanded_access_code_file, encoding="utf-8-sig") as f:
                 access_code_problem = _access_code_value_problem(f.read().strip())
         except OSError as exc:
             reason = getattr(exc, "strerror", None) or str(exc)
@@ -173,6 +173,30 @@ def _cmd_setup_noninteractive(args):
         logger.error(message)
         _setup_json_error(args, message)
         abort("", exit_code=EXIT_CONFIG_ERROR)
+    # Refuse to silently clobber an existing secret file when both --access-code
+    # and --access-code-file are given (the existence check above is skipped in
+    # that case). Secret-file writes are backup=False, so the old credential —
+    # possibly shared with another printer profile — would be unrecoverable.
+    if (
+        access_code
+        and access_code_file
+        and not _namespace_get(args, "force", False)
+        and os.path.exists(expanded_access_code_file)
+    ):
+        try:
+            with open(expanded_access_code_file, encoding="utf-8-sig") as f:
+                existing_secret = f.read().strip()
+        except OSError:
+            existing_secret = None
+        if existing_secret is not None and existing_secret != access_code.strip():
+            message = (
+                f"Access code file already exists with different contents: "
+                f"{_display_path(expanded_access_code_file)}. Refusing to overwrite it "
+                "(pass --force to overwrite, or point --access-code-file at a new path)."
+            )
+            logger.error(message)
+            _setup_json_error(args, message, **_setup_path_details(access_code_file=expanded_access_code_file))
+            abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
         _write_setup_config(config, access_code_file_secret=access_code if access_code_file else None)
     except OSError as exc:
@@ -187,6 +211,25 @@ def _cmd_setup_noninteractive(args):
         abort("", exit_code=EXIT_FILE_ERROR)
     if _namespace_get(args, "json", False):
         emit_json(_setup_summary(config))
+
+
+def _prompt_interactive_access_code(args, max_attempts=3):
+    """Prompt for the access code, rejecting empty/placeholder input.
+
+    The interactive path previously fed _prompt_secret straight into the config
+    with no validation, so pressing Enter wrote an immediately-broken config
+    ("Config must contain a real access_code...") and, on a re-run, replaced a
+    working credential with the empty one (access_code is _WIZARD_OWNED). Mirror
+    the non-interactive validation (_access_code_value_problem) and re-prompt.
+    """
+    for _ in range(max_attempts):
+        access_code = _prompt_secret("Enter Access Code (found on printer screen): ", args).strip()
+        problem = _access_code_value_problem(access_code)
+        if not problem:
+            return access_code
+        logger.error(problem)
+    logger.error("No valid access code provided after multiple attempts.")
+    abort("", exit_code=EXIT_CONFIG_ERROR)
 
 
 def _cmd_setup_interactive(args):
@@ -315,7 +358,7 @@ def _cmd_setup_interactive(args):
         logger.info(f"\nConfiguring {selected['name']}...")
     else:
         logger.info("\nConfiguring manual printer...")
-    access_code = _prompt_secret("Enter Access Code (found on printer screen): ", args)
+    access_code = _prompt_interactive_access_code(args)
 
     # Guided prompt for model & nozzle
     logger.info(f"Printer model detected: {detected_model}")

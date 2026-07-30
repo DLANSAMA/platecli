@@ -141,11 +141,32 @@ def _write_in_place(expanded, text):
         os.fsync(f.fileno())
 
 
-def _secure_write_json(path, data):
+def _secure_write_json(path, data, *, backup=True):
     # Serialize before touching the filesystem: an unserializable payload must leave the
     # existing file intact rather than truncating it half-way through json.dump.
     # backup=True keeps config.json.bak so a crash mid-write doesn't lose printer_ip/serial.
-    _atomic_secure_write(path, json.dumps(data, indent=2), backup=True)
+    # Pass backup=False when the *previous* config held a secret (e.g. migrating an inline
+    # access_code out): copying it to config.json.bak would defeat the migration by leaving
+    # a plaintext copy of the credential on disk. Callers doing that should also scrub any
+    # pre-existing .bak via :func:`_scrub_config_backup`.
+    _atomic_secure_write(path, json.dumps(data, indent=2), backup=backup)
+
+
+def _scrub_config_backup(path):
+    """Best-effort remove a ``<config>.bak`` left by an earlier backup=True write.
+
+    A prior ``_secure_write_json`` (or a still-present pre-migration backup) may
+    hold a plaintext copy of a secret we are moving out of config.json. Deleting
+    the stale ``.bak`` is the least-surprising outcome: config.json.bak exists
+    only as crash-recovery scaffolding, and keeping a plaintext credential in it
+    would defeat the migration. Never raises — a missing or unremovable .bak must
+    not fail the migration that already succeeded.
+    """
+    bak = _expand_path(path) + ".bak"
+    try:
+        os.unlink(bak)
+    except OSError:
+        pass
 
 
 def _secure_write_text(path, text):
@@ -305,10 +326,38 @@ def _merge_with_existing(config, path=None):
     return merged
 
 
+def _existing_config_has_inline_secret_being_removed(path, new_config):
+    """True when the on-disk config has an inline access_code the new one drops.
+
+    Used to decide whether config.json.bak is safe to write: if the previous
+    file held a plaintext ``access_code`` and the fresh config no longer carries
+    one inline (it moved to an access_code_file, or was cleared), a .bak would
+    leak that secret. Best-effort — an unreadable/absent existing config means
+    "no secret to leak", so keep the normal crash-recovery backup.
+    """
+    if new_config.get("access_code"):
+        return False
+    try:
+        with open(_expand_path(path), encoding="utf-8-sig") as f:
+            existing = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return isinstance(existing, dict) and bool(existing.get("access_code"))
+
+
 def _write_setup_config(config, access_code_file_secret=None):
     if access_code_file_secret is not None:
         _secure_write_text(config["access_code_file"], access_code_file_secret.rstrip("\n") + "\n")
-    _secure_write_json(_config_path(), _merge_with_existing(config))
+    # If the config we are about to overwrite carried an inline access_code that
+    # the new config no longer has inline (the classic inline->file switch),
+    # backing it up to config.json.bak would leave a plaintext copy of the
+    # secret on disk — the same leak migrate avoids. Write without a backup and
+    # scrub any stale .bak in that case; otherwise keep the crash-recovery .bak.
+    config_path = _config_path()
+    keep_backup = not _existing_config_has_inline_secret_being_removed(config_path, config)
+    _secure_write_json(config_path, _merge_with_existing(config), backup=keep_backup)
+    if not keep_backup:
+        _scrub_config_backup(config_path)
     if sys.platform == "win32":
         logger.warning(
             "   ⚠️  On Windows, file mode 0600 is ignored. Consider storing the "

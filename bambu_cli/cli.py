@@ -454,6 +454,11 @@ def build_parser():
         action="store_true",
         help="Move inline access_code into access_code_file and update config.json",
     )
+    p_setup.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing access_code_file whose contents differ (default: refuse)",
+    )
 
     return parser
 

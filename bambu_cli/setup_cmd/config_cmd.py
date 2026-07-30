@@ -4,6 +4,7 @@ import json
 import os
 
 from bambu_cli.argutils import namespace_get as _namespace_get
+from bambu_cli.config import read_config_json
 from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_SUCCESS
 from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger, safe_log_error
@@ -19,9 +20,11 @@ from bambu_cli.utils import emit_json, emit_json_error
 CONFIG_CHECK_NAMES = {
     "config",
     "config-permissions",
+    "insecure-tls",
     "printer-ip",
     "serial",
     "access-code",
+    "access-code-inline-conflict",
     "access-code-permissions",
     "orca-slicer",
     "profiles-dir",
@@ -55,8 +58,9 @@ def _cmd_config_show(args):
         safe_log_error(message)
         abort("", exit_code=EXIT_CONFIG_ERROR)
     try:
-        with open(config_path, encoding="utf-8") as f:
-            config = json.load(f)
+        # utf-8-sig via the canonical reader: a Windows-editor BOM must not make
+        # `config show` reject the exact file every other command loads fine.
+        config = read_config_json(config_path)
     except (OSError, json.JSONDecodeError) as exc:
         message = f"Could not read config: {_exception_for_message(exc)}"
         emit_json_error(
