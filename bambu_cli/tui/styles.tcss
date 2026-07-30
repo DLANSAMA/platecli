@@ -30,3 +30,47 @@ AmsPanel {
     color: $text-muted;
     padding: 0 2;
 }
+
+
+/* Prepare flow (Phase 2). */
+
+#prepare-body {
+    height: 1fr;
+    padding: 0 2;
+}
+
+#source-error {
+    color: $error;
+    height: auto;
+}
+
+#prepare-status {
+    color: $text-muted;
+    height: auto;
+    padding: 1 0 0 0;
+}
+
+#preview {
+    height: auto;
+    padding: 1 0;
+}
+
+#preflight-body {
+    height: 1fr;
+    padding: 1 2;
+}
+
+#preflight-title {
+    text-style: bold;
+    color: $error;
+}
+
+#preflight-problem {
+    padding: 1 0;
+    height: auto;
+}
+
+#preflight-hint {
+    color: $text-muted;
+    height: auto;
+}

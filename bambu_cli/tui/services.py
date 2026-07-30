@@ -67,6 +67,19 @@ def _short_error(exc: Exception) -> str:
     return f"Printer unreachable ({type(exc).__name__})."
 
 
+def _prepare_error(exc: Exception) -> str:
+    """Render a prepare-pipeline failure — never as a connectivity diagnosis.
+
+    A message-less ``OSError`` out of the slicer is a prepare failure, not a
+    printer that cannot be reached, so this does not share the status path's
+    "Printer unreachable" fallback wording.
+    """
+    message = str(exc).strip()
+    if message:
+        return message
+    return f"Preparing the model failed ({type(exc).__name__})."
+
+
 # --- View-model helpers (pure; unit-tested without a pilot) -----------------
 
 
@@ -137,3 +150,114 @@ def ams_tray_rows(snapshot: StatusSnapshot) -> list[dict[str, Any]]:
                 }
             )
     return rows
+
+
+# --- Prepare pipeline -------------------------------------------------------
+
+
+@dataclass
+class PrepareResult:
+    """The outcome of one prepare run (download → extract → slice → estimate).
+
+    ``ok`` is False when the pipeline aborted; ``error`` then carries the
+    ``BambuError`` message and ``rows`` is empty. ``state`` is always returned so
+    the caller can clean up the temp workdir it owns (and, in a later phase,
+    build the job namespace from it).
+    """
+
+    ok: bool
+    state: Any
+    rows: list[tuple[str, str]] = field(default_factory=list)
+    model_path: str | None = None
+    error: str | None = None
+
+
+class PipelineService:
+    """Run the wizard's prepare pipeline for the TUI, without any prompts.
+
+    Sequencing (download → optional zip-extract → slice → estimate) is NOT
+    reimplemented here: it is the shared ``interactive.core.run_prepare_pipeline``
+    the ``plate go`` wizard runs, driven through the same injectable ``GoSteps``
+    seam. This class turns a ``BambuError`` into a value the screen can render,
+    since blocking calls run in a Textual thread worker where an escaping
+    exception would kill the app.
+
+    Workdir ownership: the caller may pass the ``workdir`` it created, and then
+    owns deleting it (the screen does, so it can clean up even when the user
+    leaves mid-run and the result is never delivered). Without one, a workdir is
+    created here and the caller cleans it through ``cleanup``/``cleanup_workdir``.
+    """
+
+    def __init__(self, steps: Any = None) -> None:
+        self._steps = steps
+
+    def _get_steps(self) -> Any:
+        if self._steps is not None:
+            return self._steps
+        from bambu_cli.interactive.core import GoSteps
+
+        return GoSteps()
+
+    def prepare(
+        self,
+        args: argparse.Namespace,
+        *,
+        source: str,
+        material: str,
+        quality: str,
+        supports: bool,
+        workdir: str | None = None,
+        detected_material: str | None = None,
+        detected_slot: int | None = None,
+    ) -> PrepareResult:
+        """Download/slice ``source`` with the chosen presets and preview it.
+
+        Never raises: any failure from the pipeline (bad download, slicer
+        failure, unexpected OSError) comes back as
+        ``PrepareResult(ok=False, error=...)`` with the workdir cleaned up.
+        """
+        from bambu_cli.errors import BambuError
+        from bambu_cli.interactive.core import (
+            WizardState,
+            cleanup_workdir,
+            make_workdir,
+            preview_rows,
+            run_prepare_pipeline,
+        )
+
+        state = WizardState(
+            source=source,
+            material=material,
+            quality=quality,
+            supports=supports,
+            detected_ams_material=detected_material,
+            detected_ams_slot=detected_slot,
+        )
+        state.workdir = workdir if workdir is not None else make_workdir(prefix="bambu-tui-")
+        try:
+            model_path = run_prepare_pipeline(self._get_steps(), state, state.workdir)
+            rows = preview_rows(state, model_path)
+        except BambuError as exc:
+            cleanup_workdir(state)
+            return PrepareResult(ok=False, state=state, error=str(exc) or "Preparing the model failed.")
+        except Exception as exc:  # noqa: BLE001 -- see docstring: a worker must never crash the UI
+            # The pipeline is supposed to speak BambuError, but this runs in a
+            # Textual thread worker: an unexpected OSError from a collaborator
+            # must still surface as an inline message with the workdir cleaned up.
+            cleanup_workdir(state)
+            return PrepareResult(ok=False, state=state, error=_prepare_error(exc))
+        return PrepareResult(ok=True, state=state, rows=rows, model_path=model_path)
+
+    def cleanup(self, state: Any) -> None:
+        """Delete the temp workdir a prepare run created (safe to call twice)."""
+        from bambu_cli.interactive.core import cleanup_workdir
+
+        if state is not None:
+            cleanup_workdir(state)
+
+    def cleanup_workdir(self, workdir: str | None) -> None:
+        """Delete a temp workdir by path (safe when it is already gone)."""
+        from bambu_cli.interactive.core import WizardState, cleanup_workdir
+
+        if workdir:
+            cleanup_workdir(WizardState(workdir=workdir))

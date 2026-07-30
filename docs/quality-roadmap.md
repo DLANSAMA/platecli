@@ -56,7 +56,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **1123** non-live tests collected / **1122** passing (2026-07-30; latest additions are the deep-audit fix wave: mqtt print-path integrity, config/secrets hardening, and download/slice/job pipeline correctness regression tests); **84.9%** coverage measured 2026-07-29 on Linux; CI floor **83**; per-module floors not enforced |
+| Tests | **A−** | **1203** non-live tests collected / **1202** passing (2026-07-30; latest additions are the Textual TUI phases 1-2: dashboard/prepare pilot tests and the shared `interactive/core.py` unit tests, on top of the deep-audit fix wave); **84.9%** coverage measured 2026-07-29 on Linux; CI floor **83**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |

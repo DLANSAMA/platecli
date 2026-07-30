@@ -2,11 +2,12 @@
 
 The Textual app receives a ``TuiDeps`` carrying the pipeline seams and the
 status provider, exactly as the wizard receives a ``GoDeps``. Tests pass a
-``TuiDeps`` with scripted fakes so pilot tests never touch real MQTT.
+``TuiDeps`` with scripted fakes so pilot tests never touch real MQTT, never
+download, and never shell out to a slicer.
 
-Phase 1 only needs a status provider (``StatusService``); the ``GoSteps``
-pipeline seam is carried through now so Phase 2/3 screens have somewhere to
-plug in without changing the app's constructor.
+``steps`` is the very same ``GoSteps`` the ``plate go`` wizard uses (defined in
+``bambu_cli.interactive.core``), so both front-ends inject at one seam; the
+prepare screen reaches it through ``get_pipeline()`` / ``get_ams_detector()``.
 """
 
 from __future__ import annotations
@@ -14,14 +15,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from bambu_cli.tui.services import StatusService
+from bambu_cli.tui.services import PipelineService, StatusService
 
 if TYPE_CHECKING:
-    from bambu_cli.interactive.session import GoSteps
+    from bambu_cli.interactive.core import GoSteps
 
 
 def _default_steps() -> GoSteps:
-    from bambu_cli.interactive.session import GoSteps
+    from bambu_cli.interactive.core import GoSteps
 
     return GoSteps()
 
@@ -32,12 +33,15 @@ class TuiDeps:
 
     ``status_provider`` fetches a normalized status snapshot (see
     ``StatusService.fetch``); tests substitute a fake with scripted results.
-    ``steps`` is the shared ``GoSteps`` pipeline seam, reserved for later
-    phases' prepare/print flow.
+    ``steps`` is the shared ``GoSteps`` pipeline seam; ``pipeline`` and
+    ``ams_detector`` default to adapters built on top of it, and can be replaced
+    wholesale by a pilot test that wants scripted prepare results.
     """
 
     status_provider: Any = None
     steps: Any = field(default=None)
+    pipeline: Any = field(default=None)
+    ams_detector: Any = field(default=None)
 
     def get_status_provider(self) -> Any:
         if self.status_provider is not None:
@@ -48,3 +52,15 @@ class TuiDeps:
         if self.steps is not None:
             return self.steps
         return _default_steps()
+
+    def get_pipeline(self) -> Any:
+        if self.pipeline is not None:
+            return self.pipeline
+        return PipelineService(steps=self.get_steps())
+
+    def get_ams_detector(self) -> Any:
+        if self.ams_detector is not None:
+            return self.ams_detector
+        # Same seam the wizard uses: GoSteps decides between the real
+        # best-effort AMS read and whatever a test injected.
+        return self.get_steps().get_ams_material()

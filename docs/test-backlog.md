@@ -10,7 +10,7 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **1123** collected / **1122** passing (measured 2026-07-30; incl. the deep-audit fix wave: mqtt print-path, config/secrets, and pipeline correctness tests) | ≥550 with zero known flakes ✅ size |
+| Non-live tests collected | **1203** collected / **1202** passing (measured 2026-07-30; incl. the deep-audit fix wave and the Textual TUI phases 1-2: dashboard/prepare pilot tests plus the shared `interactive/core.py` unit tests) | ≥550 with zero known flakes ✅ size |
 | Line/branch coverage (CI) | **84.9%** Linux measured 2026-07-29 (C.4 hermetic Orca tests lift `slicer/output.py` 79.8%→92.7%); ~**83.9%** Windows measured 2026-07-26; **floor 83** (Windows is the binding leg) | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |

@@ -20,14 +20,16 @@ from typing import Any
 
 from textual.app import App
 
+from bambu_cli.interactive.core import preflight_problem
 from bambu_cli.tui.deps import TuiDeps
 from bambu_cli.tui.screens.dashboard import DashboardScreen
+from bambu_cli.tui.screens.prepare import PreflightErrorScreen, PrepareScreen
 
 _CSS_PATH = Path(__file__).with_name("styles.tcss")
 
 
 class PlateApp(App):
-    """Full-screen terminal UI for platecli (Phase 1: read-only dashboard)."""
+    """Full-screen terminal UI for platecli (dashboard + prepare flow)."""
 
     CSS_PATH = _CSS_PATH
     TITLE = "platecli"
@@ -36,6 +38,7 @@ class PlateApp(App):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("r", "refresh", "Refresh"),
+        ("n", "new_print", "New print"),
     ]
 
     def __init__(self, args: argparse.Namespace, deps: TuiDeps | None = None) -> None:
@@ -47,6 +50,22 @@ class PlateApp(App):
         self.push_screen(
             DashboardScreen(self._args, self._deps.get_status_provider()),
         )
+
+    def action_new_print(self) -> None:
+        """Open the prepare flow — or explain why the setup cannot print yet.
+
+        The preflight is the wizard's step-0 checks minus the prompts (shared
+        ``interactive.core.preflight_problem``): an unconfigured printer, an
+        unusable OrcaSlicer, or a missing profiles directory sends the user to
+        ``plate setup`` rather than into a form whose answers we cannot act on.
+        """
+        if isinstance(self.screen, (PrepareScreen, PreflightErrorScreen)):
+            return
+        problem = preflight_problem(self._args)
+        if problem:
+            self.push_screen(PreflightErrorScreen(problem))
+            return
+        self.push_screen(PrepareScreen(self._args, self._deps))
 
     def action_refresh(self) -> None:
         # Delegate to the active screen when it can refresh (the dashboard).
