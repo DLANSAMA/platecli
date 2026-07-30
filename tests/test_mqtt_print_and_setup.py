@@ -720,8 +720,9 @@ def test_execute_print_error_after_ack_is_blamed():
         mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
 
 
-def test_execute_print_on_connect_publishes_once():
-    """paho auto-reconnect re-firing on_connect must not re-publish the print."""
+def test_execute_print_on_connect_publishes_once_but_resubscribes():
+    """paho auto-reconnect re-firing on_connect must not re-publish the print,
+    but MUST resubscribe on every (re)connect (clean_session drops the sub)."""
     printer = _test_printer(simulation_mode=False)
     client = MagicMock()
 
@@ -744,6 +745,12 @@ def test_execute_print_on_connect_publishes_once():
         c for c in client.publish.call_args_list if c.args and str(c.args[0]).endswith("/request")
     ]
     assert len(request_publishes) == 1
+    # But the report subscription must be (re)established on BOTH connects, or an
+    # ack after a mid-window reconnect would be invisible and time the print out.
+    report_subscribes = [
+        c for c in client.subscribe.call_args_list if c.args and str(c.args[0]).endswith("/report")
+    ]
+    assert len(report_subscribes) == 2
 
 
 def test_send_command_on_connect_publishes_once():

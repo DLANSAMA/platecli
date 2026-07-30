@@ -756,9 +756,13 @@ def execute_print_command(
 
     def on_connect(client, userdata, flags, rc, properties=None):
         if rc == 0:
+            # Resubscribe on every (re)connect: with clean_session=True a
+            # mid-window reconnect drops the subscription, so a printer ack after
+            # reconnect would otherwise be invisible and time out a print that
+            # was actually accepted. Only the state-changing publish is guarded.
+            client.subscribe(f"device/{printer.serial}/report")
             if not published[0]:
                 published[0] = True
-                client.subscribe(f"device/{printer.serial}/report")
                 client.publish(f"device/{printer.serial}/request", payload)
         else:
             logger.error(f"Connection failed: rc={rc}")
