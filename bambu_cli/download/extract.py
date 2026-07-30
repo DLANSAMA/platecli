@@ -123,6 +123,13 @@ def _extract_zip_model(zip_path, outdir, args, *, noncolliding_path=None):
             return outpath, filename, member_filename, size
     except zipfile.BadZipFile as exc:
         raise ValueError("Downloaded ZIP archive is invalid or corrupt.") from exc
+    except NotImplementedError as exc:
+        # zipfile raises NotImplementedError("compression type N") for members it
+        # can't decompress, e.g. Deflate64 (type 9) archives produced by Windows
+        # Explorer's "Send to compressed folder" for large files. Translate to a
+        # ValueError so both the job pipeline and the wizard surface a clean
+        # extract-step abort instead of an uncaught traceback.
+        raise ValueError(f"ZIP archive uses an unsupported compression method: {exc}") from exc
     except RuntimeError as exc:
         # zipfile raises RuntimeError (not a subclass of OSError/ValueError) for an
         # encrypted/password-protected member. Map it to ValueError so the caller

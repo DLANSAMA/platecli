@@ -385,13 +385,32 @@ def _cmd_snapshot(
         _frame = None
         _fallback_reason = str(_exc)
         logger.debug(f"Direct camera grab unavailable ({_exc}); trying Docker streamer.")
+    except BambuError:
+        # A domain abort (e.g. ctx.printer() -> load_access_code() rejecting a
+        # malformed access_code with EXIT_CONFIG_ERROR) is a hard config error,
+        # NOT a "this printer needs Docker" signal. Let it propagate to cli.py
+        # with its own exit code instead of demoting it to a debug log and
+        # silently falling through to the Docker path (mirrors the Docker path's
+        # own `except BambuError: raise` guard).
+        raise
     except Exception as _exc:
         _frame = None
         _fallback_reason = str(_exc)
         logger.debug(f"Direct camera grab unavailable ({_exc}); trying Docker streamer.")
     if _frame:
-        _write_snapshot_atomic(outpath, _frame)
-        size = os.path.getsize(outpath)
+        try:
+            _write_snapshot_atomic(outpath, _frame)
+            size = os.path.getsize(outpath)
+        except OSError as _exc:
+            # Disk-full / permission-denied / a directory removed after
+            # _ensure_parent_dir succeeded: emit a structured file error and exit
+            # EXIT_FILE_ERROR, matching the Docker path — rather than letting the
+            # OSError escape to cli.py's generic handler (traceback + wrong
+            # EXIT_COMMAND_ERROR, no JSON error object for --json consumers).
+            message = f"Could not write snapshot: {_path_for_message(outpath)}: {_exception_for_message(_exc)}"
+            emit_json_error(args, "snapshot", EXIT_FILE_ERROR, message, failed_step="capture", output=outpath)
+            safe_log_error(message)
+            abort("", exit_code=EXIT_FILE_ERROR)
         captured_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         sha256 = hashlib.sha256(_frame).hexdigest()
         logger.info(f"\U0001f4f8 Snapshot saved: {_path_for_message(outpath)} ({size // 1024}KB)")

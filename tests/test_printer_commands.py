@@ -77,7 +77,10 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_upload(args)
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
-        mock_logger.error.assert_called_with("Dry run failed: Could not reach printer.")
+        # The dry-run now surfaces the real cause instead of a fixed, misleading
+        # "Could not reach printer." (a cert-pin mismatch must be distinguishable
+        # from an off printer) — see fix/audit-cli-json-camera.
+        mock_logger.error.assert_called_with("Dry run failed: could not reach printer: FTP Error")
 
     @patch("os.path.exists")
     @patch("os.path.getsize")

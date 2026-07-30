@@ -67,6 +67,12 @@ def parse_ams(status):
         return None
 
     active_tray = _to_int(ams_block.get("tray_now"))
+    # Bambu firmware reports tray_now 254/255 as a sentinel for the external
+    # spool / nothing loaded, not a real AMS slot index. Normalize those to None
+    # so no tray is falsely marked active and consumers don't present an
+    # external-spool state as an AMS detection.
+    if active_tray in (254, 255):
+        active_tray = None
 
     units = []
     for unit_raw in units_raw:

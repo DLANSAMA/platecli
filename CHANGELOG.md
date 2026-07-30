@@ -57,6 +57,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - The interactive setup wizard now rejects an empty or placeholder access code
   (re-prompting) instead of writing an immediately-broken config and, on a re-run,
   replacing a working credential with the empty one.
+- `plate --json <bad global flag>` now always emits the JSON error envelope and
+  exits `EXIT_COMMAND_ERROR` (5). An invalid value for a typed global flag (e.g.
+  `plate --json --network-timeout abc status`) previously bypassed the envelope
+  and exited `2` — which this CLI's contract maps to `EXIT_NETWORK_ERROR` — so
+  an agent saw a silent, misclassified failure with no structured error object.
+- Ctrl-C / EOF during a `--json` run now emits an `interrupted` JSON error
+  envelope on stdout (and sends the human "Operation cancelled by user." line to
+  stderr) instead of printing plain text to stdout, keeping the machine channel
+  parseable like every other failure path.
+- `plate upload … --dry-run` now surfaces the real failure reason (a TLS
+  cert-pin mismatch, a bad access code, an unreachable printer) instead of the
+  fixed, misleading "Could not reach printer." — a security-relevant pin failure
+  is no longer indistinguishable from the printer being off.
+- `plate snapshot` on A1/A1M no longer swallows configuration errors: a domain
+  abort raised while acquiring the printer (e.g. a malformed `access_code`) now
+  propagates with its own exit code instead of being demoted to a debug log and
+  falling through to the Docker path. A file-write failure on the direct-grab
+  path (disk full, permission denied) now exits `EXIT_FILE_ERROR` with a JSON
+  error object rather than escaping as an uncaught traceback.
+- `plate doctor` (and the written `printer_capabilities.json`) now reports
+  `camera_snapshot: true` for A1/A1M, matching the model-agnostic direct camera
+  grab those printers actually support; previously it reported `false` and an
+  agent would skip a working snapshot feature.
+- Guided wizard (`plate go`): AMS material detection no longer names the wrong
+  filament. It now trusts only the tray the printer marks active, scanning all
+  AMS units (a non-active spool in an earlier unit no longer shadows the active
+  tray in a later one), and treats the `tray_now` external-spool sentinel
+  (254/255) as "nothing loaded from the AMS."
+- Guided wizard: the confirmed print now feeds from the AMS (`use_ams=true`)
+  when the wizard detected an AMS-loaded filament and the user kept that
+  detected material; otherwise it keeps the conservative external-spool default.
+  Previously every guided print sent `use_ams=false`, stalling AMS-only machines.
+- Guided wizard: extracting a local `.zip` no longer crashes with an uncaught
+  traceback on password-protected or Deflate64 archives; those now surface a
+  clean extract-step error (the fix in `_extract_zip_model` also covers the
+  `plate job` pipeline).
+- `_display_path` no longer mangles sibling paths in JSON output: a path under a
+  directory whose name merely starts with `$HOME` (e.g. `/home/user2/...` when
+  `$HOME` is `/home/user`) is left intact instead of being rewritten to a
+  non-existent `~2/...`. It now requires a separator boundary after the prefix.
+- `_resolve_ip` no longer permanently caches DNS failures: a transient resolve
+  failure or a join-timeout is returned without caching, so later calls retry
+  (only genuine successes are cached). The resolver thread is a daemon.
+- `redact_url_credentials` now strips userinfo from scheme-relative URLs
+  (`//user:pass@host/…`), closing a gap where such a URL echoed into a log line
+  or JSON error detail reached output with its password intact.
 
 - `plate job/send <url> --dry-run` now reports `would_slice` consistently with
   the real run. The dry-run predictor previously returned `would_slice: false`
