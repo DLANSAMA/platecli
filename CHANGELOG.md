@@ -105,8 +105,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   or JSON error detail reached output with its password intact.
 - **Test-suite integrity (deep audit):** tautological assertions in
   `test_mqtt_print_and_setup.py` replaced with discriminating checks
-  (`list_files()` must return a `list`, `delete_file()` must return `False` for
-  absent files, `status()` must return a `dict`, `_validate_slice_options(valid)`
+  (`list_files()` must return a `list`, `delete_file()` must return `True`
+  (fire-and-forget FTPS semantics), `status()` must return a `dict`, `_validate_slice_options(valid)`
   must return `None`, `_process_profile_compatible` asserts exact `True`/`False`);
   `_SIM_FTP_FILES` dict now snapshot-restored around every test via autouse conftest
   fixture; `test_coverage_platform_paths.py` permission test now asserts
