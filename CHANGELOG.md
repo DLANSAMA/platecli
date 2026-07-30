@@ -17,6 +17,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Fixed
 
+- MQTT print-path integrity: `plate print` no longer reports a false
+  `Print started` (exit 0) when the printer connection is refused. A refused
+  CONNACK (e.g. wrong/rotated LAN access code) is delivered asynchronously via
+  `on_connect`; it is now tracked and surfaced as a network error with
+  `printed: false`, matching the status path.
+- MQTT print/command payloads are now published exactly once per attempt. paho's
+  auto-reconnect could re-fire `on_connect` inside the acknowledgement window and
+  silently re-issue a state-changing command (print-start, pause, stop, gcode) to
+  a printer that may already be executing the first. A once-flag prevents any
+  reconnect from re-publishing.
+- `plate print` now honours the printer's `project_file` acknowledgement: an ack
+  carrying `result: fail` (e.g. invalid `ams_mapping`) is reported as a printer
+  error instead of success.
+- `plate print` no longer misattributes a stale, latched `print_error` from a
+  previous job (arriving on the first periodic status report) to the new print.
+  Errors are only blamed on this command once its own `project_file` ack has been
+  seen.
+- `plate pause/stop`/gcode commands now publish at QoS 1, so success reflects a
+  broker acknowledgement rather than a bare local socket write.
 - `plate job/send <url> --dry-run` now reports `would_slice` consistently with
   the real run. The dry-run predictor previously returned `would_slice: false`
   for sources whose extension it could not read from the URL path (Printables

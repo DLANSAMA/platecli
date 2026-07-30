@@ -85,7 +85,9 @@ class TestSendCommand(unittest.TestCase):
         self.assertTrue(result)
         mock_client.connect.assert_called_with("192.168.1.1", 8883, keepalive=10)
         topic = f"device/{printer.serial}/request"
-        mock_client.publish.assert_called_once_with(topic, '{"test": "payload"}')
+        # Published at QoS 1 so success reflects a broker PUBACK, not a bare
+        # local socket write; and exactly once (no reconnect re-publish).
+        mock_client.publish.assert_called_once_with(topic, '{"test": "payload"}', qos=1)
         mock_client.loop_start.assert_called_once()
         mock_client.loop_stop.assert_called_once()
         mock_client.disconnect.assert_called_once()

@@ -581,3 +581,198 @@ def test_execute_print_printer_error_code_records_hex():
     payload = utils_mod._LAST_ERROR_PAYLOAD
     assert payload["printer_error_code"] == 83935248
     assert payload["printer_error_code_hex"] == "0x0500C010"
+
+
+def test_execute_print_connect_refused_is_network_error():
+    """rc != 0 (bad CONNACK / wrong access code) must fail, not report success.
+
+    Regression for the false 'Print started' exit 0 on a refused connection.
+    """
+    from bambu_cli import utils as utils_mod
+    from bambu_cli.constants import EXIT_NETWORK_ERROR
+
+    printer = _test_printer(simulation_mode=False)
+    client = MagicMock()
+
+    def loop_start():
+        # Broker refuses: paho delivers rc=4 (bad user/pass) via on_connect
+        # asynchronously after loop_start (mirrors _mqtt_connect being patched).
+        client.on_connect(client, None, None, 4)
+
+    client.loop_start.side_effect = loop_start
+    utils_mod._LAST_ERROR_PAYLOAD = None
+    with (
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+        pytest.raises(BambuError),
+    ):
+        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
+
+    payload = utils_mod._LAST_ERROR_PAYLOAD
+    assert payload is not None
+    assert payload["exit_code"] == EXIT_NETWORK_ERROR
+    assert payload["printed"] is False
+    # The publish must never have happened on a refused connection.
+    assert not client.publish.called
+
+
+def test_execute_print_rejected_result_is_printer_error():
+    """A project_file ack with result=fail must not report success."""
+    from bambu_cli import utils as utils_mod
+    from bambu_cli.constants import EXIT_PRINTER_ERROR
+
+    printer = _test_printer(simulation_mode=False)
+    client = MagicMock()
+
+    def connect(*a, **k):
+        client.on_connect(client, None, None, 0)
+
+    def loop_start():
+        msg = MagicMock()
+        # Firmware rejects the job in the ack itself, no nonzero print_error.
+        msg.payload = json.dumps(
+            {"print": {"command": "project_file", "result": "fail", "reason": "invalid ams_mapping"}}
+        ).encode()
+        client.on_message(client, None, msg)
+
+    client.connect.side_effect = connect
+    client.loop_start.side_effect = loop_start
+    utils_mod._LAST_ERROR_PAYLOAD = None
+    with (
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+        pytest.raises(BambuError),
+    ):
+        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
+
+    payload = utils_mod._LAST_ERROR_PAYLOAD
+    assert payload is not None
+    assert payload["exit_code"] == EXIT_PRINTER_ERROR
+    assert payload["printed"] is False
+    assert "invalid ams_mapping" in payload["error"]
+
+
+def test_execute_print_stale_error_before_ack_is_not_blamed():
+    """A latched print_error from a prior job (a lone periodic report arriving
+    before our project_file ack) must not be attributed to this print."""
+    printer = _test_printer(simulation_mode=False)
+    client = MagicMock()
+
+    def connect(*a, **k):
+        client.on_connect(client, None, None, 0)
+
+    def loop_start():
+        # First: a stale periodic *full-state snapshot* carrying a latched error
+        # from a prior job (all required snapshot keys present), with NO
+        # project_file command field — this is not our ack.
+        stale = MagicMock()
+        stale.payload = json.dumps(
+            {
+                "print": {
+                    "print_error": 83935248,
+                    "gcode_state": "IDLE",
+                    "mc_percent": 0,
+                    "bed_temper": 25.0,
+                    "nozzle_temper": 30.0,
+                }
+            }
+        ).encode()
+        client.on_message(client, None, stale)
+        # Then: our clean project_file ack (error already cleared / not ours).
+        ack = MagicMock()
+        ack.payload = json.dumps({"print": {"command": "project_file", "print_error": 0}}).encode()
+        client.on_message(client, None, ack)
+
+    client.connect.side_effect = connect
+    client.loop_start.side_effect = loop_start
+    with (
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+    ):
+        # Must NOT raise: the stale error predates our ack and is not ours.
+        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
+
+
+def test_execute_print_error_after_ack_is_blamed():
+    """An error arriving with/after our project_file ack is still reported."""
+    printer = _test_printer(simulation_mode=False)
+    client = MagicMock()
+
+    def connect(*a, **k):
+        client.on_connect(client, None, None, 0)
+
+    def loop_start():
+        ack = MagicMock()
+        ack.payload = json.dumps({"print": {"command": "project_file", "print_error": 0}}).encode()
+        client.on_message(client, None, ack)
+        # A later report carries a real error for OUR print.
+        err = MagicMock()
+        err.payload = json.dumps({"print": {"print_error": 1234}}).encode()
+        client.on_message(client, None, err)
+
+    client.connect.side_effect = connect
+    client.loop_start.side_effect = loop_start
+    with (
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+        pytest.raises(BambuError),
+    ):
+        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
+
+
+def test_execute_print_on_connect_publishes_once_but_resubscribes():
+    """paho auto-reconnect re-firing on_connect must not re-publish the print,
+    but MUST resubscribe on every (re)connect (clean_session drops the sub)."""
+    printer = _test_printer(simulation_mode=False)
+    client = MagicMock()
+
+    def loop_start():
+        # Simulate a reconnect: on_connect fires twice within the ack window.
+        client.on_connect(client, None, None, 0)
+        client.on_connect(client, None, None, 0)
+        msg = MagicMock()
+        msg.payload = json.dumps({"print": {"command": "project_file", "print_error": 0}}).encode()
+        client.on_message(client, None, msg)
+
+    client.loop_start.side_effect = loop_start
+    with (
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+    ):
+        mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
+    # The print-start payload must be published exactly once despite two connects.
+    request_publishes = [
+        c for c in client.publish.call_args_list if c.args and str(c.args[0]).endswith("/request")
+    ]
+    assert len(request_publishes) == 1
+    # But the report subscription must be (re)established on BOTH connects, or an
+    # ack after a mid-window reconnect would be invisible and time the print out.
+    report_subscribes = [
+        c for c in client.subscribe.call_args_list if c.args and str(c.args[0]).endswith("/report")
+    ]
+    assert len(report_subscribes) == 2
+
+
+def test_send_command_on_connect_publishes_once():
+    """send_command must not re-publish on a paho auto-reconnect either."""
+    printer = _test_printer(simulation_mode=False)
+    client = MagicMock()
+
+    def loop_start():
+        client.on_connect(client, None, None, 0)
+        client.on_connect(client, None, None, 0)
+        client.on_publish(client, None, 1)
+
+    client.loop_start.side_effect = loop_start
+    with (
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+    ):
+        assert mqtt_mod.send_command(printer, "{}", timeout=1, retries=0) is True
+    request_publishes = [
+        c for c in client.publish.call_args_list if c.args and str(c.args[0]).endswith("/request")
+    ]
+    assert len(request_publishes) == 1
+    # And publishes at QoS 1 so on_publish reflects a broker PUBACK, not a bare
+    # local socket write.
+    assert request_publishes[0].kwargs.get("qos") == 1
