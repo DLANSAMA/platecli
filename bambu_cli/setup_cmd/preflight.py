@@ -95,6 +95,18 @@ def collect_preflight_checks():
         config_permissions = _file_permission_check(_config_path(), "config-permissions")
         if config_permissions:
             checks.append(config_permissions)
+        if "insecure_tls" in cfg and not isinstance(cfg["insecure_tls"], bool):
+            # A non-boolean insecure_tls (e.g. the string "false") is ignored and
+            # TLS validation stays ON (fail-closed); flag it so the user is not
+            # confused about whether they disabled it.
+            checks.append(
+                _preflight_result(
+                    "warning",
+                    "insecure-tls",
+                    f"config.json 'insecure_tls' is not a JSON boolean ({cfg['insecure_tls']!r}); "
+                    "it is ignored and TLS certificate validation stays ENABLED. Use true/false.",
+                )
+            )
         printer_ip = cfg.get("printer_ip")
         if _looks_like_placeholder(printer_ip, {"0.0.0.0", "192.168.0.XXX", "PRINTER_IP"}):
             checks.append(
@@ -116,7 +128,7 @@ def collect_preflight_checks():
             expanded = _expand_path(access_file)
             if os.path.exists(expanded):
                 try:
-                    with open(expanded, encoding="utf-8") as f:
+                    with open(expanded, encoding="utf-8-sig") as f:
                         access_code_problem = _access_code_value_problem(f.read().strip())
                 except OSError as exc:
                     access_code_problem = f"Access code file could not be read: {_exception_for_message(exc)}"
@@ -134,6 +146,16 @@ def collect_preflight_checks():
                     access_permissions = _file_permission_check(expanded, "access-code-permissions")
                     if access_permissions:
                         checks.append(access_permissions)
+                    if has_inline_code:
+                        checks.append(
+                            _preflight_result(
+                                "warning",
+                                "access-code-inline-conflict",
+                                "config.json has BOTH an inline access_code and an access_code_file; "
+                                "the file is used and the inline value is ignored. Remove the stale "
+                                "inline key (run: plate setup --migrate-access-code).",
+                            )
+                        )
             else:
                 checks.append(
                     _preflight_result(

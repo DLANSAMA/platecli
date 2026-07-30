@@ -32,6 +32,7 @@ def _offer_pin_fingerprint(
     False) in ``--json`` mode or when the session is not interactive, so agent
     and non-TTY runs are never blocked on a prompt. Writes are atomic and 0600.
     """
+    from bambu_cli.config import read_config_json
     from bambu_cli.setup_cmd.common import _secure_write_json
 
     if json_mode:
@@ -49,8 +50,9 @@ def _offer_pin_fingerprint(
         logger.info('      Skipped. Add "cert_fingerprint" to config.json later to pin it.')
         return False
     try:
-        with open(config_path, encoding="utf-8") as f:
-            cfg = json.load(f)
+        # utf-8-sig via the canonical reader: a BOM'd config the user just loaded
+        # successfully must not silently decline the pin they opted into.
+        cfg = read_config_json(config_path)
         cfg["cert_fingerprint"] = fp
         _secure_write_json(config_path, cfg)
     except (OSError, ValueError) as exc:
