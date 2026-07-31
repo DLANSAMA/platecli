@@ -111,7 +111,7 @@ pip install 'platecli[tui]'
 plate tui    # or: plate tui --sim to explore it without a printer
 ```
 
-`plate tui` puts the same flow in one persistent screen: a live status and AMS dashboard, a prepare form with material/quality presets, an explicit print confirmation, and a job monitor. It runs on the same pipeline as `plate job`, and the same rules apply — a print only ever starts from the confirm dialog, cancelling keeps the sliced file, and leaving the monitor never stops a print. Textual is an optional extra, so `plate go` remains the zero-extra-dependency path for SSH, dumb terminals, and screen readers.
+`plate tui` puts the same flow in one persistent screen: a live status and AMS dashboard, a prepare form with material/quality presets, an optional advanced-settings screen exposing the full slicer surface (every setting in your installed profiles, searchable), an explicit print confirmation, and a job monitor. It runs on the same pipeline as `plate job`, and the same rules apply — a print only ever starts from the confirm dialog, cancelling keeps the sliced file, and leaving the monitor never stops a print. Textual is an optional extra, so `plate go` remains the zero-extra-dependency path for SSH, dumb terminals, and screen readers.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-dark.gif">

@@ -390,3 +390,63 @@ assume green.
   via `get_status()` is simpler and sim-testable; a persistent subscription
   (reusing `monitor_status`'s internals) is a later optimization.
 - **Q4 — camera panel (`bambu_cli/camera.py`):** out of scope for v1.
+
+## 11. Phase 5 — advanced slice settings ("a slicer without the slicer")
+
+**Requested after the live test (2026-07-31):** the prepare flow should
+optionally expose real slicer control, not just material/quality/supports.
+The CLI already has the full surface — ~25 named `slice` flags plus
+`--set KEY=VALUE` / `--set-filament KEY=VALUE` reaching every one of the
+~176 OrcaSlicer process/filament settings, discovered via
+`slice --list-settings` and safety-validated in `_validate_slice_options`
+(`bambu_cli/slicer/options.py`). Phase 5 is a front-end over that existing
+machinery; no new slicing vocabulary.
+
+### 11.1 Design
+
+- **Opt-in:** PrepareScreen gains a "Settings…" button + `s` binding beside
+  the presets. Untouched, the flow behaves exactly as today (presets only).
+  For pre-sliced `.3mf` sources the button is disabled with the existing
+  "material settings not applied" caveat — overrides cannot apply.
+- **SettingsScreen** (new, full screen): grouped form whose fields map 1:1
+  onto existing `slice` parser dests — Quality (layer height, first layer
+  height), Strength (infill %, pattern, walls, top/bottom layers), Supports
+  (enable, type, threshold, interface density), Adhesion (brim), Filament
+  (nozzle temp, bed temp, fan speed, flow ratio), Speed (the five accel
+  flags), Plate (copies, seam position, ironing). Blank field = no override
+  (profile default wins), matching CLI semantics.
+- **"All settings" browser** inside SettingsScreen: searchable list of every
+  settable key + example value, read from the installed profiles via the
+  same loader `slice --list-settings` uses; filter-as-you-type; selecting a
+  key opens a value editor and records a `--set` / `--set-filament`-style
+  override (kind chosen by which profile the key came from). Where profiles
+  are unavailable (e.g. `--sim` with no slicer configured) the browser
+  degrades to free-form KEY=VALUE entry — the CLI's unknown-key
+  warn-but-pass semantics already tolerate that.
+- **State/plumbing:** a `SliceOverrides` dataclass in
+  `bambu_cli/interactive/core.py`, carried on `WizardState`; a pure
+  `apply_overrides(ns, overrides)` decorates the slice namespace inside
+  `run_prepare_pipeline`. Empty overrides ⇒ byte-identical behavior, so the
+  wizard (`plate go`) is untouched.
+- **Preview + re-slice:** the preview gains an `Overrides   n set (...)`
+  line when any are active; changing settings after a preview re-enables
+  Prepare (the existing re-prepare path already discards the old workdir).
+- **Safety:** temperature overrides from any path stay subject to
+  `_validate_slice_options` — the screen surfaces that `BambuError` inline
+  (test the nozzle=999 refusal). The filament flow-ratio key is
+  `filament_flow_ratio` via `--flow-ratio`/set-filament, NOT process-level
+  `flow_ratio` (the silent-no-op gotcha) — browser keys from the filament
+  profile must be sent as filament overrides.
+
+### 11.2 Tests
+
+Unit: `SliceOverrides` round-trip + `apply_overrides` decoration (incl.
+none-set ⇒ namespace identical). Pilot: form values land on the slice
+namespace via fake `GoSteps`; browser search filters; sim degradation;
+pre-sliced disables the button; temp-refusal renders inline. Integration:
+one `tests/fakes/orca_stub` run asserting overrides land in the temp
+profiles the stub receives (the read-back lesson — never assert only on the
+request).
+
+**Acceptance:** default flow byte-identical when no settings touched; full
+§9 gates green; the settings screen usable at 80×24.

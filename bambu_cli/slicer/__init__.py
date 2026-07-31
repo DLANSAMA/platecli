@@ -19,6 +19,7 @@ from bambu_cli.slicer.options import (  # noqa: F401
     _safe_temp_prefix,
     _sliced_output_path,
     _validate_slice_options,
+    setting_catalog,
 )
 from bambu_cli.slicer.orca import (  # noqa: F401
     _build_orcaslicer_cmd,

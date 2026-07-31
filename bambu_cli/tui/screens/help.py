@@ -40,7 +40,14 @@ HELP_ROWS: list[tuple[str, list[tuple[str, str]]]] = [
         "Prepare",
         [
             ("enter", "Prepare the model in the source box"),
+            ("s", "Advanced slice settings"),
             ("escape", "Back to the dashboard"),
+        ],
+    ),
+    (
+        "Settings",
+        [
+            ("escape", "Back without applying"),
         ],
     ),
     (

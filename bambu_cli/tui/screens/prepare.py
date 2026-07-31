@@ -26,7 +26,7 @@ from functools import partial
 from typing import Any
 
 from textual.app import ComposeResult
-from textual.containers import VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Checkbox, Footer, Header, Input, Label, RadioButton, RadioSet, Static
 
@@ -36,6 +36,7 @@ from bambu_cli.interactive.core import (
     MATERIAL_GUIDANCE,
     QUALITY_CHOICES,
     QUALITY_GUIDANCE,
+    SliceOverrides,
     detect_ams_material,
     make_workdir,
     validate_source,
@@ -43,6 +44,7 @@ from bambu_cli.interactive.core import (
 from bambu_cli.tui.services import PrepareResult
 
 _SETUP_HINT = "Run 'plate setup' in a terminal, then start the TUI again."
+_PRESLICED_SETTINGS_CAVEAT = "Settings unavailable — pre-sliced file, material and slice settings are not applied."
 
 
 class PreflightErrorScreen(Screen):
@@ -87,6 +89,7 @@ class PrepareScreen(Screen):
     # time and a text input rightly swallows a printable "?".
     BINDINGS = [
         ("escape", "back", "Back"),
+        ("s", "settings", "Settings"),
         ("f1", "app.help", "Help"),
     ]
 
@@ -112,6 +115,9 @@ class PrepareScreen(Screen):
         # Set while the confirm modal owns the run, so a "back" outcome can put
         # the preview (and the workdir handle) back exactly as it was.
         self._handed_result: PrepareResult | None = None
+        # Advanced slice overrides collected on the settings screen. Empty until
+        # the user opens it, so an untouched flow slices exactly as before.
+        self.overrides = SliceOverrides()
 
     # --- composition --------------------------------------------------------
 
@@ -151,7 +157,10 @@ class PrepareScreen(Screen):
                 id="quality-set",
             )
             yield Checkbox("Supports (big overhangs)", id="supports-check")
-            yield Button("Prepare", id="prepare-button", variant="primary")
+            with Horizontal(id="prepare-actions"):
+                yield Button("Prepare", id="prepare-button", variant="primary")
+                yield Button("Settings…", id="settings-button")
+            yield Static("", id="settings-summary", markup=False)
             yield Static("", id="prepare-status", markup=False)
             yield Static("", id="preview", markup=False)
             yield Button("Start print…", id="print-button", disabled=True)
@@ -250,8 +259,55 @@ class PrepareScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "prepare-button":
             self.start_prepare()
+        elif event.button.id == "settings-button":
+            self.action_settings()
         elif event.button.id == "print-button":
             self.open_confirm()
+
+    # --- advanced settings ---------------------------------------------------
+
+    def settings_lock_reason(self) -> str | None:
+        """Why the settings screen is unavailable right now, or None.
+
+        The single source of truth for both doors into the screen — the button's
+        ``disabled`` state and the ``s`` key — so a keyboard user can never reach
+        a screen the button refuses.
+        """
+        if self._preparing:
+            return "Preparing — settings can be changed once it finishes."
+        if self.result is not None and not getattr(self.result.state, "sliced", False):
+            return _PRESLICED_SETTINGS_CAVEAT
+        return None
+
+    def action_settings(self) -> None:
+        """Open the advanced slice settings, unless something says otherwise."""
+        from bambu_cli.tui.screens.settings import SettingsScreen
+
+        reason = self.settings_lock_reason()
+        if reason:
+            # Say why rather than swallowing the key press.
+            self.query_one("#settings-summary", Static).update(reason)
+            self.app.notify(reason, severity="warning")
+            return
+        self.app.push_screen(
+            SettingsScreen(self.overrides, profiles_dir=_profiles_dir()),
+            self._settings_closed,
+        )
+
+    def _settings_closed(self, overrides: SliceOverrides | None) -> None:
+        if overrides is None:  # cancelled: keep what we had
+            return
+        self.overrides = overrides
+        self.query_one("#settings-summary", Static).update(
+            f"Overrides: {overrides.summary()}" if not overrides.is_empty() else ""
+        )
+        # Settings changed after a preview: that preview describes the old
+        # slice, so drop it and let the user prepare again.
+        if self.result is not None:
+            self._discard_workdir()
+            self.query_one("#print-button", Button).disabled = True
+            self.query_one("#preview", Static).update("")
+            self.query_one("#prepare-status", Static).update("Settings changed — prepare again to apply them.")
 
     # --- ownership handoff --------------------------------------------------
 
@@ -337,6 +393,7 @@ class PrepareScreen(Screen):
                 self.selected_material(),
                 self.selected_quality(),
                 self.selected_supports(),
+                self.overrides,
             ),
             thread=True,
             exclusive=True,
@@ -344,7 +401,15 @@ class PrepareScreen(Screen):
             exit_on_error=False,
         )
 
-    def _prepare_worker(self, workdir: str, source: str, material: str, quality: str, supports: bool) -> None:
+    def _prepare_worker(
+        self,
+        workdir: str,
+        source: str,
+        material: str,
+        quality: str,
+        supports: bool,
+        overrides: SliceOverrides,
+    ) -> None:
         result = self._deps.get_pipeline().prepare(
             self._args,
             workdir=workdir,
@@ -352,6 +417,7 @@ class PrepareScreen(Screen):
             material=material,
             quality=quality,
             supports=supports,
+            overrides=overrides,
             detected_material=self._detected_material,
             detected_slot=self._detected_slot,
         )
@@ -376,6 +442,12 @@ class PrepareScreen(Screen):
             return
         self.result = result
         self.query_one("#print-button", Button).disabled = False
+        # A pre-sliced .3mf/.gcode is printed as-is: no slicer runs, so slice
+        # overrides cannot apply. Disable the door rather than pretend.
+        presliced = not getattr(result.state, "sliced", False)
+        self.query_one("#settings-button", Button).disabled = presliced
+        if presliced:
+            self.query_one("#settings-summary", Static).update(_PRESLICED_SETTINGS_CAVEAT)
         status.update('Ready. Press "Start print…" to confirm.')
         preview.update("\n".join(f"{label:<11}{value}" for label, value in result.rows))
 
@@ -392,3 +464,13 @@ def _pressed(radio_set: RadioSet, choices: list[str], default: str | None = None
     if index is None or index < 0 or index >= len(choices):
         return default if default is not None else choices[0]
     return choices[index]
+
+
+def _profiles_dir() -> str | None:
+    """The configured OrcaSlicer profiles directory, or None when unusable."""
+    try:
+        from bambu_cli.context import current_settings
+
+        return current_settings().profiles_dir or None
+    except Exception:  # noqa: BLE001 -- the browser degrades to free-form entry
+        return None

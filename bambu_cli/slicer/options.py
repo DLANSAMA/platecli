@@ -77,6 +77,20 @@ def _known_setting_keys(profiles_dir: str, kind: str) -> dict[str, Any]:
     return result
 
 
+def setting_catalog(profiles_dir: str) -> dict[str, dict[str, Any]]:
+    """Return ``{"process": {key: example}, "filament": {key: example}}``.
+
+    The one discovery seam over the installed profiles: ``slice --list-settings``
+    (agent-facing) and the TUI's settings browser (human-facing) both read this,
+    so the two can never advertise different vocabularies. Empty sections mean
+    "no profiles readable here" — callers degrade rather than fail.
+    """
+    return {
+        "process": _known_setting_keys(profiles_dir, "process"),
+        "filament": _known_setting_keys(profiles_dir, "filament"),
+    }
+
+
 def _parse_kv_overrides(entries: list[str] | None, label: str) -> dict[str, str]:
     """``['k=v', ...]`` -> ``{'k': 'v'}``. Raises ``ValueError`` on a bad entry."""
     out: dict[str, str] = {}

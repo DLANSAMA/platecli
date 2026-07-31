@@ -18,7 +18,7 @@ import argparse
 import os
 import shutil
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from bambu_cli import utils
@@ -56,6 +56,87 @@ PRESLICED_MATERIAL_LINE = "(pre-sliced — material settings not applied)"
 
 
 @dataclass
+class SliceOverrides:
+    """Advanced slice settings collected by a front-end, in CLI vocabulary.
+
+    Three buckets, mirroring the three ways the ``slice`` parser accepts them:
+
+    * ``fields`` — named parser *dests* (``layer_height``, ``walls``, …). Set
+      exactly what ``--layer-height`` would set, so validation and profile
+      writing cannot tell a TUI run from a CLI run.
+    * ``process`` / ``filament`` — generic ``KEY=VALUE`` overrides, the
+      ``--set`` and ``--set-filament`` surface. The split matters: a filament
+      key sent as a process override is silently ignored by OrcaSlicer (the
+      ``filament_flow_ratio`` gotcha), so the *source profile* decides the
+      bucket, never a guess.
+
+    Empty means "no overrides" and the pipeline behaves exactly as it did
+    before this existed — ``plate go`` keeps its byte-identical behaviour.
+    """
+
+    fields: dict[str, Any] = field(default_factory=dict)
+    process: dict[str, str] = field(default_factory=dict)
+    filament: dict[str, str] = field(default_factory=dict)
+
+    def is_empty(self) -> bool:
+        return not (self.fields or self.process or self.filament)
+
+    def count(self) -> int:
+        return len(self.fields) + len(self.process) + len(self.filament)
+
+    def summary(self) -> str:
+        """One-line human description, e.g. ``3 set (layer_height, walls, +1)``."""
+        if self.is_empty():
+            return ""
+        names = list(self.fields) + list(self.process) + list(self.filament)
+        shown = names[:3]
+        extra = len(names) - len(shown)
+        listed = ", ".join(shown) + (f", +{extra}" if extra else "")
+        return f"{self.count()} set ({listed})"
+
+
+def apply_overrides(ns: argparse.Namespace, overrides: SliceOverrides | None) -> argparse.Namespace:
+    """Return a slice namespace decorated with ``overrides``.
+
+    With nothing to apply the namespace is returned **unchanged and unmodified**
+    (same object) — the guarantee that keeps the wizard byte-identical. With
+    overrides, a copy is decorated so the caller's namespace is never mutated:
+    named dests are assigned directly, and generic overrides are appended to the
+    same ``set_process`` / ``set_filament`` lists ``--set`` / ``--set-filament``
+    fill, in ``KEY=VALUE`` form.
+    """
+    if overrides is None or overrides.is_empty():
+        return ns
+    decorated = argparse.Namespace(**vars(ns))
+    for dest, value in overrides.fields.items():
+        setattr(decorated, dest, value)
+    for dest, bucket in (("set_process", overrides.process), ("set_filament", overrides.filament)):
+        if not bucket:
+            continue
+        existing = list(getattr(decorated, dest, None) or [])
+        existing.extend(f"{key}={value}" for key, value in bucket.items())
+        setattr(decorated, dest, existing)
+    return decorated
+
+
+def overrides_problem(overrides: SliceOverrides | None, base: argparse.Namespace | None = None) -> str | None:
+    """Return the safety/validation message these overrides would trigger, or None.
+
+    Runs the *same* ``_validate_slice_options`` the ``slice`` command runs, on a
+    namespace shaped like the one the pipeline will build — so a front-end can
+    refuse an unsafe value (nozzle 999 °C) at the moment it is entered instead
+    of after a download and a slice attempt. The bounds live in one place; this
+    only moves *when* they are checked, never *what* they allow.
+    """
+    from bambu_cli.slicer.options import _validate_slice_options
+
+    if overrides is None or overrides.is_empty():
+        return None
+    sample = base if base is not None else preset_to_job_args("PLA", "standard", False, "model.stl")
+    return _validate_slice_options(apply_overrides(argparse.Namespace(**vars(sample)), overrides))
+
+
+@dataclass
 class WizardState:
     """Plain state carried between wizard steps (and between TUI screens)."""
 
@@ -73,6 +154,8 @@ class WizardState:
     # The absolute AMS slot index (unit*4+slot) of the active tray the material
     # was detected from, or None. Used as the ams_mapping when feeding from AMS.
     detected_ams_slot: int | None = None
+    # Advanced slice settings collected by a front-end (empty for ``plate go``).
+    overrides: SliceOverrides = field(default_factory=SliceOverrides)
 
 
 # ---------------------------------------------------------------------------
@@ -392,7 +475,8 @@ def run_prepare_pipeline(steps: Any, state: WizardState, workdir: str) -> str:
     if ext in SLICEABLE_EXTENSIONS:
         utils._LAST_ERROR_PAYLOAD = None
         try:
-            printable_path = steps.get_slice()(_slice_args_for_job(model_path, preset_ns, workdir))
+            slice_ns = apply_overrides(_slice_args_for_job(model_path, preset_ns, workdir), state.overrides)
+            printable_path = steps.get_slice()(slice_ns)
         except BambuError as exc:
             if not exc.next_command:
                 exc.next_command = ["slice", model_path, "-v"]
@@ -445,12 +529,17 @@ def preview_rows(state: WizardState, model_path: str) -> list[tuple[str, str]]:
     else:
         material_line = PRESLICED_MATERIAL_LINE
 
-    return [
+    rows = [
         ("Model", name),
         ("Printer", f"{full_name}, {settings.nozzle_size}mm nozzle"),
         ("Material", material_line),
         ("Estimate", estimate_line),
     ]
+    # Only when something was actually overridden: the wizard never sets any, so
+    # its preview keeps exactly the four lines it has always printed.
+    if state.sliced and not state.overrides.is_empty():
+        rows.append(("Overrides", state.overrides.summary()))
+    return rows
 
 
 # ---------------------------------------------------------------------------

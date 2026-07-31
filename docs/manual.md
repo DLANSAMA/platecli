@@ -251,6 +251,7 @@ Without the extra, `plate tui` exits `1` (config error) with the install command
 |--------|--------------|
 | **Dashboard** | Live printer state, temperatures, layer/progress, and the AMS trays (active tray highlighted). Refreshes on `r` and every 10 s while it is the active screen. An unreachable printer renders inline — the app never crashes on it. |
 | **Prepare** (`n`) | Source box (URL or local path, validated as you submit), material and quality presets with guidance, and a supports checkbox. The AMS-detected filament is pre-selected and tagged *(detected in AMS)* — unless you already picked something, in which case a slow AMS read never overrides you. "Prepare" downloads and slices in the background and shows the same preview the wizard prints (model, printer, material line, time/filament estimate). If the printer or OrcaSlicer is not configured, this screen is replaced by a message pointing at `plate setup` — the TUI never embeds setup. |
+| **Settings** (`s` from prepare) | Advanced slice settings — the CLI's whole surface as a form: the named `slice` flags grouped by Quality / Strength / Supports / Adhesion / Filament / Speed / Plate, plus a searchable browser over **every** setting in your installed profiles (the same list `slice --list-settings` prints). Selecting a key fills in a `KEY=VALUE` editor; the key's own profile decides whether it is sent as a process or a filament override, and you can force the latter with a `filament:` prefix. A blank field keeps the profile default, exactly like leaving a flag off. Unsafe values are refused inline by the same checks the CLI runs. Disabled for pre-sliced sources, which are printed as-is. |
 | **Confirm** | Start print / Upload only / Cancel. |
 | **Monitor** (`m`) | Follows a running job — percent, layer, remaining time — until it reaches a terminal state (`FINISH` / `FAILED` / `STOP` / `IDLE`, the same set `plate status --monitor` uses). |
 | **Help** (`?` or `F1`) | The key reference, always available. |
@@ -263,6 +264,7 @@ Without the extra, `plate tui` exits `1` (config error) with the install command
 | `r` | Refresh the dashboard now |
 | `n` | New print (prepare flow) |
 | `m` | Monitor the running job |
+| `s` | Advanced slice settings (from the prepare screen) |
 | `Esc` | Back — from prepare, from the confirm dialog, or from the monitor |
 | `q` / `Ctrl-Q` | Quit (refused while an upload or print-start is in flight) |
 
@@ -276,6 +278,7 @@ The TUI keeps every guarantee the CLI makes:
 - **Upload only** uploads the sliced file and leaves it unstarted — the same as `plate job` without `--confirm`.
 - **Cancel keeps your work.** The sliced file is moved out of the temp directory and the app tells you where it is, exactly like the wizard's "Nothing sent. Sliced file kept at …".
 - **Leaving the monitor is not stopping the print.** `Esc` stops watching; it never sends a stop or pause command.
+- **Advanced settings cannot exceed CLI limits.** Every override goes through the same `slice` validation, so an unsafe temperature is refused in the form rather than sent to the printer. Filament-profile settings are applied as filament overrides and process settings as process overrides, so nothing is silently ignored. When the browser cannot read your profiles (no slicer configured yet), it has nothing to classify a key against and assumes a process setting — prefix the entry with `filament:` (e.g. `filament:filament_flow_ratio=0.9`) to send it as a filament override instead.
 - Quitting is refused while an upload or print-start is still running, so a physical action is never abandoned half-way.
 
 ### `plate go` or `plate tui`?

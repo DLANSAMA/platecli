@@ -463,3 +463,64 @@ def test_gosteps_injection_wins():
     steps = core.GoSteps(download=sentinel, slice=sentinel, job=sentinel, setup=sentinel, ams_material=sentinel)
     assert steps.get_download() is sentinel
     assert steps.get_ams_material() is sentinel
+
+
+# ---------------------------------------------------------------------------
+# SliceOverrides — the wizard must be untouched by their existence
+# ---------------------------------------------------------------------------
+
+
+def test_wizard_state_starts_with_no_overrides():
+    assert core.WizardState().overrides.is_empty()
+
+
+def test_run_prepare_pipeline_passes_the_untouched_namespace_when_no_overrides(tmp_path):
+    """`plate go` byte-identity: the slice namespace is what it always was."""
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+    seen = {}
+
+    def capture(ns=None, **kwargs):
+        seen["vars"] = dict(vars(ns))
+        return sliced
+
+    steps = core.GoSteps(download=Recorder(return_value=stl), slice=capture)
+    state = core.WizardState(source="https://example.com/cube.stl", material="PLA", quality="standard")
+    core.run_prepare_pipeline(steps, state, str(tmp_path))
+
+    from bambu_cli.interactive.presets import preset_to_job_args
+    from bambu_cli.job.predict import _slice_args_for_job
+
+    expected = _slice_args_for_job(stl, preset_to_job_args("PLA", "standard", False, state.source), str(tmp_path))
+    assert seen["vars"] == vars(expected)
+
+
+def test_run_prepare_pipeline_applies_overrides_when_present(tmp_path):
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+    slicer = Recorder(return_value=sliced)
+    steps = core.GoSteps(download=Recorder(return_value=stl), slice=slicer)
+    state = core.WizardState(source="https://example.com/cube.stl")
+    state.overrides = core.SliceOverrides(fields={"walls": 5}, filament={"filament_flow_ratio": "0.9"})
+    core.run_prepare_pipeline(steps, state, str(tmp_path))
+    assert slicer.calls[0].walls == 5
+    assert slicer.calls[0].set_filament == ["filament_flow_ratio=0.9"]
+
+
+def test_preview_rows_gain_an_overrides_line_only_when_set(tmp_path):
+    _install_ready_settings(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+    plain = core.WizardState(printable_path=sliced, sliced=True)
+    assert [label for label, _ in core.preview_rows(plain, sliced)] == ["Model", "Printer", "Material", "Estimate"]
+
+    tuned = core.WizardState(printable_path=sliced, sliced=True)
+    tuned.overrides = core.SliceOverrides(fields={"walls": 5})
+    rows = dict(core.preview_rows(tuned, sliced))
+    assert rows["Overrides"] == "1 set (walls)"
+
+    # A pre-sliced file was never sliced by us, so overrides are not claimed.
+    presliced = core.WizardState(printable_path=sliced, sliced=False)
+    presliced.overrides = core.SliceOverrides(fields={"walls": 5})
+    assert "Overrides" not in dict(core.preview_rows(presliced, sliced))

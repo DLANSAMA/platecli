@@ -20,9 +20,9 @@ from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.slicer.options import (
     _directory_input_message,
     _is_directory_input,
-    _known_setting_keys,
     _sliced_output_path,
     _validate_slice_options,
+    setting_catalog,
 )
 from bambu_cli.slicer.orca import _build_orcaslicer_cmd, _run_orcaslicer
 from bambu_cli.slicer.output import _finalize_slice, _output_snapshot
@@ -46,8 +46,9 @@ def _list_settings(args: argparse.Namespace, settings) -> str:
     from bambu_cli.utils import emit_json
 
     profiles_dir = settings.profiles_dir
-    process = _known_setting_keys(profiles_dir, "process")
-    filament = _known_setting_keys(profiles_dir, "filament")
+    catalog = setting_catalog(profiles_dir)
+    process = catalog["process"]
+    filament = catalog["filament"]
     if not process and not filament:
         logger.warning(
             f"⚠️  No OrcaSlicer profiles found under {_path_for_message(profiles_dir)}; "

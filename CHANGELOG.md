@@ -22,6 +22,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   `plate go` is unaffected and remains the no-extra-dependency path for SSH,
   dumb terminals, and screen readers. Like `go`, `tui` is interactive-only:
   `--json` and a non-TTY stdin exit `5` with the standard error envelope.
+  The prepare screen also offers **advanced slice settings** (`s`): a grouped
+  form over the named `slice` flags plus a searchable browser across every
+  setting in the installed OrcaSlicer profiles — the same discovery
+  `slice --list-settings` exposes — recorded as `--set` / `--set-filament`
+  overrides with the bucket taken from the profile the key came from. Blank
+  fields keep profile defaults, unsafe values are refused by the same
+  validation the CLI applies, and touching nothing leaves the slice byte
+  identical to before.
 
 ### Changed
 

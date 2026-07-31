@@ -56,7 +56,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **1203** non-live tests collected / **1202** passing (2026-07-30; latest additions are the Textual TUI phases 1-2: dashboard/prepare pilot tests and the shared `interactive/core.py` unit tests, on top of the deep-audit fix wave); **84.9%** coverage measured 2026-07-29 on Linux; CI floor **83**; per-module floors not enforced |
+| Tests | **A−** | **1297** non-live tests collected / **1296** passing (2026-07-31; latest additions are the Textual TUI phases 1-5: dashboard, prepare, confirm/print, job monitor, help overlay, and advanced slice settings — pilot tests plus the shared `interactive/core.py` unit tests and a hermetic override read-back, on top of the deep-audit fix wave); **84.9%** coverage measured 2026-07-29 on Linux; CI floor **83**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
@@ -117,7 +117,7 @@ A+ for *this* project means all of the following are true simultaneously:
 | `slicer/` | ~75% | ≥85% | ≥92% |
 | `job/` | ~93% | ≥95% | ≥97% (keep) |
 | `commands/` | ~80% | ≥90% | ≥95% |
-| `tui/` (Textual front-end, optional extra) | **97%** measured 2026-07-30 (`app`/`deps`/`entry`/`services`/`widgets/*`/`screens/dashboard`/`screens/help` 100%; `screens/confirm` 97.2%; `screens/monitor` 95.7%; `screens/prepare` 95.7% — package minimum 95.7%) | ≥85% | ≥92% |
+| `tui/` (Textual front-end, optional extra) | **97%** measured 2026-07-31 (`app`/`deps`/`entry`/`services`/`settings_model`/`widgets/*`/`screens/dashboard`/`screens/help` 100%; `screens/settings` 98.6%; `screens/confirm` 97.2%; `screens/monitor` 95.7%; `screens/prepare` 95.6% — package minimum 95.6%) | ≥85% | ≥92% |
 | JSON contract tests | partial (`test_json_contracts.py`) | every command | every command + schema file |
 | Property / adversarial tests | few | netsafety + zip + filenames | + redirect/SSRF fuzz |
 | Flakes in CI (30 consecutive green main runs) | unknown | 0 known | 0 |
@@ -626,7 +626,7 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 | D Contracts & 1.0 | **in progress** | local | — | schemas + contract harness + stability policy; remaining agent `--json` schemas land in follow-up PRs |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
 | Doc truth pass | **done** | local | 2026-07-24 | versions de-literalized, prerequisites stated, camera guidance corrected, test/coverage numbers re-measured |
-| TUI (`plate tui`) | **done** (phases 1–4) | `feat/tui` | 2026-07-30 | Textual front-end over the shared `interactive/core.py`: dashboard, prepare, confirm modal (only `confirm=True` path), job monitor, help overlay. Optional `[tui]` extra; pilot-tested headlessly at 80×24; `tui/` package ~97% covered (no module below 95.7%) |
+| TUI (`plate tui`) | **done** (phases 1–5) | `feat/tui` | 2026-07-31 | Textual front-end over the shared `interactive/core.py`: dashboard, prepare, confirm modal (only `confirm=True` path), job monitor, help overlay, and advanced slice settings (the named `slice` flags plus a browser over every installed profile setting, routed to `--set` / `--set-filament` by source profile). Optional `[tui]` extra; pilot-tested headlessly at 80×24; `tui/` package ~97% covered (no module below 95.6%) |
 
 > **Verified 2026-07-09** against a clean checkout — the "current scoreboard" above
 > was corrected the same day. Coverage floor raised 79→**81** (multi-OS minimum:

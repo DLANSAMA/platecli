@@ -162,3 +162,61 @@ HelpScreen {
     height: auto;
     padding: 1 0 0 0;
 }
+
+
+/* Advanced slice settings (Phase 5). */
+
+#settings-body {
+    height: 1fr;
+    padding: 0 2;
+}
+
+#settings-intro {
+    color: $text-muted;
+    height: auto;
+    padding: 0 0 1 0;
+}
+
+.settings-group {
+    text-style: bold;
+    padding: 1 0 0 0;
+}
+
+.settings-input {
+    width: 100%;
+}
+
+#browser-status {
+    color: $text-muted;
+    height: auto;
+}
+
+#browser-list {
+    height: 8;
+    border: round $secondary;
+}
+
+#override-list {
+    height: auto;
+    color: $text-muted;
+}
+
+#settings-error {
+    color: $error;
+    height: auto;
+    padding: 1 0 0 0;
+}
+
+#settings-buttons, #settings-actions, #prepare-actions {
+    height: auto;
+    align: left middle;
+}
+
+#settings-buttons Button, #settings-actions Button, #prepare-actions Button {
+    margin: 0 1 0 0;
+}
+
+#settings-summary {
+    height: auto;
+    color: $text-muted;
+}

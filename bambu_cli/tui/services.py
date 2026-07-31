@@ -206,6 +206,7 @@ class PipelineService:
         material: str,
         quality: str,
         supports: bool,
+        overrides: Any = None,
         workdir: str | None = None,
         detected_material: str | None = None,
         detected_slot: int | None = None,
@@ -233,6 +234,8 @@ class PipelineService:
             detected_ams_material=detected_material,
             detected_ams_slot=detected_slot,
         )
+        if overrides is not None:
+            state.overrides = overrides
         state.workdir = workdir if workdir is not None else make_workdir(prefix="bambu-tui-")
         try:
             model_path = run_prepare_pipeline(self._get_steps(), state, state.workdir)
