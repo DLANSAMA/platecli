@@ -85,6 +85,15 @@ and (b) explicit model downloads you request. Key properties:
   only the print step is withheld. `--confirm` is a deliberate-action gate against
   accidents, not an authorization boundary: the CLI cannot distinguish a human's flag
   from an agent's. Agents must not invent confirm flags without user approval.
+- **In the interactive front-ends the gate is a dialog, not the flag.** `plate go`
+  (wizard) and `plate tui` (full-screen UI) never require the user to type
+  `--confirm`; the equivalent deliberate action is an explicit confirmation step —
+  the wizard's final question and the TUI's confirm dialog — which is the single
+  place in each front-end that requests a print. Neither is scriptable: both refuse
+  `--json` and a non-TTY stdin with exit `5`, so an agent cannot drive them, and
+  choosing *Upload only* leaves the file on the printer unstarted. The property the
+  flag protects is preserved (no print without a distinct, deliberate second action);
+  only its form differs.
 
 ## Known limitations
 

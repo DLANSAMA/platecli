@@ -28,7 +28,13 @@
 3. `release.yml` runs: CI matrix -> build (sdist+wheel, `twine check`, tag/version match)
    -> publish to PyPI via trusted publishing (`pypi` environment, `id-token: write`)
    -> GitHub Release with the dist artifacts attached.
-4. Verify: `pip install --no-cache-dir platecli==X.Y.Z && plate --version`.
+4. Verify: `pip install --no-cache-dir platecli==X.Y.Z && plate --version`. Verify the
+   **optional extra** resolves too — `pip install --no-cache-dir 'platecli[tui]==X.Y.Z'`,
+   then `plate tui` in a real terminal. A broken extra is invisible to the default
+   install path, and the `textual` pin is capped below a major version, so a resolver
+   change can strand it. (`==X.Y.Z` is for *verifying* a release only — never put the
+   pinned form in docs or launch copy; users get the newest release from
+   `pip install platecli`.)
 5. If the release touched FTPS, gcode confirm, slice validation, or job upload, run the
    [live-printer smoke](live-printer-smoke.md) with a printer attached.
 6. **Bump main to the next dev version** (e.g. `0.5.0.dev0`) in a follow-up PR.

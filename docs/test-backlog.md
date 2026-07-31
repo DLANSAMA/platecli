@@ -6,16 +6,16 @@
 This file is a short **remaining-gaps** list only. Refresh after each phase or audit.
 Do not treat historical “≥98% coverage” claims as current — see the snapshot below.
 
-## Snapshot (2026-07-24)
+## Snapshot (2026-07-31)
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
 | Non-live tests collected | **1297** collected / **1296** passing (measured 2026-07-31; incl. the deep-audit fix wave and the Textual TUI phases 1-5: dashboard/prepare/confirm/monitor/settings pilot tests, the shared `interactive/core.py` unit tests, and the hermetic override read-back against the OrcaSlicer stub) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **84.9%** Linux measured 2026-07-29 (C.4 hermetic Orca tests lift `slicer/output.py` 79.8%→92.7%); ~**83.9%** Windows measured 2026-07-26; **floor 83** (Windows is the binding leg) | **≥92%** total; optional module floors |
+| Line/branch coverage (CI) | **88.51%** Linux, **88.09%** Windows, **88.33%** macOS — all read off CI run `30632442521` (2026-07-31); local Linux measures 88.35%; **floor 83** (Windows is still the binding leg, so it sets any future ratchet) | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
-| JSON schemas | **25** files under `docs/schemas/` | every `--json` command + monitor goldens |
+| JSON schemas | **26** files under `docs/schemas/` (`tui.json` added with the TUI) | every `--json` command + monitor goldens |
 | Mutation baseline | Pure safety modules; floor **40%** | hermetic Orca stub landed (C.4); re-run `mutmut` on `slicer/output.py` to raise its row |
 | Live printer | Documented opt-in harness | manual pre-release (optional scheduled lab) |
 | Product version | pre-1.0 Beta (single-sourced from `pyproject.toml`) | **v1.0.0** when roadmap §5 is complete |

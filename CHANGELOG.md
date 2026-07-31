@@ -200,6 +200,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `plate job/send <model> --dry-run`: a 0-byte/unreadable sliceable model now fails
   the dry-run, matching the existing printer-ready empty-file check (dry-run parity).
 
+### Documentation
+
+- Troubleshooting gained the three `plate tui` symptoms, keyed to the exact strings
+  the command prints: the missing `[tui]` extra (exit `1`), the interactive-only
+  refusal in a script, pipe, or `--json` run (exit `5`), and an empty settings
+  browser when no OrcaSlicer profiles are readable — including the `filament:`
+  prefix that stops a filament key being sent as a silently-ignored process override.
+- SECURITY.md now states how deliberate-intent works in the interactive front-ends.
+  The threat model described `--confirm` as the gate for physical actions, which is
+  true of the non-interactive commands but not of `plate go` / `plate tui`, where the
+  user never types the flag and the equivalent gate is an explicit confirmation
+  dialog. Both remain unscriptable (`--json` and non-TTY stdin exit `5`).
+- AGENTS.md: the module table now lists `interactive/`, `tui/`, `tlspin.py`,
+  `netsafety.py`, `printables.py`, `ams.py` and `utils.py`; `go` and `tui` are marked
+  explicitly as human-only surfaces with no machine contract; and a stray paragraph
+  that had been splitting the quality-gates table in two (breaking its rendering on
+  GitHub and PyPI) was moved below it.
+- CONTRIBUTING.md lists all eight CI smokes instead of four, and explains why
+  `python_compat_smoke.py` is worth running by hand: PEP 604 `X | None` passes ruff,
+  mypy, and the local suite while breaking Python 3.9 at import time.
+- Measured coverage/test numbers refreshed across the quality roadmap and test
+  backlog from the current matrix (Linux 88.4%, Windows 88.09%, macOS 88.33%),
+  replacing figures dating from before the TUI work.
+
 ### Security
 
 - `insecure_tls` is now coerced strictly and fails **closed**. A hand-edited

@@ -1,7 +1,12 @@
 # Implementation plan: full-screen TUI (`plate tui`)
 
-**Status:** Draft for implementation — hand-off document for autonomous overnight
-coding sessions.
+**Status:** **Implemented — all five phases landed on `feat/tui` (2026-07-30/31).**
+Kept as the design record and rationale; it is no longer a to-do list. Phases 1–5
+(dashboard, prepare, confirm/monitor, polish/help, advanced slice settings) are
+built, documented in [the manual](../manual.md#full-screen-mode-plate-tui), and
+covered by pilot tests. What the plan describes as future work has either shipped
+or is recorded as an accepted quirk in the PR — read the manual and
+[quality-roadmap](../quality-roadmap.md) for current behaviour, not this file.
 **Branch:** all implementation work goes on **`feat/tui`** (branched from `main`).
 Each phase below is sized for one ~1–2 h autonomous session and MUST leave the
 repo green (every gate in §8 passing) so the session can commit safely.

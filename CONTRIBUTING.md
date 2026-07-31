@@ -24,12 +24,27 @@ uv run python -m pytest tests/ -q -m "not live"
 uv run python -W error::ResourceWarning -m pytest tests/ -m "not live" \
   --cov=bambu_cli --cov-report=term-missing --cov-fail-under=83
 
-# Smokes used in CI (see .github/workflows/ci.yml)
-uv run python tests/privacy_smoke.py
-uv run python tests/ci_workflow_smoke.py
+# Smokes used in CI — all of them (see the "lint" job in .github/workflows/ci.yml).
+# These are NOT part of pytest; a green suite says nothing about them.
 python scripts/syntax_smoke.py
 python scripts/cli_help_smoke.py
+uv run python tests/ci_workflow_smoke.py
+uv run python tests/python_compat_smoke.py       # 3.9 floor: syntax + PEP 604 unions
+uv run python tests/dependency_resolution_smoke.py
+uv run python tests/release_readiness_smoke.py
+uv run python tests/privacy_smoke.py
+uv run python tests/agent_cli_smoke.py
 ```
+
+`python_compat_smoke.py` is worth running by hand before any push. The project
+supports Python 3.9, most contributors do not develop on it, and the failure mode
+is invisible locally: `X | None` (PEP 604) is accepted by ruff and mypy and runs
+fine on 3.10+, but raises `TypeError` on 3.9 the moment it is evaluated in a
+**runtime** position — a class base, a `cast()` argument, a `TypeVar` bound, a
+module-level alias. `from __future__ import annotations` defers *annotations*
+only and does not help there. Use `typing.Optional` / `typing.Union` instead.
+`release_readiness_smoke.py` flags local `__pycache__` / `build` / `dist` noise
+that CI's clean checkout does not have — expected locally, not a failure to chase.
 
 - **No printer** is required for the default suite: use simulation (`--sim`) or mocks.
 - **Live pre-release harness** (`tests/live_printer_smoke.py`): opt-in only

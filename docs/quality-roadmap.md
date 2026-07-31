@@ -15,8 +15,12 @@ Historical baseline (do not read as current), from the audit + full
 `pytest --cov=bambu_cli` on 2026-07-08: **368 tests**, **78%** line coverage
 (1105 / 4973 stmts missed), **130** `sys.exit` sites in `bambu_cli/`, **7**
 `@mockable` sites (def + 6 uses), **1** `BambuError` raise in production.
-The "Baseline" column below is that snapshot. **Current measured (2026-07-27):
-980 passed, 84.49% branch coverage over 6025 statements.**
+The "Baseline" column below is that snapshot. **Current measured (2026-07-31,
+`feat/tui` at `7f9db3f`): 1296 passed / 1297 collected, 88.35% branch coverage
+over 7634 statements (local Linux).** Read off the full CI matrix on that commit
+(CI runs a clean checkout, so its Linux legs sit a little higher):
+Windows 3.14 **88.09%** (still the binding leg), macOS 3.14 88.33%, Linux 3.9
+88.53% / 3.12 88.50% / 3.14 88.51%.
 
 | Area | Baseline | Gate to A | Gate to A+ | Primary evidence |
 |------|----------|-----------|------------|------------------|
@@ -35,7 +39,7 @@ The "Baseline" column below is that snapshot. **Current measured (2026-07-27):
 
 ## Scoreboard (current)
 
-Updated **2026-07-25** (docs truth pass; test/coverage numbers re-measured). Foundational phases
+Updated **2026-07-31** (TUI phases 1–5 landed; test/coverage numbers re-measured against CI run `30632442521`). Foundational phases
 (0/A/B) are done. Phase C **typing is done** (full package + `check_untyped_defs`);
 coverage floor is **83** (target 92). Phase D schemas largely landed but not
 complete for every command. The camera Docker bind default and camera pin
@@ -56,7 +60,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **1297** non-live tests collected / **1296** passing (2026-07-31; latest additions are the Textual TUI phases 1-5: dashboard, prepare, confirm/print, job monitor, help overlay, and advanced slice settings — pilot tests plus the shared `interactive/core.py` unit tests and a hermetic override read-back, on top of the deep-audit fix wave); **84.9%** coverage measured 2026-07-29 on Linux; CI floor **83**; per-module floors not enforced |
+| Tests | **A−** | **1297** non-live tests collected / **1296** passing (2026-07-31; latest additions are the Textual TUI phases 1-5: dashboard, prepare, confirm/print, job monitor, help overlay, and advanced slice settings — pilot tests plus the shared `interactive/core.py` unit tests and a hermetic override read-back, on top of the deep-audit fix wave); **88.35%** coverage measured 2026-07-31 on Linux (CI: Windows 88.09%, Linux 88.51%); CI floor **83**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
@@ -66,9 +70,18 @@ security is not yet **A+**.
 is coverage toward 92 and documented camera hardenings. Tagging `v1.0.0` still requires §5.
 
 **Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26; bound by the Windows leg at 83.85%, not Linux's 84.10%).
-Measured branch total is **84.03%** on Linux (2026-07-26; Windows historically ran ~0.4pt lower); the floor is set
-at the multi-OS minimum so the matrix does not flake while still denying ~2 points
+Measured branch total is **88.35%** on local Linux (2026-07-31), 88.51% on CI's Linux leg; the floor is set
+at the multi-OS minimum so the matrix does not flake while still denying points
 of silent rot vs the old 79 gate.
+
+**Ratchet headroom (measured 2026-07-31, run `30632442521`):** every leg now sits
+above 88 — Windows 88.09%, macOS 88.33%, Linux 3.9/3.12/3.14 88.53/88.50/88.51% —
+against a gate of 83, so roughly five points of drift can pass unnoticed. Windows
+remains the binding leg, as it has at every ratchet. Raising the gate to **85** is
+supported by this data with ~3 points of margin; **88** is not, because Windows
+clears it by 0.09pt and would flake the matrix. Ratcheting means moving `ci.yml`,
+the citations in this file, and `docs/test-backlog.md` together — `tests/test_docs_consistency.py`
+and `tests/ci_workflow_smoke.py` both enforce that.
 
 ### Residual coverage policy
 
@@ -117,7 +130,7 @@ A+ for *this* project means all of the following are true simultaneously:
 | `slicer/` | ~75% | ≥85% | ≥92% |
 | `job/` | ~93% | ≥95% | ≥97% (keep) |
 | `commands/` | ~80% | ≥90% | ≥95% |
-| `tui/` (Textual front-end, optional extra) | **97%** measured 2026-07-31 (`app`/`deps`/`entry`/`services`/`settings_model`/`widgets/*`/`screens/dashboard`/`screens/help` 100%; `screens/settings` 98.6%; `screens/confirm` 97.2%; `screens/monitor` 95.7%; `screens/prepare` 95.6% — package minimum 95.6%) | ≥85% | ≥92% |
+| `tui/` (Textual front-end, optional extra) | measured 2026-07-31: **13 of 17 modules at 100%** (`app`/`deps`/`entry`/`services`/`settings_model`/`widgets/*`/`screens/dashboard`/`screens/help`); the other four are `screens/settings` 98.6%, `screens/confirm` 97.2%, `screens/prepare` 95.8%, `screens/monitor` 95.7% — **package minimum 95.7%** | ≥85% | ≥92% |
 | JSON contract tests | partial (`test_json_contracts.py`) | every command | every command + schema file |
 | Property / adversarial tests | few | netsafety + zip + filenames | + redirect/SSRF fuzz |
 | Flakes in CI (30 consecutive green main runs) | unknown | 0 known | 0 |

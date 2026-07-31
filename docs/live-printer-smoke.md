@@ -92,7 +92,14 @@ job upload paths:
 1. Unit suite green (`-m "not live"`) plus the usual CI lint/type/security gates
    ([CONTRIBUTING.md](../CONTRIBUTING.md)).
 2. Run this live harness with `BAMBU_LIVE=1` (upload-only path at minimum).
-3. Optionally enable `BAMBU_LIVE_CLEANUP=1` after success.
-4. Record the run date/host in the release notes if useful (no secrets).
-5. For 1.0 readiness criteria beyond this harness, see
+3. **Exercise the interactive front-ends by hand — this harness does not cover them.**
+   `plate go` and `plate tui` both require a real TTY, so nothing automated drives
+   them: the pilot tests prove the TUI's screens and logic headlessly, but only a
+   human sees whether it is actually usable against a live printer. Walk one source
+   through prepare → (`s` for advanced settings) → confirm, and check the monitor
+   follows the job. Starting a print needs the user's explicit go-ahead, exactly as
+   `--confirm` does.
+4. Optionally enable `BAMBU_LIVE_CLEANUP=1` after success.
+5. Record the run date/host in the release notes if useful (no secrets).
+6. For 1.0 readiness criteria beyond this harness, see
    [quality-roadmap.md](quality-roadmap.md) §5.
