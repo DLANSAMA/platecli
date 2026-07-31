@@ -548,6 +548,21 @@ def preserve_printable(state: WizardState) -> str | None:
         return state.printable_path
 
 
+def decline_message(state: WizardState) -> str:
+    """Preserve the printable file and return the wizard's "Nothing sent" line.
+
+    Declining must never silently delete work: the sliced file is moved out of
+    the temp workdir (or left in place when it was the user's own file) and the
+    message names where it landed. Shared so the wizard and the TUI say — and
+    keep — exactly the same thing.
+    """
+    kept = preserve_printable(state)
+    if kept:
+        label = "File kept at" if not state.sliced else "Sliced file kept at"
+        return f"Nothing sent. {label} {kept}"
+    return "Nothing sent."
+
+
 def cleanup_workdir(state: WizardState) -> None:
     """Delete the temp workdir unless we deliberately preserved a file in it."""
     if os.environ.get("BAMBU_KEEP_WORKDIR") == "1":

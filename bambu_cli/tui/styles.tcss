@@ -74,3 +74,64 @@ AmsPanel {
     color: $text-muted;
     height: auto;
 }
+
+
+/* Confirm modal + job monitor (Phase 3). */
+
+ConfirmModal {
+    align: center middle;
+}
+
+#confirm-body {
+    width: 70;
+    max-width: 100%;
+    height: auto;
+    max-height: 80%;
+    border: thick $primary;
+    background: $surface;
+    padding: 1 2;
+}
+
+#confirm-title {
+    text-style: bold;
+}
+
+#confirm-path {
+    color: $text-muted;
+    height: auto;
+    padding: 0 0 1 0;
+}
+
+#confirm-buttons {
+    height: auto;
+    align: left middle;
+}
+
+#confirm-buttons Button {
+    margin: 0 1 0 0;
+}
+
+#confirm-status {
+    height: auto;
+    padding: 1 0 0 0;
+}
+
+#monitor-body {
+    height: 1fr;
+    padding: 1 2;
+}
+
+#monitor-title {
+    text-style: bold;
+    height: auto;
+}
+
+JobProgress {
+    height: auto;
+    padding: 1 0;
+}
+
+#monitor-hint {
+    color: $text-muted;
+    height: auto;
+}

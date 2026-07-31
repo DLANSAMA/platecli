@@ -261,3 +261,88 @@ class PipelineService:
 
         if workdir:
             cleanup_workdir(WizardState(workdir=workdir))
+
+
+# --- Live job monitoring ----------------------------------------------------
+
+
+def terminal_gcode_states() -> frozenset[str]:
+    """The gcode_state values that end a print watch.
+
+    Imported from ``protocols.mqtt`` (lazily, so the TUI import path does not
+    pull the MQTT stack in eagerly) rather than re-listed here: the TUI monitor
+    must stop on exactly the set ``mqtt.monitor_status`` stops on.
+    """
+    from bambu_cli.protocols.mqtt import TERMINAL_GCODE_STATES
+
+    return TERMINAL_GCODE_STATES
+
+
+class MonitorService:
+    """Poll printer status for a running job until it reaches a terminal state.
+
+    A thin adapter over the same status provider the dashboard uses (so failures
+    arrive as ``StatusSnapshot(ok=False)`` and never as exceptions). The loop
+    itself lives in the screen's cancellable thread worker; this class only
+    answers "what is the state now" and "is that state terminal", which keeps
+    both decisions unit-testable without a pilot.
+    """
+
+    def __init__(self, status_provider: Any = None) -> None:
+        self._status_provider = status_provider
+
+    def _provider(self) -> Any:
+        if self._status_provider is not None:
+            return self._status_provider
+        return StatusService()
+
+    def poll(self, args: argparse.Namespace) -> StatusSnapshot:
+        return self._provider().fetch(args)
+
+    def is_terminal(self, snapshot: StatusSnapshot) -> bool:
+        """True when the job is over — an unreadable status is never terminal."""
+        if not snapshot.ok:
+            return False
+        return snapshot.gcode_state in terminal_gcode_states()
+
+
+def job_progress_lines(snapshot: StatusSnapshot) -> list[tuple[str, str]]:
+    """Return ``(label, value)`` rows for the job-progress widget (pure)."""
+    if not snapshot.ok:
+        return [("Status", snapshot.error or "Printer unreachable.")]
+
+    raw = snapshot.raw
+    rows: list[tuple[str, str]] = [
+        ("State", str(raw.get("gcode_state", "UNKNOWN"))),
+        ("Progress", f"{raw.get('mc_percent', 0)}%"),
+        ("Layer", f"{raw.get('layer_num') or 0} / {raw.get('total_layer_num') or 0}"),
+        ("Remaining", format_remaining(raw.get("mc_remaining_time"))),
+    ]
+    if raw.get("gcode_file"):
+        rows.append(("File", str(raw.get("gcode_file"))))
+    return rows
+
+
+def format_remaining(minutes: Any) -> str:
+    """Render ``mc_remaining_time`` (minutes) as ``1h 05m`` / ``42m`` / ``—``."""
+    try:
+        total = int(minutes)
+    except (TypeError, ValueError):
+        return "—"
+    if total < 0:
+        return "—"
+    hours, mins = divmod(total, 60)
+    if hours:
+        return f"{hours}h {mins:02d}m"
+    return f"{mins}m"
+
+
+def progress_percent(snapshot: StatusSnapshot) -> int:
+    """Clamped 0-100 completion percentage for the progress bar."""
+    if not snapshot.ok:
+        return 0
+    try:
+        value = int(snapshot.raw.get("mc_percent", 0))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(100, value))

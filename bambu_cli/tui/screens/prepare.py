@@ -13,8 +13,10 @@ workers and post their result back through ``App.call_from_thread``; neither can
 raise into the UI (``PipelineService.prepare`` returns failures as values), so a
 download or slicer failure renders inline instead of crashing the app.
 
-Phase 2 stops at the preview: the print action is present but disabled — the
-confirmation modal that may set ``confirm=True`` is Phase 3.
+From the preview the user can open the confirmation modal, which is the only
+code path that may start a print. Opening it *transfers* ownership of the temp
+workdir (see ``screens/confirm.py``'s docstring for the full ownership rules):
+this screen deletes the workdir only while it still holds it.
 """
 
 from __future__ import annotations
@@ -71,7 +73,10 @@ class PreflightErrorScreen(Screen):
         self.app.pop_screen()
 
     def action_quit(self) -> None:
-        self.app.exit()
+        # Route through the app so the in-flight-job guard applies here too
+        # (unreachable with a job running today, but there is exactly one quit
+        # policy and every path goes through it).
+        self.app.action_quit()
 
 
 class PrepareScreen(Screen):
@@ -93,11 +98,16 @@ class PrepareScreen(Screen):
         # screen can delete it even when the pipeline finishes after the user
         # has already left (the result never comes back in that case).
         self._workdir: str | None = None
-        self._closed = False
+        # NOTE: not ``_closed``/``_running`` — those are MessagePump internals;
+        # shadowing them silently breaks Textual's own message dispatch.
+        self._left_screen = False
         # True once the user has touched the material control: a slow AMS read
         # that lands afterwards must never re-pick for them.
         self._material_touched = False
         self._detection_button: RadioButton | None = None
+        # Set while the confirm modal owns the run, so a "back" outcome can put
+        # the preview (and the workdir handle) back exactly as it was.
+        self._handed_result: PrepareResult | None = None
 
     # --- composition --------------------------------------------------------
 
@@ -140,7 +150,7 @@ class PrepareScreen(Screen):
             yield Button("Prepare", id="prepare-button", variant="primary")
             yield Static("", id="prepare-status", markup=False)
             yield Static("", id="preview", markup=False)
-            yield Button("Start print", id="print-button", disabled=True)
+            yield Button("Start print…", id="print-button", disabled=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -161,7 +171,7 @@ class PrepareScreen(Screen):
         # its late result is discarded (see _apply_result) and this deletes the
         # directory the worker was filling. cleanup_workdir tolerates a
         # directory that has already been removed, so the double path is safe.
-        self._closed = True
+        self._left_screen = True
         self._discard_workdir()
 
     def _discard_workdir(self) -> None:
@@ -180,7 +190,7 @@ class PrepareScreen(Screen):
         self.app.call_from_thread(self._apply_detection, material, slot)
 
     def _apply_detection(self, material: str | None, slot: int | None) -> None:
-        if self._closed:
+        if self._left_screen:
             return
         self._detected_material = material
         self._detected_slot = slot
@@ -236,6 +246,60 @@ class PrepareScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "prepare-button":
             self.start_prepare()
+        elif event.button.id == "print-button":
+            self.open_confirm()
+
+    # --- ownership handoff --------------------------------------------------
+
+    def take_result(self) -> PrepareResult | None:
+        """Hand the prepared run (and its workdir) to the confirm modal.
+
+        After this the screen no longer deletes the workdir on unmount — the
+        modal owns it, and either consumes it (printed/uploaded/declined) or
+        hands it back through ``adopt_result``.
+        """
+        result = self.result
+        self._handed_result = result
+        self.result = None
+        self._workdir = None
+        return result
+
+    def adopt_result(self, result: PrepareResult) -> None:
+        """Take ownership back (the user backed out of the modal)."""
+        self.result = result
+        self._workdir = result.state.workdir
+
+    def open_confirm(self) -> None:
+        """Preview → confirmation modal (the only path that can start a print)."""
+        from bambu_cli.tui.screens.confirm import ConfirmModal
+
+        if self.result is None or not self.result.ok or self._preparing:
+            return
+        result = self.take_result()
+        assert result is not None  # guarded above  # noqa: S101
+        self.app.push_screen(ConfirmModal(self._args, self._deps, result.state), self._confirm_closed)
+
+    def _confirm_closed(self, outcome: Any) -> None:
+        from bambu_cli.tui.screens.confirm import BACK, PRINTED
+
+        handed, self._handed_result = self._handed_result, None
+        if outcome is None:
+            # Dismissed without a decision (never happens through our own code
+            # paths): treat it as backing out so nothing is destroyed.
+            if handed is not None:
+                self.adopt_result(handed)
+            return
+        if outcome.kind == BACK:
+            if handed is not None:
+                self.adopt_result(handed)
+            self.query_one("#prepare-status", Static).update("Back at the preview — nothing has been sent.")
+            return
+        # The modal consumed the run: the preview no longer describes a file we
+        # own, so the print action goes back to disabled.
+        self.query_one("#print-button", Button).disabled = True
+        self.query_one("#prepare-status", Static).update(outcome.message)
+        if outcome.kind == PRINTED:
+            self.app.open_monitor()
 
     # --- prepare ------------------------------------------------------------
 
@@ -252,6 +316,7 @@ class PrepareScreen(Screen):
 
         # A previous run's temp workdir is dead the moment we start another one.
         self._discard_workdir()
+        self.query_one("#print-button", Button).disabled = True
         # Create the workdir on this side of the worker: the screen must be able
         # to delete it on unmount without waiting for a result that may never
         # arrive (Escape mid-prepare).
@@ -289,7 +354,7 @@ class PrepareScreen(Screen):
         self.app.call_from_thread(self._apply_result, result)
 
     def _apply_result(self, result: PrepareResult) -> None:
-        if self._closed:
+        if self._left_screen:
             # The user left while the pipeline ran: there is nobody to show this
             # to and the widgets are gone. Drop the products of the run rather
             # than touching an unmounted screen.
@@ -301,11 +366,13 @@ class PrepareScreen(Screen):
         preview = self.query_one("#preview", Static)
         if not result.ok:
             self.result = None
+            self.query_one("#print-button", Button).disabled = True
             status.update(result.error or "Preparing the model failed.")
             preview.update("")
             return
         self.result = result
-        status.update("Ready.")
+        self.query_one("#print-button", Button).disabled = False
+        status.update('Ready. Press "Start print…" to confirm.')
         preview.update("\n".join(f"{label:<11}{value}" for label, value in result.rows))
 
 

@@ -81,7 +81,8 @@ class DashboardScreen(Screen):
         self.refresh_status()
 
     def action_quit(self) -> None:
-        self.app.exit()
+        # Route through the app so the in-flight-job guard applies here too.
+        self.app.action_quit()
 
     def refresh_status(self) -> None:
         """Kick off a background fetch unless one is already in flight."""

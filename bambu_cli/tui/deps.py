@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from bambu_cli.tui.services import PipelineService, StatusService
+from bambu_cli.tui.services import MonitorService, PipelineService, StatusService
 
 if TYPE_CHECKING:
     from bambu_cli.interactive.core import GoSteps
@@ -35,13 +35,17 @@ class TuiDeps:
     ``StatusService.fetch``); tests substitute a fake with scripted results.
     ``steps`` is the shared ``GoSteps`` pipeline seam; ``pipeline`` and
     ``ams_detector`` default to adapters built on top of it, and can be replaced
-    wholesale by a pilot test that wants scripted prepare results.
+    wholesale by a pilot test that wants scripted prepare results. The monitor
+    polls through ``monitor_service`` at ``poll_interval`` seconds.
     """
 
     status_provider: Any = None
     steps: Any = field(default=None)
     pipeline: Any = field(default=None)
     ams_detector: Any = field(default=None)
+    monitor_service: Any = field(default=None)
+    # Seconds between monitor polls. Injected so pilot tests never sleep.
+    poll_interval: float = 3.0
 
     def get_status_provider(self) -> Any:
         if self.status_provider is not None:
@@ -57,6 +61,14 @@ class TuiDeps:
         if self.pipeline is not None:
             return self.pipeline
         return PipelineService(steps=self.get_steps())
+
+    def get_monitor_service(self) -> Any:
+        if self.monitor_service is not None:
+            return self.monitor_service
+        return MonitorService(self.get_status_provider())
+
+    def get_poll_interval(self) -> float:
+        return self.poll_interval
 
     def get_ams_detector(self) -> Any:
         if self.ams_detector is not None:

@@ -1,15 +1,16 @@
 """The Textual application shell for ``plate tui``.
 
-``PlateApp`` wires the injected ``TuiDeps`` into the dashboard screen and owns
-global bindings and the stylesheet. It holds no domain logic: the dashboard
-fetches through ``TuiDeps.get_status_provider()`` (a ``StatusService`` in
-production, a scripted fake in pilot tests).
+``PlateApp`` wires the injected ``TuiDeps`` into the screens and owns global
+bindings and the stylesheet. It holds no domain logic: the dashboard fetches
+through ``TuiDeps.get_status_provider()`` (a ``StatusService`` in production, a
+scripted fake in pilot tests), and starting a print is the confirm modal's job
+alone (``screens/confirm.py``).
 
 The status fetch never raises (``StatusService`` captures failures into a
 ``StatusSnapshot(ok=False)``), so a printer error renders inline instead of
-crashing the app; ``sys.exit`` never appears here (it lives only in ``cli.py``).
-Later phases will catch ``BambuError`` from pipeline workers and surface it as a
-notification.
+crashing the app; process termination never happens here (that lives only in
+``cli.py``). Pipeline and job workers catch ``BambuError`` and render it inline,
+and ``q`` refuses to quit while an upload/print-start worker is still running.
 """
 
 from __future__ import annotations
@@ -23,13 +24,14 @@ from textual.app import App
 from bambu_cli.interactive.core import preflight_problem
 from bambu_cli.tui.deps import TuiDeps
 from bambu_cli.tui.screens.dashboard import DashboardScreen
+from bambu_cli.tui.screens.monitor import MonitorScreen
 from bambu_cli.tui.screens.prepare import PreflightErrorScreen, PrepareScreen
 
 _CSS_PATH = Path(__file__).with_name("styles.tcss")
 
 
 class PlateApp(App):
-    """Full-screen terminal UI for platecli (dashboard + prepare flow)."""
+    """Full-screen terminal UI for platecli (dashboard, prepare, confirm, monitor)."""
 
     CSS_PATH = _CSS_PATH
     TITLE = "platecli"
@@ -39,12 +41,17 @@ class PlateApp(App):
         ("q", "quit", "Quit"),
         ("r", "refresh", "Refresh"),
         ("n", "new_print", "New print"),
+        ("m", "monitor", "Monitor job"),
     ]
 
     def __init__(self, args: argparse.Namespace, deps: TuiDeps | None = None) -> None:
         super().__init__()
         self._args = args
         self._deps = deps if deps is not None else TuiDeps()
+        # True while an upload / print-start worker is running: quitting then
+        # would abandon a physical action mid-flight, so the quit binding
+        # refuses instead (the modal re-enables it when the worker returns).
+        self._job_in_flight = False
 
     def on_mount(self) -> None:
         self.push_screen(
@@ -66,6 +73,29 @@ class PlateApp(App):
             self.push_screen(PreflightErrorScreen(problem))
             return
         self.push_screen(PrepareScreen(self._args, self._deps))
+
+    def set_job_in_flight(self, value: bool) -> None:
+        self._job_in_flight = bool(value)
+
+    @property
+    def job_in_flight(self) -> bool:
+        return self._job_in_flight
+
+    def action_quit(self) -> None:
+        """Quit, unless a job worker is mid-flight (then say so and stay)."""
+        if self._job_in_flight:
+            self.notify("Upload in progress — wait for it to finish.", severity="warning")
+            return
+        self.exit()
+
+    def action_monitor(self) -> None:
+        """Watch the running job. Leaving the monitor never stops the print."""
+        self.open_monitor()
+
+    def open_monitor(self) -> None:
+        if isinstance(self.screen, MonitorScreen):
+            return
+        self.push_screen(MonitorScreen(self._args, self._deps))
 
     def action_refresh(self) -> None:
         # Delegate to the active screen when it can refresh (the dashboard).

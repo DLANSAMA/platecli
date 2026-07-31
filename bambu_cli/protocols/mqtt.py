@@ -260,6 +260,12 @@ def send_command(
 # so they are the gate for telling a snapshot from a delta.
 _REQUIRED_STATUS_KEYS = ("gcode_state", "mc_percent", "bed_temper", "nozzle_temper")
 
+# The gcode_state values that end a print watch. Module-level (rather than a
+# local in monitor_status) so every follower of a print — the CLI monitor loop
+# and the TUI monitor screen — stops on exactly the same set instead of keeping
+# a second copy that can drift.
+TERMINAL_GCODE_STATES = frozenset({"FINISH", "FAILED", "STOP", "IDLE"})
+
 
 def status_is_complete(data):
     """True when ``data`` is a full snapshot rather than an incremental delta."""
@@ -536,7 +542,7 @@ def monitor_status(args):
             logger.info("🏁 Reached terminal state: FINISH")
         return
 
-    terminal_states = {"FINISH", "FAILED", "STOP", "IDLE"}
+    terminal_states = TERMINAL_GCODE_STATES
     received_terminal = threading.Event()
     show_progress_bar = not json_mode and sys.stdout.isatty()
     client = create_mqtt_client(printer)

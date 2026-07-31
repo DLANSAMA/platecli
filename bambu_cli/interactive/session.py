@@ -45,10 +45,11 @@ from bambu_cli.interactive.core import GoSteps as GoSteps
 from bambu_cli.interactive.core import WizardState as WizardState
 from bambu_cli.interactive.core import build_job_namespace as _build_job_namespace
 from bambu_cli.interactive.core import cleanup_workdir as _cleanup_workdir
+from bambu_cli.interactive.core import decline_message as _decline_message
 from bambu_cli.interactive.core import detect_ams_material as _detect_ams_material
 from bambu_cli.interactive.core import make_workdir as _make_workdir
 from bambu_cli.interactive.core import match_material_preset as _match_material_preset  # noqa: F401
-from bambu_cli.interactive.core import preserve_printable as _preserve_printable
+from bambu_cli.interactive.core import preserve_printable as _preserve_printable  # noqa: F401
 from bambu_cli.interactive.core import preview_rows as _preview_rows
 from bambu_cli.interactive.core import read_loaded_ams_material as _read_loaded_ams_material  # noqa: F401
 from bambu_cli.interactive.core import run_prepare_pipeline as _run_prepare_pipeline
@@ -303,12 +304,7 @@ def _step_confirm_print(args: argparse.Namespace, deps: GoDeps, state: WizardSta
 
     # Nothing sent. Preserve the printable file outside the temp workdir so the
     # path we print survives cleanup (a user's own pre-sliced file stays put).
-    kept = _preserve_printable(state)
-    if kept:
-        label = "File kept at" if not state.sliced else "Sliced file kept at"
-        prompts.print(f"Nothing sent. {label} {kept}")
-    else:
-        prompts.print("Nothing sent.")
+    prompts.print(_decline_message(state))
     raise _GoDone(0)
 
 
