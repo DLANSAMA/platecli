@@ -554,18 +554,19 @@ often that means OrcaSlicer is not set up yet (see
 [OrcaSlicer or its BBL profiles were not found](#orcaslicer-or-its-bbl-profiles-were-not-found))
 or you are exploring with `plate tui --sim` on a machine with no slicer.
 
-The form still works — type overrides by hand as `KEY=VALUE`. One caveat worth
-knowing: with no profiles to check the key against, the TUI cannot tell a
-*filament* setting from a *process* setting and assumes process. If the key is a
-filament setting, prefix it so it is sent to the right bucket:
-
-```
-filament:filament_flow_ratio=0.9
-```
+The form still works — type the setting's name into **Setting** and its value
+into **Value**. One caveat worth knowing: with no profiles to check the key
+against, the TUI cannot tell a *filament* setting from a *process* setting, so
+every new key starts at *process* (the bucket a bare `--set` uses). For a
+filament setting such as `filament_flow_ratio`, switch **Applies to** to
+*filament* before adding it.
 
 Getting this wrong is the classic silent no-op — a filament key sent as a process
-override is accepted and then ignored, so the slice comes out unchanged. Once
-OrcaSlicer is configured the browser classifies keys for you automatically.
+override is accepted and then ignored, so the slice comes out unchanged. The
+picker resets to *process* for each new key rather than remembering your last
+choice, precisely so the mistake cannot happen in reverse either. Once
+OrcaSlicer is configured the browser classifies keys for you automatically and
+the dropdown is set from the profile the key was found in.
 
 ## Nothing happens when I run a print command
 

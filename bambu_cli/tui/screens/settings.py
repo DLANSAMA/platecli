@@ -3,21 +3,29 @@
 "A slicer without the slicer": the same surface the CLI exposes (~25 named
 ``slice`` flags plus ``--set`` / ``--set-filament`` reaching every installed
 OrcaSlicer process/filament setting), rendered as a form. Nothing here knows
-what a setting *means* — the field table, parsing, filtering, and bucket
-selection all live in ``tui/settings_model.py``, and the safety bounds stay in
-``slicer.options._validate_slice_options`` (reached through
+what a setting *means* — the field table, parsing, filtering, editor inference
+and bucket selection all live in ``tui/settings_model.py``, and the safety bounds
+stay in ``slicer.options._validate_slice_options`` (reached through
 ``interactive.core.overrides_problem``).
 
 Two ways in:
 
 * **The form** — named fields; blank leaves the profile default alone, exactly
-  as an unset CLI flag does.
-* **The browser** — search every key the installed profiles contain and add it
-  as a ``KEY=VALUE`` override. The bucket comes from the profile the key was
-  found in, so a filament key is never sent as a process override (the
-  ``filament_flow_ratio`` silent-no-op). With no profiles readable (``--sim``
-  on a machine with no slicer configured) the list is empty and free-form
-  ``KEY=VALUE`` entry still works — unknown keys are warn-but-pass in the CLI.
+  as an unset CLI flag does. Fields with a closed option set are dropdowns, so
+  there is nothing to mistype.
+* **The browser** — search every key the installed profiles contain, pick one,
+  and edit *just its value*. Picking a key fills in its name, pins the bucket to
+  whichever profile the key came from (the ``filament_flow_ratio`` silent-no-op
+  is why the bucket is a fact and not a guess), shows the profile's own value as
+  the starting point, and chooses the control from the values that key actually
+  takes across the installed profiles: a toggle for ``0``/``1``, a dropdown for a
+  short closed set, a number box, or free text.
+
+Free text stays reachable for everything the profiles cannot describe — an
+unknown key, or a value like a custom g-code block that no picker can represent.
+With no profiles readable (``--sim`` on a machine with no slicer configured) the
+browser is empty and the name and bucket are entered by hand; the CLI's
+warn-but-pass handling of unknown keys already tolerates that.
 
 Applying validates: type errors from the form and printer-safety refusals from
 ``_validate_slice_options`` (nozzle 999 °C) render inline and keep the screen
@@ -31,24 +39,44 @@ from typing import Any, Optional
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Input, Label, OptionList, Static
+from textual.widgets import (
+    Button,
+    Footer,
+    Header,
+    Input,
+    Label,
+    OptionList,
+    Select,
+    Static,
+    Switch,
+)
 from textual.widgets.option_list import Option
 
 from bambu_cli.interactive.core import SliceOverrides, overrides_problem
 from bambu_cli.tui.settings_model import (
+    EDITOR_NUMBER,
+    EDITOR_SELECT,
+    EDITOR_SWITCH,
     FILAMENT,
     PROCESS,
     SETTING_FIELDS,
     CatalogEntry,
+    SettingField,
     bucket_for_key,
     collect_field_overrides,
     fields_by_group,
     filter_catalog,
     load_catalog,
-    parse_override_entry,
 )
 
 _BROWSER_ROWS = 200
+_NO_OVERRIDE_PROMPT = "(profile default)"
+# Sentinel dropdown entry that reveals the free-text box. The observed values of
+# a key are what the *installed* profiles happen to use, which is a subset of what
+# OrcaSlicer accepts -- profiles that only ever say ``grid`` must not make
+# ``gyroid`` unreachable. The dropdown is a shortcut, never a cage.
+_CUSTOM_VALUE = "\x00custom"
+_CUSTOM_LABEL = "(type a custom value…)"
 
 
 # NOTE: ``Optional[...]`` and not ``SliceOverrides | None``. A class base is a
@@ -72,6 +100,13 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
         self._filament: dict[str, str] = dict(start.filament)
         self._profiles_dir = profiles_dir
         self._catalog: list[CatalogEntry] = []
+        self._browser_matches: list[CatalogEntry] = []
+        # Which key the value editor is currently configured for, and the option
+        # set the dropdown holds. Both exist to make a repeat configure a no-op:
+        # assigning to Input.value posts Changed *asynchronously*, so the handler
+        # lands after we have already prefilled and must not undo it.
+        self._editor_key: str | None = None
+        self._select_values: tuple[str, ...] = ()
 
     # --- composition --------------------------------------------------------
 
@@ -87,26 +122,64 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
                 yield Label(group, classes="settings-group")
                 for field in fields:
                     yield Label(field.label, classes="settings-label")
-                    yield Input(
-                        value=_as_text(self._fields.get(field.dest)),
-                        placeholder=field.hint,
-                        id=field.widget_id,
-                        classes="settings-input",
-                    )
+                    if field.kind == "choice" and field.choices:
+                        yield Select(
+                            [(choice, choice) for choice in field.choices],
+                            prompt=_NO_OVERRIDE_PROMPT,
+                            value=self._initial_choice(field.dest, field.choices),
+                            id=field.widget_id,
+                            classes="settings-input",
+                        )
+                    else:
+                        yield Input(
+                            value=_as_text(self._fields.get(field.dest)),
+                            placeholder=field.hint,
+                            id=field.widget_id,
+                            classes="settings-input",
+                        )
+
             yield Label("All settings", classes="settings-group")
             yield Static("", id="browser-status", markup=False)
             yield Input(placeholder="search every profile setting…", id="browser-search")
             yield OptionList(id="browser-list")
-            yield Input(placeholder="KEY=VALUE  (prefix filament: to force a filament setting)", id="override-entry")
+
+            yield Label("Add an override", classes="settings-group")
+            yield Label("Setting", classes="settings-label")
+            yield Input(placeholder="pick one above, or type a key", id="override-key")
+            yield Label("Applies to", classes="settings-label")
+            yield Select(
+                [("process", PROCESS), ("filament", FILAMENT)],
+                prompt="process",
+                value=PROCESS,
+                allow_blank=False,
+                id="override-bucket",
+            )
+            yield Static("", id="override-default", markup=False)
+            yield Label("Value", classes="settings-label")
+            # All three editors exist from the start and are shown one at a time.
+            # Swapping `display` avoids mounting/removing widgets mid-interaction,
+            # which is where Textual timing bugs live.
+            yield Select([], prompt="choose a value", id="override-select")
+            yield Switch(id="override-switch")
+            yield Input(placeholder="value", id="override-value")
             with Horizontal(id="settings-buttons"):
-                yield Button("Add override", id="override-add")
-                yield Button("Clear overrides", id="override-clear")
-            yield Static("", id="override-list", markup=False)
+                yield Button("Add / update", id="override-add")
+                yield Button("Remove selected", id="override-remove")
+                yield Button("Clear all", id="override-clear")
+            yield Label("Pending overrides", classes="settings-label")
+            yield OptionList(id="override-current")
+
             yield Static("", id="settings-error", markup=False)
             with Horizontal(id="settings-actions"):
                 yield Button("Apply", id="settings-apply", variant="primary")
                 yield Button("Cancel", id="settings-cancel")
         yield Footer()
+
+    def _initial_choice(self, dest: str, choices: tuple[str, ...]) -> Any:
+        """Pre-selected dropdown value, or BLANK when there is no override."""
+        current = self._fields.get(dest)
+        text = "" if current is None else str(current)
+        return text if text in choices else Select.BLANK
 
     def on_mount(self) -> None:
         self._catalog = load_catalog(self._profiles_dir)
@@ -114,8 +187,9 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
         if self._catalog:
             status.update(f"{len(self._catalog)} settings found in the installed profiles.")
         else:
-            status.update("No profiles readable here — type overrides as KEY=VALUE below.")
+            status.update("No profiles readable here — type a setting name and pick its bucket.")
         self._refresh_browser("")
+        self._show_editor(None)
         self._refresh_override_list()
 
     # --- browser ------------------------------------------------------------
@@ -125,30 +199,122 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
         option_list.clear_options()
         matches = filter_catalog(self._catalog, query, limit=_BROWSER_ROWS)
         option_list.add_options([Option(entry.label, id=f"{entry.kind}:{entry.key}") for entry in matches])
-        self.matches = matches
+        self._browser_matches = matches
+
+    def _entry_for(self, key: str) -> CatalogEntry | None:
+        return next((e for e in self._catalog if e.key == key), None)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "browser-search":
             self._refresh_browser(event.value)
+        elif event.input.id == "override-key":
+            # Typing a known key adopts its bucket and editor, same as picking it.
+            self._configure_for_key(event.value.strip(), prefill=False)
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        """Picking a key pre-fills the editor with ``key=<current example>``."""
-        option_id = event.option.id or ""
-        _kind, _, key = option_id.partition(":")
-        entry = next((e for e in self._catalog if e.key == key), None)
-        editor = self.query_one("#override-entry", Input)
-        editor.value = f"{key}={entry.example if entry else ''}"
-        editor.focus()
+        if event.option_list.id == "browser-list":
+            option_id = event.option.id or ""
+            _kind, _, key = option_id.partition(":")
+            key_input = self.query_one("#override-key", Input)
+            # Assigning to .value fires Changed -> _configure_for_key(prefill=False);
+            # the explicit call below then prefills the profile's own value.
+            key_input.value = key
+            self._configure_for_key(key, prefill=True)
+        elif event.option_list.id == "override-current":
+            self._load_pending(event.option.id or "")
+
+    # --- the value editor ---------------------------------------------------
+
+    def _show_editor(self, editor: str | None) -> None:
+        """Show exactly one value control; free text is the fallback for all else."""
+        self.query_one("#override-select", Select).display = editor == EDITOR_SELECT
+        self.query_one("#override-switch", Switch).display = editor == EDITOR_SWITCH
+        value_input = self.query_one("#override-value", Input)
+        value_input.display = editor not in (EDITOR_SELECT, EDITOR_SWITCH)
+        value_input.placeholder = "number" if editor == EDITOR_NUMBER else "value"
+
+    def _configure_for_key(self, key: str, prefill: bool) -> None:
+        """Point the editor at ``key``: bucket, profile default, and control.
+
+        A repeat call for the same key without ``prefill`` is a no-op, which is
+        what makes the async ``Input.Changed`` that follows a programmatic
+        ``key_input.value = key`` harmless instead of destructive.
+        """
+        if key == self._editor_key and not prefill:
+            return
+        self._editor_key = key
+        entry = self._entry_for(key)
+        default_box = self.query_one("#override-default", Static)
+        bucket_select = self.query_one("#override-bucket", Select)
+
+        if entry is None:
+            default_box.update("" if not key else f"{key} is not in the installed profiles — it will be sent as typed.")
+            self._select_values = ()
+            self._show_editor(None)
+            # An unclassifiable key starts at process, the bucket a bare `--set`
+            # uses. Inheriting the previous key's bucket would silently send a
+            # process setting as a filament override -- the mirror of the
+            # no-op this split exists to prevent.
+            bucket_select.value = PROCESS
+            return
+
+        # The source profile decides the bucket; it is a fact, not a preference.
+        bucket_select.value = entry.kind
+        default_box.update(f"Profile value: {entry.example}   ({entry.kind} setting)")
+        editor = entry.editor
+        self._show_editor(editor)
+
+        if editor == EDITOR_SELECT:
+            select = self.query_one("#override-select", Select)
+            select.set_options([(value, value) for value in entry.values] + [(_CUSTOM_LABEL, _CUSTOM_VALUE)])
+            self._select_values = entry.values
+            if prefill and entry.example in entry.values:
+                select.value = entry.example
+        elif editor == EDITOR_SWITCH:
+            self._select_values = ()
+            if prefill:
+                self.query_one("#override-switch", Switch).value = entry.example == "1"
+        else:
+            self._select_values = ()
+            if prefill:
+                self.query_one("#override-value", Input).value = entry.example
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Choosing "custom" in the dropdown reveals the free-text box."""
+        if event.select.id == "override-select":
+            self.query_one("#override-value", Input).display = event.value == _CUSTOM_VALUE
+
+    def _editor_value(self) -> str | None:
+        """The visible control's value, or ``None`` when nothing was chosen.
+
+        ``None`` is only possible from an untouched dropdown: blank there means
+        "not chosen yet", never "set this to the empty string". An empty *text*
+        value is a real value — clearing a setting (a custom g-code block, say)
+        is a legitimate override — so it comes back as ``""``.
+        """
+        select = self.query_one("#override-select", Select)
+        if select.display:
+            if select.value is Select.BLANK:
+                return None
+            if select.value == _CUSTOM_VALUE:
+                return self.query_one("#override-value", Input).value.strip()
+            return str(select.value)
+        switch = self.query_one("#override-switch", Switch)
+        if switch.display:
+            return "1" if switch.value else "0"
+        return self.query_one("#override-value", Input).value.strip()
 
     # --- events -------------------------------------------------------------
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "override-entry":
+        if event.input.id in ("override-key", "override-value"):
             self._add_override()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "override-add":
             self._add_override()
+        elif event.button.id == "override-remove":
+            self._remove_selected()
         elif event.button.id == "override-clear":
             self._process.clear()
             self._filament.clear()
@@ -159,30 +325,84 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
             self.action_cancel()
 
     def _add_override(self) -> None:
-        editor = self.query_one("#override-entry", Input)
-        key, value, bucket_hint, error = parse_override_entry(editor.value)
+        key = self.query_one("#override-key", Input).value.strip()
         error_box = self.query_one("#settings-error", Static)
-        if error or key is None:
-            error_box.update(error or "Invalid override.")
+        if not key:
+            error_box.update("Pick a setting above, or type its name.")
+            return
+        value = self._editor_value()
+        if value is None:  # an untouched dropdown -- see _editor_value
+            error_box.update(f"Choose a value for {key}.")
             return
         error_box.update("")
-        # An explicit "filament:" / "process:" prefix wins; otherwise the profile
-        # the key was found in decides (and unknown keys default to process).
-        bucket = bucket_hint or bucket_for_key(self._catalog, key)
+        bucket_select = self.query_one("#override-bucket", Select)
+        chosen = bucket_select.value
+        # An unknown key keeps whatever bucket the user picked; a known key is
+        # pinned to the profile it came from.
+        bucket = bucket_for_key(self._catalog, key, default=str(chosen))
         target = self._filament if bucket == FILAMENT else self._process
-        target[key] = value or ""
-        editor.value = ""
+        target[key] = value
+        # Adding to one bucket must not leave a stale copy in the other.
+        other = self._process if bucket == FILAMENT else self._filament
+        other.pop(key, None)
         self._refresh_override_list()
 
+    def _remove_selected(self) -> None:
+        option_list = self.query_one("#override-current", OptionList)
+        index = option_list.highlighted
+        if index is None:
+            self.query_one("#settings-error", Static).update("Select a pending override to remove.")
+            return
+        option = option_list.get_option_at_index(index)
+        self._forget(option.id or "")
+        self._refresh_override_list()
+
+    def _forget(self, option_id: str) -> None:
+        bucket, _, key = option_id.partition(":")
+        (self._filament if bucket == FILAMENT else self._process).pop(key, None)
+
+    def _load_pending(self, option_id: str) -> None:
+        """Clicking a pending override loads it back into the editor to edit."""
+        bucket, _, key = option_id.partition(":")
+        if not key:
+            return
+        source = self._filament if bucket == FILAMENT else self._process
+        self.query_one("#override-key", Input).value = key
+        self._configure_for_key(key, prefill=False)
+        self.query_one("#override-bucket", Select).value = bucket
+        current = source.get(key, "")
+        select = self.query_one("#override-select", Select)
+        switch = self.query_one("#override-switch", Switch)
+        if select.display:
+            if current in self._select_values:
+                select.value = current
+            else:
+                # A value the profiles never showed round-trips through custom.
+                select.value = _CUSTOM_VALUE
+                self.query_one("#override-value", Input).value = current
+        elif switch.display:
+            switch.value = current == "1"
+        else:
+            self.query_one("#override-value", Input).value = current
+
     def _refresh_override_list(self) -> None:
-        lines = [f"[{PROCESS}] {k}={v}" for k, v in sorted(self._process.items())]
-        lines += [f"[{FILAMENT}] {k}={v}" for k, v in sorted(self._filament.items())]
-        self.query_one("#override-list", Static).update("\n".join(lines))
+        option_list = self.query_one("#override-current", OptionList)
+        option_list.clear_options()
+        options = [Option(f"[{PROCESS}] {k}={v}", id=f"{PROCESS}:{k}") for k, v in sorted(self._process.items())]
+        options += [Option(f"[{FILAMENT}] {k}={v}", id=f"{FILAMENT}:{k}") for k, v in sorted(self._filament.items())]
+        option_list.add_options(options)
 
     # --- apply / cancel -----------------------------------------------------
 
+    def _field_text(self, field: SettingField) -> str:
+        """The form's current text for one field, whichever control renders it."""
+        if field.kind == "choice" and field.choices:
+            select = self.query_one(f"#{field.widget_id}", Select)
+            return "" if select.value is Select.BLANK else str(select.value)
+        return self.query_one(f"#{field.widget_id}", Input).value
+
     def action_apply(self) -> None:
-        raw = {field.dest: self.query_one(f"#{field.widget_id}", Input).value for field in SETTING_FIELDS}
+        raw = {field.dest: self._field_text(field) for field in SETTING_FIELDS}
         parsed, errors = collect_field_overrides(raw)
         error_box = self.query_one("#settings-error", Static)
         if errors:

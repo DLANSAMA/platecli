@@ -33,6 +33,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- **`plate tui` advanced settings are now picked rather than typed.** The screen
+  previously asked you to hand-edit a `KEY=VALUE` string, with a `filament:`
+  prefix to remember and no help on what a setting expects. Now: the named flags
+  with a fixed option set (wall type, support type, seam position, ironing) are
+  dropdowns; choosing a key from the browser fills in its name, shows the value
+  your own profile uses, pins the process/filament bucket to whichever profile
+  the key came from, and picks a control from the values that key actually holds
+  across your installed profiles — a toggle for on/off settings, a dropdown for a
+  short set of known values, otherwise a plain box. Pending overrides are a list
+  you can click to edit or remove one at a time.
+  The inference never costs capability: every dropdown carries a *type a custom
+  value* entry, because the values your profiles happen to use are a subset of
+  what OrcaSlicer accepts, and free text remains the fallback for anything the
+  profiles cannot describe. With no readable profiles the name and bucket are
+  typed as before — but the bucket now resets to `process` for each new key
+  instead of carrying the previous choice over, so a process setting can never be
+  sent as a filament override by accident. An untouched dropdown is refused
+  ("choose a value") rather than sent as an empty override; an empty *text* value
+  is still allowed, since clearing a setting is a legitimate override.
 - Internal refactor only — no user-visible change. Extracted the path,
   JSON-mode/redaction, and argparse-coercion helpers out of `bambu_cli/cli.py`
   into three focused modules (`bambu_cli/paths.py`, `bambu_cli/jsonio.py`,

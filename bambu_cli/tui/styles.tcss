@@ -196,9 +196,20 @@ HelpScreen {
     border: round $secondary;
 }
 
-#override-list {
+/* The override editor: a name, a bucket, and one value control at a time. */
+#override-key, #override-bucket, #override-select, #override-value {
+    width: 100%;
+}
+
+#override-default {
     height: auto;
     color: $text-muted;
+    padding: 0 0 1 0;
+}
+
+#override-current {
+    height: 6;
+    border: round $secondary;
 }
 
 #settings-error {

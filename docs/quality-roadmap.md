@@ -16,8 +16,9 @@ Historical baseline (do not read as current), from the audit + full
 (1105 / 4973 stmts missed), **130** `sys.exit` sites in `bambu_cli/`, **7**
 `@mockable` sites (def + 6 uses), **1** `BambuError` raise in production.
 The "Baseline" column below is that snapshot. **Current measured (2026-07-31,
-`feat/tui` at `7f9db3f`): 1296 passed / 1297 collected, 88.35% branch coverage
-over 7634 statements (local Linux).** Read off the full CI matrix on that commit
+`feat/tui-settings-ux`): 1307 passed / 1308 collected, 88.53% branch coverage
+over 7755 statements (local Linux).** Read off the full CI matrix on `feat/tui`
+at `cc6f78c` (this branch has not reached CI yet)
 (CI runs a clean checkout, so its Linux legs sit a little higher):
 Windows 3.14 **88.09%** (still the binding leg), macOS 3.14 88.33%, Linux 3.9
 88.53% / 3.12 88.50% / 3.14 88.51%.
@@ -60,7 +61,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **1297** non-live tests collected / **1296** passing (2026-07-31; latest additions are the Textual TUI phases 1-5: dashboard, prepare, confirm/print, job monitor, help overlay, and advanced slice settings — pilot tests plus the shared `interactive/core.py` unit tests and a hermetic override read-back, on top of the deep-audit fix wave); **88.35%** coverage measured 2026-07-31 on Linux (CI: Windows 88.09%, Linux 88.51%); CI floor **83**; per-module floors not enforced |
+| Tests | **A−** | **1308** non-live tests collected / **1307** passing (2026-07-31; latest additions are the Textual TUI phases 1-5: dashboard, prepare, confirm/print, job monitor, help overlay, and advanced slice settings — pilot tests plus the shared `interactive/core.py` unit tests and a hermetic override read-back, on top of the deep-audit fix wave); **88.53%** coverage measured 2026-07-31 on Linux (CI on `cc6f78c`: Windows 88.09%, Linux 88.51%); CI floor **83**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
@@ -130,7 +131,7 @@ A+ for *this* project means all of the following are true simultaneously:
 | `slicer/` | ~75% | ≥85% | ≥92% |
 | `job/` | ~93% | ≥95% | ≥97% (keep) |
 | `commands/` | ~80% | ≥90% | ≥95% |
-| `tui/` (Textual front-end, optional extra) | measured 2026-07-31: **13 of 17 modules at 100%** (`app`/`deps`/`entry`/`services`/`settings_model`/`widgets/*`/`screens/dashboard`/`screens/help`); the other four are `screens/settings` 98.6%, `screens/confirm` 97.2%, `screens/prepare` 95.8%, `screens/monitor` 95.7% — **package minimum 95.7%** | ≥85% | ≥92% |
+| `tui/` (Textual front-end, optional extra) | measured 2026-07-31: **13 of 17 modules at 100%** (`app`/`deps`/`entry`/`services`/`settings_model`/`widgets/*`/`screens/dashboard`/`screens/help`); the other four are `screens/settings` 99.0%, `screens/confirm` 97.2%, `screens/prepare` 95.8%, `screens/monitor` 95.7% — **package minimum 95.7%** | ≥85% | ≥92% |
 | JSON contract tests | partial (`test_json_contracts.py`) | every command | every command + schema file |
 | Property / adversarial tests | few | netsafety + zip + filenames | + redirect/SSRF fuzz |
 | Flakes in CI (30 consecutive green main runs) | unknown | 0 known | 0 |

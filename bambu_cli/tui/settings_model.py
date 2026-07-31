@@ -143,17 +143,64 @@ def collect_field_overrides(raw_values: dict[str, str]) -> tuple[dict[str, Any],
 # --- "All settings" browser -------------------------------------------------
 
 
+# How a browsed setting should be edited. Derived from the values the installed
+# profiles actually hold — never from a hand-written table of slicer vocabulary.
+EDITOR_SWITCH = "switch"
+EDITOR_SELECT = "select"
+EDITOR_NUMBER = "number"
+EDITOR_TEXT = "text"
+
+# A choice list stops being a usable picker past a dozen entries, and a "value"
+# longer than this is prose (a custom g-code block), not a choice.
+_MAX_SELECT_CHOICES = 12
+_MAX_CHOICE_LEN = 40
+
+
 @dataclass(frozen=True)
 class CatalogEntry:
-    """One browsable OrcaSlicer setting: its key, bucket, and an example value."""
+    """One browsable OrcaSlicer setting: key, bucket, example, observed domain."""
 
     key: str
     kind: str  # PROCESS | FILAMENT
     example: str
+    values: tuple[str, ...] = ()
 
     @property
     def label(self) -> str:
         return f"[{self.kind}] {self.key} = {self.example}"
+
+    @property
+    def editor(self) -> str:
+        """Which control edits this setting: switch / select / number / text."""
+        return editor_for(self.values)
+
+
+def _is_number(text: str) -> bool:
+    try:
+        float(text)
+    except ValueError:
+        return False
+    return True
+
+
+def editor_for(values: tuple[str, ...]) -> str:
+    """Pick an editor from a setting's observed values.
+
+    Ordered deliberately: ``0``/``1`` are numeric too, so the boolean test runs
+    first or every toggle in OrcaSlicer would render as a number box. Anything
+    that is not confidently a toggle, a number, or a short closed set falls back
+    to free text — the escape hatch has to stay, because a profile can hold a
+    custom g-code block and no picker can represent that.
+    """
+    if not values:
+        return EDITOR_TEXT
+    if set(values) <= {"0", "1"}:
+        return EDITOR_SWITCH
+    if all(_is_number(v) for v in values):
+        return EDITOR_NUMBER
+    if len(values) <= _MAX_SELECT_CHOICES and all(v and len(v) <= _MAX_CHOICE_LEN and "\n" not in v for v in values):
+        return EDITOR_SELECT
+    return EDITOR_TEXT
 
 
 def load_catalog(profiles_dir: str | None) -> list[CatalogEntry]:
@@ -169,13 +216,19 @@ def load_catalog(profiles_dir: str | None) -> list[CatalogEntry]:
     if not profiles_dir:
         return []
     try:
-        from bambu_cli.slicer.options import setting_catalog
+        from bambu_cli.slicer.options import setting_catalog, setting_value_domains
 
         catalog = setting_catalog(profiles_dir)
+        domains = setting_value_domains(profiles_dir)
     except Exception:  # noqa: BLE001 -- discovery is a nicety; never break the UI
         return []
     entries = [
-        CatalogEntry(key=key, kind=kind, example=_example(value))
+        CatalogEntry(
+            key=key,
+            kind=kind,
+            example=_example(value),
+            values=domains.get(kind, {}).get(key, ()),
+        )
         for kind in (PROCESS, FILAMENT)
         for key, value in catalog.get(kind, {}).items()
     ]
@@ -209,30 +262,3 @@ def bucket_for_key(entries: list[CatalogEntry], key: str, default: str = PROCESS
         if entry.key == key:
             return entry.kind
     return default
-
-
-def parse_override_entry(raw: str) -> tuple[str | None, str | None, str | None, str | None]:
-    """Parse ``[filament:|process:]KEY=VALUE`` -> ``(key, value, bucket, error)``.
-
-    ``bucket`` is None unless the user wrote an explicit prefix. The prefix is
-    what makes the degraded (no readable profiles) mode honest: with no profiles
-    to classify a key against, ``filament:filament_flow_ratio=0.9`` is the only
-    way to say "this is a filament setting" — and sending a filament key as a
-    process override is the silent-no-op this whole split exists to prevent.
-    """
-    text = (raw or "").strip()
-    bucket: str | None = None
-    for prefix, kind in ((f"{FILAMENT}:", FILAMENT), (f"{PROCESS}:", PROCESS)):
-        if text.lower().startswith(prefix):
-            bucket = kind
-            text = text[len(prefix) :].strip()
-            break
-    if not text:
-        return None, None, bucket, "Enter a setting as KEY=VALUE."
-    if "=" not in text:
-        return None, None, bucket, f"Invalid override {text!r}: expected KEY=VALUE"
-    key, _, value = text.partition("=")
-    key = key.strip()
-    if not key:
-        return None, None, bucket, f"Invalid override {text!r}: empty setting name"
-    return key, value.strip(), bucket, None
