@@ -26,7 +26,7 @@ open. Nothing leaves this screen unvalidated.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalScroll
@@ -51,7 +51,11 @@ from bambu_cli.tui.settings_model import (
 _BROWSER_ROWS = 200
 
 
-class SettingsScreen(Screen[SliceOverrides | None]):
+# NOTE: ``Optional[...]`` and not ``SliceOverrides | None``. A class base is a
+# runtime expression -- ``from __future__ import annotations`` does not defer it
+# -- and ``type | None`` is a TypeError before Python 3.10. tests/python_compat_smoke.py
+# guards this; see the class-base rule there.
+class SettingsScreen(Screen[Optional[SliceOverrides]]):
     """Collect advanced slice overrides; dismisses with them, or None on cancel."""
 
     BINDINGS = [
