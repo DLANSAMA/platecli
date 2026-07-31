@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Added
+
+- **`plate tui` — a full-screen terminal UI** (optional extra:
+  `pip install 'platecli[tui]'`). A live dashboard (printer state, temperatures,
+  progress, AMS trays), a guided prepare screen (source validation, material and
+  quality presets with the AMS-loaded filament pre-selected, supports, slice +
+  time/filament preview), an explicit print-confirmation dialog (start / upload
+  only / cancel), and a live job monitor that follows a print to its terminal
+  state. It is a front-end over the existing pipeline — source validation, AMS
+  detection, download/slice, and the `job` request are the very same shared code
+  `plate go` runs, so the two cannot drift. Safety is unchanged: a print starts
+  only from the confirm dialog, upload-only leaves the file unstarted,
+  cancelling preserves the sliced file and says where it is, leaving the monitor
+  never stops a print, and quitting is refused while an upload is in flight.
+  `plate go` is unaffected and remains the no-extra-dependency path for SSH,
+  dumb terminals, and screen readers. Like `go`, `tui` is interactive-only:
+  `--json` and a non-TTY stdin exit `5` with the standard error envelope.
+
 ### Changed
 
 - Internal refactor only — no user-visible change. Extracted the path,

@@ -20,10 +20,12 @@ from pathlib import Path
 from typing import Any
 
 from textual.app import App
+from textual.binding import Binding
 
 from bambu_cli.interactive.core import preflight_problem
 from bambu_cli.tui.deps import TuiDeps
 from bambu_cli.tui.screens.dashboard import DashboardScreen
+from bambu_cli.tui.screens.help import HelpScreen
 from bambu_cli.tui.screens.monitor import MonitorScreen
 from bambu_cli.tui.screens.prepare import PreflightErrorScreen, PrepareScreen
 
@@ -37,11 +39,16 @@ class PlateApp(App):
     TITLE = "platecli"
     SUB_TITLE = "printer dashboard"
 
+    # App-level bindings stay ACTIVE everywhere but are not shown in the Footer:
+    # each screen advertises the subset that actually does something there (a
+    # footer promising "r Refresh" on a form the user is typing into is worse
+    # than no footer at all). The help overlay lists the full set.
     BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("r", "refresh", "Refresh"),
-        ("n", "new_print", "New print"),
-        ("m", "monitor", "Monitor job"),
+        Binding("q", "quit", "Quit", show=False),
+        Binding("r", "refresh", "Refresh", show=False),
+        Binding("n", "new_print", "New print", show=False),
+        Binding("m", "monitor", "Monitor job", show=False),
+        Binding("question_mark,f1", "help", "Help", show=False),
     ]
 
     def __init__(self, args: argparse.Namespace, deps: TuiDeps | None = None) -> None:
@@ -87,6 +94,22 @@ class PlateApp(App):
             self.notify("Upload in progress — wait for it to finish.", severity="warning")
             return
         self.exit()
+
+    def action_help(self) -> None:
+        """Open the key reference (never stacks a second copy).
+
+        Refused while the top screen is busy with a job worker: an overlay
+        pushed over the confirm modal would take the top-of-stack away from it,
+        and a screen that is not on top cannot dismiss itself with its result.
+        The modal repairs that case anyway (see ``ConfirmModal._job_done``), but
+        the honest fix is not to cover a screen that is mid-transaction.
+        """
+        if isinstance(self.screen, HelpScreen):
+            return
+        if getattr(self.screen, "busy_with_job", False):
+            self.notify("Finishing the upload — try help again in a moment.", severity="warning")
+            return
+        self.push_screen(HelpScreen())
 
     def action_monitor(self) -> None:
         """Watch the running job. Leaving the monitor never stops the print."""

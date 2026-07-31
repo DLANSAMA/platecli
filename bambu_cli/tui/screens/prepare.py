@@ -54,6 +54,7 @@ class PreflightErrorScreen(Screen):
 
     BINDINGS = [
         ("escape", "back", "Back"),
+        ("question_mark", "app.help", "Help"),
         ("q", "quit", "Quit"),
     ]
 
@@ -82,8 +83,11 @@ class PreflightErrorScreen(Screen):
 class PrepareScreen(Screen):
     """Collect a source + presets, then download/slice and show the preview."""
 
+    # F1 rather than "?" for help here: the source box has focus most of the
+    # time and a text input rightly swallows a printable "?".
     BINDINGS = [
         ("escape", "back", "Back"),
+        ("f1", "app.help", "Help"),
     ]
 
     def __init__(self, args: argparse.Namespace, deps: Any) -> None:

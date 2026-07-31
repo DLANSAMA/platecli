@@ -7,8 +7,9 @@ non-TTY stdin both emit the standard error envelope and abort with
 without the extra gets an actionable install hint (``EXIT_CONFIG_ERROR``) rather
 than an ``ImportError`` traceback.
 
-Domain code never calls ``sys.exit`` — terminal conditions raise ``BambuError``
-via ``abort`` (``sys.exit`` lives only in ``cli.py``; CI greps for this).
+Domain code never terminates the process itself — terminal conditions raise
+``BambuError`` via ``abort``; the one process-exit call in the codebase lives in
+``cli.py`` (CI greps for that, in code and in prose).
 """
 
 from __future__ import annotations

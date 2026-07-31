@@ -117,6 +117,7 @@ A+ for *this* project means all of the following are true simultaneously:
 | `slicer/` | ~75% | ≥85% | ≥92% |
 | `job/` | ~93% | ≥95% | ≥97% (keep) |
 | `commands/` | ~80% | ≥90% | ≥95% |
+| `tui/` (Textual front-end, optional extra) | **97%** measured 2026-07-30 (`app`/`deps`/`entry`/`services`/`widgets/*`/`screens/dashboard`/`screens/help` 100%; `screens/confirm` 97.2%; `screens/monitor` 95.7%; `screens/prepare` 95.7% — package minimum 95.7%) | ≥85% | ≥92% |
 | JSON contract tests | partial (`test_json_contracts.py`) | every command | every command + schema file |
 | Property / adversarial tests | few | netsafety + zip + filenames | + redirect/SSRF fuzz |
 | Flakes in CI (30 consecutive green main runs) | unknown | 0 known | 0 |
@@ -625,6 +626,7 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 | D Contracts & 1.0 | **in progress** | local | — | schemas + contract harness + stability policy; remaining agent `--json` schemas land in follow-up PRs |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
 | Doc truth pass | **done** | local | 2026-07-24 | versions de-literalized, prerequisites stated, camera guidance corrected, test/coverage numbers re-measured |
+| TUI (`plate tui`) | **done** (phases 1–4) | `feat/tui` | 2026-07-30 | Textual front-end over the shared `interactive/core.py`: dashboard, prepare, confirm modal (only `confirm=True` path), job monitor, help overlay. Optional `[tui]` extra; pilot-tested headlessly at 80×24; `tui/` package ~97% covered (no module below 95.7%) |
 
 > **Verified 2026-07-09** against a clean checkout — the "current scoreboard" above
 > was corrected the same day. Coverage floor raised 79→**81** (multi-OS minimum:

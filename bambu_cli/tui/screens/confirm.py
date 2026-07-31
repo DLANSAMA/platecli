@@ -40,7 +40,7 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static
+from textual.widgets import Button, Footer, Static
 
 from bambu_cli.errors import BambuError
 from bambu_cli.interactive.core import build_job_namespace, cleanup_workdir, decline_message
@@ -68,6 +68,7 @@ class ConfirmModal(ModalScreen[ConfirmOutcome]):
 
     BINDINGS = [
         ("escape", "back", "Back"),
+        ("question_mark", "app.help", "Help"),
     ]
 
     def __init__(self, args: argparse.Namespace, deps: Any, state: Any) -> None:
@@ -91,6 +92,7 @@ class ConfirmModal(ModalScreen[ConfirmOutcome]):
             Static("", id="confirm-status", markup=False),
             id="confirm-body",
         )
+        yield Footer()
 
     def on_unmount(self) -> None:
         # Still owning the run at unmount means the app is going away mid-decision.
@@ -168,7 +170,33 @@ class ConfirmModal(ModalScreen[ConfirmOutcome]):
             error = _with_output_tail(error, buffer.getvalue())
         self.app.call_from_thread(self._job_done, confirm, error)
 
+    @property
+    def busy_with_job(self) -> bool:
+        """True while the job worker runs — nothing may be pushed over us then.
+
+        Read by ``PlateApp.action_help``: a modal that is not top-of-stack
+        cannot deliver its outcome, so overlays are refused for this window.
+        """
+        return self._job_running
+
+    def _ensure_on_top(self) -> None:
+        """Pop anything stacked above this modal so ``dismiss`` is accepted.
+
+        Textual ignores ``dismiss()`` from a screen that is not on top, and the
+        worker's completion callback would then be swallowed — leaving the modal
+        frozen with its buttons disabled and the run's outcome lost. Runs on the
+        main thread (``call_from_thread``), so touching the stack is safe.
+        """
+        app = self.app
+        for _ in range(len(app.screen_stack)):
+            if app.screen is self or self not in app.screen_stack:
+                return
+            app.pop_screen()
+
     def _job_done(self, confirm: bool, error: str | None) -> None:
+        # An overlay (today: the help screen) may have been pushed over us while
+        # the worker ran; take the top back before reporting anything.
+        self._ensure_on_top()
         self._job_running = False
         self._set_app_job_in_flight(False)
         if error is not None:

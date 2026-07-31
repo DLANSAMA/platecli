@@ -135,3 +135,30 @@ JobProgress {
     color: $text-muted;
     height: auto;
 }
+
+
+/* Help overlay (Phase 4). */
+
+HelpScreen {
+    align: center middle;
+}
+
+#help-body {
+    width: 68;
+    max-width: 100%;
+    height: auto;
+    max-height: 80%;
+    border: thick $primary;
+    background: $surface;
+    padding: 1 2;
+}
+
+#help-title {
+    text-style: bold;
+    height: auto;
+}
+
+#help-keys {
+    height: auto;
+    padding: 1 0 0 0;
+}

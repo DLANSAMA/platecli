@@ -37,6 +37,8 @@ class MonitorScreen(Screen):
 
     BINDINGS = [
         ("escape", "detach", "Back (keeps printing)"),
+        ("question_mark", "app.help", "Help"),
+        ("q", "app.quit", "Quit"),
     ]
 
     def __init__(

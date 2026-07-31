@@ -34,6 +34,9 @@ class DashboardScreen(Screen):
 
     BINDINGS = [
         ("r", "refresh", "Refresh"),
+        ("n", "app.new_print", "New print"),
+        ("m", "app.monitor", "Monitor"),
+        ("question_mark", "app.help", "Help"),
         ("q", "quit", "Quit"),
     ]
 

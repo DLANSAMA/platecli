@@ -11,6 +11,7 @@ The complete reference for `plate` — setup, configuration, slicing, monitoring
 - [OrcaSlicer](#orcaslicer)
 - [Usage](#usage)
 - [Guided mode (plate go)](#guided-mode-plate-go)
+- [Full-screen mode (plate tui)](#full-screen-mode-plate-tui)
 - [Monitoring a print](#monitoring-a-print)
 - [Camera snapshots](#camera-snapshots)
 - [Global flags](#global-flags)
@@ -229,6 +230,57 @@ The wizard walks these steps:
 7. **Confirm** — a default-**No** gate. Answering Yes is the deliberate-action equivalent of `job --confirm` and starts the print. Declining offers an upload-only path; declining that keeps the sliced file rather than deleting it.
 
 The wizard never exposes raw slicer knobs (infill, walls, speeds, seams, `--set` overrides). For that level of control, or for scripts and AI agents, use `plate job <url> --confirm` directly — `plate go` deliberately requires an interactive terminal and `plate go --json` always errors with exit `5` (interactive mode has no machine contract).
+
+## Full-screen mode (plate tui)
+
+`plate tui` is a full-screen terminal app over the same pipeline: a live printer dashboard, a guided prepare form, an explicit print confirmation, and a job monitor — all in one persistent screen instead of a question queue. It is a *front-end*, not new machinery: it validates sources, reads the AMS, slices, and builds the `job` request through exactly the same shared code `plate go` uses, so the two cannot drift apart.
+
+It needs the optional TUI extra (it is not a runtime dependency):
+
+```bash
+pip install 'platecli[tui]'   # or: uv tool install 'platecli[tui]'
+plate tui
+plate tui --sim               # explore every screen with a simulated printer
+```
+
+Without the extra, `plate tui` exits `1` (config error) with the install command. Like `plate go` it is interactive-only: `plate tui --json` and a non-TTY stdin both exit `5` with the standard error envelope (there is no machine contract — agents use `plate job`).
+
+### Screens
+
+| Screen | What it does |
+|--------|--------------|
+| **Dashboard** | Live printer state, temperatures, layer/progress, and the AMS trays (active tray highlighted). Refreshes on `r` and every 10 s while it is the active screen. An unreachable printer renders inline — the app never crashes on it. |
+| **Prepare** (`n`) | Source box (URL or local path, validated as you submit), material and quality presets with guidance, and a supports checkbox. The AMS-detected filament is pre-selected and tagged *(detected in AMS)* — unless you already picked something, in which case a slow AMS read never overrides you. "Prepare" downloads and slices in the background and shows the same preview the wizard prints (model, printer, material line, time/filament estimate). If the printer or OrcaSlicer is not configured, this screen is replaced by a message pointing at `plate setup` — the TUI never embeds setup. |
+| **Confirm** | Start print / Upload only / Cancel. |
+| **Monitor** (`m`) | Follows a running job — percent, layer, remaining time — until it reaches a terminal state (`FINISH` / `FAILED` / `STOP` / `IDLE`, the same set `plate status --monitor` uses). |
+| **Help** (`?` or `F1`) | The key reference, always available. |
+
+### Keys
+
+| Key | Action |
+|-----|--------|
+| `?` / `F1` | Help overlay (`F1` also works while typing in the source box) |
+| `r` | Refresh the dashboard now |
+| `n` | New print (prepare flow) |
+| `m` | Monitor the running job |
+| `Esc` | Back — from prepare, from the confirm dialog, or from the monitor |
+| `q` / `Ctrl-Q` | Quit (refused while an upload or print-start is in flight) |
+
+Each screen's footer lists only the keys that do something there; the help overlay lists all of them.
+
+### Safety model
+
+The TUI keeps every guarantee the CLI makes:
+
+- **A print starts only from the confirm dialog.** That dialog is the single place in the TUI that sets `confirm=True`; nothing else in the app can start a print.
+- **Upload only** uploads the sliced file and leaves it unstarted — the same as `plate job` without `--confirm`.
+- **Cancel keeps your work.** The sliced file is moved out of the temp directory and the app tells you where it is, exactly like the wizard's "Nothing sent. Sliced file kept at …".
+- **Leaving the monitor is not stopping the print.** `Esc` stops watching; it never sends a stop or pause command.
+- Quitting is refused while an upload or print-start is still running, so a physical action is never abandoned half-way.
+
+### `plate go` or `plate tui`?
+
+`plate go` stays, and it is the right choice on a dumb terminal, over a slow SSH link, with a screen reader, or when you do not want the extra dependency — it is a plain question-and-answer flow with no full-screen redraw. `plate tui` is for a normal local terminal where a persistent dashboard and live job view are worth having. Scripts and AI agents should use neither: `plate job <url> --confirm` is the machine path.
 
 ## Monitoring a print
 

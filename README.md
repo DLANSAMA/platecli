@@ -104,6 +104,15 @@ plate        # bare `plate` on a terminal launches the same wizard
 
 It walks you from a model URL (or local file) to a running print without touching a slicer: paste a source, confirm the printer, pick a material and quality preset, answer one supports question, then see a time and filament preview before a final confirm. If your printer has an AMS, the material step defaults to whatever filament is loaded. It drives the same `download` → `slice` → `job` pipeline as `plate job`, so the result is identical — it just asks the questions for you. `plate go` needs an interactive terminal; for scripts and agents, use `plate job <url> --confirm`.
 
+### Prefer a full-screen app?
+
+```bash
+pip install 'platecli[tui]'
+plate tui    # or: plate tui --sim to explore it without a printer
+```
+
+`plate tui` puts the same flow in one persistent screen: a live status and AMS dashboard, a prepare form with material/quality presets, an explicit print confirmation, and a job monitor. It runs on the same pipeline as `plate job`, and the same rules apply — a print only ever starts from the confirm dialog, cancelling keeps the sliced file, and leaving the monitor never stops a print. Textual is an optional extra, so `plate go` remains the zero-extra-dependency path for SSH, dumb terminals, and screen readers.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-dark.gif">
   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-light.gif">

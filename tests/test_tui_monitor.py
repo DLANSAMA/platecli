@@ -80,6 +80,16 @@ class Recorder:
 
 
 @pytest.fixture(autouse=True)
+def _isolated_cwd(tmp_path, monkeypatch):
+    """Never let a declined print drop its preserved file in the repo.
+
+    ``preserve_printable`` relocates the sliced file into the *current working
+    directory* by design; tests that decline must therefore own their cwd.
+    """
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture(autouse=True)
 def _reset_context():
     saved = _context.get_current()
     yield
