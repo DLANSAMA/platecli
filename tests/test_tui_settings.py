@@ -345,7 +345,12 @@ def test_editor_for_infers_the_control_from_observed_values():
     """The control is derived from data, and falls back to text when unsure."""
     # 0/1 is checked before "numeric" or every OrcaSlicer toggle is a number box.
     assert sm.editor_for(("0", "1")) == sm.EDITOR_SWITCH
-    assert sm.editor_for(("0",)) == sm.EDITOR_SWITCH
+    # ...but BOTH states must have been seen. Only-"0" is a number sitting at
+    # zero far more often than a flag, and a toggle would cap it at 0/1 with no
+    # custom escape. These are all "0" in every stock Bambu profile:
+    # raft_layers, skirt_loops, support_filament, bottom_shell_thickness.
+    assert sm.editor_for(("0",)) == sm.EDITOR_NUMBER
+    assert sm.editor_for(("1",)) == sm.EDITOR_NUMBER
     assert sm.editor_for(("0.2", "0.16")) == sm.EDITOR_NUMBER
     assert sm.editor_for(("220",)) == sm.EDITOR_NUMBER
     assert sm.editor_for(("grid", "gyroid")) == sm.EDITOR_SELECT
@@ -1449,3 +1454,79 @@ async def test_option_prompts_bypass_rich_markup(tmp_path):
         prompt = pending.get_option_at_index(0).prompt
         assert isinstance(prompt, Text), "pending prompt must not be markup-parsed"
         assert str(prompt) == "[process] spiral_mode=1"
+
+
+def test_a_lone_zero_stays_a_number_so_counts_remain_settable():
+    """Regression: the toggle inference used to cage numeric settings.
+
+    Measured against the stock Bambu profiles, 35 keys were inferred as toggles
+    but only 6 ever varied between "0" and "1". The other 29 sit at a constant
+    zero (or one) and are plainly numbers — `raft_layers`, `skirt_loops`,
+    `skirt_height`, `support_filament` (an AMS slot index),
+    `bottom_shell_thickness`, `max_bridge_length`. Rendering those as a switch
+    made every value except 0 and 1 unreachable, and unlike the dropdown a
+    switch carries no custom-value escape.
+    """
+    for observed in (("0",), ("1",)):
+        assert sm.editor_for(observed) == sm.EDITOR_NUMBER, observed
+    # A key actually seen in both states is still a toggle.
+    assert sm.editor_for(("0", "1")) == sm.EDITOR_SWITCH
+
+
+async def test_a_constant_zero_key_is_editable_to_any_number(tmp_path):
+    """End to end: a key that is 0 in every profile can still be set to 3."""
+    from bambu_cli.interactive.core import GoSteps
+
+    profiles = tmp_path / "profiles"
+    (profiles / "process").mkdir(parents=True)
+    (profiles / "filament").mkdir(parents=True)
+    # raft_layers is "0" in every stock profile — the exact shape that used to
+    # be caged by a toggle.
+    for name in ("p1", "p2"):
+        (profiles / "process" / f"{name}.json").write_text(
+            json.dumps({"type": "process", "name": name, "raft_layers": "0"}), encoding="utf-8"
+        )
+    _install_ready_settings(tmp_path, profiles=profiles)
+    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        prepare, settings = await _open_settings(pilot, app)
+        settings.query_one("#override-key", Input).value = "raft_layers"
+        await pilot.pause()
+        # A free number box, not a toggle.
+        assert settings.query_one("#override-switch", Switch).display is False
+        assert settings.query_one("#override-value", Input).display is True
+        settings.query_one("#override-value", Input).value = "3"
+        settings.query_one("#override-add", Button).press()
+        await pilot.pause()
+        assert "[process] raft_layers=3" in _pending(settings)
+        settings.action_apply()
+        await _settle(pilot)
+    assert prepare.overrides.process == {"raft_layers": "3"}
+
+
+async def test_bucket_control_is_locked_for_a_known_key(tmp_path):
+    """A control that accepts input and discards it is a lie.
+
+    For a key found in the profiles, `bucket_for_key` overrules the dropdown, so
+    the dropdown is locked and simply reports the fact. It unlocks again for a
+    key nothing can classify, where the user's choice is the only signal.
+    """
+    from bambu_cli.interactive.core import GoSteps
+
+    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
+    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        _prepare, settings = await _open_settings(pilot, app)
+        bucket = settings.query_one("#override-bucket", Select)
+
+        settings.query_one("#override-key", Input).value = "filament_flow_ratio"
+        await pilot.pause()
+        assert bucket.value == sm.FILAMENT
+        assert bucket.disabled is True
+
+        settings.query_one("#override-key", Input).value = "not_in_any_profile"
+        await pilot.pause()
+        assert bucket.value == sm.PROCESS
+        assert bucket.disabled is False

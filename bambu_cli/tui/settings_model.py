@@ -194,7 +194,14 @@ def editor_for(values: tuple[str, ...]) -> str:
     """
     if not values:
         return EDITOR_TEXT
-    if set(values) <= {"0", "1"}:
+    # BOTH states must have been observed. A key seen only ever holding "0" is
+    # far more often a number that happens to sit at zero than a flag —
+    # `raft_layers`, `skirt_loops`, `skirt_height`, `support_filament` (an AMS
+    # slot index) and `bottom_shell_thickness` are all "0" in every stock Bambu
+    # profile. A toggle would cap them at 0/1 with no way back, and unlike the
+    # dropdown a switch has no custom-value escape. Measured against the stock
+    # profiles this is the difference between 35 keys inferred as toggles and 6.
+    if set(values) == {"0", "1"}:
         return EDITOR_SWITCH
     if all(_is_number(v) for v in values):
         return EDITOR_NUMBER

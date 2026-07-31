@@ -287,10 +287,16 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
             # process setting as a filament override -- the mirror of the
             # no-op this split exists to prevent.
             bucket_select.value = PROCESS
+            # Nothing knows better than the user here, so let them choose.
+            bucket_select.disabled = False
             return
 
         # The source profile decides the bucket; it is a fact, not a preference.
         bucket_select.value = entry.kind
+        # Locked, not merely pre-set: for a known key the profile decides, and
+        # `bucket_for_key` overrules whatever this control says. Leaving it
+        # editable let the user make a choice that was silently discarded.
+        bucket_select.disabled = True
         self._set_note(default_box, f"Profile value: {entry.example}   ({entry.kind} setting)")
         editor = entry.editor
         self._show_editor(editor)
