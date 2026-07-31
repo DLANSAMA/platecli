@@ -35,6 +35,8 @@ from bambu_cli.tui.widgets.job_progress import JobProgress
 class MonitorScreen(Screen):
     """Follows a running print until FINISH/FAILED/STOP/IDLE."""
 
+    SUB_TITLE = "job monitor"
+
     BINDINGS = [
         ("escape", "detach", "Back (keeps printing)"),
         ("question_mark", "app.help", "Help"),

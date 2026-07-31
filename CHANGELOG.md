@@ -52,6 +52,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   sent as a filament override by accident. An untouched dropdown is refused
   ("choose a value") rather than sent as an empty override; an empty *text* value
   is still allowed, since clearing a setting is a legitimate override.
+  The screen was also rebuilt visually: each field is one row (label beside its
+  control) instead of a stacked label over a bordered box, so a 80x24 terminal
+  shows three whole groups rather than four fields; every field carries an
+  example value; and the header names the screen you are on.
 - Internal refactor only — no user-visible change. Extracted the path,
   JSON-mode/redaction, and argparse-coercion helpers out of `bambu_cli/cli.py`
   into three focused modules (`bambu_cli/paths.py`, `bambu_cli/jsonio.py`,

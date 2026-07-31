@@ -46,26 +46,26 @@ SETTING_FIELDS: tuple[SettingField, ...] = (
     SettingField("pattern", "Infill pattern", "Strength", "text", "e.g. grid, gyroid"),
     SettingField("walls", "Walls", "Strength", "int", "perimeter count"),
     SettingField("wall_type", "Wall type", "Strength", "choice", "normal | classic", ("normal", "classic")),
-    SettingField("top_layers", "Top layers", "Strength", "int"),
-    SettingField("bottom_layers", "Bottom layers", "Strength", "int"),
+    SettingField("top_layers", "Top layers", "Strength", "int", "e.g. 4"),
+    SettingField("bottom_layers", "Bottom layers", "Strength", "int", "e.g. 3"),
     # Supports
     SettingField("support_type", "Support type", "Supports", "choice", "tree | normal", ("tree", "normal")),
     SettingField("support_threshold", "Support threshold (°)", "Supports", "float", "0-90"),
-    SettingField("support_interface_density", "Interface density (%)", "Supports", "float"),
+    SettingField("support_interface_density", "Interface density (%)", "Supports", "float", "0-100"),
     # Adhesion
     SettingField("brim", "Brim width (mm)", "Adhesion", "float", "0 disables"),
     # Filament
-    SettingField("nozzle_temp", "Nozzle temp (°C)", "Filament", "int"),
-    SettingField("bed_temp", "Bed temp (°C)", "Filament", "int"),
+    SettingField("nozzle_temp", "Nozzle temp (°C)", "Filament", "int", "e.g. 220"),
+    SettingField("bed_temp", "Bed temp (°C)", "Filament", "int", "e.g. 60"),
     SettingField("fan_speed", "Fan speed (%)", "Filament", "float", "0-100"),
     SettingField("flow_ratio", "Flow ratio", "Filament", "float", "e.g. 0.98"),
     # Speed
-    SettingField("speed", "Print speed (mm/s)", "Speed", "float"),
-    SettingField("accel_wall", "Inner wall accel (mm/s²)", "Speed", "int"),
-    SettingField("accel_wall_outer", "Outer wall accel (mm/s²)", "Speed", "int"),
-    SettingField("accel_infill", "Infill accel (mm/s²)", "Speed", "int"),
-    SettingField("accel_travel", "Travel accel (mm/s²)", "Speed", "int"),
-    SettingField("accel_first_layer", "First layer accel (mm/s²)", "Speed", "int"),
+    SettingField("speed", "Print speed (mm/s)", "Speed", "float", "e.g. 200"),
+    SettingField("accel_wall", "Inner wall accel (mm/s²)", "Speed", "int", "e.g. 5000"),
+    SettingField("accel_wall_outer", "Outer wall accel (mm/s²)", "Speed", "int", "e.g. 5000"),
+    SettingField("accel_infill", "Infill accel (mm/s²)", "Speed", "int", "e.g. 8000"),
+    SettingField("accel_travel", "Travel accel (mm/s²)", "Speed", "int", "e.g. 10000"),
+    SettingField("accel_first_layer", "First layer accel (mm/s²)", "Speed", "int", "e.g. 500"),
     # Plate
     SettingField("copies", "Copies", "Plate", "int", "1 or more"),
     SettingField(

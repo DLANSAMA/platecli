@@ -1417,3 +1417,35 @@ async def test_settings_screen_fits_80x24(tmp_path):
         settings.action_apply()
         await _settle(pilot)
     assert prepare.overrides.process == {"spiral_mode": "1"}
+
+
+async def test_option_prompts_bypass_rich_markup(tmp_path):
+    """Bucket tags must survive rendering, not just exist in the string.
+
+    A ``str`` prompt is parsed as Rich markup, so "[filament] key = 0.98" renders
+    as " key = 0.98" — the bucket tag silently eaten, which is precisely the fact
+    the browser exists to show. Asserting on the prompt string cannot see this
+    (the string is intact); passing ``Text`` is what stops it. The same bug would
+    corrupt any bracketed profile value, e.g. a list-valued "[0.98]".
+    """
+    from rich.text import Text
+
+    from bambu_cli.interactive.core import GoSteps
+
+    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
+    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        _prepare, settings = await _open_settings(pilot, app)
+        browser = settings.query_one("#browser-list", OptionList)
+        assert browser.option_count > 0
+        for i in range(browser.option_count):
+            prompt = browser.get_option_at_index(i).prompt
+            assert isinstance(prompt, Text), "browser prompt must not be markup-parsed"
+            assert str(prompt).startswith(("[process]", "[filament]"))
+
+        await _add_override(pilot, settings, "spiral_mode", "1")
+        pending = settings.query_one("#override-current", OptionList)
+        prompt = pending.get_option_at_index(0).prompt
+        assert isinstance(prompt, Text), "pending prompt must not be markup-parsed"
+        assert str(prompt) == "[process] spiral_mode=1"

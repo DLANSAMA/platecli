@@ -85,6 +85,8 @@ class PreflightErrorScreen(Screen):
 class PrepareScreen(Screen):
     """Collect a source + presets, then download/slice and show the preview."""
 
+    SUB_TITLE = "prepare a print"
+
     # F1 rather than "?" for help here: the source box has focus most of the
     # time and a text input rightly swallows a printable "?".
     BINDINGS = [

@@ -179,11 +179,50 @@ HelpScreen {
 
 .settings-group {
     text-style: bold;
+    color: $accent;
     padding: 1 0 0 0;
+    height: 2;
 }
 
-.settings-input {
+/* One row per field. The form is 25 fields plus a browser and an editor; with
+   stacked labels and default (bordered, 3-row) inputs only four fit on an
+   80x24 terminal. Flat 1-row controls keep the whole group readable at once. */
+.settings-row {
+    height: 1;
     width: 100%;
+}
+
+.settings-label {
+    width: 26;
+    height: 1;
+    color: $text-muted;
+}
+
+/* Flat by default: a filled background on every row merges 25 fields into one
+   slab. Focus is what marks the active field. */
+.settings-input {
+    width: 1fr;
+    height: 1;
+    border: none;
+    background: transparent;
+    padding: 0 1;
+}
+
+.settings-input:focus, .settings-input:focus-within {
+    background: $primary 40%;
+}
+
+/* Select wraps its value in SelectCurrent, which brings its own border,
+   background and padding — all of which break the one-row rhythm. */
+.settings-input SelectCurrent {
+    border: none;
+    background: transparent;
+    padding: 0 1;
+    height: 1;
+}
+
+.settings-input:focus-within SelectCurrent {
+    background: $primary 40%;
 }
 
 #browser-status {
@@ -204,12 +243,24 @@ HelpScreen {
 #override-default {
     height: auto;
     color: $text-muted;
-    padding: 0 0 1 0;
+    padding: 0 0 0 26;
+}
+
+/* The toggle sits in the same one-row slot as the other value editors. */
+.settings-switch {
+    height: 1;
+    border: none;
+    background: transparent;
+    padding: 0 1;
 }
 
 #override-current {
-    height: 6;
+    height: 4;
     border: round $secondary;
+}
+
+#browser-list {
+    height: 6;
 }
 
 #settings-error {

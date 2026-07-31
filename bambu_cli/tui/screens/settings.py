@@ -36,6 +36,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
@@ -86,6 +87,10 @@ _CUSTOM_LABEL = "(type a custom value…)"
 class SettingsScreen(Screen[Optional[SliceOverrides]]):
     """Collect advanced slice overrides; dismisses with them, or None on cancel."""
 
+    # Header watches screen.sub_title; without this every screen claimed to be
+    # the printer dashboard.
+    SUB_TITLE = "advanced slice settings"
+
     BINDINGS = [
         ("escape", "cancel", "Cancel"),
         ("f1", "app.help", "Help"),
@@ -121,22 +126,25 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
             for group, fields in fields_by_group():
                 yield Label(group, classes="settings-group")
                 for field in fields:
-                    yield Label(field.label, classes="settings-label")
-                    if field.kind == "choice" and field.choices:
-                        yield Select(
-                            [(choice, choice) for choice in field.choices],
-                            prompt=_NO_OVERRIDE_PROMPT,
-                            value=self._initial_choice(field.dest, field.choices),
-                            id=field.widget_id,
-                            classes="settings-input",
-                        )
-                    else:
-                        yield Input(
-                            value=_as_text(self._fields.get(field.dest)),
-                            placeholder=field.hint,
-                            id=field.widget_id,
-                            classes="settings-input",
-                        )
+                    # Label and control share one row: the form is 25 fields long
+                    # and stacking them put four on a screen.
+                    with Horizontal(classes="settings-row"):
+                        yield Label(field.label, classes="settings-label")
+                        if field.kind == "choice" and field.choices:
+                            yield Select(
+                                [(choice, choice) for choice in field.choices],
+                                prompt=_NO_OVERRIDE_PROMPT,
+                                value=self._initial_choice(field.dest, field.choices),
+                                id=field.widget_id,
+                                classes="settings-input",
+                            )
+                        else:
+                            yield Input(
+                                value=_as_text(self._fields.get(field.dest)),
+                                placeholder=field.hint,
+                                id=field.widget_id,
+                                classes="settings-input",
+                            )
 
             yield Label("All settings", classes="settings-group")
             yield Static("", id="browser-status", markup=False)
@@ -144,24 +152,33 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
             yield OptionList(id="browser-list")
 
             yield Label("Add an override", classes="settings-group")
-            yield Label("Setting", classes="settings-label")
-            yield Input(placeholder="pick one above, or type a key", id="override-key")
-            yield Label("Applies to", classes="settings-label")
-            yield Select(
-                [("process", PROCESS), ("filament", FILAMENT)],
-                prompt="process",
-                value=PROCESS,
-                allow_blank=False,
-                id="override-bucket",
-            )
-            yield Static("", id="override-default", markup=False)
-            yield Label("Value", classes="settings-label")
+            with Horizontal(classes="settings-row"):
+                yield Label("Setting", classes="settings-label")
+                yield Input(
+                    placeholder="pick one above, or type a key",
+                    id="override-key",
+                    classes="settings-input",
+                )
+            with Horizontal(classes="settings-row"):
+                yield Label("Applies to", classes="settings-label")
+                yield Select(
+                    [("process", PROCESS), ("filament", FILAMENT)],
+                    prompt="process",
+                    value=PROCESS,
+                    allow_blank=False,
+                    id="override-bucket",
+                    classes="settings-input",
+                )
             # All three editors exist from the start and are shown one at a time.
             # Swapping `display` avoids mounting/removing widgets mid-interaction,
-            # which is where Textual timing bugs live.
-            yield Select([], prompt="choose a value", id="override-select")
-            yield Switch(id="override-switch")
-            yield Input(placeholder="value", id="override-value")
+            # which is where Textual timing bugs live. A hidden widget takes no
+            # space, so they can share one row.
+            with Horizontal(classes="settings-row"):
+                yield Label("Value", classes="settings-label")
+                yield Select([], prompt="choose a value", id="override-select", classes="settings-input")
+                yield Switch(id="override-switch", classes="settings-switch")
+                yield Input(placeholder="value", id="override-value", classes="settings-input")
+            yield Static("", id="override-default", markup=False)
             with Horizontal(id="settings-buttons"):
                 yield Button("Add / update", id="override-add")
                 yield Button("Remove selected", id="override-remove")
@@ -198,7 +215,10 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
         option_list = self.query_one("#browser-list", OptionList)
         option_list.clear_options()
         matches = filter_catalog(self._catalog, query, limit=_BROWSER_ROWS)
-        option_list.add_options([Option(entry.label, id=f"{entry.kind}:{entry.key}") for entry in matches])
+        # Text(), not str: a str prompt is parsed as Rich markup, which silently
+        # ate the "[process]"/"[filament]" tag and would eat any bracketed
+        # profile value (list-valued settings render as "[0.98]").
+        option_list.add_options([Option(Text(entry.label), id=f"{entry.kind}:{entry.key}") for entry in matches])
         self._browser_matches = matches
 
     def _entry_for(self, key: str) -> CatalogEntry | None:
@@ -233,6 +253,16 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
         value_input.display = editor not in (EDITOR_SELECT, EDITOR_SWITCH)
         value_input.placeholder = "number" if editor == EDITOR_NUMBER else "value"
 
+    @staticmethod
+    def _set_note(box: Static, text: str) -> None:
+        """Write the profile-value note, collapsing the line when it is empty.
+
+        An empty Static still occupies its padding, which left a gap in the
+        middle of the editor before a key was chosen.
+        """
+        box.update(text)
+        box.display = bool(text)
+
     def _configure_for_key(self, key: str, prefill: bool) -> None:
         """Point the editor at ``key``: bucket, profile default, and control.
 
@@ -248,7 +278,8 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
         bucket_select = self.query_one("#override-bucket", Select)
 
         if entry is None:
-            default_box.update("" if not key else f"{key} is not in the installed profiles — it will be sent as typed.")
+            note = "" if not key else f"{key} is not in the installed profiles — it will be sent as typed."
+            self._set_note(default_box, note)
             self._select_values = ()
             self._show_editor(None)
             # An unclassifiable key starts at process, the bucket a bare `--set`
@@ -260,7 +291,7 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
 
         # The source profile decides the bucket; it is a fact, not a preference.
         bucket_select.value = entry.kind
-        default_box.update(f"Profile value: {entry.example}   ({entry.kind} setting)")
+        self._set_note(default_box, f"Profile value: {entry.example}   ({entry.kind} setting)")
         editor = entry.editor
         self._show_editor(editor)
 
@@ -388,8 +419,10 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
     def _refresh_override_list(self) -> None:
         option_list = self.query_one("#override-current", OptionList)
         option_list.clear_options()
-        options = [Option(f"[{PROCESS}] {k}={v}", id=f"{PROCESS}:{k}") for k, v in sorted(self._process.items())]
-        options += [Option(f"[{FILAMENT}] {k}={v}", id=f"{FILAMENT}:{k}") for k, v in sorted(self._filament.items())]
+        options = [Option(Text(f"[{PROCESS}] {k}={v}"), id=f"{PROCESS}:{k}") for k, v in sorted(self._process.items())]
+        options += [
+            Option(Text(f"[{FILAMENT}] {k}={v}"), id=f"{FILAMENT}:{k}") for k, v in sorted(self._filament.items())
+        ]
         option_list.add_options(options)
 
     # --- apply / cancel -----------------------------------------------------
