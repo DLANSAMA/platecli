@@ -1384,3 +1384,36 @@ async def test_unchosen_dropdown_is_refused_rather_than_sent_empty(tmp_path):
         settings.query_one("#override-add", Button).press()
         await pilot.pause()
         assert _pending(settings) == ["[process] unknown_free_text_key="]
+
+
+async def test_settings_screen_fits_80x24(tmp_path):
+    """The screen gained controls; it still has to work on the smallest terminal.
+
+    Phase 4 proved every other screen at 80x24 but not this one. The editor is
+    the widest part — a name box, a bucket dropdown, a value control and a
+    pending list — so nothing here may push the layout past 80 columns.
+    """
+    from bambu_cli.interactive.core import GoSteps
+
+    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
+    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
+    async with app.run_test(size=(80, 24)) as pilot:
+        await _settle(pilot)
+        prepare, settings = await _open_settings(pilot, app)
+        assert app.size.width == 80 and app.size.height == 24
+        for widget_id in (
+            "#browser-list",
+            "#override-key",
+            "#override-bucket",
+            "#override-current",
+            "#settings-buttons",
+        ):
+            assert settings.query_one(widget_id).outer_size.width <= 80, widget_id
+        assert settings.container_size.width <= 80
+
+        # And it is still usable, not merely rendered.
+        await _add_override(pilot, settings, "spiral_mode", "1")
+        assert "[process] spiral_mode=1" in _pending(settings)
+        settings.action_apply()
+        await _settle(pilot)
+    assert prepare.overrides.process == {"spiral_mode": "1"}
