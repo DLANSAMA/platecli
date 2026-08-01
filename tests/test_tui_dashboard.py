@@ -176,3 +176,82 @@ async def test_dashboard_against_sim_transport():
     # The sim MQTT payload reports IDLE with a PLA/PETG/TPU AMS.
     assert "IDLE" in text
     assert "PLA" in text
+
+
+# --- printer-supplied text is data, never Rich markup ----------------------
+#
+# Every cell in these two panels carries strings the *printer* chose: the name
+# of the file it is running, the filament type in a tray. A ``str`` cell in a
+# Rich table is markup-parsed, which both eats content ("model [remix].stl"
+# renders as "model .stl") and can raise ``MarkupError`` mid-render on a name
+# shaped like a closing tag. Passing ``Text`` is what stops both.
+
+
+def _bracketed_file_snapshot(name):
+    return StatusSnapshot(
+        ok=True,
+        raw={
+            "gcode_state": "RUNNING",
+            "mc_percent": 42,
+            "nozzle_temper": 220,
+            "bed_temper": 60,
+            "gcode_file": name,
+        },
+        ams={"units": []},
+    )
+
+
+def _tray_type_snapshot(ftype):
+    return StatusSnapshot(
+        ok=True,
+        raw={"gcode_state": "IDLE", "mc_percent": 0},
+        ams={
+            "active_tray": 0,
+            "units": [
+                {
+                    "id": 0,
+                    "trays": [
+                        {"slot": 0, "type": ftype, "color": "F2F2F2", "remain": 90, "empty": False, "active": True},
+                    ],
+                }
+            ],
+        },
+    )
+
+
+async def test_status_panel_renders_a_bracketed_filename_verbatim():
+    """A "[remix]" tag in the running file's name must survive to the screen."""
+    provider = FakeStatusProvider([_bracketed_file_snapshot("model [remix].stl")])
+    app = PlateApp(_args(), TuiDeps(status_provider=provider))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        text = _all_text(app)
+    assert "model [remix].stl" in text
+
+
+async def test_status_panel_survives_a_markup_shaped_filename():
+    """A closing-tag shape must not blow the render up (MarkupError)."""
+    provider = FakeStatusProvider([_bracketed_file_snapshot("a[/b]c.gcode")])
+    app = PlateApp(_args(), TuiDeps(status_provider=provider))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        text = _all_text(app)  # raises rich.errors.MarkupError against a str cell
+    assert "a[/b]c.gcode" in text
+
+
+async def test_ams_panel_renders_a_bracketed_filament_type_verbatim():
+    provider = FakeStatusProvider([_tray_type_snapshot("PLA [matte]")])
+    app = PlateApp(_args(), TuiDeps(status_provider=provider))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        text = _all_text(app)
+    assert "PLA [matte]" in text
+
+
+async def test_ams_panel_survives_a_markup_shaped_filament_type():
+    provider = FakeStatusProvider([_tray_type_snapshot("a[/b]c")])
+    app = PlateApp(_args(), TuiDeps(status_provider=provider))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        text = _all_text(app)
+    assert "a[/b]c" in text

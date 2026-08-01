@@ -241,10 +241,14 @@ def _with_output_tail(message: str, captured: str, *, lines: int = 3, width: int
 def _summary_table(rows: Any) -> Any:
     """Render the preview rows as a compact label/value grid (empty if none)."""
     from rich.table import Table
+    from rich.text import Text
 
     table = Table.grid(padding=(0, 2))
     table.add_column(justify="right", style="bold")
     table.add_column()
     for label, value in rows or []:
-        table.add_row(str(label), str(value))
+        # Text(), not str: these rows carry filenames and slicer output, and a
+        # str cell is parsed as Rich markup — "model [remix].stl" would render
+        # as "model .stl", and "a[/b]c.gcode" would raise MarkupError.
+        table.add_row(Text(str(label)), Text(str(value)))
     return table

@@ -7,6 +7,7 @@ View layer only. It is handed a ``StatusSnapshot`` and renders the rows
 from __future__ import annotations
 
 from rich.table import Table
+from rich.text import Text
 from textual.widgets import Static
 
 from bambu_cli.tui.services import StatusSnapshot, status_lines
@@ -27,5 +28,9 @@ class StatusPanel(Static):
         table.add_column(justify="right", style="bold")
         table.add_column()
         for label, value in status_lines(snapshot):
-            table.add_row(label, value)
+            # Text(), not str: a str cell is parsed as Rich markup, and these
+            # values carry printer-supplied data — a file named
+            # "model [remix].stl" would render as "model .stl", and one shaped
+            # like "a[/b]c.gcode" would raise MarkupError mid-render.
+            table.add_row(Text(label), Text(value))
         self.update(table)

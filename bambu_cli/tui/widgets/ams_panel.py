@@ -34,5 +34,9 @@ class AmsPanel(Static):
             marker = "●" if row["active"] else " "
             style = "bold green" if row["active"] else ("dim" if row["empty"] else "")
             label = Text(f"{marker} {row['label']}", style=style)
-            table.add_row(label, str(row["type"]), str(row["remain"]))
+            # Text(), not str, for the printer-supplied filament type too: as a
+            # str it is markup-parsed, so a bracketed type is eaten (and one
+            # shaped like "a[/b]c" raises MarkupError). The label is already a
+            # styled Text and keeps its style.
+            table.add_row(label, Text(str(row["type"])), Text(str(row["remain"])))
         self.update(table)

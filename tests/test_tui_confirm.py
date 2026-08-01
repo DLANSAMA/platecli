@@ -419,3 +419,52 @@ async def test_start_print_opens_the_monitor(tmp_path):
         modal = await _open_modal(pilot, screen)
         await _press_button(pilot, modal, "#confirm-print")
         assert isinstance(pilot.app.screen, MonitorScreen)
+
+
+# --- the summary grid renders filenames as data, not Rich markup -----------
+
+
+def _render_to_text(renderable) -> str:
+    """Render a Rich renderable (or str) to plain text via a wide Console."""
+    from rich.console import Console
+
+    if renderable is None:
+        return ""
+    if isinstance(renderable, str):
+        return renderable
+    console = Console(width=200)
+    with console.capture() as capture:
+        console.print(renderable)
+    return capture.get()
+
+
+async def test_confirm_summary_shows_a_bracketed_filename_verbatim(tmp_path):
+    """The one screen that names the file must not let Rich eat part of it.
+
+    A ``str`` cell in a Rich grid is markup-parsed, so "model [remix].stl"
+    renders as "model .stl" — the modal would then ask the user to confirm
+    sending a file under a name that is not the file's name.
+    """
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path, name="model [remix].stl")
+    steps = GoSteps(download=Recorder(), slice=_slicer_into_workdir(tmp_path), job=Recorder())
+
+    app = PlateApp(_args(), _deps(steps))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = await _prepare_to_preview(pilot, stl)
+        modal = await _open_modal(pilot, screen)
+        summary = _render_to_text(modal.query_one("#confirm-summary", Static).renderable)
+        await _press_button(pilot, modal, "#confirm-cancel")
+
+    assert "model [remix].stl" in summary
+
+
+def test_confirm_summary_survives_a_markup_shaped_value():
+    """A closing-tag shape must render, not raise MarkupError mid-modal."""
+    from bambu_cli.tui.screens.confirm import _summary_table
+
+    rows = [("Model", "a[/b]c.gcode"), ("Overrides", "process: layer_height=[0.98]")]
+    text = _render_to_text(_summary_table(rows))  # raises MarkupError against str cells
+    assert "a[/b]c.gcode" in text
+    assert "[0.98]" in text
