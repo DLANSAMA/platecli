@@ -202,7 +202,7 @@ HelpScreen {
     height: 2;
 }
 
-/* One row per field. The form is 25 fields plus a browser and an editor; with
+/* One row per field. The form is 25 fields plus an override editor; with
    stacked labels and default (bordered, 3-row) inputs only four fit on an
    80x24 terminal. Flat 1-row controls keep the whole group readable at once. */
 .settings-row {
@@ -243,33 +243,14 @@ HelpScreen {
     background: $primary 40%;
 }
 
-#browser-status {
-    color: $text-muted;
-    height: auto;
-}
-
-#browser-list {
-    height: 6;
-    border: round $secondary;
-}
-
-/* The override editor: a name, a bucket, and one value control at a time. */
-#override-key, #override-bucket, #override-select, #override-value {
+/* The override editor: a name, a bucket, and a value. */
+#override-key, #override-bucket, #override-value {
     width: 100%;
 }
 
-#override-default {
+#override-help, #override-note {
     height: auto;
     color: $text-muted;
-    padding: 0 0 0 26;
-}
-
-/* The toggle sits in the same one-row slot as the other value editors. */
-.settings-switch {
-    height: 1;
-    border: none;
-    background: transparent;
-    padding: 0 1;
 }
 
 #override-current {

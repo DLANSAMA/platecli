@@ -77,61 +77,12 @@ def _known_setting_keys(profiles_dir: str, kind: str) -> dict[str, Any]:
     return result
 
 
-@lru_cache(maxsize=16)
-def _setting_value_domain(profiles_dir: str, kind: str) -> dict[str, tuple[str, ...]]:
-    """``{key: every distinct value this key takes across ``kind`` profiles}``.
-
-    ``_known_setting_keys`` keeps only the first value it sees, which is all the
-    agent-facing listing needs. A UI wants more: if a key only ever holds
-    ``"0"``/``"1"`` across every installed profile it is a toggle, and if it holds
-    a handful of words it is a closed choice — both can be offered as a picker
-    instead of a free-text box. That inference is only honest when it is drawn
-    from the profiles actually installed, so this returns the observed domain and
-    nothing invented. Values are returned sorted, list-valued settings
-    contributing each element.
-
-    Separate from ``_known_setting_keys`` on purpose: that function's
-    ``{key: representative_value}`` contract feeds ``slice --list-settings`` and
-    must not change shape.
-    """
-    seen: dict[str, set[str]] = {}
-    for path in sorted(glob.glob(os.path.join(profiles_dir, kind, "*.json"))):
-        try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, ValueError):
-            continue
-        if not isinstance(data, dict):
-            continue
-        for key, value in data.items():
-            if key in _NON_SETTING_KEYS:
-                continue
-            bucket = seen.setdefault(key, set())
-            for item in value if isinstance(value, list) else [value]:
-                if item is None or isinstance(item, (dict, list)):
-                    continue
-                bucket.add(str(item))
-    return {key: tuple(sorted(values)) for key, values in seen.items()}
-
-
-def setting_value_domains(profiles_dir: str) -> dict[str, dict[str, tuple[str, ...]]]:
-    """``{"process": {key: (values…)}, "filament": {…}}`` — observed value domains.
-
-    Companion to :func:`setting_catalog`; same degrade-to-empty contract.
-    """
-    return {
-        "process": _setting_value_domain(profiles_dir, "process"),
-        "filament": _setting_value_domain(profiles_dir, "filament"),
-    }
-
-
 def setting_catalog(profiles_dir: str) -> dict[str, dict[str, Any]]:
     """Return ``{"process": {key: example}, "filament": {key: example}}``.
 
-    The one discovery seam over the installed profiles: ``slice --list-settings``
-    (agent-facing) and the TUI's settings browser (human-facing) both read this,
-    so the two can never advertise different vocabularies. Empty sections mean
-    "no profiles readable here" — callers degrade rather than fail.
+    The one discovery seam over the installed profiles, read by
+    ``slice --list-settings``. Empty sections mean "no profiles readable here" —
+    callers degrade rather than fail.
     """
     return {
         "process": _known_setting_keys(profiles_dir, "process"),

@@ -37,7 +37,7 @@ the `plate doctor` output — but check first that no access code is visible.
 - [Missing dependency: paho-mqtt](#missing-dependency-paho-mqtt)
 - ["plate tui requires the TUI extra"](#plate-tui-requires-the-tui-extra)
 - ["plate tui is interactive" — exit 5 in a script, pipe, or with --json](#plate-tui-is-interactive--exit-5-in-a-script-pipe-or-with---json)
-- [The advanced settings browser is empty ("No profiles readable here")](#the-advanced-settings-browser-is-empty-no-profiles-readable-here)
+- [My TUI override was accepted but changed nothing](#my-tui-override-was-accepted-but-changed-nothing)
 - [Nothing happens when I run a print command](#nothing-happens-when-i-run-a-print-command)
 
 ## First: the two diagnostic commands
@@ -542,31 +542,30 @@ If you meant to run it interactively and still got this, your stdin is not a TTY
 `plate tui < /dev/tty` in an odd terminal, or run it directly rather than through
 a wrapper that redirects stdin.
 
-## The advanced settings browser is empty ("No profiles readable here")
+## My TUI override was accepted but changed nothing
 
+Almost always the **Applies to** bucket. OrcaSlicer keeps *process* settings and
+*filament* settings in separate profiles, and an override aimed at the wrong one
+is accepted and then ignored — no error, no warning, just a slice that comes out
+identical. `filament_flow_ratio` is the usual victim: it is a filament setting,
+so sending it as a process override does nothing at all.
+
+The TUI does not guess the bucket, for the same reason the CLI does not: it is
+`--set` versus `--set-filament`, and only you know which one you meant. Every new
+key starts at *process* (the bucket a bare `--set` uses) and the picker resets for
+each key rather than remembering your last choice, so a mistake in one direction
+cannot silently follow you into the next override.
+
+To see what your installed profiles actually accept, and which bucket each key
+lives in:
+
+```bash
+plate slice --list-settings
 ```
-No profiles readable here — type overrides as KEY=VALUE below.
-```
 
-The settings browser lists every key found in your **installed OrcaSlicer
-profiles**, so with no readable profiles directory there is nothing to list. Most
-often that means OrcaSlicer is not set up yet (see
-[OrcaSlicer or its BBL profiles were not found](#orcaslicer-or-its-bbl-profiles-were-not-found))
-or you are exploring with `plate tui --sim` on a machine with no slicer.
-
-The form still works — type the setting's name into **Setting** and its value
-into **Value**. One caveat worth knowing: with no profiles to check the key
-against, the TUI cannot tell a *filament* setting from a *process* setting, so
-every new key starts at *process* (the bucket a bare `--set` uses). For a
-filament setting such as `filament_flow_ratio`, switch **Applies to** to
-*filament* before adding it.
-
-Getting this wrong is the classic silent no-op — a filament key sent as a process
-override is accepted and then ignored, so the slice comes out unchanged. The
-picker resets to *process* for each new key rather than remembering your last
-choice, precisely so the mistake cannot happen in reverse either. Once
-OrcaSlicer is configured the browser classifies keys for you automatically and
-the dropdown is set from the profile the key was found in.
+If that prints nothing, OrcaSlicer is not set up yet — see
+[OrcaSlicer or its BBL profiles were not found](#orcaslicer-or-its-bbl-profiles-were-not-found).
+Overrides still work in the meantime; unknown keys are warn-but-pass.
 
 ## Nothing happens when I run a print command
 

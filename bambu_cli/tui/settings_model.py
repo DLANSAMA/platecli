@@ -2,14 +2,12 @@
 
 No Textual imports live here: the screen renders from ``SETTING_FIELDS`` and
 calls these functions, so every decision (what a field accepts, how a typed
-value is parsed, how the browser filters, which bucket a browsed key belongs to)
-is unit-testable without a pilot — the plan's view/logic split.
+value is parsed) is unit-testable without a pilot — the plan's view/logic split.
 
 Every field maps 1:1 onto a ``slice`` parser *dest*. Nothing here invents slicer
-vocabulary: the named fields are the CLI's named flags, and the browser lists
-whatever the installed profiles actually contain (the same discovery
-``slice --list-settings`` uses). Blank means "no override" everywhere, matching
-CLI semantics where an unset flag leaves the profile default alone.
+vocabulary — the named fields are the CLI's named flags. Blank means "no
+override" everywhere, matching CLI semantics where an unset flag leaves the
+profile default alone.
 """
 
 from __future__ import annotations
@@ -138,134 +136,3 @@ def collect_field_overrides(raw_values: dict[str, str]) -> tuple[dict[str, Any],
         elif value is not None:
             parsed[field.dest] = value
     return parsed, errors
-
-
-# --- "All settings" browser -------------------------------------------------
-
-
-# How a browsed setting should be edited. Derived from the values the installed
-# profiles actually hold — never from a hand-written table of slicer vocabulary.
-EDITOR_SWITCH = "switch"
-EDITOR_SELECT = "select"
-EDITOR_NUMBER = "number"
-EDITOR_TEXT = "text"
-
-# A choice list stops being a usable picker past a dozen entries, and a "value"
-# longer than this is prose (a custom g-code block), not a choice.
-_MAX_SELECT_CHOICES = 12
-_MAX_CHOICE_LEN = 40
-
-
-@dataclass(frozen=True)
-class CatalogEntry:
-    """One browsable OrcaSlicer setting: key, bucket, example, observed domain."""
-
-    key: str
-    kind: str  # PROCESS | FILAMENT
-    example: str
-    values: tuple[str, ...] = ()
-
-    @property
-    def label(self) -> str:
-        return f"[{self.kind}] {self.key} = {self.example}"
-
-    @property
-    def editor(self) -> str:
-        """Which control edits this setting: switch / select / number / text."""
-        return editor_for(self.values)
-
-
-def _is_number(text: str) -> bool:
-    try:
-        float(text)
-    except ValueError:
-        return False
-    return True
-
-
-def editor_for(values: tuple[str, ...]) -> str:
-    """Pick an editor from a setting's observed values.
-
-    Ordered deliberately: ``0``/``1`` are numeric too, so the boolean test runs
-    first or every toggle in OrcaSlicer would render as a number box. Anything
-    that is not confidently a toggle, a number, or a short closed set falls back
-    to free text — the escape hatch has to stay, because a profile can hold a
-    custom g-code block and no picker can represent that.
-    """
-    if not values:
-        return EDITOR_TEXT
-    # BOTH states must have been observed. A key seen only ever holding "0" is
-    # far more often a number that happens to sit at zero than a flag —
-    # `raft_layers`, `skirt_loops`, `skirt_height`, `support_filament` (an AMS
-    # slot index) and `bottom_shell_thickness` are all "0" in every stock Bambu
-    # profile. A toggle would cap them at 0/1 with no way back, and unlike the
-    # dropdown a switch has no custom-value escape. Measured against the stock
-    # profiles this is the difference between 35 keys inferred as toggles and 6.
-    if set(values) == {"0", "1"}:
-        return EDITOR_SWITCH
-    if all(_is_number(v) for v in values):
-        return EDITOR_NUMBER
-    if len(values) <= _MAX_SELECT_CHOICES and all(v and len(v) <= _MAX_CHOICE_LEN and "\n" not in v for v in values):
-        return EDITOR_SELECT
-    return EDITOR_TEXT
-
-
-def load_catalog(profiles_dir: str | None) -> list[CatalogEntry]:
-    """Every settable key from the installed profiles, sorted, or ``[]``.
-
-    Reads through ``slicer.options.setting_catalog`` — the same discovery
-    ``slice --list-settings`` uses — so the browser and the agent surface list
-    the same vocabulary. Any failure (no profiles configured, unreadable dir,
-    ``--sim`` on a machine with no slicer) degrades to an empty catalog; the
-    screen then offers free-form ``KEY=VALUE`` entry, which the CLI's
-    warn-but-pass handling of unknown keys already tolerates.
-    """
-    if not profiles_dir:
-        return []
-    try:
-        from bambu_cli.slicer.options import setting_catalog, setting_value_domains
-
-        catalog = setting_catalog(profiles_dir)
-        domains = setting_value_domains(profiles_dir)
-    except Exception:  # noqa: BLE001 -- discovery is a nicety; never break the UI
-        return []
-    entries = [
-        CatalogEntry(
-            key=key,
-            kind=kind,
-            example=_example(value),
-            values=domains.get(kind, {}).get(key, ()),
-        )
-        for kind in (PROCESS, FILAMENT)
-        for key, value in catalog.get(kind, {}).items()
-    ]
-    return sorted(entries, key=lambda e: (e.key, e.kind))
-
-
-def _example(value: Any) -> str:
-    text = value[0] if isinstance(value, list) and value else value
-    text = "" if text is None else str(text)
-    return text if len(text) <= 40 else text[:37] + "…"
-
-
-def filter_catalog(entries: list[CatalogEntry], query: str, limit: int = 200) -> list[CatalogEntry]:
-    """Case-insensitive substring filter over keys (pure; drives the browser)."""
-    needle = (query or "").strip().lower()
-    if not needle:
-        return entries[:limit]
-    return [entry for entry in entries if needle in entry.key.lower()][:limit]
-
-
-def bucket_for_key(entries: list[CatalogEntry], key: str, default: str = PROCESS) -> str:
-    """Which override bucket a browsed key belongs to.
-
-    The source profile decides — never a guess about the name. This is what
-    keeps ``filament_flow_ratio`` out of ``--set`` (where OrcaSlicer would
-    silently ignore it). Unknown keys fall back to ``default`` (process), which
-    is what a bare ``--set`` does today.
-    """
-    key = (key or "").strip()
-    for entry in entries:
-        if entry.key == key:
-            return entry.kind
-    return default

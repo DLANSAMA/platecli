@@ -23,35 +23,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   dumb terminals, and screen readers. Like `go`, `tui` is interactive-only:
   `--json` and a non-TTY stdin exit `5` with the standard error envelope.
   The prepare screen also offers **advanced slice settings** (`s`): a grouped
-  form over the named `slice` flags plus a searchable browser across every
-  setting in the installed OrcaSlicer profiles — the same discovery
-  `slice --list-settings` exposes — recorded as `--set` / `--set-filament`
-  overrides with the bucket taken from the profile the key came from. Blank
-  fields keep profile defaults, unsafe values are refused by the same
-  validation the CLI applies, and touching nothing leaves the slice byte
-  identical to before.
+  form over the named `slice` flags, plus an *Add an override* editor (a key, a
+  process/filament bucket, and a value) for everything the named flags do not
+  cover, recorded as `--set` / `--set-filament`. Blank fields keep profile
+  defaults, unsafe values are refused by the same validation the CLI applies,
+  and touching nothing leaves the slice byte identical to before. Use
+  `plate slice --list-settings` to see which keys your profiles accept.
 
 ### Changed
 
-- **`plate tui` advanced settings are now picked rather than typed.** The screen
-  previously asked you to hand-edit a `KEY=VALUE` string, with a `filament:`
-  prefix to remember and no help on what a setting expects. Now: the named flags
-  with a fixed option set (wall type, support type, seam position, ironing) are
-  dropdowns; choosing a key from the browser fills in its name, shows the value
-  your own profile uses, pins the process/filament bucket to whichever profile
-  the key came from, and picks a control from the values that key actually holds
-  across your installed profiles — a toggle for on/off settings, a dropdown for a
-  short set of known values, otherwise a plain box. Pending overrides are a list
-  you can click to edit or remove one at a time.
-  The inference never costs capability: every dropdown carries a *type a custom
-  value* entry, because the values your profiles happen to use are a subset of
-  what OrcaSlicer accepts, and free text remains the fallback for anything the
-  profiles cannot describe. With no readable profiles the name and bucket are
-  typed as before — but the bucket now resets to `process` for each new key
-  instead of carrying the previous choice over, so a process setting can never be
-  sent as a filament override by accident. An untouched dropdown is refused
-  ("choose a value") rather than sent as an empty override; an empty *text* value
-  is still allowed, since clearing a setting is a legitimate override.
+- **`plate tui` advanced settings are clearer to fill in.** The screen previously
+  asked you to hand-edit a `KEY=VALUE` string, with a `filament:` prefix to
+  remember and no help on what a setting expects. Now the named flags with a
+  fixed option set (wall type, support type, seam position, ironing) are
+  dropdowns, and anything else is added as a name, a *process*/*filament* bucket
+  and a value — the same split `--set` and `--set-filament` make. Pending
+  overrides are a list you can click to edit or remove one at a time. The bucket
+  resets to `process` for each new key instead of carrying the previous choice
+  over, so a process setting can never be sent as a filament override by
+  accident. An empty value is still allowed, since clearing a setting is a
+  legitimate override.
   The screen was also rebuilt visually: each field is one row (label beside its
   control) instead of a stacked label over a bordered box, so a 80x24 terminal
   shows three whole groups rather than four fields; every field carries an
@@ -227,9 +218,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 - Troubleshooting gained the three `plate tui` symptoms, keyed to the exact strings
   the command prints: the missing `[tui]` extra (exit `1`), the interactive-only
-  refusal in a script, pipe, or `--json` run (exit `5`), and an empty settings
-  browser when no OrcaSlicer profiles are readable — including the `filament:`
-  prefix that stops a filament key being sent as a silently-ignored process override.
+  refusal in a script, pipe, or `--json` run (exit `5`), and an override that is
+  accepted but changes nothing — the *Applies to* bucket, which is what stops a
+  filament key being sent as a silently-ignored process override.
 - SECURITY.md now states how deliberate-intent works in the interactive front-ends.
   The threat model described `--confirm` as the gate for physical actions, which is
   true of the non-interactive commands but not of `plate go` / `plate tui`, where the

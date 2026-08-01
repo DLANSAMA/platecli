@@ -30,7 +30,7 @@ sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 pytest.importorskip("textual")
 
-from textual.widgets import Button, Input, OptionList, Select, Static, Switch  # noqa: E402
+from textual.widgets import Button, Input, OptionList, Select, Static  # noqa: E402
 
 from bambu_cli import context as _context  # noqa: E402
 from bambu_cli.interactive.core import SliceOverrides, apply_overrides, overrides_problem  # noqa: E402
@@ -306,115 +306,16 @@ def test_collect_field_overrides_reports_every_bad_field():
     assert len(errors) == 2
 
 
-def test_catalog_filter_and_bucket_routing(tmp_path):
-    profiles = tmp_path / "profiles"
-    (profiles / "process").mkdir(parents=True)
-    (profiles / "filament").mkdir(parents=True)
-    (profiles / "process" / "p.json").write_text(
-        json.dumps({"type": "process", "name": "p", "layer_height": "0.2", "flow_ratio": "1"}), encoding="utf-8"
-    )
-    (profiles / "filament" / "f.json").write_text(
-        json.dumps({"type": "filament", "name": "f", "filament_flow_ratio": ["0.98"], "nozzle_temperature": ["220"]}),
-        encoding="utf-8",
-    )
-    catalog = sm.load_catalog(str(profiles))
-    keys = {e.key for e in catalog}
-    assert {"layer_height", "flow_ratio", "filament_flow_ratio", "nozzle_temperature"} <= keys
-    assert "name" not in keys and "type" not in keys  # bookkeeping keys excluded
-
-    flow = sm.filter_catalog(catalog, "flow")
-    assert {e.key for e in flow} == {"flow_ratio", "filament_flow_ratio"}
-    assert sm.filter_catalog(catalog, "nothing-matches-this") == []
-    assert len(sm.filter_catalog(catalog, "")) == len(catalog)
-
-    # THE gotcha: the filament key must be routed to --set-filament, and the
-    # same-looking process key to --set. The source profile decides, not the name.
-    assert sm.bucket_for_key(catalog, "filament_flow_ratio") == sm.FILAMENT
-    assert sm.bucket_for_key(catalog, "flow_ratio") == sm.PROCESS
-    assert sm.bucket_for_key(catalog, "totally_unknown_key") == sm.PROCESS
-    # An example value is shown for each entry.
-    assert next(e for e in catalog if e.key == "filament_flow_ratio").example == "0.98"
 
 
-def test_catalog_degrades_when_profiles_are_unavailable(tmp_path):
-    assert sm.load_catalog(None) == []
-    assert sm.load_catalog(str(tmp_path / "nope")) == []
 
 
-def test_editor_for_infers_the_control_from_observed_values():
-    """The control is derived from data, and falls back to text when unsure."""
-    # 0/1 is checked before "numeric" or every OrcaSlicer toggle is a number box.
-    assert sm.editor_for(("0", "1")) == sm.EDITOR_SWITCH
-    # ...but BOTH states must have been seen. Only-"0" is a number sitting at
-    # zero far more often than a flag, and a toggle would cap it at 0/1 with no
-    # custom escape. These are all "0" in every stock Bambu profile:
-    # raft_layers, skirt_loops, support_filament, bottom_shell_thickness.
-    assert sm.editor_for(("0",)) == sm.EDITOR_NUMBER
-    assert sm.editor_for(("1",)) == sm.EDITOR_NUMBER
-    assert sm.editor_for(("0.2", "0.16")) == sm.EDITOR_NUMBER
-    assert sm.editor_for(("220",)) == sm.EDITOR_NUMBER
-    assert sm.editor_for(("grid", "gyroid")) == sm.EDITOR_SELECT
-    assert sm.editor_for(("aligned", "back", "nearest", "random")) == sm.EDITOR_SELECT
-    # Nothing observed -> nothing to infer.
-    assert sm.editor_for(()) == sm.EDITOR_TEXT
-    # Too many to pick from, too long to be a choice, or multi-line prose
-    # (a custom g-code block) all stay as free text.
-    assert sm.editor_for(tuple(f"v{i}" for i in range(13))) == sm.EDITOR_TEXT
-    assert sm.editor_for(("x" * 41,)) == sm.EDITOR_TEXT
-    assert sm.editor_for(("G1 X0\nG1 Y0",)) == sm.EDITOR_TEXT
 
 
-def test_setting_value_domains_collects_every_observed_value(tmp_path):
-    from bambu_cli.slicer.options import setting_value_domains
-
-    profiles = tmp_path / "profiles"
-    (profiles / "process").mkdir(parents=True)
-    (profiles / "filament").mkdir(parents=True)
-    (profiles / "process" / "a.json").write_text(
-        json.dumps({"type": "process", "name": "a", "spiral_mode": "0", "layer_height": "0.2"}),
-        encoding="utf-8",
-    )
-    (profiles / "process" / "b.json").write_text(
-        json.dumps({"type": "process", "name": "b", "spiral_mode": "1", "layer_height": "0.2"}),
-        encoding="utf-8",
-    )
-    (profiles / "filament" / "f.json").write_text(
-        json.dumps({"type": "filament", "name": "f", "filament_flow_ratio": ["0.98", "1.0"]}),
-        encoding="utf-8",
-    )
-    domains = setting_value_domains(str(profiles))
-    # Union across profiles, sorted, de-duplicated -- not just the first seen.
-    assert domains["process"]["spiral_mode"] == ("0", "1")
-    assert domains["process"]["layer_height"] == ("0.2",)
-    # A list-valued setting contributes each element.
-    assert domains["filament"]["filament_flow_ratio"] == ("0.98", "1.0")
-    # Bookkeeping fields are not settings.
-    assert "name" not in domains["process"]
-    assert "type" not in domains["process"]
 
 
-def test_setting_value_domains_degrades_on_unreadable_profiles(tmp_path):
-    from bambu_cli.slicer.options import setting_value_domains
-
-    profiles = tmp_path / "empty"
-    (profiles / "process").mkdir(parents=True)
-    (profiles / "process" / "bad.json").write_text("{not json", encoding="utf-8")
-    domains = setting_value_domains(str(profiles))
-    assert domains == {"process": {}, "filament": {}}
 
 
-def test_catalog_entries_carry_their_domain_and_editor(tmp_path):
-    profiles = tmp_path / "profiles"
-    (profiles / "process").mkdir(parents=True)
-    (profiles / "process" / "a.json").write_text(
-        json.dumps({"type": "process", "name": "a", "spiral_mode": "0"}), encoding="utf-8"
-    )
-    (profiles / "process" / "b.json").write_text(
-        json.dumps({"type": "process", "name": "b", "spiral_mode": "1"}), encoding="utf-8"
-    )
-    entry = next(e for e in sm.load_catalog(str(profiles)) if e.key == "spiral_mode")
-    assert entry.values == ("0", "1")
-    assert entry.editor == sm.EDITOR_SWITCH
 
 
 # ---------------------------------------------------------------------------
@@ -436,77 +337,15 @@ def _profiles_with_keys(tmp_path):
     return profiles
 
 
-def _profiles_with_domains(tmp_path):
-    """Profiles whose keys span all three inferred editors.
-
-    Two process profiles so a key can be *observed* holding more than one value:
-    that is what turns ``sparse_infill_pattern`` into a dropdown and
-    ``spiral_mode`` into a toggle, without anyone hand-listing slicer vocabulary.
-    """
-    profiles = tmp_path / "profiles"
-    (profiles / "process").mkdir(parents=True)
-    (profiles / "filament").mkdir(parents=True)
-    (profiles / "process" / "p1.json").write_text(
-        json.dumps(
-            {
-                "type": "process",
-                "name": "p1",
-                "layer_height": "0.2",
-                "sparse_infill_pattern": "grid",
-                "spiral_mode": "0",
-            }
-        ),
-        encoding="utf-8",
-    )
-    (profiles / "process" / "p2.json").write_text(
-        json.dumps(
-            {
-                "type": "process",
-                "name": "p2",
-                "layer_height": "0.16",
-                "sparse_infill_pattern": "gyroid",
-                "spiral_mode": "1",
-            }
-        ),
-        encoding="utf-8",
-    )
-    (profiles / "filament" / "f.json").write_text(
-        json.dumps({"type": "filament", "name": "f", "filament_flow_ratio": ["0.98"]}), encoding="utf-8"
-    )
-    return profiles
-
-
-def _put_value(settings, value):
-    """Write a value into whichever editor control is currently visible.
-
-    A value the installed profiles never showed goes through the dropdown's
-    "custom" entry — the escape hatch that keeps every value the CLI accepts
-    reachable, not just the ones the local profiles happen to use.
-    """
-    from bambu_cli.tui.screens.settings import _CUSTOM_VALUE
-
-    select = settings.query_one("#override-select", Select)
-    if select.display:
-        if value in settings._select_values:
-            select.value = value
-        else:
-            select.value = _CUSTOM_VALUE
-            settings.query_one("#override-value", Input).value = str(value)
-        return
-    switch = settings.query_one("#override-switch", Switch)
-    if switch.display:
-        switch.value = value in ("1", 1, True)
-        return
-    settings.query_one("#override-value", Input).value = str(value)
 
 
 async def _add_override(pilot, settings, key, value, bucket=None):
-    """Drive the real add path: name the key, let it configure, set the value."""
+    """Drive the real add path: name the key, pick a bucket, set the value."""
     settings.query_one("#override-key", Input).value = key
-    await pilot.pause()  # Input.Changed configures bucket + editor
+    await pilot.pause()  # let Input.Changed reset the bucket before we pick one
     if bucket is not None:
         settings.query_one("#override-bucket", Select).value = bucket
-    _put_value(settings, value)
+    settings.query_one("#override-value", Input).value = str(value)
     settings.query_one("#override-add", Button).press()
     await pilot.pause()
 
@@ -577,146 +416,12 @@ async def test_form_values_land_on_the_slice_namespace(tmp_path):
     assert "Overrides" in preview and "3 set" in preview
 
 
-async def test_browser_search_filters_and_routes_filament_keys(tmp_path):
-    from bambu_cli.interactive.core import GoSteps
-
-    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
-    stl = tmp_path / "cube.stl"
-    stl.write_text("solid cube\nendsolid cube\n", encoding="utf-8")
-
-    slicer = Recorder()
-
-    def capture(ns=None, **kwargs):
-        slicer.calls.append(ns)
-        return _slicer_into_workdir(ns)
-
-    steps = GoSteps(download=Recorder(), slice=capture, job=Recorder())
-    app = PlateApp(_args(), _deps(steps))
-    async with app.run_test() as pilot:
-        await _settle(pilot)
-        prepare, settings = await _open_settings(pilot, app)
-        assert "settings found" in _text(settings.query_one("#browser-status", Static))
-
-        search = settings.query_one("#browser-search", Input)
-        search.value = "flow"
-        await pilot.pause()
-        options = settings.query_one("#browser-list", OptionList)
-        assert options.option_count == 1  # only filament_flow_ratio matches
-        search.value = "layer"
-        await pilot.pause()
-        assert settings.query_one("#browser-list", OptionList).option_count == 1
-
-        # One filament key and one process key -- no KEY=VALUE string anywhere.
-        await _add_override(pilot, settings, "filament_flow_ratio", "0.95")
-        await _add_override(pilot, settings, "sparse_infill_pattern", "gyroid")
-        listed = _pending(settings)
-        assert "[filament] filament_flow_ratio=0.95" in listed
-        assert "[process] sparse_infill_pattern=gyroid" in listed
-        settings.action_apply()
-        await _settle(pilot)
-        await _prepare_with(pilot, app, prepare, stl)
-
-    ns = slicer.calls[0]
-    # THE gotcha, end to end: the filament key rode --set-filament, not --set.
-    assert ns.set_filament == ["filament_flow_ratio=0.95"]
-    assert ns.set_process == ["sparse_infill_pattern=gyroid"]
 
 
-async def test_selecting_a_browser_row_fills_key_bucket_and_value(tmp_path):
-    """Picking a row fills the name, pins the bucket, and seeds the value."""
-    from bambu_cli.interactive.core import GoSteps
-
-    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
-    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
-    async with app.run_test() as pilot:
-        await _settle(pilot)
-        _prepare, settings = await _open_settings(pilot, app)
-        settings.query_one("#browser-search", Input).value = "filament_flow"
-        await pilot.pause()
-        options = settings.query_one("#browser-list", OptionList)
-        options.focus()
-        options.highlighted = 0
-        await pilot.pause()
-        await pilot.press("enter")
-        await pilot.pause()
-
-        assert settings.query_one("#override-key", Input).value == "filament_flow_ratio"
-        # The bucket comes from the profile the key lives in, not from a guess.
-        assert settings.query_one("#override-bucket", Select).value == sm.FILAMENT
-        assert "0.98" in _text(settings.query_one("#override-default", Static))
-        # A lone numeric value infers a number box, seeded with the profile's own.
-        assert settings.query_one("#override-value", Input).display is True
-        assert settings.query_one("#override-value", Input).value == "0.98"
-        assert settings.query_one("#override-select", Select).display is False
-        assert settings.query_one("#override-switch", Switch).display is False
 
 
-async def test_toggle_and_dropdown_editors_come_from_the_profiles(tmp_path):
-    """0/1 keys get a switch; a short observed value set gets a dropdown."""
-    from bambu_cli.interactive.core import GoSteps
-
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
-    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
-    async with app.run_test() as pilot:
-        await _settle(pilot)
-        prepare, settings = await _open_settings(pilot, app)
-
-        # spiral_mode is only ever 0 or 1 across the installed profiles.
-        settings.query_one("#override-key", Input).value = "spiral_mode"
-        await pilot.pause()
-        assert settings.query_one("#override-switch", Switch).display is True
-        assert settings.query_one("#override-value", Input).display is False
-        settings.query_one("#override-switch", Switch).value = True
-        settings.query_one("#override-add", Button).press()
-        await pilot.pause()
-        assert "[process] spiral_mode=1" in _pending(settings)
-
-        # sparse_infill_pattern holds two distinct words -> a dropdown of both.
-        settings.query_one("#override-key", Input).value = "sparse_infill_pattern"
-        await pilot.pause()
-        dropdown = settings.query_one("#override-select", Select)
-        assert dropdown.display is True
-        assert settings._select_values == ("grid", "gyroid")
-        dropdown.value = "gyroid"
-        settings.query_one("#override-add", Button).press()
-        await pilot.pause()
-        assert "[process] sparse_infill_pattern=gyroid" in _pending(settings)
-
-        settings.action_apply()
-        await _settle(pilot)
-    assert prepare.overrides.process == {"spiral_mode": "1", "sparse_infill_pattern": "gyroid"}
 
 
-async def test_browser_degrades_to_typed_key_and_bucket_picker(tmp_path):
-    """No readable profiles: type the name, pick the bucket, still no syntax."""
-    from bambu_cli.interactive.core import GoSteps
-
-    # A profiles dir that exists (so preflight passes) but holds no profile
-    # JSONs -- the shape of a machine where discovery cannot see anything.
-    _install_ready_settings(tmp_path)
-    app = PlateApp(_args(sim=True), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
-    async with app.run_test() as pilot:
-        await _settle(pilot)
-        await pilot.press("n")
-        await _settle(pilot)
-        prepare = app.screen
-        assert isinstance(prepare, PrepareScreen)
-        prepare.action_settings()
-        await _settle(pilot)
-        settings = app.screen
-        assert "No profiles readable here" in _text(settings.query_one("#browser-status", Static))
-        assert settings.query_one("#browser-list", OptionList).option_count == 0
-
-        # An unclassifiable key says so, and falls back to free text.
-        settings.query_one("#override-key", Input).value = "some_unknown_key"
-        await pilot.pause()
-        assert "not in the installed profiles" in _text(settings.query_one("#override-default", Static))
-        assert settings.query_one("#override-value", Input).display is True
-        await _add_override(pilot, settings, "some_unknown_key", "7")
-        settings.action_apply()
-        await _settle(pilot)
-        # Unknown keys are warn-but-pass in the CLI, so they are accepted here.
-        assert prepare.overrides.process == {"some_unknown_key": "7"}
 
 
 async def test_non_numeric_field_is_refused_inline(tmp_path):
@@ -971,10 +676,10 @@ async def test_override_buttons_and_enter_key(tmp_path):
         await pilot.pause()
         settings.query_one("#override-add", Button).press()
         await pilot.pause()
-        assert "Pick a setting" in _text(settings.query_one("#settings-error", Static))
+        assert "Type the name" in _text(settings.query_one("#settings-error", Static))
         assert len(_pending(settings)) == 1
 
-        # Clear drops every browsed override but leaves the form fields alone.
+        # Clear drops every KEY=VALUE override but leaves the form fields alone.
         settings.query_one("#set-walls", Input).value = "4"
         settings.query_one("#override-clear", Button).press()
         await pilot.pause()
@@ -989,13 +694,13 @@ async def test_pending_override_can_be_reloaded_and_removed(tmp_path):
     """The pending list is editable: click to load it back, remove one at a time."""
     from bambu_cli.interactive.core import GoSteps
 
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
+    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
     app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
     async with app.run_test() as pilot:
         await _settle(pilot)
         prepare, settings = await _open_settings(pilot, app)
         await _add_override(pilot, settings, "layer_height", "0.24")
-        await _add_override(pilot, settings, "filament_flow_ratio", "0.95")
+        await _add_override(pilot, settings, "filament_flow_ratio", "0.95", bucket=sm.FILAMENT)
         assert len(_pending(settings)) == 2
 
         # Clicking a pending row loads it back into the editor for a fix-up.
@@ -1085,15 +790,6 @@ def test_field_for_unknown_dest_is_none():
     assert sm.field_for("not_a_real_dest") is None
 
 
-def test_load_catalog_survives_a_broken_discovery(monkeypatch, tmp_path):
-    """Discovery is a nicety: any failure degrades to free-form entry."""
-    import bambu_cli.slicer.options as options_mod
-
-    def boom(_profiles_dir):
-        raise RuntimeError("profiles on fire")
-
-    monkeypatch.setattr(options_mod, "setting_catalog", boom)
-    assert sm.load_catalog(str(tmp_path)) == []
 
 
 async def test_s_key_cannot_bypass_the_pre_sliced_settings_gate(tmp_path):
@@ -1154,11 +850,16 @@ async def test_settings_lock_reason_is_clear_once_a_sliced_result_exists(tmp_pat
         assert isinstance(app.screen, SettingsScreen)
 
 
-async def test_bucket_picker_routes_a_key_in_degraded_mode(tmp_path):
-    """With no profiles to classify against, the bucket dropdown is the routing."""
+async def test_bucket_picker_routes_a_filament_key(tmp_path):
+    """THE gotcha, end to end: the bucket dropdown is what routes the override.
+
+    OrcaSlicer silently ignores a filament setting sent as a process override, so
+    ``--set`` vs ``--set-filament`` is the whole point of the picker. Nothing
+    infers it — the user's choice is the routing, exactly as on the command line.
+    """
     from bambu_cli.interactive.core import GoSteps
 
-    _install_ready_settings(tmp_path)  # profiles dir exists but holds no JSONs
+    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
     stl = tmp_path / "cube.stl"
     stl.write_text("solid cube\nendsolid cube\n", encoding="utf-8")
     slicer = Recorder()
@@ -1172,7 +873,6 @@ async def test_bucket_picker_routes_a_key_in_degraded_mode(tmp_path):
     async with app.run_test() as pilot:
         await _settle(pilot)
         prepare, settings = await _open_settings(pilot, app)
-        assert "No profiles readable here" in _text(settings.query_one("#browser-status", Static))
         await _add_override(pilot, settings, "filament_flow_ratio", "0.9", bucket=sm.FILAMENT)
         # Left alone, the picker stays on process -- what a bare --set does.
         await _add_override(pilot, settings, "top_shell_layers", "5")
@@ -1188,39 +888,6 @@ async def test_bucket_picker_routes_a_key_in_degraded_mode(tmp_path):
     assert ns.set_process == ["top_shell_layers=5"]
 
 
-async def test_dropdown_offers_a_custom_value_escape(tmp_path):
-    """A picker must never cap what the CLI can express.
-
-    The installed profiles only ever show ``grid`` and ``gyroid``; OrcaSlicer
-    accepts far more. The dropdown is a shortcut over what was observed, so it
-    carries a "custom" entry that reveals the text box — otherwise inferring the
-    control would quietly remove capability the CLI has.
-    """
-    from bambu_cli.interactive.core import GoSteps
-    from bambu_cli.tui.screens.settings import _CUSTOM_VALUE
-
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
-    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
-    async with app.run_test() as pilot:
-        await _settle(pilot)
-        prepare, settings = await _open_settings(pilot, app)
-        settings.query_one("#override-key", Input).value = "sparse_infill_pattern"
-        await pilot.pause()
-        dropdown = settings.query_one("#override-select", Select)
-        assert dropdown.display is True
-        # The text box is hidden until "custom" is chosen...
-        assert settings.query_one("#override-value", Input).display is False
-        dropdown.value = _CUSTOM_VALUE
-        await pilot.pause()
-        # ...and revealed by it.
-        assert settings.query_one("#override-value", Input).display is True
-        settings.query_one("#override-value", Input).value = "honeycomb"
-        settings.query_one("#override-add", Button).press()
-        await pilot.pause()
-        assert "[process] sparse_infill_pattern=honeycomb" in _pending(settings)
-        settings.action_apply()
-        await _settle(pilot)
-    assert prepare.overrides.process == {"sparse_infill_pattern": "honeycomb"}
 
 
 async def test_named_choice_fields_are_dropdowns(tmp_path):
@@ -1247,68 +914,14 @@ async def test_named_choice_fields_are_dropdowns(tmp_path):
     assert prepare.overrides.fields == {"seam_position": "aligned"}
 
 
-async def test_picking_a_row_survives_the_async_changed(tmp_path):
-    """Assigning Input.value posts Changed *later*; it must not undo the prefill.
-
-    Setting the key programmatically fires ``Input.Changed`` asynchronously,
-    after the prefill has already run. Without the same-key guard that handler
-    reconfigures the editor and wipes the seeded value.
-
-    Deliberately exercised on a *dropdown* key: re-running ``set_options`` is
-    what resets a Select back to blank, so a number-valued key would pass this
-    test with the guard deleted and prove nothing.
-    """
-    from bambu_cli.interactive.core import GoSteps
-
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
-    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
-    async with app.run_test() as pilot:
-        await _settle(pilot)
-        _prepare, settings = await _open_settings(pilot, app)
-        settings.query_one("#browser-search", Input).value = "sparse_infill_pattern"
-        await pilot.pause()
-        options = settings.query_one("#browser-list", OptionList)
-        options.focus()
-        options.highlighted = 0
-        await pilot.pause()
-        await pilot.press("enter")
-        # Extra settle: give every queued Changed message a chance to land.
-        await _settle(pilot)
-        await pilot.pause()
-        dropdown = settings.query_one("#override-select", Select)
-        assert dropdown.display is True
-        # Still holding the profile's own value, not reset to blank.
-        assert dropdown.value == "grid"
-        assert settings.query_one("#override-key", Input).value == "sparse_infill_pattern"
 
 
-async def test_browsing_to_a_boolean_key_prefills_the_switch(tmp_path):
-    """Picking a 0/1 key seeds the toggle from the profile's own value."""
-    from bambu_cli.interactive.core import GoSteps
-
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
-    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
-    async with app.run_test() as pilot:
-        await _settle(pilot)
-        _prepare, settings = await _open_settings(pilot, app)
-        settings.query_one("#browser-search", Input).value = "spiral_mode"
-        await pilot.pause()
-        options = settings.query_one("#browser-list", OptionList)
-        options.focus()
-        options.highlighted = 0
-        await pilot.pause()
-        await pilot.press("enter")
-        await _settle(pilot)
-        switch = settings.query_one("#override-switch", Switch)
-        assert switch.display is True
-        # p1.json is read first and says "0", so the toggle starts off.
-        assert switch.value is False
 
 
 async def test_remove_with_nothing_selected_says_so(tmp_path):
     from bambu_cli.interactive.core import GoSteps
 
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
+    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
     app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
     async with app.run_test() as pilot:
         await _settle(pilot)
@@ -1319,23 +932,22 @@ async def test_remove_with_nothing_selected_says_so(tmp_path):
         assert "Select a pending override" in _text(settings.query_one("#settings-error", Static))
 
 
-async def test_pending_values_round_trip_back_into_every_editor(tmp_path):
-    """Reloading a pending override restores it into the right control.
+async def test_pending_values_round_trip_back_into_the_editor(tmp_path):
+    """Reloading a pending override restores its key, bucket and value verbatim.
 
-    Covers all three: a dropdown value the profiles know, a custom value they do
-    not, and a toggle. A custom value must come back through the custom entry or
-    editing it would silently reset to blank.
+    The bucket has to come back with it: reloading a filament override and
+    re-adding it must not silently demote it to a process override, which is the
+    silent no-op this screen exists to keep reachable.
     """
     from bambu_cli.interactive.core import GoSteps
-    from bambu_cli.tui.screens.settings import _CUSTOM_VALUE
 
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
+    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
     app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
     async with app.run_test() as pilot:
         await _settle(pilot)
         _prepare, settings = await _open_settings(pilot, app)
-        await _add_override(pilot, settings, "sparse_infill_pattern", "gyroid")  # in-domain
-        await _add_override(pilot, settings, "spiral_mode", "1")  # toggle
+        await _add_override(pilot, settings, "sparse_infill_pattern", "gyroid")
+        await _add_override(pilot, settings, "filament_flow_ratio", "0.95", bucket=sm.FILAMENT)
         current = settings.query_one("#override-current", OptionList)
 
         def reload(key):
@@ -1347,48 +959,43 @@ async def test_pending_values_round_trip_back_into_every_editor(tmp_path):
 
         reload("sparse_infill_pattern")
         await pilot.pause()
-        assert settings.query_one("#override-select", Select).value == "gyroid"
+        assert settings.query_one("#override-key", Input).value == "sparse_infill_pattern"
+        assert settings.query_one("#override-bucket", Select).value == sm.PROCESS
+        assert settings.query_one("#override-value", Input).value == "gyroid"
 
-        reload("spiral_mode")
+        reload("filament_flow_ratio")
         await pilot.pause()
-        assert settings.query_one("#override-switch", Switch).value is True
-
-        # A value outside the observed domain returns through "custom".
-        settings._process["sparse_infill_pattern"] = "honeycomb"
-        reload("sparse_infill_pattern")
+        assert settings.query_one("#override-bucket", Select).value == sm.FILAMENT
+        assert settings.query_one("#override-value", Input).value == "0.95"
+        # Re-adding it unchanged keeps it on the filament side.
+        settings.query_one("#override-add", Button).press()
         await pilot.pause()
-        assert settings.query_one("#override-select", Select).value == _CUSTOM_VALUE
-        assert settings.query_one("#override-value", Input).value == "honeycomb"
+        assert _pending(settings) == [
+            "[process] sparse_infill_pattern=gyroid",
+            "[filament] filament_flow_ratio=0.95",
+        ]
 
         # A malformed id is ignored rather than raising.
         settings._load_pending("")
         await pilot.pause()
 
 
-async def test_unchosen_dropdown_is_refused_rather_than_sent_empty(tmp_path):
-    """A blank dropdown means "not chosen yet", not "set this to empty"."""
+async def test_an_empty_value_is_a_real_override(tmp_path):
+    """Clearing a setting is legitimate — ``--set key=`` does exactly this."""
     from bambu_cli.interactive.core import GoSteps
 
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
+    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
     app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
     async with app.run_test() as pilot:
         await _settle(pilot)
-        _prepare, settings = await _open_settings(pilot, app)
-        settings.query_one("#override-key", Input).value = "sparse_infill_pattern"
-        await pilot.pause()
-        assert settings.query_one("#override-select", Select).value is Select.BLANK
-        settings.query_one("#override-add", Button).press()
-        await pilot.pause()
-        assert "Choose a value for sparse_infill_pattern" in _text(settings.query_one("#settings-error", Static))
-        assert _pending(settings) == []
+        prepare, settings = await _open_settings(pilot, app)
+        await _add_override(pilot, settings, "machine_start_gcode", "")
+        assert _pending(settings) == ["[process] machine_start_gcode="]
+        settings.action_apply()
+        await _settle(pilot)
+    assert prepare.overrides.process == {"machine_start_gcode": ""}
 
-        # An empty *text* value is still allowed: clearing a setting is valid.
-        settings.query_one("#override-key", Input).value = "unknown_free_text_key"
-        await pilot.pause()
-        settings.query_one("#override-value", Input).value = ""
-        settings.query_one("#override-add", Button).press()
-        await pilot.pause()
-        assert _pending(settings) == ["[process] unknown_free_text_key="]
+
 
 
 async def test_settings_screen_fits_80x24(tmp_path):
@@ -1400,14 +1007,13 @@ async def test_settings_screen_fits_80x24(tmp_path):
     """
     from bambu_cli.interactive.core import GoSteps
 
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
+    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
     app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
     async with app.run_test(size=(80, 24)) as pilot:
         await _settle(pilot)
         prepare, settings = await _open_settings(pilot, app)
         assert app.size.width == 80 and app.size.height == 24
         for widget_id in (
-            "#browser-list",
             "#override-key",
             "#override-bucket",
             "#override-current",
@@ -1427,106 +1033,37 @@ async def test_settings_screen_fits_80x24(tmp_path):
 async def test_option_prompts_bypass_rich_markup(tmp_path):
     """Bucket tags must survive rendering, not just exist in the string.
 
-    A ``str`` prompt is parsed as Rich markup, so "[filament] key = 0.98" renders
-    as " key = 0.98" — the bucket tag silently eaten, which is precisely the fact
-    the browser exists to show. Asserting on the prompt string cannot see this
+    A ``str`` prompt is parsed as Rich markup, so "[filament] key=0.98" renders as
+    " key=0.98" — the bucket tag silently eaten, which is precisely the fact the
+    pending list exists to show. Asserting on the prompt string cannot see this
     (the string is intact); passing ``Text`` is what stops it. The same bug would
-    corrupt any bracketed profile value, e.g. a list-valued "[0.98]".
+    corrupt any bracketed *value*, e.g. a list-valued "[0.98]".
     """
     from rich.text import Text
 
     from bambu_cli.interactive.core import GoSteps
 
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
+    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
     app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
     async with app.run_test() as pilot:
         await _settle(pilot)
         _prepare, settings = await _open_settings(pilot, app)
-        browser = settings.query_one("#browser-list", OptionList)
-        assert browser.option_count > 0
-        for i in range(browser.option_count):
-            prompt = browser.get_option_at_index(i).prompt
-            assert isinstance(prompt, Text), "browser prompt must not be markup-parsed"
-            assert str(prompt).startswith(("[process]", "[filament]"))
-
         await _add_override(pilot, settings, "spiral_mode", "1")
+        await _add_override(pilot, settings, "filament_flow_ratio", "[0.98]", bucket=sm.FILAMENT)
         pending = settings.query_one("#override-current", OptionList)
-        prompt = pending.get_option_at_index(0).prompt
-        assert isinstance(prompt, Text), "pending prompt must not be markup-parsed"
-        assert str(prompt) == "[process] spiral_mode=1"
+        prompts = [pending.get_option_at_index(i).prompt for i in range(pending.option_count)]
+        assert all(isinstance(p, Text) for p in prompts), "pending prompts must not be markup-parsed"
+        assert [str(p) for p in prompts] == [
+            "[process] spiral_mode=1",
+            "[filament] filament_flow_ratio=[0.98]",
+        ]
 
 
-def test_a_lone_zero_stays_a_number_so_counts_remain_settable():
-    """Regression: the toggle inference used to cage numeric settings.
-
-    Measured against the stock Bambu profiles, 35 keys were inferred as toggles
-    but only 6 ever varied between "0" and "1". The other 29 sit at a constant
-    zero (or one) and are plainly numbers — `raft_layers`, `skirt_loops`,
-    `skirt_height`, `support_filament` (an AMS slot index),
-    `bottom_shell_thickness`, `max_bridge_length`. Rendering those as a switch
-    made every value except 0 and 1 unreachable, and unlike the dropdown a
-    switch carries no custom-value escape.
-    """
-    for observed in (("0",), ("1",)):
-        assert sm.editor_for(observed) == sm.EDITOR_NUMBER, observed
-    # A key actually seen in both states is still a toggle.
-    assert sm.editor_for(("0", "1")) == sm.EDITOR_SWITCH
 
 
-async def test_a_constant_zero_key_is_editable_to_any_number(tmp_path):
-    """End to end: a key that is 0 in every profile can still be set to 3."""
-    from bambu_cli.interactive.core import GoSteps
-
-    profiles = tmp_path / "profiles"
-    (profiles / "process").mkdir(parents=True)
-    (profiles / "filament").mkdir(parents=True)
-    # raft_layers is "0" in every stock profile — the exact shape that used to
-    # be caged by a toggle.
-    for name in ("p1", "p2"):
-        (profiles / "process" / f"{name}.json").write_text(
-            json.dumps({"type": "process", "name": name, "raft_layers": "0"}), encoding="utf-8"
-        )
-    _install_ready_settings(tmp_path, profiles=profiles)
-    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
-    async with app.run_test() as pilot:
-        await _settle(pilot)
-        prepare, settings = await _open_settings(pilot, app)
-        settings.query_one("#override-key", Input).value = "raft_layers"
-        await pilot.pause()
-        # A free number box, not a toggle.
-        assert settings.query_one("#override-switch", Switch).display is False
-        assert settings.query_one("#override-value", Input).display is True
-        settings.query_one("#override-value", Input).value = "3"
-        settings.query_one("#override-add", Button).press()
-        await pilot.pause()
-        assert "[process] raft_layers=3" in _pending(settings)
-        settings.action_apply()
-        await _settle(pilot)
-    assert prepare.overrides.process == {"raft_layers": "3"}
 
 
-async def test_bucket_control_is_locked_for_a_known_key(tmp_path):
-    """A control that accepts input and discards it is a lie.
 
-    For a key found in the profiles, `bucket_for_key` overrules the dropdown, so
-    the dropdown is locked and simply reports the fact. It unlocks again for a
-    key nothing can classify, where the user's choice is the only signal.
-    """
-    from bambu_cli.interactive.core import GoSteps
 
-    _install_ready_settings(tmp_path, profiles=_profiles_with_domains(tmp_path))
-    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
-    async with app.run_test() as pilot:
-        await _settle(pilot)
-        _prepare, settings = await _open_settings(pilot, app)
-        bucket = settings.query_one("#override-bucket", Select)
 
-        settings.query_one("#override-key", Input).value = "filament_flow_ratio"
-        await pilot.pause()
-        assert bucket.value == sm.FILAMENT
-        assert bucket.disabled is True
 
-        settings.query_one("#override-key", Input).value = "not_in_any_profile"
-        await pilot.pause()
-        assert bucket.value == sm.PROCESS
-        assert bucket.disabled is False

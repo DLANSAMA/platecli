@@ -420,14 +420,23 @@ machinery; no new slicing vocabulary.
   (nozzle temp, bed temp, fan speed, flow ratio), Speed (the five accel
   flags), Plate (copies, seam position, ironing). Blank field = no override
   (profile default wins), matching CLI semantics.
-- **"All settings" browser** inside SettingsScreen: searchable list of every
-  settable key + example value, read from the installed profiles via the
-  same loader `slice --list-settings` uses; filter-as-you-type; selecting a
-  key opens a value editor and records a `--set` / `--set-filament`-style
-  override (kind chosen by which profile the key came from). Where profiles
-  are unavailable (e.g. `--sim` with no slicer configured) the browser
-  degrades to free-form KEY=VALUE entry — the CLI's unknown-key
-  warn-but-pass semantics already tolerate that.
+- **"Add an override"** inside SettingsScreen: a key, a process/filament
+  bucket and a value, recorded as a `--set` / `--set-filament` override, for
+  everything the named fields do not cover. The CLI's unknown-key
+  warn-but-pass semantics mean an unrecognised key is tolerated, so this
+  needs no profile discovery and behaves the same with or without a slicer
+  configured. `slice --list-settings` stays the way to see what the installed
+  profiles accept.
+
+  > **Cut before merge (2026-08-01).** This started as a searchable *browser*
+  > over every key in the installed profiles, with the editor control inferred
+  > from each key's observed values (toggle / dropdown / number / text) and the
+  > bucket pinned from the source profile. It worked, but the inference was a
+  > tuned heuristic over a third-party tool's vocabulary that could drift
+  > silently with any OrcaSlicer profile update, no test could catch that drift,
+  > and it generated most of the branch's fix commits. The hand-tuning surface
+  > was not worth it for a user who is, by definition, already a `--set` user.
+  > See `docs/quality-roadmap.md` if it is ever revisited.
 - **State/plumbing:** a `SliceOverrides` dataclass in
   `bambu_cli/interactive/core.py`, carried on `WizardState`; a pure
   `apply_overrides(ns, overrides)` decorates the slice namespace inside
@@ -440,15 +449,16 @@ machinery; no new slicing vocabulary.
   `_validate_slice_options` — the screen surfaces that `BambuError` inline
   (test the nozzle=999 refusal). The filament flow-ratio key is
   `filament_flow_ratio` via `--flow-ratio`/set-filament, NOT process-level
-  `flow_ratio` (the silent-no-op gotcha) — browser keys from the filament
-  profile must be sent as filament overrides.
+  `flow_ratio` (the silent-no-op gotcha) — the *Applies to* picker is what
+  routes it, and it resets to `process` per key so a choice never carries over.
 
 ### 11.2 Tests
 
 Unit: `SliceOverrides` round-trip + `apply_overrides` decoration (incl.
 none-set ⇒ namespace identical). Pilot: form values land on the slice
-namespace via fake `GoSteps`; browser search filters; sim degradation;
-pre-sliced disables the button; temp-refusal renders inline. Integration:
+namespace via fake `GoSteps`; the bucket picker routes a filament key to
+`--set-filament` end to end; pre-sliced disables the button; temp-refusal
+renders inline. Integration:
 one `tests/fakes/orca_stub` run asserting overrides land in the temp
 profiles the stub receives (the read-back lesson — never assert only on the
 request).

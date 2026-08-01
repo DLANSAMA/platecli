@@ -291,10 +291,7 @@ class PrepareScreen(Screen):
             self.query_one("#settings-summary", Static).update(reason)
             self.app.notify(reason, severity="warning")
             return
-        self.app.push_screen(
-            SettingsScreen(self.overrides, profiles_dir=_profiles_dir()),
-            self._settings_closed,
-        )
+        self.app.push_screen(SettingsScreen(self.overrides), self._settings_closed)
 
     def _settings_closed(self, overrides: SliceOverrides | None) -> None:
         if overrides is None:  # cancelled: keep what we had
@@ -472,13 +469,3 @@ def _pressed(radio_set: RadioSet, choices: list[str], default: str | None = None
     if index is None or index < 0 or index >= len(choices):
         return default if default is not None else choices[0]
     return choices[index]
-
-
-def _profiles_dir() -> str | None:
-    """The configured OrcaSlicer profiles directory, or None when unusable."""
-    try:
-        from bambu_cli.context import current_settings
-
-        return current_settings().profiles_dir or None
-    except Exception:  # noqa: BLE001 -- the browser degrades to free-form entry
-        return None
