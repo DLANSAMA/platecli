@@ -339,7 +339,13 @@ class PrepareScreen(Screen):
             return
         result = self.take_result()
         assert result is not None  # guarded above  # noqa: S101
-        self.app.push_screen(ConfirmModal(self._args, self._deps, result.state), self._confirm_closed)
+        # The rows the preview already computed: the confirmation for a
+        # physical action should say what is about to happen, not just where
+        # the file is.
+        self.app.push_screen(
+            ConfirmModal(self._args, self._deps, result.state, rows=result.rows),
+            self._confirm_closed,
+        )
 
     def _confirm_closed(self, outcome: Any) -> None:
         from bambu_cli.tui.screens.confirm import BACK, PRINTED

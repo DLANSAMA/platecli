@@ -16,6 +16,8 @@ class StatusPanel(Static):
     """Renders a single printer-status snapshot as a label/value table."""
 
     def on_mount(self) -> None:
+        # A framed box with no title is a box the reader has to identify.
+        self.border_title = "Printer"
         # Start with a placeholder; the screen calls update_snapshot once the
         # first fetch lands.
         self.update_snapshot(StatusSnapshot(ok=False, error="Loading printer status…"))

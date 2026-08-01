@@ -7,6 +7,8 @@ turns those rows into a Rich table plus a bar.
 
 from __future__ import annotations
 
+from typing import Any
+
 from rich.console import Group
 from rich.table import Table
 from rich.text import Text
@@ -18,10 +20,20 @@ _BAR_WIDTH = 30
 
 
 class JobProgress(Static):
-    """Renders the live state of the running job."""
+    """Renders the live state of the running job.
+
+    ``compact`` renders the bar alone. The dashboard already shows state,
+    progress and layer in its printer panel, so the full table there would say
+    everything twice; the monitor, which has the screen to itself, shows all of
+    it.
+    """
+
+    def __init__(self, *args: Any, compact: bool = False, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._compact = compact
 
     def update_snapshot(self, snapshot: StatusSnapshot) -> None:
-        self.update(_render(snapshot))
+        self.update(_bar(progress_percent(snapshot)) if self._compact else _render(snapshot))
 
 
 def _bar(percent: int) -> Text:

@@ -17,6 +17,7 @@ class AmsPanel(Static):
     """Renders the AMS trays from a status snapshot as a highlighted table."""
 
     def on_mount(self) -> None:
+        self.border_title = "AMS"
         self.update_snapshot(StatusSnapshot(ok=False, error="Loading AMS…"))
 
     def update_snapshot(self, snapshot: StatusSnapshot) -> None:

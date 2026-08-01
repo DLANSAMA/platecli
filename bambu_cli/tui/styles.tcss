@@ -6,23 +6,32 @@ Screen {
 }
 
 #dashboard-body {
-    height: 1fr;
+    height: auto;
 }
 
 StatusPanel {
     width: 1fr;
-    height: 100%;
+    height: auto;
     border: round $primary;
+    border-title-color: $accent;
+    border-title-style: bold;
     padding: 1 2;
     content-align: left top;
 }
 
 AmsPanel {
     width: 1fr;
-    height: 100%;
+    height: auto;
     border: round $secondary;
+    border-title-color: $accent;
+    border-title-style: bold;
     padding: 1 2;
     content-align: left top;
+}
+
+#dash-progress {
+    height: auto;
+    padding: 1 2 0 2;
 }
 
 #dashboard-hint {
@@ -87,13 +96,20 @@ ConfirmModal {
     max-width: 100%;
     height: auto;
     max-height: 80%;
-    border: thick $primary;
+    border: round $primary;
+    border-title-color: $accent;
+    border-title-style: bold;
     background: $surface;
     padding: 1 2;
 }
 
 #confirm-title {
     text-style: bold;
+}
+
+#confirm-summary {
+    height: auto;
+    padding: 1 0 1 0;
 }
 
 #confirm-path {
@@ -148,7 +164,9 @@ HelpScreen {
     max-width: 100%;
     height: auto;
     max-height: 80%;
-    border: thick $primary;
+    border: round $primary;
+    border-title-color: $accent;
+    border-title-style: bold;
     background: $surface;
     padding: 1 2;
 }
@@ -231,7 +249,7 @@ HelpScreen {
 }
 
 #browser-list {
-    height: 8;
+    height: 6;
     border: round $secondary;
 }
 
@@ -259,9 +277,6 @@ HelpScreen {
     border: round $secondary;
 }
 
-#browser-list {
-    height: 6;
-}
 
 #settings-error {
     color: $error;

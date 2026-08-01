@@ -71,17 +71,22 @@ class ConfirmModal(ModalScreen[ConfirmOutcome]):
         ("question_mark", "app.help", "Help"),
     ]
 
-    def __init__(self, args: argparse.Namespace, deps: Any, state: Any) -> None:
+    def __init__(self, args: argparse.Namespace, deps: Any, state: Any, rows: Any = None) -> None:
         super().__init__()
         self._args = args
         self._deps = deps
         self._state = state
+        self._rows = list(rows or [])
         self._owns = True
         self._job_running = False
+
+    def on_mount(self) -> None:
+        self.query_one("#confirm-body").border_title = "Confirm"
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(
             Static("Send this to the printer?", id="confirm-title"),
+            Static(_summary_table(self._rows), id="confirm-summary"),
             Static(str(self._state.printable_path or ""), id="confirm-path", markup=False),
             Horizontal(
                 Button("Start print", id="confirm-print", variant="primary"),
@@ -231,3 +236,15 @@ def _with_output_tail(message: str, captured: str, *, lines: int = 3, width: int
         return message
     kept = [line[:width] for line in tail[-lines:]]
     return message + "\n" + "\n".join(kept)
+
+
+def _summary_table(rows: Any) -> Any:
+    """Render the preview rows as a compact label/value grid (empty if none)."""
+    from rich.table import Table
+
+    table = Table.grid(padding=(0, 2))
+    table.add_column(justify="right", style="bold")
+    table.add_column()
+    for label, value in rows or []:
+        table.add_row(str(label), str(value))
+    return table

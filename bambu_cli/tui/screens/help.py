@@ -91,6 +91,9 @@ class HelpScreen(ModalScreen[None]):
         ("q", "close", "Close"),
     ]
 
+    def on_mount(self) -> None:
+        self.query_one("#help-body").border_title = "Keys"
+
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="help-body"):
             yield Static("Keys", id="help-title")

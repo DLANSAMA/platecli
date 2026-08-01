@@ -24,9 +24,14 @@ from textual.widgets import Footer, Header, Static
 
 from bambu_cli.tui.services import StatusSnapshot
 from bambu_cli.tui.widgets.ams_panel import AmsPanel
+from bambu_cli.tui.widgets.job_progress import JobProgress
 from bambu_cli.tui.widgets.status_panel import StatusPanel
 
 _REFRESH_INTERVAL = 10.0
+# States where a progress bar means something. Deliberately not derived from
+# TERMINAL_GCODE_STATES: "not terminal" includes states like PREPARE where a
+# percentage is meaningless.
+_ACTIVE_STATES = frozenset({"RUNNING", "PAUSE"})
 
 
 class DashboardScreen(Screen):
@@ -52,6 +57,10 @@ class DashboardScreen(Screen):
         with Horizontal(id="dashboard-body"):
             yield StatusPanel(id="status-panel")
             yield AmsPanel(id="ams-panel")
+        # The bar the monitor already uses, surfaced here while a job is live.
+        # Hidden at rest: an idle printer has no progress to draw, and a 0%%
+        # bar sitting on the dashboard reads as a stalled print.
+        yield JobProgress(id="dash-progress", compact=True)
         yield Static("", id="dashboard-hint")
         yield Footer()
 
@@ -113,6 +122,11 @@ class DashboardScreen(Screen):
         self._fetching = False
         self.query_one("#status-panel", StatusPanel).update_snapshot(snapshot)
         self.query_one("#ams-panel", AmsPanel).update_snapshot(snapshot)
+        progress = self.query_one("#dash-progress", JobProgress)
+        running = snapshot.ok and str(snapshot.raw.get("gcode_state", "")).upper() in _ACTIVE_STATES
+        progress.display = running
+        if running:
+            progress.update_snapshot(snapshot)
         hint = self.query_one("#dashboard-hint", Static)
         if snapshot.ok:
             hint.update("Press r to refresh · q to quit")

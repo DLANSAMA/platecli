@@ -1051,3 +1051,52 @@ async def test_upload_only_outcome_lands_from_under_an_overlay(tmp_path):
             assert "Uploaded" in _text(app.screen.query_one("#prepare-status", Static))
     finally:
         gate.set()
+
+
+async def test_dashboard_shows_the_progress_bar_only_while_a_job_runs(tmp_path):
+    """A 0% bar on an idle printer reads as a stalled print, so it stays hidden."""
+    from bambu_cli.tui.widgets.job_progress import JobProgress
+
+    _install_ready_settings(tmp_path)
+    provider = ScriptedStatus([_snap("IDLE", 0), _snap("RUNNING", 42), _snap("FINISH", 100)])
+    app = PlateApp(_args(), _deps(status_provider=provider))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        bar = app.screen.query_one("#dash-progress", JobProgress)
+        assert bar.display is False  # IDLE
+
+        await pilot.press("r")
+        await _settle(pilot)
+        assert bar.display is True  # RUNNING
+
+        await pilot.press("r")
+        await _settle(pilot)
+        assert bar.display is False  # FINISH is not an active state
+
+
+async def test_confirm_modal_says_what_it_is_about_to_print(tmp_path):
+    """The riskiest dialog in the app must show more than a temp path."""
+    _install_ready_settings(tmp_path)
+    model = tmp_path / "cube.stl"
+    model.write_text("solid cube\nendsolid cube\n", encoding="utf-8")
+    steps = GoSteps(download=Recorder(), slice=_slicer_into_workdir, job=Recorder())
+    app = PlateApp(_args(), _deps(steps=steps))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        await pilot.press("n")
+        await _settle(pilot)
+        prepare = app.screen
+        prepare.query_one("#source-input", Input).value = str(model)
+        prepare.query_one("#source-input", Input).focus()
+        await pilot.press("enter")
+        await _settle(pilot)
+        prepare.open_confirm()
+        await _settle(pilot)
+        modal = app.screen
+        assert isinstance(modal, ConfirmModal)
+        # The preview rows the prepare screen computed travel to the dialog.
+        assert modal._rows, "confirm modal received no summary rows"
+        assert modal.query_one("#confirm-body").border_title == "Confirm"
+        # Rendered through a Rich grid, so assert on the labels reaching it.
+        labels = [str(label) for label, _value in modal._rows]
+        assert any("Model" in x for x in labels), labels
