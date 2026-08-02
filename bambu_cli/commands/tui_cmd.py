@@ -11,7 +11,7 @@ import argparse
 
 
 def cmd_tui(args: argparse.Namespace) -> None:
-    """Full-screen terminal UI: dashboard, guided print, job monitor."""
+    """Live full-screen view of the printer, with a job monitor and print flow."""
     from bambu_cli.tui import cmd_tui as _cmd_tui
 
     _cmd_tui(args)

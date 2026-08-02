@@ -233,7 +233,7 @@ The wizard never exposes raw slicer knobs (infill, walls, speeds, seams, `--set`
 
 ## Full-screen mode (plate tui)
 
-`plate tui` is a full-screen terminal app over the same pipeline: a live printer dashboard, a guided prepare form, an explicit print confirmation, and a job monitor — all in one persistent screen instead of a question queue. It is a *front-end*, not new machinery: it validates sources, reads the AMS, slices, and builds the `job` request through exactly the same shared code `plate go` uses, so the two cannot drift apart.
+`plate tui` is a live view of your printer — state, temperatures, layer and progress, and the AMS trays, on one screen that keeps updating — with a job monitor that follows a running print to completion. Starting a print is built in too, through the same prepare-and-confirm flow the wizard uses, so you never have to leave the screen to do it. It is a *front-end*, not new machinery: it validates sources, reads the AMS, slices, and builds the `job` request through exactly the same shared code `plate go` uses, so the two cannot drift apart.
 
 It needs the optional TUI extra (it is not a runtime dependency):
 
@@ -281,9 +281,13 @@ The TUI keeps every guarantee the CLI makes:
 - **Advanced settings cannot exceed CLI limits.** Every override goes through the same `slice` validation, so an unsafe temperature is refused in the form rather than sent to the printer. The **Applies to** dropdown is the routing, exactly as `--set` vs `--set-filament` is on the command line: a filament setting such as `filament_flow_ratio` sent as a process override is accepted by OrcaSlicer and then *silently ignored*, so the slice comes out unchanged. The picker starts every new key at *process* (the bucket a bare `--set` uses) rather than carrying your last choice over, so a process setting is never sent as a filament override by accident either.
 - Quitting is refused while an upload or print-start is still running, so a physical action is never abandoned half-way.
 
-### `plate go` or `plate tui`?
+### Where it runs
 
-`plate go` stays, and it is the right choice on a dumb terminal, over a slow SSH link, with a screen reader, or when you do not want the extra dependency — it is a plain question-and-answer flow with no full-screen redraw. `plate tui` is for a normal local terminal where a persistent dashboard and live job view are worth having. Scripts and AI agents should use neither: `plate job <url> --confirm` is the machine path.
+Textual is an optional extra, never a runtime dependency, so `plate go` keeps
+working with nothing extra installed — on a dumb terminal, over a slow SSH link,
+and with a screen reader, where a full-screen redraw is a liability. Both drive
+the same pipeline, so nothing is out of reach either way. Scripts and AI agents
+should use neither: `plate job <url> --confirm` is the machine path.
 
 ## Monitoring a print
 

@@ -371,7 +371,7 @@ def build_parser():
     sub.add_parser(
         "tui",
         parents=[get_global_parser()],
-        help="Full-screen terminal UI (dashboard, guided print, job monitor)",
+        help="Live full-screen view of the printer (needs the 'tui' extra)",
     )
 
     p_slice = sub.add_parser("slice", parents=[get_global_parser()], help="Slice a model file into .3mf")
