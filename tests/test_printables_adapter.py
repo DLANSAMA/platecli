@@ -304,21 +304,28 @@ def test_malformed_api_response_never_raises(_log, payload):
     assert result.as_tuple() == (None, None)
 
 
+# Factories, not instances: pytest derives parameter ids from the values at
+# collection time, and building an HTTPError up here made it probe attributes
+# that blow up on Python 3.9 (KeyError: 'file' via tempfile.__getattr__).
+# Explicit ids keep the report readable without pytest inspecting the objects.
 @pytest.mark.parametrize(
-    "boom",
+    "make_error",
     [
-        ValueError("bad value"),
-        KeyError("renamed_field"),
-        AttributeError("'NoneType' object has no attribute 'get'"),
-        TypeError("unhashable"),
-        RuntimeError("something odd"),
-        MemoryError("body too large"),
-        urllib.error.HTTPError("https://api.printables.com/graphql/", 500, "Server Error", {}, None),
+        pytest.param(lambda: ValueError("bad value"), id="ValueError"),
+        pytest.param(lambda: KeyError("renamed_field"), id="KeyError-renamed-field"),
+        pytest.param(lambda: AttributeError("'NoneType' object has no attribute 'get'"), id="AttributeError"),
+        pytest.param(lambda: TypeError("unhashable"), id="TypeError"),
+        pytest.param(lambda: RuntimeError("something odd"), id="RuntimeError"),
+        pytest.param(lambda: MemoryError("body too large"), id="MemoryError"),
+        pytest.param(
+            lambda: urllib.error.HTTPError("https://api.printables.com/graphql/", 500, "Server Error", {}, None),
+            id="HTTPError-500",
+        ),
     ],
 )
 @patch("bambu_cli.logging_utils._BACKEND")
-def test_unexpected_exception_is_contained_not_propagated(_log, boom):
-    adapter, _ = _adapter(boom)
+def test_unexpected_exception_is_contained_not_propagated(_log, make_error):
+    adapter, _ = _adapter(make_error())
     result = adapter.resolve(MODEL_URL)  # must not raise
     assert result.ok is False
     assert result.error
