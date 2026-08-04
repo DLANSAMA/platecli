@@ -16,10 +16,10 @@ from bambu_cli.download import (
     _download_source_extension,
     _download_target_filename,
     _file_extension,
-    _is_printables_model_url,
     _portable_basename,
     _sanitize_download_filename,
 )
+from bambu_cli.printables import is_printables_url
 from bambu_cli.slicer import _sliced_output_path
 
 
@@ -122,7 +122,7 @@ def _predicted_url_remote_name(url, args):
     not resolve Printables pages, HTML pages, redirects, or ZIP members because
     doing so would require network I/O or archive extraction.
     """
-    if _is_printables_model_url(url):
+    if is_printables_url(url):
         return None
     predicted_ext = _predicted_url_download_extension(url, args)
     if predicted_ext in ARCHIVE_DOWNLOAD_EXTENSIONS:

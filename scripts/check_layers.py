@@ -91,6 +91,21 @@ ALLOWED: dict[tuple[str, str], str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Package internals that must not be imported from outside their own package.
+# An adapter is only a sandbox if callers cannot reach past it.
+# ---------------------------------------------------------------------------
+SEALED: dict[str, str] = {
+    "bambu_cli.printables.client": (
+        "the raw Printables GraphQL wire format — import from bambu_cli.printables instead, "
+        "so a schema change stays contained in the adapter"
+    ),
+    "bambu_cli.printables.adapter": (
+        "internal; the public names are re-exported from bambu_cli.printables"
+    ),
+}
+
+
 def unit_of(module: str) -> str | None:
     """Map a dotted module path to the layer unit that owns it."""
     parts = module.split(".")
@@ -104,6 +119,34 @@ def unit_of(module: str) -> str | None:
 def source_unit(path: Path) -> str:
     rel = path.relative_to(PKG).parts
     return rel[0] if (PKG / rel[0]).is_dir() else path.stem
+
+
+def iter_raw_imports():
+    """Yield (file, lineno, dotted_module) for every bambu_cli import."""
+    for file in sorted(PKG.rglob("*.py")):
+        if "__pycache__" in file.parts:
+            continue
+        tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and not node.level and node.module:
+                if node.module.startswith("bambu_cli"):
+                    yield file, node.lineno, node.module
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("bambu_cli"):
+                        yield file, node.lineno, alias.name
+
+
+def sealed_violations():
+    """Imports that reach into another package's sealed internals."""
+    out = []
+    for file, lineno, module in iter_raw_imports():
+        for sealed, why in SEALED.items():
+            if module == sealed or module.startswith(sealed + "."):
+                owner = PKG / sealed.split(".")[1]
+                if owner not in file.parents:
+                    out.append((file, lineno, module, why))
+    return out
 
 
 def iter_edges():
@@ -176,11 +219,15 @@ def main() -> int:
         rel = file.relative_to(ROOT)
         print(f"VIOLATION {rel}:{lineno}: {src} -> {dst} ({why}, {kind})")
 
+    sealed = sealed_violations()
+    for file, lineno, module, why in sealed:
+        print(f"SEALED    {file.relative_to(ROOT)}:{lineno}: imports {module} — {why}")
+
     stale = set(ALLOWED) - used_allowances
     for src, dst in sorted(stale):
         print(f"STALE     allowance {src} -> {dst} is no longer needed; remove it from ALLOWED")
 
-    failures = len(violations) + len(unknown) + len(stale)
+    failures = len(violations) + len(unknown) + len(stale) + len(sealed)
     if failures:
         print(f"\n{failures} layering problem(s). See the rank table in {Path(__file__).name}.")
         return 1
