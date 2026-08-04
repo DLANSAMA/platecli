@@ -16,6 +16,7 @@ from bambu_cli.constants import (
     WINDOWS_RESERVED_FILENAMES,
 )
 from bambu_cli.errors import abort
+from bambu_cli.fsutil import _portable_basename
 from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import logger
 
@@ -27,11 +28,6 @@ def _name_for_message(value):
 
 def _file_extension(path):
     return os.path.splitext(path)[1].lower()
-
-
-def _portable_basename(path):
-    """Return a basename while treating both POSIX and Windows separators as separators."""
-    return os.path.basename(str(path or "").replace("\\", "/"))
 
 
 def _download_source_extension(url, fallback_name=None):

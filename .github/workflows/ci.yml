@@ -170,6 +170,11 @@ jobs:
             echo "::error::@mockable/test indirection found in production code."
             exit 1
           fi
+      - name: layer boundaries (blocking)
+        # Directories alone never held: protocols/, slicer/ and download/ already
+        # existed as packages and still drifted (slicer imported a private FTPS
+        # helper). See the rank table in scripts/check_layers.py.
+        run: python scripts/check_layers.py
       - name: security + contract markers smoke
         run: |
           uv sync --frozen

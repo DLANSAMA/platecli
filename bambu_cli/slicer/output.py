@@ -10,11 +10,11 @@ import zipfile
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
 from bambu_cli.errors import abort
+from bambu_cli.fsutil import _remove_partial_file
 from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
-from bambu_cli.protocols.ftps import _remove_partial_file
 from bambu_cli.utils import emit_json, emit_json_error
 
 

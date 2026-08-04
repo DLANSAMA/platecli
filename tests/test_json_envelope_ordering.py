@@ -37,7 +37,7 @@ def _envelope(capsys):
 
 
 def _camera_localhost_guard(args):
-    from bambu_cli import camera
+    from bambu_cli.protocols import camera
 
     camera._require_localhost_streamer_url(args, "http://camera.example.com:1984/x", "/tmp/snap.jpg")
 

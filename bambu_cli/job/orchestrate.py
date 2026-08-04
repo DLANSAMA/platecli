@@ -64,10 +64,15 @@ from bambu_cli.slicer import _directory_input_message, _is_directory_input, _val
 from bambu_cli.utils import emit_json
 
 
-def _cmd_job(args):
-    """Public entry point shim: builds a RuntimeContext/JobSteps and delegates."""
+def _cmd_job(args, steps):
+    """Public entry point shim: builds a RuntimeContext and delegates.
 
-    return _run_job(RuntimeContext.for_request(args), args, JobSteps())
+    ``steps`` is supplied by the caller — ``bambu_cli.commands.cmd_job`` is the
+    composition root that knows the real handlers. This module must not import
+    them (see scripts/check_layers.py).
+    """
+
+    return _run_job(RuntimeContext.for_request(args), args, steps)
 
 
 def _run_job(ctx, args, steps=None):

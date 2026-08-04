@@ -18,7 +18,7 @@ sys.modules.setdefault("paho", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
-from bambu_cli import camera as camera_mod  # noqa: E402
+from bambu_cli.protocols import camera as camera_mod  # noqa: E402
 from bambu_cli import commands as commands_mod  # noqa: E402
 from bambu_cli import config as config_mod  # noqa: E402
 from bambu_cli import slicer as slicer_mod  # noqa: E402
@@ -65,7 +65,7 @@ def test_camera_simulation_snapshot(tmp_path, capsys):
     args = Namespace(output=str(out), json=True, direct=True)
     printer = _test_printer(simulation_mode=True, insecure_tls=True)
     with (
-        patch("bambu_cli.camera.get_printer", return_value=printer, create=True),
+        patch("bambu_cli.protocols.camera.get_printer", return_value=printer, create=True),
         patch("bambu_cli.printer.get_printer", return_value=printer),
         patch.object(camera_mod, "_grab_camera_frame_direct", return_value=b"\xff\xd8\xfffakejpeg"),
     ):

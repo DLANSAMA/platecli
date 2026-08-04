@@ -8,14 +8,14 @@ class TestCameraPortIsValid(unittest.TestCase):
     def test_rejects_out_of_range_container_port(self):
         """A container port above 65535 must be rejected: \\d{1,5} alone lets
         '99999' match the regex even though it is not a valid port number."""
-        from bambu_cli.camera import _camera_port_is_valid
+        from bambu_cli.protocols.camera import _camera_port_is_valid
 
         self.assertFalse(_camera_port_is_valid("1985:99999"))
         self.assertFalse(_camera_port_is_valid("0"))
         self.assertFalse(_camera_port_is_valid("70000-70005"))
 
     def test_accepts_valid_container_ports(self):
-        from bambu_cli.camera import _camera_port_is_valid
+        from bambu_cli.protocols.camera import _camera_port_is_valid
 
         self.assertTrue(_camera_port_is_valid("127.0.0.1:1985:1984"))
         self.assertTrue(_camera_port_is_valid("1984"))
@@ -43,7 +43,7 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         """Without a pinned fingerprint (and insecure_tls unset) the camera
         connection must fail closed before the access code is sent."""
         import ssl as ssl_mod
-        from bambu_cli.camera import _grab_camera_frame_direct
+        from bambu_cli.protocols.camera import _grab_camera_frame_direct
 
         create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
         printer = _test_printer(ip="192.168.1.100", access_code="my_secret_code")
@@ -57,7 +57,7 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         mock_tls.sendall.assert_not_called()
 
     def test_grab_camera_frame_direct_insecure(self):
-        from bambu_cli.camera import _grab_camera_frame_direct
+        from bambu_cli.protocols.camera import _grab_camera_frame_direct
 
         create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
         printer = _test_printer(ip="192.168.1.100", access_code="my_secret_code", insecure_tls=True)
@@ -78,7 +78,7 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         mock_tls.close.assert_called_once()
 
     def test_grab_camera_frame_direct_with_pin(self):
-        from bambu_cli.camera import _grab_camera_frame_direct
+        from bambu_cli.protocols.camera import _grab_camera_frame_direct
 
         der = b"der_cert"
         good_fp = hashlib.sha256(der).hexdigest()
@@ -96,7 +96,7 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         mock_tls.getpeercert.assert_called_once_with(binary_form=True)
 
     def test_grab_camera_frame_direct_pin_mismatch(self):
-        from bambu_cli.camera import _CameraPinMismatch, _grab_camera_frame_direct
+        from bambu_cli.protocols.camera import _CameraPinMismatch, _grab_camera_frame_direct
 
         create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
         mock_tls.getpeercert.return_value = b"der_cert"
@@ -123,7 +123,7 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         a Docker-fallback signal). Regression: the old code called .lower() on a
         None fingerprint and crashed with AttributeError instead of a clean pin
         failure that the snapshot command recognizes as fail-closed."""
-        from bambu_cli.camera import _CameraPinMismatch, _grab_camera_frame_direct
+        from bambu_cli.protocols.camera import _CameraPinMismatch, _grab_camera_frame_direct
 
         create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
         mock_tls.getpeercert.return_value = None
@@ -146,7 +146,7 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         NOT a raw TypeError from hmac.compare_digest that would escape into the
         broad except-Exception fallback and silently use the unpinned Docker
         streamer."""
-        from bambu_cli.camera import _CameraPinMismatch, _grab_camera_frame_direct
+        from bambu_cli.protocols.camera import _CameraPinMismatch, _grab_camera_frame_direct
 
         create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
         mock_tls.getpeercert.return_value = b"der_cert"
@@ -169,7 +169,7 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         """An implausibly large frame length means the stream is desynced; the
         grab must give up (return None) instead of reading the skipped body as
         the next frame header for the rest of the loop."""
-        from bambu_cli.camera import _grab_camera_frame_direct
+        from bambu_cli.protocols.camera import _grab_camera_frame_direct
 
         create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
         mock_tls.recv.side_effect = [(99_000_000).to_bytes(4, "little") + b"\x00" * 12]
@@ -300,7 +300,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         without ever touching the Docker streamer fallback — otherwise the
         streamer would connect to the printer ignoring the pin (silent
         downgrade of an explicit security control)."""
-        from bambu_cli.camera import _CameraPinMismatch
+        from bambu_cli.protocols.camera import _CameraPinMismatch
         from bambu_cli.commands import cmd_snapshot
 
         mock_logger = MagicMock()
@@ -410,7 +410,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
             patch("os.fdopen", mock_open()),
             patch("os.unlink"),
             patch("os.path.getsize", return_value=2048),
-            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
             patch("builtins.open", new_callable=mock_open),
         ):
             cmd_snapshot(
@@ -538,7 +538,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
     def test_cmd_snapshot_direct_only_pin_mismatch_keeps_specific_message(self):
         """A pin mismatch must keep its own, more specific message rather than being
         swallowed by the generic direct-only refusal."""
-        from bambu_cli.camera import _CameraPinMismatch
+        from bambu_cli.protocols.camera import _CameraPinMismatch
         from bambu_cli.commands import cmd_snapshot
 
         mock_logger, mock_run, mock_urlopen = MagicMock(), MagicMock(), MagicMock()
@@ -578,7 +578,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
 
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
-            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
             patch("os.path.getsize", return_value=2048),
         ):
             cmd_snapshot(
@@ -625,7 +625,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
             patch("os.fdopen", mock_open()),
             patch("os.unlink"),
             patch("os.path.getsize", return_value=2048),
-            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
             patch("builtins.open", new_callable=mock_open),
         ):
             cmd_snapshot(
@@ -689,7 +689,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
-            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
             patch("os.path.getsize", return_value=1024),
             settings_ctx(camera_port="0.0.0.0:1985:1984"),
         ):
@@ -726,7 +726,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
-            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
             patch("os.path.getsize", return_value=1024),
             settings_ctx(camera_port="127.0.0.1:1985:1984"),  # config is safe
         ):
@@ -754,7 +754,7 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
     def test_unique_flag_no_output_uses_timestamp(self):
         """With --unique and no --output, filename is printer_snapshot_<stamp>.jpg."""
         import datetime
-        from bambu_cli.camera import _utc_stamp
+        from bambu_cli.protocols.camera import _utc_stamp
 
         fixed_dt = datetime.datetime(2026, 7, 24, 19, 15, 30, tzinfo=datetime.timezone.utc)
         stamp = _utc_stamp(fixed_dt)
@@ -770,10 +770,10 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
         args = self._snap_args(output=None, unique=True)
 
         with (
-            patch("bambu_cli.camera._write_snapshot_atomic", side_effect=_fake_write),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic", side_effect=_fake_write),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=1024),
-            patch("bambu_cli.camera._ensure_parent_dir"),
+            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
         ):
             cmd_snapshot(
                 args,
@@ -800,10 +800,10 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
         args = self._snap_args(output="cam.jpg", unique=True)
 
         with (
-            patch("bambu_cli.camera._write_snapshot_atomic", side_effect=_fake_write),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic", side_effect=_fake_write),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=1024),
-            patch("bambu_cli.camera._ensure_parent_dir"),
+            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
         ):
             cmd_snapshot(
                 args,
@@ -827,10 +827,10 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
         args = self._snap_args(output="myshot.jpg", unique=False)
 
         with (
-            patch("bambu_cli.camera._write_snapshot_atomic", side_effect=_fake_write),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic", side_effect=_fake_write),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=1024),
-            patch("bambu_cli.camera._ensure_parent_dir"),
+            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
         ):
             cmd_snapshot(
                 args,
@@ -865,11 +865,11 @@ class TestSnapshotJsonMetadata(unittest.TestCase):
 
         buf = io.StringIO()
         with (
-            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=len(frame_data)),
-            patch("bambu_cli.camera._ensure_parent_dir"),
-            patch("bambu_cli.camera.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
+            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
+            patch("bambu_cli.protocols.camera.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
         ):
             cmd_snapshot(
                 args,
@@ -901,11 +901,11 @@ class TestSnapshotJsonMetadata(unittest.TestCase):
 
         buf = io.StringIO()
         with (
-            patch("bambu_cli.camera._write_snapshot_atomic"),
+            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=len(frame_data)),
-            patch("bambu_cli.camera._ensure_parent_dir"),
-            patch("bambu_cli.camera.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
+            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
+            patch("bambu_cli.protocols.camera.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
         ):
             cmd_snapshot(
                 args,

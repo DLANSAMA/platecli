@@ -199,8 +199,8 @@ def collect_preflight_checks():
 
     settings = current_settings()
     cfg_for_paths = cfg or current_config() or {}
-    from bambu_cli.commands.doctor import _DIRECT_CAMERA_MODELS
     from bambu_cli.config import detect_orca_slicer, detect_profiles_dir, orca_install_hint
+    from bambu_cli.constants import DIRECT_CAMERA_MODELS as _DIRECT_CAMERA_MODELS
 
     orca_path = _expand_path(cfg_for_paths.get("orca_slicer", settings.orca_slicer))
     if not orca_path:
@@ -279,7 +279,7 @@ def collect_preflight_checks():
             )
 
     # Only X1-series need Docker for snapshots. P1/A1 capture directly over the
-    # printer's TLS camera port (bambu_cli/camera.py:160-178), so warning them
+    # printer's TLS camera port (bambu_cli/protocols/camera.py:160-178), so warning them
     # that "camera snapshots will be unavailable" is simply false.
     # camera_direct_only refuses the streamer outright, so Docker is irrelevant on every
     # model -- reporting it as "available for snapshots" or warning that it is missing

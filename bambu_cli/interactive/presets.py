@@ -78,7 +78,7 @@ def preset_to_job_args(material: str, quality: str, supports: bool, source: str)
     Returns:
         argparse.Namespace with all job defaults plus preset overrides applied.
     """
-    from bambu_cli.cli import build_parser
+    from bambu_cli.cliparse import build_parser
 
     mat = MATERIAL_PRESETS[material]
     qual = QUALITY_PRESETS[quality]

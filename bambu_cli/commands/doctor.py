@@ -7,7 +7,14 @@ import tempfile
 
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.config import CONFIG_PATH, MODEL_MAPPING, _expected_fingerprint, get_network_timeout, load_config
-from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
+from bambu_cli.constants import (
+    DIRECT_CAMERA_MODELS as _DIRECT_CAMERA_MODELS,
+)
+from bambu_cli.constants import (
+    EXIT_CONFIG_ERROR,
+    EXIT_FILE_ERROR,
+    EXIT_NETWORK_ERROR,
+)
 from bambu_cli.context import RuntimeContext
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
@@ -16,11 +23,6 @@ from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.utils import _ensure_parent_dir, _redacted_serial
-
-# Printer families whose camera is captured with the direct port-6000 TLS grab
-# (bambu_cli/camera.py:160-178). These need no Docker; X1-series fall back to
-# the BambuP1Streamer RTSP container instead.
-_DIRECT_CAMERA_MODELS = ("P1P", "P1S", "A1", "A1M")
 
 
 def _offer_pin_fingerprint(
@@ -159,7 +161,7 @@ def cmd_doctor(args, ctx=None):
 
     logger.info(f"   [3/3] Verifying FTPS connectivity to {shown_ip()}:990...")
     try:
-        with get_ftp(timeout=net_timeout):
+        with get_ftp(printer, timeout=net_timeout):
             logger.info("   ✅ FTPS connection established.")
     except Exception as e:
         message = f"FTPS connection failed: {e}"

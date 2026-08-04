@@ -10,11 +10,11 @@ from bambu_cli.context import RuntimeContext
 from bambu_cli.download.naming import (
     _is_print_ready_name,
     _name_for_message,
-    _portable_basename,
     _print_ready_error_message,
     _safe_remote_name,
 )
 from bambu_cli.errors import abort
+from bambu_cli.fsutil import _portable_basename
 from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path

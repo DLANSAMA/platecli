@@ -18,7 +18,7 @@ import pytest
 
 from bambu_cli import config as config_mod
 from bambu_cli import setup_cmd
-from bambu_cli.commands.doctor import _DIRECT_CAMERA_MODELS
+from bambu_cli.constants import DIRECT_CAMERA_MODELS as _DIRECT_CAMERA_MODELS
 from bambu_cli.errors import BambuError
 from tests.bambu_test_base import settings_ctx
 

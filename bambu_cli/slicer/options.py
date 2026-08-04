@@ -15,7 +15,7 @@ from functools import lru_cache
 from typing import Any
 
 from bambu_cli.argutils import namespace_get as _namespace_get
-from bambu_cli.download.naming import _portable_basename
+from bambu_cli.fsutil import _portable_basename
 from bambu_cli.logging_utils import logger
 from bambu_cli.paths import path_for_message as _path_for_message
 
