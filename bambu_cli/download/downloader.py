@@ -40,7 +40,7 @@ from bambu_cli.netsafety import build_safe_opener, polite_open, user_agent_for_u
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
-from bambu_cli.printables import _is_printables_model_url, resolve_printables_url
+from bambu_cli.printables import is_printables_url, resolve_printables_url
 from bambu_cli.utils import _ensure_output_dir, _record_download_success, emit_json_error
 
 
@@ -88,7 +88,7 @@ def _cmd_download(
     normalized_source_report = _redact_url_credentials(normalized_source)
     max_download_bytes = _validate_max_download_mb_or_exit(args)
     _validate_download_url_or_exit(args, source_url, normalized_source, url, "validate", "Invalid URL source")
-    is_printables_model = _is_printables_model_url(url)
+    is_printables_model = is_printables_url(url)
     if not is_printables_model:
         _reject_unsupported_download_extension(args, source_url, normalized_source, url, urlparse(url).path)
 

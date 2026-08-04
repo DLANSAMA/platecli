@@ -74,6 +74,6 @@ from bambu_cli.netsafety import (  # noqa: F401
     user_agent_for_url,
 )
 from bambu_cli.printables import (  # noqa: F401
-    _is_printables_model_url,
+    is_printables_url,
     resolve_printables_url,
 )

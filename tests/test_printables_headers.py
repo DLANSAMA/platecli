@@ -18,7 +18,7 @@ sys.modules.setdefault("paho", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 
 from bambu_cli import constants, netsafety  # noqa: E402
-from bambu_cli.printables import resolve_printables_url  # noqa: E402
+from bambu_cli.printables import PrintablesAdapter, resolve_printables_url  # noqa: E402
 
 
 def _clear_ua_caches():
@@ -32,10 +32,12 @@ def _gql_response(payload):
     return resp
 
 
-@patch("bambu_cli.printables.build_safe_opener")
 @patch("bambu_cli.logging_utils._BACKEND")
-def test_printables_gql_headers_are_honest_and_unforged(mock_logger, mock_safe_opener):
-    mock_open = mock_safe_opener.return_value.open
+def test_printables_gql_headers_are_honest_and_unforged(mock_logger):
+    # The opener is injected rather than patched: the adapter's whole point is
+    # that callers (and tests) never reach into its internals.
+    mock_opener = MagicMock()
+    mock_open = mock_opener.open
     mock_open.return_value.__enter__.side_effect = [
         _gql_response(
             {
@@ -61,7 +63,8 @@ def test_printables_gql_headers_are_honest_and_unforged(mock_logger, mock_safe_o
         ),
     ]
 
-    url, name = resolve_printables_url("https://www.printables.com/model/3161-3d-benchy")
+    adapter = PrintablesAdapter(opener_factory=lambda: mock_opener)
+    url, name = resolve_printables_url("https://www.printables.com/model/3161-3d-benchy", adapter=adapter)
     assert url == "https://files.printables.com/media/x/3dbenchy.stl"
     assert name == "3dbenchy.stl"
 

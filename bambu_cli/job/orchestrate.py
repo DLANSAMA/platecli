@@ -25,7 +25,6 @@ from bambu_cli.download import (
     _extract_zip_model,
     _file_extension,
     _is_http_url,
-    _is_printables_model_url,
     _known_unsupported_download_extension,
     _looks_like_url,
     _max_download_mb_error,
@@ -60,6 +59,7 @@ from bambu_cli.logging_utils import logger
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
+from bambu_cli.printables import is_printables_url
 from bambu_cli.slicer import _directory_input_message, _is_directory_input, _validate_slice_options
 from bambu_cli.utils import emit_json
 
@@ -165,7 +165,7 @@ def _run_job(ctx, args, steps=None):
 
     try:
         if getattr(args, "dry_run", False) and _is_http_url(source):
-            if not _is_printables_model_url(source):
+            if not is_printables_url(source):
                 unsupported_ext = _known_unsupported_download_extension(urlparse(source).path)
                 if unsupported_ext:
                     summary["extension"] = unsupported_ext
