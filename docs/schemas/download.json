@@ -3,17 +3,50 @@
   "$id": "https://platecli.local/schemas/download.json",
   "title": "platecli download success envelope",
   "type": "object",
-  "required": ["status", "command", "source", "download_url", "path", "filename", "bytes"],
+  "required": [
+    "status",
+    "command",
+    "source",
+    "download_url",
+    "path",
+    "filename",
+    "bytes"
+  ],
   "properties": {
-    "status": {"const": "downloaded"},
-    "command": {"const": "download"},
-    "source": {"type": "string"},
-    "normalized_source": {},
-    "download_url": {"type": "string"},
-    "path": {"type": "string", "minLength": 1},
-    "filename": {"type": "string", "minLength": 1},
-    "bytes": {"type": "integer"},
-    "archive_entry": {"type": "string"}
+    "status": {
+      "const": "downloaded",
+      "type": "string"
+    },
+    "command": {
+      "const": "download",
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "normalized_source": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "download_url": {
+      "type": "string"
+    },
+    "path": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "filename": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "bytes": {
+      "type": "integer"
+    },
+    "archive_entry": {
+      "type": "string"
+    }
   },
   "additionalProperties": true
 }

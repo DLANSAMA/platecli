@@ -10,8 +10,8 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **1308** collected / **1307** passing (measured 2026-07-31; incl. the deep-audit fix wave and the Textual TUI phases 1-5: dashboard/prepare/confirm/monitor/settings pilot tests, the shared `interactive/core.py` unit tests, and the hermetic override read-back against the OrcaSlicer stub) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **88.51%** Linux, **88.09%** Windows, **88.33%** macOS — all read off CI run `30632442521` (2026-07-31); local Linux measures 88.35%; **floor 83** (Windows is still the binding leg, so it sets any future ratchet) | **≥92%** total; optional module floors |
+| Non-live tests collected | **PLACEHOLDER_N** collected / **PLACEHOLDER_P** passing (measured 2026-08-05 on Linux; the Textual TUI phases 1-5 plus the structural refactor wave: layer-boundary enforcement, Printables-adapter containment, and generated-schema contract tests) | ≥550 with zero known flakes ✅ size |
+| Line/branch coverage (CI) | **PLACEHOLDER_C** Linux measured 2026-08-05; **88.09%** Windows measured 2026-07-31 (not re-measured since); **floor 83** (Windows is the binding leg) | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |

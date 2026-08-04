@@ -3,23 +3,47 @@
   "$id": "https://platecli.local/schemas/snapshot.json",
   "title": "platecli snapshot success envelope",
   "type": "object",
-  "required": ["status", "command", "output", "size_bytes", "captured_at", "sha256"],
+  "required": [
+    "status",
+    "command",
+    "output",
+    "size_bytes",
+    "captured_at",
+    "sha256"
+  ],
   "properties": {
-    "status": {"const": "saved"},
-    "command": {"const": "snapshot"},
-    "output": {"type": "string", "minLength": 1},
-    "size_bytes": {"type": "integer"},
+    "status": {
+      "const": "saved",
+      "type": "string"
+    },
+    "command": {
+      "const": "snapshot",
+      "type": "string"
+    },
+    "output": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "size_bytes": {
+      "type": "integer"
+    },
     "captured_at": {
-      "type": "string",
-      "description": "ISO-8601 UTC timestamp of capture (e.g. 2026-07-24T19:15:30Z)"
+      "description": "ISO-8601 UTC timestamp of capture (e.g. 2026-07-24T19:15:30Z)",
+      "type": "string"
     },
     "sha256": {
-      "type": "string",
-      "description": "Hex SHA-256 digest of the captured JPEG bytes; use to verify a capture is new"
+      "description": "Hex SHA-256 digest of the captured JPEG bytes; use to verify a capture is new",
+      "type": "string"
     },
-    "method": {"type": "string"},
-    "camera_image": {"type": "string"},
-    "docker_container": {"type": "string"}
+    "method": {
+      "type": "string"
+    },
+    "camera_image": {
+      "type": "string"
+    },
+    "docker_container": {
+      "type": "string"
+    }
   },
   "additionalProperties": true
 }

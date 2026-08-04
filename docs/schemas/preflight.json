@@ -3,23 +3,45 @@
   "$id": "https://platecli.local/schemas/preflight.json",
   "title": "platecli preflight result envelope",
   "type": "object",
-  "required": ["status", "command", "checks"],
+  "required": [
+    "status",
+    "command",
+    "checks"
+  ],
   "properties": {
-    "status": {"type": "string"},
-    "command": {"const": "preflight"},
+    "status": {
+      "type": "string"
+    },
+    "command": {
+      "const": "preflight",
+      "type": "string"
+    },
     "checks": {
-      "type": "array",
       "items": {
-        "type": "object",
-        "required": ["status", "name", "message"],
         "properties": {
-          "status": {"type": "string"},
-          "name": {"type": "string"},
-          "message": {"type": "string"},
-          "detail": {"type": "object"}
+          "status": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "type": "object"
+          }
         },
+        "required": [
+          "status",
+          "name",
+          "message"
+        ],
+        "type": "object",
         "additionalProperties": true
-      }
+      },
+      "type": "array"
     }
   },
   "additionalProperties": true

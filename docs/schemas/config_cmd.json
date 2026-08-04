@@ -3,19 +3,52 @@
   "$id": "https://platecli.local/schemas/config_cmd.json",
   "title": "platecli config show/validate envelope",
   "type": "object",
-  "required": ["status", "command", "action"],
+  "required": [
+    "status",
+    "command",
+    "action"
+  ],
   "properties": {
-    "status": {"type": "string"},
-    "command": {"const": "config"},
-    "action": {"enum": ["show", "validate"]},
-    "config_path": {"type": "string"},
-    "config": {"type": "object"},
-    "exit_code": {"type": "integer"},
-    "ok": {"type": "boolean"},
-    "errors": {"type": "integer"},
-    "warnings": {"type": "integer"},
-    "strict": {"type": "boolean"},
-    "checks": {"type": "array"}
+    "status": {
+      "type": "string"
+    },
+    "command": {
+      "const": "config",
+      "type": "string"
+    },
+    "action": {
+      "enum": [
+        "show",
+        "validate"
+      ],
+      "type": "string"
+    },
+    "config_path": {
+      "type": "string"
+    },
+    "config": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "errors": {
+      "type": "integer"
+    },
+    "warnings": {
+      "type": "integer"
+    },
+    "strict": {
+      "type": "boolean"
+    },
+    "checks": {
+      "items": {},
+      "type": "array"
+    }
   },
   "additionalProperties": true
 }

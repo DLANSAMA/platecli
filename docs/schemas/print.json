@@ -3,14 +3,34 @@
   "$id": "https://platecli.local/schemas/print.json",
   "title": "platecli print success or confirmation envelope",
   "type": "object",
-  "required": ["status", "command", "file"],
+  "required": [
+    "status",
+    "command",
+    "file"
+  ],
   "properties": {
-    "status": {"type": "string"},
-    "command": {"const": "print"},
-    "file": {"type": "string"},
-    "printed": {"type": "boolean"},
-    "dry_run": {"type": "boolean"},
-    "next_command": {"type": "array"}
+    "status": {
+      "type": "string"
+    },
+    "command": {
+      "const": "print",
+      "type": "string"
+    },
+    "file": {
+      "type": "string"
+    },
+    "printed": {
+      "type": "boolean"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "next_command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
   },
   "additionalProperties": true
 }

@@ -3,13 +3,34 @@
   "$id": "https://platecli.local/schemas/go.json",
   "title": "platecli go error envelope (interactive command; --json always errors)",
   "type": "object",
-  "required": ["status", "command", "exit_code", "error", "failed_step"],
+  "required": [
+    "status",
+    "command",
+    "exit_code",
+    "error",
+    "failed_step"
+  ],
   "properties": {
-    "status": {"const": "error"},
-    "command": {"const": "go"},
-    "exit_code": {"const": 5},
-    "error": {"type": "string", "minLength": 1},
-    "failed_step": {"const": "parse"}
+    "status": {
+      "const": "error",
+      "type": "string"
+    },
+    "command": {
+      "const": "go",
+      "type": "string"
+    },
+    "exit_code": {
+      "const": 5,
+      "type": "integer"
+    },
+    "error": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "failed_step": {
+      "const": "parse",
+      "type": "string"
+    }
   },
   "additionalProperties": true
 }

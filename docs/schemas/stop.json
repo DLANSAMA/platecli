@@ -3,12 +3,32 @@
   "$id": "https://platecli.local/schemas/stop.json",
   "title": "platecli stop success or confirmation envelope",
   "type": "object",
-  "required": ["status", "command", "stopped"],
+  "required": [
+    "status",
+    "command",
+    "stopped"
+  ],
   "properties": {
-    "status": {"enum": ["stopped", "confirmation_required"]},
-    "command": {"const": "stop"},
-    "stopped": {"type": "boolean"},
-    "next_command": {"type": "array", "items": {"type": "string"}}
+    "status": {
+      "enum": [
+        "stopped",
+        "confirmation_required"
+      ],
+      "type": "string"
+    },
+    "command": {
+      "const": "stop",
+      "type": "string"
+    },
+    "stopped": {
+      "type": "boolean"
+    },
+    "next_command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
   },
   "additionalProperties": true
 }

@@ -3,10 +3,18 @@
   "$id": "https://platecli.local/schemas/ok_envelope.json",
   "title": "platecli JSON ok envelope",
   "type": "object",
-  "required": ["status", "command"],
+  "required": [
+    "status",
+    "command"
+  ],
   "properties": {
-    "status": {"type": "string"},
-    "command": {"type": "string", "minLength": 1}
+    "status": {
+      "type": "string"
+    },
+    "command": {
+      "minLength": 1,
+      "type": "string"
+    }
   },
   "additionalProperties": true
 }

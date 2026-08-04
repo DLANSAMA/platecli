@@ -130,10 +130,24 @@ def _json_display_paths(value):
     return value
 
 
+def _as_payload(data):
+    """Accept either a raw dict or a contract from ``bambu_cli.contracts``.
+
+    Contracts are the typed description of each command's ``--json`` output and
+    generate ``docs/schemas``. They render to a plain dict here rather than
+    serializing themselves, so every payload still goes through the redaction
+    pass below — that is the whole reason these are dataclasses and not pydantic
+    models (see bambu_cli/contracts/base.py).
+    """
+    from bambu_cli.contracts import Contract
+
+    return data.to_payload() if isinstance(data, Contract) else data
+
+
 def emit_json(data):
     global _JSON_EMITTED
     _JSON_EMITTED = True
-    print(json.dumps(_json_display_paths(data), indent=2))
+    print(json.dumps(_json_display_paths(_as_payload(data)), indent=2))
 
 
 def emit_json_line(data):
@@ -145,7 +159,7 @@ def emit_json_line(data):
     """
     global _JSON_EMITTED
     _JSON_EMITTED = True
-    print(json.dumps(_json_display_paths(data), separators=(",", ":")), flush=True)
+    print(json.dumps(_json_display_paths(_as_payload(data)), separators=(",", ":")), flush=True)
 
 
 def _namespace_get(args, key, default=None):

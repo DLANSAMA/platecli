@@ -2,35 +2,66 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platecli.local/schemas/slice_list_settings.json",
   "title": "platecli slice --list-settings result envelope",
-  "description": "Discovery output listing every settable OrcaSlicer process/filament setting. Agents read this to learn the override vocabulary, then drive it via --set / --set-filament / --settings-json.",
   "type": "object",
-  "required": ["status", "command", "action", "process", "filament"],
+  "description": "Discovery output listing every settable OrcaSlicer process/filament setting. Agents read this to learn the override vocabulary, then drive it via --set / --set-filament / --settings-json.",
+  "required": [
+    "status",
+    "command",
+    "action",
+    "process",
+    "filament"
+  ],
   "properties": {
-    "status": {"const": "ok"},
-    "command": {"const": "slice"},
-    "action": {"const": "list_settings"},
-    "profiles_dir": {"type": "string"},
+    "status": {
+      "const": "ok",
+      "type": "string"
+    },
+    "command": {
+      "const": "slice",
+      "type": "string"
+    },
+    "action": {
+      "const": "list_settings",
+      "type": "string"
+    },
+    "profiles_dir": {
+      "type": "string"
+    },
     "process": {
-      "type": "object",
-      "required": ["count", "settings"],
       "properties": {
-        "count": {"type": "integer"},
+        "count": {
+          "type": "integer"
+        },
         "settings": {
-          "type": "object",
-          "description": "Map of process setting key to a representative/example value."
+          "additionalProperties": true,
+          "description": "Map of process setting key to a representative/example value.",
+          "type": "object"
         }
-      }
+      },
+      "required": [
+        "count",
+        "settings"
+      ],
+      "type": "object",
+      "additionalProperties": true
     },
     "filament": {
-      "type": "object",
-      "required": ["count", "settings"],
       "properties": {
-        "count": {"type": "integer"},
+        "count": {
+          "type": "integer"
+        },
         "settings": {
-          "type": "object",
-          "description": "Map of filament setting key to a representative/example value."
+          "additionalProperties": true,
+          "description": "Map of filament setting key to a representative/example value.",
+          "type": "object"
         }
-      }
+      },
+      "required": [
+        "count",
+        "settings"
+      ],
+      "type": "object",
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

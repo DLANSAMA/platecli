@@ -3,13 +3,32 @@
   "$id": "https://platecli.local/schemas/gcode.json",
   "title": "platecli gcode success or confirmation envelope",
   "type": "object",
-  "required": ["status", "command", "gcode", "sent"],
+  "required": [
+    "status",
+    "command",
+    "gcode",
+    "sent"
+  ],
   "properties": {
-    "status": {"type": "string"},
-    "command": {"const": "gcode"},
-    "gcode": {"type": "string"},
-    "sent": {"type": "boolean"},
-    "next_command": {"type": "array"}
+    "status": {
+      "type": "string"
+    },
+    "command": {
+      "const": "gcode",
+      "type": "string"
+    },
+    "gcode": {
+      "type": "string"
+    },
+    "sent": {
+      "type": "boolean"
+    },
+    "next_command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
   },
   "additionalProperties": true
 }

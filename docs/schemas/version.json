@@ -10,14 +10,16 @@
   ],
   "properties": {
     "status": {
-      "const": "ok"
+      "const": "ok",
+      "type": "string"
     },
     "command": {
-      "const": "version"
+      "const": "version",
+      "type": "string"
     },
     "version": {
-      "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "type": "string"
     }
   },
   "additionalProperties": false

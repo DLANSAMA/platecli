@@ -46,6 +46,7 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 | `commands/` | Printer subcommand handlers (`status`, `device`, `files`, `print_cmd`, `doctor`, `gcode`, thin `setup_wrappers`) |
 | `download/` | URL/filename validation, HTML scraping, ZIP extraction, `download` command |
 | `printables/` | Printables.com integration behind a strict adapter. `client.py` (the undocumented GraphQL wire format) is **sealed** — import only from `bambu_cli.printables`. `adapter.py` guarantees no Printables failure escapes as an exception |
+| `contracts/` | Typed `--json` payload shapes (frozen dataclasses). **Generates `docs/schemas/*.json`** via `scripts/gen_schemas.py`; do not hand-edit a schema |
 | `job/` | One-shot `job`/`send` orchestration, dry-run predict, print payloads, injectable `JobSteps` |
 | `setup_cmd/` | Guided/non-interactive setup, mDNS, config show/validate, preflight |
 | `slicer/` | OrcaSlicer integration |
@@ -78,6 +79,17 @@ The rule exists because directories alone never held it: `protocols/`, `slicer/`
 Accepted debt lives in `ALLOWED` in that script, each entry with a reason. Shrink it; do not grow it. One edge is currently allowlisted: `context -> printer` (`RuntimeContext` lazily constructs a `BambuPrinter`; the real fix is a composition root that installs a printer factory).
 
 The same script also enforces `SEALED` — package internals no outside module may import. `bambu_cli.printables.client` is sealed because an adapter is only a sandbox if callers cannot reach past it. **Third-party integrations go behind an adapter that cannot raise:** `PrintablesAdapter.resolve()` returns a `PrintablesResolution` for every outcome, converting a renamed field or a redesigned error envelope into a typed `printables_contract_changed` result instead of a traceback in the middle of `plate job`. `KeyboardInterrupt`/`SystemExit` are deliberately the only things that still propagate.
+
+**JSON schemas are generated, never hand-written.** `docs/schemas/*.json` comes from the dataclasses in `bambu_cli/contracts/`:
+
+```bash
+python scripts/gen_schemas.py            # regenerate after changing a payload
+python scripts/gen_schemas.py --check    # what CI runs (blocking)
+```
+
+Editing a schema by hand will be overwritten and will red CI. Change the model, regenerate, commit both. The gate fails in *both* directions — a stale schema, and a schema with no contract behind it.
+
+**Pydantic is a dev/build dependency only** (`[test]` extra, `python_version >= '3.10'`). `bambu_cli` never imports it, and a test asserts that. Serialization stays in `emit_json`, because that pass applies the credential redaction a `model_dump_json()` would bypass. The contracts annotate optionals as `X | None`, which only *evaluates* on 3.10+ — safe because nothing at runtime resolves those annotations (also asserted by a test). Only the generator does, and it refuses to run below 3.10 with an explanatory message.
 
 **Package inventory is derived:** setuptools finds `bambu_cli*`; syntax smoke and CLI help smoke auto-discover modules/commands (`scripts/syntax_smoke.py`, `scripts/cli_help_smoke.py`). Adding a module under `bambu_cli/` or a subcommand in `cli.py` is enough — no triplicated lists.
 

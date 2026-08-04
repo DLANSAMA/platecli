@@ -13,11 +13,6 @@ from bambu_cli.logging_utils import logger, safe_log_error
 from .argutils import exit_code_from_system_exit as _exit_code_from_system_exit
 from .argutils import namespace_get as _namespace_get
 from .argutils import setup_args_provided as _setup_args_provided
-
-# The argparse tree lives in bambu_cli.cliparse so domain code can build a
-# namespace without importing this entrypoint (audit item A1). Re-exported here
-# because build_parser() is the documented source of truth for the command set,
-# and the help/workflow smokes plus several tests import it from this module.
 from .cliparse import (  # noqa: F401
     JsonArgumentParser,
     _add_job_arguments,
@@ -35,6 +30,12 @@ from .constants import (
     EXIT_SUCCESS,
     PRINTER_NETWORK_COMMANDS,
 )
+
+# The argparse tree lives in bambu_cli.cliparse so domain code can build a
+# namespace without importing this entrypoint (audit item A1). Re-exported here
+# because build_parser() is the documented source of truth for the command set,
+# and the help/workflow smokes plus several tests import it from this module.
+from .contracts import Version
 from .jsonio import json_mode_requested as _json_mode_requested
 from .utils import emit_json, emit_json_error
 
@@ -143,13 +144,7 @@ def main():
     args = parser.parse_args()
     if getattr(args, "version", False):
         if bool(getattr(args, "json", False)):
-            emit_json(
-                {
-                    "status": "ok",
-                    "command": "version",
-                    "version": VERSION,
-                }
-            )
+            emit_json(Version(status="ok", command="version", version=VERSION))
         else:
             print(f"plate {VERSION}")
         return
