@@ -35,6 +35,9 @@ the `plate doctor` output — but check first that no access code is visible.
 - ["Atomic replace is unavailable ... writing in place instead"](#atomic-replace-is-unavailable--writing-in-place-instead)
 - [Config not found — and where the config file actually lives](#config-not-found--and-where-the-config-file-actually-lives)
 - [Missing dependency: paho-mqtt](#missing-dependency-paho-mqtt)
+- ["plate tui requires the TUI extra"](#plate-tui-requires-the-tui-extra)
+- ["plate tui is interactive" — exit 5 in a script, pipe, or with --json](#plate-tui-is-interactive--exit-5-in-a-script-pipe-or-with---json)
+- [My TUI override was accepted but changed nothing](#my-tui-override-was-accepted-but-changed-nothing)
 - [Nothing happens when I run a print command](#nothing-happens-when-i-run-a-print-command)
 
 ## First: the two diagnostic commands
@@ -495,6 +498,74 @@ uv pip install -e .
 
 If you installed with `pipx` / `uv tool`, use `pipx reinstall platecli` or
 `uv tool install --force platecli`.
+
+## "plate tui requires the TUI extra"
+
+```
+plate tui requires the TUI extra: pip install 'platecli[tui]'
+```
+
+Exit code `1`. The full-screen UI is built on [Textual](https://textual.textualize.io/),
+which is an **optional** dependency — a plain `pip install platecli` deliberately
+does not pull it in, so the CLI stays light for scripts, servers, and agents.
+Install the extra:
+
+```bash
+pip install 'platecli[tui]'
+# pipx / uv tool users:
+pipx install 'platecli[tui]'      # or: pipx inject platecli textual
+uv tool install 'platecli[tui]'
+```
+
+Nothing else about `plate` changes — `plate go` is the same guided flow without
+the extra, and every non-interactive command works exactly as before.
+
+## "plate tui is interactive" — exit 5 in a script, pipe, or with --json
+
+```
+plate tui is interactive; use 'plate job <url> --confirm' for scripts.
+```
+
+Exit code `5`. Working as designed, and it fires in three situations: you passed
+`--json`, stdin is not a terminal (a pipe, a cron job, a CI step, some editor
+terminals), or both. The TUI has no machine contract — there is no stable
+document to parse out of a full-screen app — so instead of emitting half a
+contract it refuses and points at the command that *does* have one.
+
+For automation use the one-shot pipeline:
+
+```bash
+plate job <url-or-file> --json --confirm
+```
+
+If you meant to run it interactively and still got this, your stdin is not a TTY.
+`plate tui < /dev/tty` in an odd terminal, or run it directly rather than through
+a wrapper that redirects stdin.
+
+## My TUI override was accepted but changed nothing
+
+Almost always the **Applies to** bucket. OrcaSlicer keeps *process* settings and
+*filament* settings in separate profiles, and an override aimed at the wrong one
+is accepted and then ignored — no error, no warning, just a slice that comes out
+identical. `filament_flow_ratio` is the usual victim: it is a filament setting,
+so sending it as a process override does nothing at all.
+
+The TUI does not guess the bucket, for the same reason the CLI does not: it is
+`--set` versus `--set-filament`, and only you know which one you meant. Every new
+key starts at *process* (the bucket a bare `--set` uses) and the picker resets for
+each key rather than remembering your last choice, so a mistake in one direction
+cannot silently follow you into the next override.
+
+To see what your installed profiles actually accept, and which bucket each key
+lives in:
+
+```bash
+plate slice --list-settings
+```
+
+If that prints nothing, OrcaSlicer is not set up yet — see
+[OrcaSlicer or its BBL profiles were not found](#orcaslicer-or-its-bbl-profiles-were-not-found).
+Overrides still work in the meantime; unknown keys are warn-but-pass.
 
 ## Nothing happens when I run a print command
 

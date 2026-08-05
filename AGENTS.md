@@ -12,6 +12,8 @@ Runs on Linux, macOS, and Windows.
 
 Prefer `job`/`send` for agent work. Always ask the user before running any command with `--confirm`.
 
+**Two subcommands are for humans only and have no machine contract:** `go` (the guided wizard) and `tui` (the full-screen Textual UI). Both refuse `--json` and a non-TTY stdin, exiting `5` with the standard error envelope — do not try to drive or scrape them. `plate job <url> --confirm` is the machine path and does everything they do.
+
 ## Data handling
 
 ZIP files are opened safely. URL downloads and ZIP extraction have a 2048 MB safety limit via `--max-download-mb`. Conflicting files use a numbered sibling such as `model-1.stl`.
@@ -45,6 +47,13 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 | `setup_cmd/` | Guided/non-interactive setup, mDNS, config show/validate, preflight |
 | `camera.py` | Snapshot capture (injectable grab_frame / docker runners) |
 | `slicer/` | OrcaSlicer integration |
+| `interactive/` | Shared wizard core (`core.py`: `GoSteps`, presets, override validation) + the `plate go` session. Both interactive front-ends inject at this one seam |
+| `tui/` | Textual full-screen UI (`plate tui`), optional `[tui]` extra. A front-end over `interactive/core.py` — **not** an agent surface (see "human only" above) |
+| `tlspin.py` | The single `verify_cert_fingerprint` used by mqtt, ftps, and camera (fail-closed; B.5) |
+| `netsafety.py` | SSRF / private-IP guards for download targets |
+| `printables.py` | Printables model resolution (GraphQL + HTML fallback) |
+| `ams.py` | AMS tray parsing and material matching |
+| `utils.py` | `emit_json` / `emit_json_error` envelopes and shared output helpers |
 | `config.py` | Config load/apply, timeouts, fingerprints |
 | `context.py` | `Settings` / `RuntimeContext` process context |
 | `logging_utils.py` | Process logger proxy; tests use `set_logger` / patch `_BACKEND` |
@@ -92,14 +101,17 @@ Published on PyPI as `platecli`; the installed command is `plate`.
 | Gate | Command / note |
 |------|----------------|
 | Default tests | `uv run python -m pytest tests/ -q -m "not live"` — never contacts a printer |
-| Coverage (CI) | `--cov-fail-under=83` (measured 83.85% Windows / 84.10% Linux; A+ target **92%** — see roadmap) |
+| Coverage (CI) | `--cov-fail-under=83` (CI run `30632442521`, 2026-07-31: Windows 88.09% / Linux 88.51% / macOS 88.33%; A+ target **92%** — see roadmap) |
 | Lint | `uvx ruff check bambu_cli` + `uvx ruff format --check bambu_cli` |
 | Types | `uvx mypy -p bambu_cli` |
 | Security lint | `uvx bandit -c pyproject.toml -r bambu_cli -ll` |
-
-CI pins these tool versions (see `.github/workflows/ci.yml`); running them unpinned locally is fine.
+| Smokes (not pytest) | `syntax`, `cli_help`, `ci_workflow`, `python_compat`, `dependency_resolution`, `release_readiness`, `privacy`, `agent_cli` — see [CONTRIBUTING.md](CONTRIBUTING.md). A green pytest says nothing about these. |
 | Mutation baseline | `./scripts/run_mutation_baseline.sh` — nightly / `workflow_dispatch` only; [docs/mutation-baseline.md](docs/mutation-baseline.md) |
 | Live printer | Opt-in only: `BAMBU_LIVE=1` + real config + `BAMBU_LIVE_SOURCE`. [docs/live-printer-smoke.md](docs/live-printer-smoke.md). Always ask the user before `--confirm` or `BAMBU_LIVE_PRINT_CONFIRM`. |
+
+CI pins these tool versions (see `.github/workflows/ci.yml`); running them unpinned locally is fine.
+The lint job runs the smokes and the type/security gates **separately from pytest** —
+a passing test suite is not evidence any of them are green.
 
 **Truth sources for quality status:** [docs/quality-roadmap.md](docs/quality-roadmap.md) (scoreboard) and [docs/test-backlog.md](docs/test-backlog.md) (remaining gaps). Prefer those over older blog-style claims.
 

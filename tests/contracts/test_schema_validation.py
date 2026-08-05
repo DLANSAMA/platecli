@@ -109,6 +109,8 @@ _COMMAND_SCHEMAS = {
     "snapshot": ["snapshot.json"],
     "status": ["status.json", "status_event.json"],
     "stop": ["stop.json"],
+    # `tui` is interactive-only: `--json` always emits the error envelope in tui.json.
+    "tui": ["tui.json"],
     "upload": ["upload.json"],
 }
 

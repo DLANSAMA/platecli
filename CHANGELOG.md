@@ -5,8 +5,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Added
+
+- **`plate tui` — a full-screen terminal UI** (optional extra:
+  `pip install 'platecli[tui]'`). A live dashboard (printer state, temperatures,
+  progress, AMS trays), a guided prepare screen (source validation, material and
+  quality presets with the AMS-loaded filament pre-selected, supports, slice +
+  time/filament preview), an explicit print-confirmation dialog (start / upload
+  only / cancel), and a live job monitor that follows a print to its terminal
+  state. It is a front-end over the existing pipeline — source validation, AMS
+  detection, download/slice, and the `job` request are the very same shared code
+  `plate go` runs, so the two cannot drift. Safety is unchanged: a print starts
+  only from the confirm dialog, upload-only leaves the file unstarted,
+  cancelling preserves the sliced file and says where it is, leaving the monitor
+  never stops a print, and quitting is refused while an upload is in flight.
+  `plate go` is unaffected and remains the no-extra-dependency path for SSH,
+  dumb terminals, and screen readers. Like `go`, `tui` is interactive-only:
+  `--json` and a non-TTY stdin exit `5` with the standard error envelope.
+  The prepare screen also offers **advanced slice settings** (`s`): a grouped
+  form over the named `slice` flags, plus an *Add an override* editor (a key, a
+  process/filament bucket, and a value) for everything the named flags do not
+  cover, recorded as `--set` / `--set-filament`. Blank fields keep profile
+  defaults, unsafe values are refused by the same validation the CLI applies,
+  and touching nothing leaves the slice byte identical to before. Use
+  `plate slice --list-settings` to see which keys your profiles accept.
+
 ### Changed
 
+- **`plate tui` advanced settings are clearer to fill in.** The screen previously
+  asked you to hand-edit a `KEY=VALUE` string, with a `filament:` prefix to
+  remember and no help on what a setting expects. Now the named flags with a
+  fixed option set (wall type, support type, seam position, ironing) are
+  dropdowns, and anything else is added as a name, a *process*/*filament* bucket
+  and a value — the same split `--set` and `--set-filament` make. Pending
+  overrides are a list you can click to edit or remove one at a time. The bucket
+  resets to `process` for each new key instead of carrying the previous choice
+  over, so a process setting can never be sent as a filament override by
+  accident. An empty value is still allowed, since clearing a setting is a
+  legitimate override.
+  The screen was also rebuilt visually: each field is one row (label beside its
+  control) instead of a stacked label over a bordered box, so a 80x24 terminal
+  shows three whole groups rather than four fields; every field carries an
+  example value; and the header names the screen you are on.
 - Internal refactor only — no user-visible change. Extracted the path,
   JSON-mode/redaction, and argparse-coercion helpers out of `bambu_cli/cli.py`
   into three focused modules (`bambu_cli/paths.py`, `bambu_cli/jsonio.py`,
@@ -173,6 +213,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   (`failed_step: "extract"`) instead of escaping as an unstructured error.
 - `plate job/send <model> --dry-run`: a 0-byte/unreadable sliceable model now fails
   the dry-run, matching the existing printer-ready empty-file check (dry-run parity).
+
+### Documentation
+
+- Troubleshooting gained the three `plate tui` symptoms, keyed to the exact strings
+  the command prints: the missing `[tui]` extra (exit `1`), the interactive-only
+  refusal in a script, pipe, or `--json` run (exit `5`), and an override that is
+  accepted but changes nothing — the *Applies to* bucket, which is what stops a
+  filament key being sent as a silently-ignored process override.
+- SECURITY.md now states how deliberate-intent works in the interactive front-ends.
+  The threat model described `--confirm` as the gate for physical actions, which is
+  true of the non-interactive commands but not of `plate go` / `plate tui`, where the
+  user never types the flag and the equivalent gate is an explicit confirmation
+  dialog. Both remain unscriptable (`--json` and non-TTY stdin exit `5`).
+- AGENTS.md: the module table now lists `interactive/`, `tui/`, `tlspin.py`,
+  `netsafety.py`, `printables.py`, `ams.py` and `utils.py`; `go` and `tui` are marked
+  explicitly as human-only surfaces with no machine contract; and a stray paragraph
+  that had been splitting the quality-gates table in two (breaking its rendering on
+  GitHub and PyPI) was moved below it.
+- CONTRIBUTING.md lists all eight CI smokes instead of four, and explains why
+  `python_compat_smoke.py` is worth running by hand: PEP 604 `X | None` passes ruff,
+  mypy, and the local suite while breaking Python 3.9 at import time.
+- Measured coverage/test numbers refreshed across the quality roadmap and test
+  backlog from the current matrix (Linux 88.4%, Windows 88.09%, macOS 88.33%),
+  replacing figures dating from before the TUI work.
 
 ### Security
 

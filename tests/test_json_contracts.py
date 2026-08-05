@@ -873,6 +873,27 @@ def test_download_credential_url_rejected_and_redacted_shape(monkeypatch, tmp_pa
 
 
 # ---------------------------------------------------------------------------
+# tui: interactive-only error-envelope contract (mirrors go)
+# ---------------------------------------------------------------------------
+
+
+def test_tui_json_error_envelope_shape(monkeypatch, tmp_path, capsys):
+    # `plate tui --json` never launches the UI: it emits the standard error
+    # envelope (exit 5, failed_step parse) exactly like `go`.
+    exc = run_main(monkeypatch, tmp_path, ["--json", "tui"])
+    assert exc is not None and exc.code == 5
+    payload = read_json(capsys)
+    assert_shape(payload, base_error_spec("tui"))
+    assert payload["failed_step"] == "parse"
+
+
+def test_tui_non_tty_stdin_exits_5(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    exc = run_main(monkeypatch, tmp_path, ["tui"])
+    assert exc is not None and exc.code == 5
+
+
+# ---------------------------------------------------------------------------
 # JsonArgumentParser bad-argument contract
 # ---------------------------------------------------------------------------
 

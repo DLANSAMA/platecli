@@ -40,13 +40,20 @@ Extra knobs (all optional):
     ORCA_STUB_STDERR   extra literal text to print to stderr
     ORCA_STUB_MARKER   if set, a file at this path is appended to when the stub
                        runs (lets a test assert the real binary was invoked)
+    ORCA_STUB_PROFILE_DUMP
+                       if set, the temp machine/process/filament profiles this
+                       run was handed (via --load-settings / --load-filaments)
+                       are written to this path as one JSON object, so a test
+                       can read back what the slicer would actually have used
 
 The stub never touches anything outside the ``--outputdir`` it is told to use
-(plus the optional marker file), so tests stay confined to ``tmp_path``.
+(plus the optional marker and profile-dump files), so tests stay confined to
+``tmp_path``.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -103,6 +110,34 @@ def _resolve_output_path(argv: list[str]) -> str | None:
     return outfile
 
 
+def _dump_profiles(argv: list[str], dest: str) -> None:
+    """Write ``{"process": {...}, "filament": {...}, "machine": {...}}`` to *dest*.
+
+    ``--load-settings "<machine>;<process>"`` and ``--load-filaments <filament>``
+    name real JSON files that the caller generated for this run and deletes
+    afterwards, so a test can only see their contents from in here.
+    """
+    paths: dict[str, str] = {}
+    for i, tok in enumerate(argv):
+        if tok == "--load-settings" and i + 1 < len(argv):
+            parts = argv[i + 1].split(";")
+            if parts:
+                paths["machine"] = parts[0]
+            if len(parts) > 1:
+                paths["process"] = parts[1]
+        elif tok == "--load-filaments" and i + 1 < len(argv):
+            paths["filament"] = argv[i + 1]
+    out: dict[str, object] = {}
+    for role, path in paths.items():
+        try:
+            with open(path, encoding="utf-8") as fh:
+                out[role] = json.load(fh)
+        except (OSError, ValueError) as exc:
+            out[role] = {"__error__": str(exc)}
+    with open(dest, "w", encoding="utf-8") as fh:
+        json.dump(out, fh)
+
+
 def main(argv: list[str]) -> int:
     scenario = os.environ.get("ORCA_STUB_SCENARIO", "success")
 
@@ -114,6 +149,13 @@ def main(argv: list[str]) -> int:
             fh.write(scenario + "\n")
 
     outpath = _resolve_output_path(argv)
+
+    dump = os.environ.get("ORCA_STUB_PROFILE_DUMP")
+    if dump:
+        # Read back the temp profiles the caller actually built and hand them to
+        # the test. Overrides are only real if they landed in these files: the
+        # request (argv) proves nothing about what OrcaSlicer would have used.
+        _dump_profiles(argv, dump)
 
     # A hang must block regardless of the sleep knob so timeout handling in
     # ``cmd_slice`` (subprocess.TimeoutExpired -> EXIT_TIMEOUT) is exercised.

@@ -1,0 +1,280 @@
+/* platecli TUI stylesheet (Phase 1: read-only dashboard).
+   Kept minimal and terminal-friendly; reviewed on a narrow 80x24 terminal. */
+
+Screen {
+    layout: vertical;
+}
+
+#dashboard-body {
+    height: auto;
+}
+
+StatusPanel {
+    width: 1fr;
+    height: auto;
+    border: round $primary;
+    border-title-color: $accent;
+    border-title-style: bold;
+    padding: 1 2;
+    content-align: left top;
+}
+
+AmsPanel {
+    width: 1fr;
+    height: auto;
+    border: round $secondary;
+    border-title-color: $accent;
+    border-title-style: bold;
+    padding: 1 2;
+    content-align: left top;
+}
+
+#dash-progress {
+    height: auto;
+    padding: 1 2 0 2;
+}
+
+#dashboard-hint {
+    height: 1;
+    color: $text-muted;
+    padding: 0 2;
+}
+
+
+/* Prepare flow (Phase 2). */
+
+#prepare-body {
+    height: 1fr;
+    padding: 0 2;
+}
+
+#source-error {
+    color: $error;
+    height: auto;
+}
+
+#prepare-status {
+    color: $text-muted;
+    height: auto;
+    padding: 1 0 0 0;
+}
+
+#preview {
+    height: auto;
+    padding: 1 0;
+}
+
+#preflight-body {
+    height: 1fr;
+    padding: 1 2;
+}
+
+#preflight-title {
+    text-style: bold;
+    color: $error;
+}
+
+#preflight-problem {
+    padding: 1 0;
+    height: auto;
+}
+
+#preflight-hint {
+    color: $text-muted;
+    height: auto;
+}
+
+
+/* Confirm modal + job monitor (Phase 3). */
+
+ConfirmModal {
+    align: center middle;
+}
+
+#confirm-body {
+    width: 70;
+    max-width: 100%;
+    height: auto;
+    max-height: 80%;
+    border: round $primary;
+    border-title-color: $accent;
+    border-title-style: bold;
+    background: $surface;
+    padding: 1 2;
+}
+
+#confirm-title {
+    text-style: bold;
+}
+
+#confirm-summary {
+    height: auto;
+    padding: 1 0 1 0;
+}
+
+#confirm-path {
+    color: $text-muted;
+    height: auto;
+    padding: 0 0 1 0;
+}
+
+#confirm-buttons {
+    height: auto;
+    align: left middle;
+}
+
+#confirm-buttons Button {
+    margin: 0 1 0 0;
+}
+
+#confirm-status {
+    height: auto;
+    padding: 1 0 0 0;
+}
+
+#monitor-body {
+    height: 1fr;
+    padding: 1 2;
+}
+
+#monitor-title {
+    text-style: bold;
+    height: auto;
+}
+
+JobProgress {
+    height: auto;
+    padding: 1 0;
+}
+
+#monitor-hint {
+    color: $text-muted;
+    height: auto;
+}
+
+
+/* Help overlay (Phase 4). */
+
+HelpScreen {
+    align: center middle;
+}
+
+#help-body {
+    width: 68;
+    max-width: 100%;
+    height: auto;
+    max-height: 80%;
+    border: round $primary;
+    border-title-color: $accent;
+    border-title-style: bold;
+    background: $surface;
+    padding: 1 2;
+}
+
+#help-title {
+    text-style: bold;
+    height: auto;
+}
+
+#help-keys {
+    height: auto;
+    padding: 1 0 0 0;
+}
+
+
+/* Advanced slice settings (Phase 5). */
+
+#settings-body {
+    height: 1fr;
+    padding: 0 2;
+}
+
+#settings-intro {
+    color: $text-muted;
+    height: auto;
+    padding: 0 0 1 0;
+}
+
+.settings-group {
+    text-style: bold;
+    color: $accent;
+    padding: 1 0 0 0;
+    height: 2;
+}
+
+/* One row per field. The form is 25 fields plus an override editor; with
+   stacked labels and default (bordered, 3-row) inputs only four fit on an
+   80x24 terminal. Flat 1-row controls keep the whole group readable at once. */
+.settings-row {
+    height: 1;
+    width: 100%;
+}
+
+.settings-label {
+    width: 26;
+    height: 1;
+    color: $text-muted;
+}
+
+/* Flat by default: a filled background on every row merges 25 fields into one
+   slab. Focus is what marks the active field. */
+.settings-input {
+    width: 1fr;
+    height: 1;
+    border: none;
+    background: transparent;
+    padding: 0 1;
+}
+
+.settings-input:focus, .settings-input:focus-within {
+    background: $primary 40%;
+}
+
+/* Select wraps its value in SelectCurrent, which brings its own border,
+   background and padding — all of which break the one-row rhythm. */
+.settings-input SelectCurrent {
+    border: none;
+    background: transparent;
+    padding: 0 1;
+    height: 1;
+}
+
+.settings-input:focus-within SelectCurrent {
+    background: $primary 40%;
+}
+
+/* The override editor: a name, a bucket, and a value. */
+#override-key, #override-bucket, #override-value {
+    width: 100%;
+}
+
+#override-help, #override-note {
+    height: auto;
+    color: $text-muted;
+}
+
+#override-current {
+    height: 4;
+    border: round $secondary;
+}
+
+
+#settings-error {
+    color: $error;
+    height: auto;
+    padding: 1 0 0 0;
+}
+
+#settings-buttons, #settings-actions, #prepare-actions {
+    height: auto;
+    align: left middle;
+}
+
+#settings-buttons Button, #settings-actions Button, #prepare-actions Button {
+    margin: 0 1 0 0;
+}
+
+#settings-summary {
+    height: auto;
+    color: $text-muted;
+}
