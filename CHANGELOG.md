@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-05
+
 ### Added
 
 - **`plate tui` — a full-screen terminal UI** (optional extra:
@@ -783,7 +785,8 @@ Initial development version: LAN-mode printer control (MQTT/FTPS), one-shot `job
 ### Removed
 - `requirements.txt`, which duplicated the `dependencies` already declared in `pyproject.toml`. Install with `uv pip install -e .` (or `pip install platecli`) instead.
 
-[Unreleased]: https://github.com/DLANSAMA/platecli/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/DLANSAMA/platecli/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/DLANSAMA/platecli/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/DLANSAMA/platecli/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/DLANSAMA/platecli/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/DLANSAMA/platecli/compare/v0.2.1...v0.2.2
