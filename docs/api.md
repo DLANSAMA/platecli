@@ -121,7 +121,7 @@ table omits one. Payloads are validated against the published files, mostly from
 real `--sim` invocations rather than hand-written fixtures.
 
 Contract tests: `tests/contracts/test_schema_validation.py` and
-`tests/test_json_contracts.py`.
+`tests/test_json_contract_*.py`.
 
 ## Command payloads
 

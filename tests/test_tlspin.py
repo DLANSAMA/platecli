@@ -2,7 +2,7 @@
 
 ``bambu_cli.tlspin.verify_cert_fingerprint`` is the single source of truth that
 MQTT, FTPS, and the direct camera grab all call. These tests exercise it
-directly; the per-transport suites (``test_tls_pinning.py``, ``test_camera_cmd``)
+directly; the per-transport suites (``test_tls_pinning.py``, ``test_camera_capture``)
 prove each call site still fails closed through its own path.
 """
 

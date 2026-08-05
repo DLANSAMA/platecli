@@ -179,6 +179,7 @@ only_mutate = [
 # Focused suite for mutation speed (not the full 500+ suite).
 pytest_add_cli_args_test_selection = [
     "tests/test_naming_and_validation.py",
+    "tests/test_download_validation_boundary.py",
     "tests/test_properties_safety.py",
     "tests/test_slicer_pure.py",
     "tests/test_job.py",

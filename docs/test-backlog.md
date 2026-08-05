@@ -41,7 +41,7 @@ Tracked in [SECURITY.md](../SECURITY.md) known limitations:
 | Gap | Notes |
 |-----|-------|
 | Camera Docker bind default | **Done.** Defaults to `127.0.0.1:…` publish; `camera_port` → stream URL parsing fixed; bind-parse tests in place |
-| Camera pin soft-fallback | **Done.** Aborts on pin mismatch and on `ssl.SSLError` from the handshake when a pin is configured; no Docker fallthrough in either case; regression tests in `tests/test_camera_cmd.py` |
+| Camera pin soft-fallback | **Done.** Aborts on pin mismatch and on `ssl.SSLError` from the handshake when a pin is configured; no Docker fallthrough in either case; regression tests in `tests/test_camera_capture.py` / `tests/test_cmd_snapshot.py` |
 | Single TLS pin helper | **Done.** One `verify_cert_fingerprint` (`bambu_cli/tlspin.py`, constant-time compare) used by mqtt/ftps/camera; direct unit suite in `tests/test_tlspin.py` + per-transport fail-closed tests |
 
 ### P1 — Coverage ratchet & transport residual
@@ -64,7 +64,7 @@ Tracked in [SECURITY.md](../SECURITY.md) known limitations:
 
 | Gap | Notes |
 |-----|-------|
-| Giant unittest-style modules | e.g. `test_printer_commands.py`, `test_download_cmd.py` — split by family over time |
+| Giant unittest-style modules | **Done (2026-08-04).** `test_printer_commands.py` (1333), `test_json_contracts.py` (1031) and `test_camera_cmd.py` (927) split by command surface; largest remaining is `test_job.py` (1246) |
 | `tests/fakes/` package | Shared TLS/FTP/MQTT fakes (roadmap A.3) |
 | Mutation survivors | Honest ~30–33% on some `predict` / `validation` emit paths; cosmetic/equivalent accepted |
 | Phase E | Weekly fuzz (ZIP/URL), SBOM, Dependabot, optional scheduled live lab |

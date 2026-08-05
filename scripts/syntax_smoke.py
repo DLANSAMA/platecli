@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Compile every runtime module under bambu_cli/ (auto-discovered).
+"""Compile every Python file in the repo that ships or runs in CI.
 
-Also compiles the legacy scripts/bambu.py entry and a fixed set of CI smoke
-modules under tests/. Replaces the hand-maintained py_compile file list in
-ci.yml — adding a package module no longer requires editing the workflow.
+All of bambu_cli/, scripts/ and tests/ are auto-discovered. The tests/ list used
+to be a hand-curated sample, which went stale the moment a test module was
+renamed or split — the same failure mode CLAUDE.md warns about for package and
+help-command inventories. Nothing here is hand-maintained now.
 """
 
 from __future__ import annotations
@@ -14,29 +15,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Extra non-package paths still syntax-checked in CI (not auto-discoverable
-# as package modules, but required for release/agent smoke).
-EXTRA_PATHS = (
-    "scripts/bambu.py",
-    "scripts/__init__.py",
-    "tests/bambu_test_base.py",
-    "tests/agent_cli_smoke.py",
-    "tests/ci_workflow_smoke.py",
-    "tests/dependency_resolution_smoke.py",
-    "tests/live_printer_smoke.py",
-    "tests/package_contents_smoke.py",
-    "tests/privacy_smoke.py",
-    "tests/python_compat_smoke.py",
-    "tests/release_readiness_smoke.py",
-    "tests/test_config_and_logging.py",
-    "tests/test_protocol_clients.py",
-    "tests/test_cli_entry.py",
-    "tests/test_printer_commands.py",
-    "tests/test_slice_cmd.py",
-    "tests/test_download_cmd.py",
-    "tests/test_camera_cmd.py",
-    "tests/test_doctor_and_safety.py",
-)
+
+def _discover(*dirs: str) -> list[Path]:
+    """Every .py under the given top-level directories, sorted."""
+    out: list[Path] = []
+    for name in dirs:
+        base = ROOT / name
+        if base.is_dir():
+            out += [p for p in base.rglob("*.py") if "__pycache__" not in p.parts]
+    return sorted(out)
 
 
 def package_modules() -> list[Path]:
@@ -46,11 +33,7 @@ def package_modules() -> list[Path]:
 
 
 def all_targets() -> list[Path]:
-    targets = package_modules()
-    for rel in EXTRA_PATHS:
-        path = ROOT / rel
-        if path.is_file():
-            targets.append(path)
+    targets = package_modules() + _discover("scripts", "tests")
     # de-dupe while preserving order
     seen: set[Path] = set()
     unique: list[Path] = []

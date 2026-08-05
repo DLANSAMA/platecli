@@ -493,7 +493,7 @@ def test_resume_confirmation_fixture_matches_schema():
 
 def test_snapshot_success_fixture_matches_schema():
     """Hand-written fixture: snapshot requires injecting a real grab_frame + camera
-    TLS stack; the hermetic seam exists (tests/test_camera_cmd.py:855) but is not
+    TLS stack; the hermetic seam exists (tests/test_snapshot_output.py) but is not
     imported here to keep the contract suite's dependency footprint minimal.
     The fixture guards schema shape; the camera cmd test guards the real emitter.
     """

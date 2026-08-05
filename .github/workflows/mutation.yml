@@ -40,7 +40,7 @@ jobs:
       - name: Run mutation baseline (floor from docs/mutation-baseline.md)
         env:
           # Keep in sync with docs/mutation-baseline.md "CI floor".
-          MUTATION_SCORE_FLOOR: "40"
+          MUTATION_SCORE_FLOOR: "48"
           FORCE_CLEAN: "1"
           CI: "true"
         run: ./scripts/run_mutation_baseline.sh

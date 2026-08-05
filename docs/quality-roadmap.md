@@ -169,7 +169,7 @@ Every new or touched command path must satisfy:
                    │
      ┌─────────────▼─────────────┐
      │ contract tests            │  schema + full payload per command
-     │ (test_json_contracts +    │
+     │ (test_json_contract_* +   │
      │  schemas/*.json)          │
      └─────────────┬─────────────┘
                    │

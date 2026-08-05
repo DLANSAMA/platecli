@@ -60,36 +60,69 @@ Focused tests (also listed in `[tool.mutmut].pytest_add_cli_args_test_selection`
 | Total mutants | 1480 |
 | Killed | 610 |
 | Survived | 870 |
-| Timeout / suspicious / no_tests | 0 |
 | **Score** | **610 / 1480 ≈ 41.2%** |
 
-Per-module (approx. killed / accounted on a clean run):
+### Measured 2026-08-04 (current) — same scope, re-run on a clean tree
 
-| Module | Score | Note |
-|--------|------:|------|
-| `job/payload.py` | ~65–69% | AMS + payload generation well tested |
-| `slicer/options.py` | ~60–63% | Bounds + property tests |
-| `netsafety.py` | ~58% | Private-IP refusal strong; cache/handler cosmetics survive |
-| `download/naming.py` | ~55–56% | Injection + sanitize properties; CD/header edges survive |
-| `job/predict.py` | ~33% | Dry-run heuristics under-specified; many equivalent branches |
-| `download/validation.py` | ~30–31% | Message/emit paths + normalize edge strings |
-| `slicer/output.py` | ~21% baseline; **not yet re-measured** since the C.4 hermetic Orca stub landed | **Was low:** `_finalize_slice` I/O/logging mutated with little unit signal. `tests/test_slice_stub_integration.py` (roadmap C.4) now drives its benign-GL / empty / corrupt / missing-output / real-error branches through the real slicer subprocess (line coverage 79.8%→~93%), so a re-run of `mutmut` on this module should score materially higher — update this row after the next mutation run. |
+| Metric | Count |
+|--------|------:|
+| Total mutants | 2091 |
+| Killed | 1061 |
+| Survived | 1027 |
+| Timeout | 3 |
+| **Score** | **1061 / 2091 = 50.7%** |
 
-**Honest reading:** the overall score **dropped vs Phase 1** because scope **widened** into harder modules (especially `output._finalize_slice` and `predict`/`validation` emit paths). That is intentional. Do **not** restore a high score by shrinking back to only well-covered files.
+Per-module, derived from the mutant sources and survivor list (these reconcile
+to the 50.7% total, so they are measured rather than estimated):
+
+| Module | Total | Survived | Killed | Score | vs 2026-07-09 |
+|--------|------:|---------:|-------:|------:|--------------:|
+| `job/payload.py` | 180 | 55 | 125 | **69.4%** | ~65–69% → flat |
+| `netsafety.py` | 153 | 50 | 103 | **67.3%** | ~58% → **+9** |
+| `slicer/options.py` | 433 | 155 | 278 | **64.2%** | ~60–63% → +2 |
+| `download/naming.py` | 201 | 77 | 124 | **61.7%** | ~55–56% → **+6** |
+| `job/predict.py` | 379 | 193 | 186 | **49.1%** | ~33% → **+16** |
+| `download/validation.py` | 320 | 191 | 129 | **40.3%** | ~30–31% → **+10** |
+| `slicer/output.py` | 344 | 269 | 75 | **21.8%** | ~21% → **+0.8** |
+
+**The C.4 prediction did not pan out — correcting it here.** The previous
+revision of this file said the hermetic Orca stub "should score materially
+higher" for `slicer/output.py` and asked for the row to be updated after a
+re-run. Re-run: **21.8%**, essentially unchanged. Line coverage rose (79.8% →
+92.7%) while the mutation score did not, which is the textbook signal that the
+new tests *execute* `_finalize_slice` without *constraining* it — they assert
+the command succeeds, not what it wrote. `slicer/output.py` now holds 269 of the
+1027 survivors (26%), the single largest pocket.
+
+The honest options for that module are (a) extract the pure decision logic out
+of `_finalize_slice` so it can be asserted directly, or (b) accept it and stop
+counting it. Adding more end-to-end tests will not move it. Not attempted here:
+it is a production refactor, not a test change.
+
+`download/validation.py`'s +10 comes from `tests/test_download_validation_boundary.py`,
+which covers the `_reject_*` functions that previously had no direct tests.
 
 ## CI floor
 
 | Setting | Value |
 |---------|------:|
-| `MUTATION_SCORE_FLOOR` | **40** |
+| `MUTATION_SCORE_FLOOR` | **48** |
 | Formula | `100 * killed / (killed + survived + timeout + suspicious + no_tests)` |
-| Rationale | Just under the honest Phase 3 score (~41.2%), same discipline as coverage `fail_under` — catch real regressions without flaking on one equivalent mutant |
+| Rationale | Just under the measured 2026-08-04 score (50.7%), same discipline as coverage `fail_under` — catch real regressions without flaking on one equivalent mutant. Raised from 40, which was set against the older 41.2% and had ~10 points of silent-drift room. |
+
+> **Fixed 2026-08-04:** the floor was previously assigned in
+> `run_mutation_baseline.sh` **without `export`**, so the score check — which runs
+> in a child python process — never saw it and fell back to its own hardcoded
+> default. A local run printed `floor: 40%` in its header and then enforced a
+> different number a few lines later. CI was unaffected only because the workflow
+> sets the variable at job level. There is now one value, exported, and the child
+> errors out rather than inventing a default.
 
 Enforced by `./scripts/run_mutation_baseline.sh` after `mutmut export-cicd-stats`. Nightly / manual workflow fails if the score falls below the floor.
 
 ## Surviving mutants (accepted / deferred)
 
-Categories (not an exhaustive dump of 861 IDs):
+Categories (not an exhaustive dump of the 1027 survivors):
 
 1. **Equivalent / cosmetic** — error-message string literals, log format, `getattr` default when tests always set the attribute, `ZipFile(..., "r")` vs default mode.
 2. **`_finalize_slice` (output.py)** — subprocess exit interpretation, JSON emit, path display. **Addressed (C.4):** `tests/fakes/orca_stub` + `tests/test_slice_stub_integration.py` now run these branches against a real fake-slicer subprocess. Residual survivors here should be cosmetic (log strings / path display); re-measure before treating any as "accepted".
@@ -112,7 +145,7 @@ Safety gates that **do** kill well under the widened suite:
 # from repo root
 uv pip install '.[test]'   # mutmut + hypothesis
 FORCE_CLEAN=1 ./scripts/run_mutation_baseline.sh
-# optional: MUTATION_SCORE_FLOOR=40 (default in script / CI)
+# optional: MUTATION_SCORE_FLOOR=48 (default in script / CI)
 ```
 
 Artifacts (`mutants/`, `.mutmut-cache`, `.hypothesis/`) are gitignored.
