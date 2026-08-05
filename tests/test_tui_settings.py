@@ -126,8 +126,20 @@ async def _settle(pilot):
 
 
 def _text(widget) -> str:
+    """Plain text of a widget's renderable — Rich grids included.
+
+    ``str(table)`` is a repr, not the rendered rows, so a grid-backed panel
+    (the preview) has to go through a Console to be asserted on at all.
+    """
     renderable = getattr(widget, "renderable", "")
-    return renderable if isinstance(renderable, str) else str(renderable)
+    if isinstance(renderable, str):
+        return renderable
+    from rich.console import Console
+
+    console = Console(width=200)
+    with console.capture() as capture:
+        console.print(renderable)
+    return capture.get()
 
 
 # ---------------------------------------------------------------------------
