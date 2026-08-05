@@ -45,6 +45,7 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 | `argutils.py` | argparse/`Namespace` coercion helpers (`namespace_get`, `exit_code_from_system_exit`, `setup_args_provided`) |
 | `commands/` | Printer subcommand handlers (`status`, `device`, `files`, `print_cmd`, `doctor`, `gcode`, thin `setup_wrappers`) |
 | `download/` | URL/filename validation, HTML scraping, ZIP extraction, `download` command |
+| `printables/` | Printables.com integration behind a strict adapter. `client.py` (the undocumented GraphQL wire format) is **sealed** — import only from `bambu_cli.printables`. `adapter.py` guarantees no Printables failure escapes as an exception |
 | `job/` | One-shot `job`/`send` orchestration, dry-run predict, print payloads, injectable `JobSteps` |
 | `setup_cmd/` | Guided/non-interactive setup, mDNS, config show/validate, preflight |
 | `slicer/` | OrcaSlicer integration |
@@ -75,6 +76,8 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 The rule exists because directories alone never held it: `protocols/`, `slicer/` and `download/` were already separate packages and still drifted — `slicer/output.py` imported a **private FTPS helper** to delete a partial file, so a change to Bambu transport code silently changed slicer behavior. If you need a helper in two adapters, push it down to rank 10 (that is what `fsutil.py` is for); do not import sideways.
 
 Accepted debt lives in `ALLOWED` in that script, each entry with a reason. Shrink it; do not grow it. One edge is currently allowlisted: `context -> printer` (`RuntimeContext` lazily constructs a `BambuPrinter`; the real fix is a composition root that installs a printer factory).
+
+The same script also enforces `SEALED` — package internals no outside module may import. `bambu_cli.printables.client` is sealed because an adapter is only a sandbox if callers cannot reach past it. **Third-party integrations go behind an adapter that cannot raise:** `PrintablesAdapter.resolve()` returns a `PrintablesResolution` for every outcome, converting a renamed field or a redesigned error envelope into a typed `printables_contract_changed` result instead of a traceback in the middle of `plate job`. `KeyboardInterrupt`/`SystemExit` are deliberately the only things that still propagate.
 
 **Package inventory is derived:** setuptools finds `bambu_cli*`; syntax smoke and CLI help smoke auto-discover modules/commands (`scripts/syntax_smoke.py`, `scripts/cli_help_smoke.py`). Adding a module under `bambu_cli/` or a subcommand in `cli.py` is enough — no triplicated lists.
 
