@@ -44,6 +44,7 @@ from bambu_cli.contracts.models import (
     Status,
     StatusEvent,
     Stop,
+    Tui,
     Upload,
     Version,
 )
@@ -81,6 +82,7 @@ __all__ = [
     "Status",
     "StatusEvent",
     "Stop",
+    "Tui",
     "Upload",
     "Version",
     "all_contracts",

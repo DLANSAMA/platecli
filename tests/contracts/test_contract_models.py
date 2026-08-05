@@ -244,6 +244,7 @@ SAMPLES = [
     contracts.JobOk(status="uploaded", command="job"),
     contracts.JobError(status="error", command="job", exit_code=2, error="boom", failed_step="upload"),
     contracts.Go(status="error", command="go", exit_code=5, error="interactive only", failed_step="parse"),
+    contracts.Tui(status="error", command="tui", exit_code=5, error="interactive only", failed_step="parse"),
 ]
 
 

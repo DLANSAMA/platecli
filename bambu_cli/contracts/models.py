@@ -527,6 +527,24 @@ class JobError(Contract):
 
 
 @dataclass(frozen=True)
+class Tui(Contract):
+    """``tui`` is a full-screen Textual UI: ``--json`` only ever reports refusal.
+
+    Same shape as :class:`Go` — both are human-only front-ends with no machine
+    contract (AGENTS.md), so the only payload either can emit is the refusal.
+    """
+
+    schema_name: ClassVar[str] = "tui"
+    schema_title: ClassVar[str] = "platecli tui error envelope (interactive command; --json always errors)"
+
+    status: Literal["error"]
+    command: Literal["tui"]
+    exit_code: Literal[5]
+    error: str = spec(required=True, min_length=1)
+    failed_step: Literal["parse"] = spec(required=True, default="parse")
+
+
+@dataclass(frozen=True)
 class Go(Contract):
     """``go`` is an interactive wizard: ``--json`` only ever reports refusal."""
 
