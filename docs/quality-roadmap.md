@@ -61,7 +61,7 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **1374** non-live tests collected / **1373** passing (2026-08-05; the Textual TUI phases 1-5 plus the structural refactor wave: layer-boundary enforcement, the Printables adapter's malformed-payload containment sweep, and round-trip tests proving each generated schema matches what its contract emits); **89.0%** coverage measured 2026-08-05 on Linux; CI floor **83**; per-module floors not enforced |
+| Tests | **A−** | **1406** non-live tests collected / **1405** passing (2026-08-05; the Textual TUI phases 1-5 plus the structural refactor wave: layer-boundary enforcement, the Printables adapter's malformed-payload containment sweep, and round-trip tests proving each generated schema matches what its contract emits); **89.1%** coverage measured 2026-08-05 on Linux; CI floor **83**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
 | Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
