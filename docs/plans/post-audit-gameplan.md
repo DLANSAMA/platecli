@@ -351,7 +351,7 @@ Before merging to `main`:
 ## 8. Pasteable brief for a new Claude session
 
 ```text
-You are working in /home/dylanr/Projects/platecli on branch feat/tui (or main if TUI already merged).
+You are working in your local platecli checkout on branch feat/tui (or main if TUI already merged).
 
 Execute docs/plans/post-audit-gameplan.md.
 
