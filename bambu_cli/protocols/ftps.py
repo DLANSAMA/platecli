@@ -3,7 +3,6 @@ import ftplib
 import os
 import socket
 import ssl
-import tempfile
 import threading
 from typing import Any
 
@@ -160,49 +159,6 @@ class ImplicitFTPS(ftplib.FTP_TLS):
         return conn, size
 
 
-def _remove_partial_file(path):
-    try:
-        if path and os.path.exists(path):
-            os.unlink(path)
-    except OSError:
-        pass
-
-
-def _download_partial_path(outpath):
-    if not os.path.exists(outpath):
-        return outpath, False
-    directory = os.path.dirname(outpath) or "."
-    basename = os.path.basename(outpath) or "download"
-    fd, temp_path = tempfile.mkstemp(prefix=f".{basename}.", suffix=".part", dir=directory)
-    os.close(fd)
-    return temp_path, True
-
-
-def _noncolliding_path(path):
-    from bambu_cli.paths import path_for_message as _path_for_message
-
-    try:
-        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.close(fd)
-        return path
-    except FileExistsError:
-        pass
-
-    directory = os.path.dirname(path)
-    basename = os.path.basename(path)
-    stem, ext = os.path.splitext(basename)
-    stem = stem or "download"
-    for index in range(1, 1000):
-        candidate = os.path.join(directory, f"{stem}-{index}{ext}")
-        try:
-            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.close(fd)
-            return candidate
-        except FileExistsError:
-            continue
-    raise FileExistsError(f"Could not find an unused filename near {_path_for_message(path)}")
-
-
 class PooledFTPWrapper:
     def __init__(self, ftp, manager):
         self._ftp = ftp
@@ -238,11 +194,7 @@ class ConnectionManager:
         self._lock = threading.Lock()
         self._ftp_usage_lock = threading.Lock()
 
-    def get_ftp(self, printer=None, timeout=60):
-        if printer is None:
-            from bambu_cli.printer import get_printer
-
-            printer = get_printer()
+    def get_ftp(self, printer, timeout=60):
         with self._lock:
             client = self._ftp_client
         if client is not None:
@@ -305,5 +257,11 @@ def _create_raw_ftp(printer, timeout=60):
     return ftp
 
 
-def get_ftp(printer=None, timeout=60):
+def get_ftp(printer, timeout=60):
+    """Borrow a pooled FTPS client for *printer*.
+
+    ``printer`` is required: this module must not reach up to
+    ``bambu_cli.printer`` for an ambient one (see scripts/check_layers.py).
+    Callers own the lookup.
+    """
     return connection_manager.get_ftp(printer, timeout=timeout)

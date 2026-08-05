@@ -513,19 +513,20 @@ def _status_event(p, event):
     }
 
 
-def monitor_status(args):
+def monitor_status(args, printer):
     """Subscribe to the printer's report topic and stream updates until a terminal state.
 
     In ``--json`` mode each change is emitted as one compact NDJSON line (an
     ``event: "update"`` object, then a final ``event: "terminal"``) so an agent
     can follow a print in real time. Otherwise a live human-readable progress
     bar is shown.
+
+    ``printer`` is injected by the caller — this module must not reach up to
+    ``bambu_cli.printer`` for an ambient one (see scripts/check_layers.py).
     """
     from bambu_cli.argutils import namespace_get as _namespace_get
-    from bambu_cli.printer import get_printer
     from bambu_cli.utils import emit_json_line
 
-    printer = get_printer()
     json_mode = bool(_namespace_get(args, "json", False))
     logger.info("📡 Starting status monitor loop. Press Ctrl+C to stop.")
     if printer.simulation_mode:

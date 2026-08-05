@@ -14,12 +14,11 @@ from bambu_cli.constants import (
 from bambu_cli.download.naming import (
     _download_filename_with_extension,
     _file_extension,
-    _portable_basename,
     _sanitize_download_filename,
 )
+from bambu_cli.fsutil import _download_partial_path, _noncolliding_path, _portable_basename, _remove_partial_file
 from bambu_cli.logging_utils import logger
 from bambu_cli.paths import path_for_message as _path_for_message
-from bambu_cli.protocols.ftps import _download_partial_path, _noncolliding_path, _remove_partial_file
 
 
 def _archive_member_too_large_message(filename, member_bytes, max_bytes):

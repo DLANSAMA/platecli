@@ -501,7 +501,8 @@ def preview_rows(state: WizardState, model_path: str) -> list[tuple[str, str]]:
     """
     from bambu_cli.config import MODEL_MAPPING
     from bambu_cli.context import current_settings
-    from bambu_cli.download.naming import _file_extension, _portable_basename
+    from bambu_cli.download.naming import _file_extension
+    from bambu_cli.fsutil import _portable_basename
 
     settings = current_settings()
     model_info = MODEL_MAPPING.get(settings.printer_model, {})
@@ -553,7 +554,7 @@ def build_job_namespace(state: WizardState, args: argparse.Namespace, *, confirm
     ``confirm=True`` is what actually starts a print, so only an explicit
     user confirmation path passes it.
     """
-    from bambu_cli.cli import build_parser
+    from bambu_cli.cliparse import build_parser
 
     assert state.printable_path is not None  # noqa: S101
     parser = build_parser()
@@ -614,7 +615,7 @@ def preserve_printable(state: WizardState) -> str | None:
     If the move fails, we keep the whole workdir (return None so the message
     omits a path rather than naming a doomed one).
     """
-    from bambu_cli.protocols.ftps import _noncolliding_path
+    from bambu_cli.fsutil import _noncolliding_path
 
     if not state.printable_path or not os.path.exists(state.printable_path):
         return None

@@ -22,6 +22,7 @@ sys.modules.setdefault("paho", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
+from bambu_cli import fsutil  # noqa: E402
 from bambu_cli import netsafety  # noqa: E402
 from bambu_cli.download import extract as extract_mod  # noqa: E402
 from bambu_cli.download import naming as naming_mod  # noqa: E402
@@ -79,11 +80,8 @@ def test_status_event_int_coercion():
 
 def test_monitor_status_simulation_ndjson(capsys):
     args = Namespace(json=True, sim=True)
-    with (
-        patch("bambu_cli.printer.get_printer", return_value=_test_printer(simulation_mode=True)),
-        patch.object(mqtt_mod.time, "sleep", return_value=None),
-    ):
-        mqtt_mod.monitor_status(args)
+    with patch.object(mqtt_mod.time, "sleep", return_value=None):
+        mqtt_mod.monitor_status(args, _test_printer(simulation_mode=True))
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.strip()]
     assert len(lines) >= 2
     events = [json.loads(ln) for ln in lines]
@@ -143,7 +141,7 @@ def test_noncolliding_path_creates_sibling(tmp_path):
     p = tmp_path / "model.stl"
     p.write_text("a", encoding="utf-8")
     # open exclusive fails → sibling
-    out = ftps_mod._noncolliding_path(str(p))
+    out = fsutil._noncolliding_path(str(p))
     assert out != str(p)
     assert out.endswith(".stl")
     assert Path(out).parent == tmp_path

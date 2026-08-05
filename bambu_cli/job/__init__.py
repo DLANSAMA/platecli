@@ -23,10 +23,7 @@ from bambu_cli.job.predict import (  # noqa: F401
 )
 from bambu_cli.job.steps import (  # noqa: F401
     JobSteps,
-    _default_download,
-    _default_print,
-    _default_slice,
-    _default_upload,
+    MissingJobStep,
 )
 from bambu_cli.job.support import (  # noqa: F401
     _emit_job_failure,

@@ -14,8 +14,9 @@ from bambu_cli.constants import (
     KNOWN_UNSUPPORTED_CONTENT_TYPES,
     KNOWN_UNSUPPORTED_DOWNLOAD_EXTENSIONS,
 )
-from bambu_cli.download.naming import _file_extension, _portable_basename
+from bambu_cli.download.naming import _file_extension
 from bambu_cli.errors import BambuError, abort
+from bambu_cli.fsutil import _portable_basename
 from bambu_cli.jsonio import looks_like_schemeless_credential_url as _looks_like_schemeless_credential_url
 from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import safe_log_error

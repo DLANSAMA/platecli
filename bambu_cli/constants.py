@@ -161,3 +161,9 @@ PRINTER_CONFIG_COMMANDS = {
 }
 LOCAL_COMMANDS = {"slice", "download", "preflight", "setup", "config", "go", "tui"}
 PRINTER_NETWORK_COMMANDS = PRINTER_CONFIG_COMMANDS - LOCAL_COMMANDS
+
+# Printer families whose camera is captured with the direct port-6000 TLS grab
+# rather than the BambuP1Streamer RTSP container (X1-series fall back to Docker).
+# Lives here rather than in a command module so both `doctor` and `preflight`
+# can read it without an upward import.
+DIRECT_CAMERA_MODELS = ("P1P", "P1S", "A1", "A1M")

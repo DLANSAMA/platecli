@@ -1217,13 +1217,14 @@ class TestMonitorStatusStreaming(unittest.TestCase):
         import json
         import types
 
+        from bambu_cli.printer import get_printer
         from bambu_cli.protocols import mqtt
 
         args = types.SimpleNamespace(json=True, monitor=True, sim=True)
         with settings_ctx(simulation=True), patch.object(mqtt.time, "sleep"):
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                mqtt.monitor_status(args)
+                mqtt.monitor_status(args, get_printer())
 
         events = [json.loads(line) for line in buf.getvalue().splitlines() if line.strip()]
         self.assertEqual(

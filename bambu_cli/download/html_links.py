@@ -8,7 +8,8 @@ from bambu_cli.constants import (
     DOWNLOAD_LINK_EXTENSION_PRIORITY,
     HTML_LINK_SCAN_LIMIT,
 )
-from bambu_cli.download.naming import _file_extension, _portable_basename
+from bambu_cli.download.naming import _file_extension
+from bambu_cli.fsutil import _portable_basename
 
 
 def _is_html_content_type(content_type):

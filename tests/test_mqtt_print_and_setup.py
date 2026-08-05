@@ -18,12 +18,13 @@ sys.modules.setdefault("paho", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
-from bambu_cli import camera as camera_mod  # noqa: E402
+from bambu_cli.protocols import camera as camera_mod  # noqa: E402
 from bambu_cli import commands as commands_mod  # noqa: E402
 from bambu_cli import netsafety  # noqa: E402
 from bambu_cli import slicer as slicer_mod  # noqa: E402
 from bambu_cli.download import naming as naming_mod  # noqa: E402
 from bambu_cli.download import validation as validation_mod  # noqa: E402
+from bambu_cli import fsutil  # noqa: E402
 from bambu_cli.errors import BambuError  # noqa: E402
 from bambu_cli.protocols import ftps as ftps_mod  # noqa: E402
 from bambu_cli.protocols import mqtt as mqtt_mod  # noqa: E402
@@ -76,13 +77,13 @@ def test_execute_print_simulation_missing_file():
         mqtt_mod.execute_print_command(printer, "{}", "missing.3mf", dry_run=False)
 
 
-def test_ftps_remove_partial_and_download_path(tmp_path):
+def test_remove_partial_and_download_path(tmp_path):
     p = tmp_path / "x.stl"
     p.write_text("hi", encoding="utf-8")
-    partial, replace = ftps_mod._download_partial_path(str(p))
+    partial, replace = fsutil._download_partial_path(str(p))
     assert replace is True
-    ftps_mod._remove_partial_file(partial)
-    ftps_mod._remove_partial_file(str(tmp_path / "nope"))
+    fsutil._remove_partial_file(partial)
+    fsutil._remove_partial_file(str(tmp_path / "nope"))
 
 
 def test_migrate_noop_no_inline(tmp_path):
@@ -135,7 +136,7 @@ def test_slicer_executable_problem_missing():
 
 def test_naming_portable_and_extension():
     assert naming_mod._file_extension("a.STL") == ".stl"
-    assert naming_mod._portable_basename("a/b\\c.stl") in ("c.stl", "b\\c.stl") or "c" in naming_mod._portable_basename(
+    assert fsutil._portable_basename("a/b\\c.stl") in ("c.stl", "b\\c.stl") or "c" in fsutil._portable_basename(
         "a/b/c.stl"
     )
 
@@ -247,11 +248,10 @@ def test_monitor_non_sim_reaches_terminal(capsys):
     client.loop_start.side_effect = loop_start
     args = Namespace(json=True)
     with (
-        patch("bambu_cli.printer.get_printer", return_value=printer),
         patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
         patch.object(mqtt_mod, "_mqtt_connect"),
     ):
-        mqtt_mod.monitor_status(args)
+        mqtt_mod.monitor_status(args, printer)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.strip()]
     assert any("terminal" in ln or "FINISH" in ln for ln in lines)
 
@@ -280,11 +280,10 @@ def test_monitor_merges_deltas_into_streamed_state(capsys):
     client.loop_start.side_effect = loop_start
     args = Namespace(json=True)
     with (
-        patch("bambu_cli.printer.get_printer", return_value=printer),
         patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
         patch.object(mqtt_mod, "_mqtt_connect"),
     ):
-        mqtt_mod.monitor_status(args)
+        mqtt_mod.monitor_status(args, printer)
 
     events = [json.loads(ln) for ln in capsys.readouterr().out.splitlines() if ln.strip()]
     assert events, "expected at least one NDJSON event"

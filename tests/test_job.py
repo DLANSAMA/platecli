@@ -52,6 +52,26 @@ from bambu_cli.job import JobSteps, _run_job  # noqa: E402
 from bambu_cli.errors import BambuError
 
 
+def default_steps(**overrides):
+    """``JobSteps`` wired to the real command handlers, with optional fakes.
+
+    Production wires these at the composition root (``commands.cmd_job``); the
+    orchestrator no longer imports ``bambu_cli.commands`` itself. Each default
+    looks the handler up on the module at *call* time, so tests that
+    monkeypatch ``bambu_cli.commands.cmd_upload`` still take effect.
+    """
+    from bambu_cli import commands
+
+    steps = {
+        "download": lambda *a, **k: commands.cmd_download(*a, **k),
+        "slice": lambda *a, **k: commands.cmd_slice(*a, **k),
+        "upload": lambda *a, **k: commands.cmd_upload(*a, **k),
+        "print_": lambda *a, **k: commands.cmd_print(*a, **k),
+    }
+    steps.update(overrides)
+    return JobSteps(**steps)
+
+
 def _parse(argv):
     return build_parser().parse_args(argv)
 
@@ -123,7 +143,7 @@ def _reset_last_error():
 def test_download_failure_detail_flows_through(tmp_path, capsys):
     url = "https://example.com/model.stl"
     args = _parse(["job", url, "--json"])
-    steps = JobSteps(download=failing_step("download", 2, "Could not connect", failed_step="http", url=url))
+    steps = default_steps(download=failing_step("download", 2, "Could not connect", failed_step="http", url=url))
     ctx = _ctx()
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(ctx, args, steps)
@@ -143,7 +163,7 @@ def test_slice_failure_detail_flows_through(tmp_path):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
     args = _parse(["job", str(stl), "--json"])
-    steps = JobSteps(slice=failing_step("slice", 3, "Slicer crashed", failed_step="orca"))
+    steps = default_steps(slice=failing_step("slice", 3, "Slicer crashed", failed_step="orca"))
     ctx = _ctx()
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         import io
@@ -167,7 +187,7 @@ def test_upload_failure_detail_flows_through(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--json"])
-    steps = JobSteps(upload=failing_step("upload", 2, "FTPS connection refused", failed_step="ftps"))
+    steps = default_steps(upload=failing_step("upload", 2, "FTPS connection refused", failed_step="ftps"))
     ctx = _ctx()
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(ctx, args, steps)
@@ -182,7 +202,7 @@ def test_print_failure_detail_flows_through(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--confirm", "--json"])
-    steps = JobSteps(
+    steps = default_steps(
         upload=fake_upload("model.3mf"),
         print_=failing_step("print", 4, "Printer busy", failed_step="mqtt"),
     )
@@ -207,7 +227,7 @@ def test_uploaded_only_next_command(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--upload-only", "--json"])
-    steps = JobSteps(upload=fake_upload("model.3mf"))
+    steps = default_steps(upload=fake_upload("model.3mf"))
     _run_job(_ctx(), args, steps)
     payload = _read_json(capsys)
     assert payload["status"] == "uploaded"
@@ -220,7 +240,7 @@ def test_uploaded_not_printed_next_command(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--json"])
-    steps = JobSteps(upload=fake_upload("model.3mf"))
+    steps = default_steps(upload=fake_upload("model.3mf"))
     _run_job(_ctx(), args, steps)
     payload = _read_json(capsys)
     assert payload["status"] == "uploaded_not_printed"
@@ -244,7 +264,7 @@ def test_uploaded_next_command_includes_ams_and_flags(tmp_path, capsys):
             "--skip-flow-cali",
         ]
     )
-    steps = JobSteps(upload=fake_upload("model.3mf"))
+    steps = default_steps(upload=fake_upload("model.3mf"))
     _run_job(_ctx(), args, steps)
     payload = _read_json(capsys)
     assert payload["next_command"] == [
@@ -284,7 +304,7 @@ def test_print_options_validated_without_confirm(tmp_path, capsys, extra):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(_bad_ams_argv(ready, *extra))
-    steps = JobSteps(upload=fake_upload("model.3mf"))
+    steps = default_steps(upload=fake_upload("model.3mf"))
     with contextlib.suppress(SystemExit, BambuError):
         _run_job(_ctx(), args, steps)
     payload = _read_json(capsys)
@@ -306,7 +326,7 @@ def test_upload_only_next_command_is_itself_valid(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--upload-only", "--json", "--use-ams", "--ams-mapping", "0,1"])
-    steps = JobSteps(upload=fake_upload("model.3mf"))
+    steps = default_steps(upload=fake_upload("model.3mf"))
     _run_job(_ctx(), args, steps)
     next_command = _read_json(capsys)["next_command"]
 
@@ -326,7 +346,7 @@ def test_valid_and_absent_print_options_still_pass(tmp_path, capsys):
         ["job", str(ready), "--dry-run", "--json"],
         ["job", str(ready), "--dry-run", "--json", "--use-ams", "--ams-mapping", "0"],
     ):
-        _run_job(_ctx(), _parse(argv), JobSteps(upload=fake_upload("model.3mf")))
+        _run_job(_ctx(), _parse(argv), default_steps(upload=fake_upload("model.3mf")))
         assert _read_json(capsys)["status"] == "dry_run_local_skipped"
 
 
@@ -334,7 +354,7 @@ def test_printed_success(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--confirm", "--json"])
-    steps = JobSteps(upload=fake_upload("model.3mf"), print_=fake_print())
+    steps = default_steps(upload=fake_upload("model.3mf"), print_=fake_print())
     _run_job(_ctx(), args, steps)
     payload = _read_json(capsys)
     assert payload["status"] == "printed"
@@ -364,7 +384,7 @@ def test_printed_success(tmp_path, capsys):
 def test_dry_run_direct_url(filename, would_slice, would_extract, capsys):
     url = f"https://example.com/{filename}"
     args = _parse(["job", url, "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_url_skipped"
     assert payload["would_download"] is True
@@ -386,7 +406,7 @@ def test_dry_run_printables_model_url_predicts_slice(capsys):
     """
     url = "https://printables.com/model/12345-agent-smoke"
     args = _parse(["job", url, "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_url_skipped"
     assert payload["would_download"] is True
@@ -438,7 +458,7 @@ def test_dry_run_extensionless_url_predicts_slice(capsys):
     """
     url = "https://example.com/download?id=1"
     args = _parse(["job", url, "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_url_skipped"
     assert payload["would_slice"] is True
@@ -449,7 +469,7 @@ def test_dry_run_local_model_file(tmp_path, capsys):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
     args = _parse(["job", str(stl), "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_local_skipped"
     assert payload["would_slice"] is True
@@ -463,7 +483,7 @@ def test_dry_run_local_zip(tmp_path, capsys):
     with zipfile.ZipFile(zpath, "w") as zf:
         zf.writestr("model.stl", b"solid x")
     args = _parse(["job", str(zpath), "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_local_skipped"
     assert payload["archive_entry"] == "model.stl"
@@ -475,7 +495,7 @@ def test_dry_run_local_printer_ready_file(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_local_skipped"
     assert payload["would_upload"] is True
@@ -488,7 +508,7 @@ def test_dry_run_local_gcode_3mf_is_print_ready_not_sliced(tmp_path, capsys):
     ready = tmp_path / "plate.gcode.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_local_skipped"
     assert payload["would_slice"] is False
@@ -515,7 +535,7 @@ def test_dry_run_local_zip_member_slice_matches_predicate(tmp_path, member, woul
     with zipfile.ZipFile(zpath, "w") as zf:
         zf.writestr(member, b"content")
     args = _parse(["job", str(zpath), "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_local_skipped"
     assert payload["archive_entry"] == member
@@ -537,7 +557,7 @@ def test_dry_run_would_create_output_dir(tmp_path, capsys):
     stl.write_bytes(b"solid x")
     missing_out = tmp_path / "does_not_exist_yet"
     args = _parse(["job", str(stl), "--dry-run", "--json", "--output", str(missing_out)])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["would_create_output_dir"] is True
     assert not missing_out.exists()
@@ -601,7 +621,7 @@ def test_zip_archive_entry_propagates_to_summary(tmp_path, capsys):
         zf.writestr("part.stl", b"solid x")
     out_dir = tmp_path / "out"
     args = _parse(["job", str(zpath), "--json", "--output", str(out_dir)])
-    steps = JobSteps(
+    steps = default_steps(
         slice=fake_slice(str(out_dir / "part.3mf")),
         upload=fake_upload("part.3mf"),
     )
@@ -623,7 +643,7 @@ def test_output_created_when_needed(tmp_path, capsys):
     stl.write_bytes(b"solid x")
     out_dir = tmp_path / "fresh_out"
     args = _parse(["job", str(stl), "--json", "--output", str(out_dir)])
-    steps = JobSteps(
+    steps = default_steps(
         slice=fake_slice(str(out_dir / "model.3mf")),
         upload=fake_upload("model.3mf"),
     )
@@ -639,7 +659,7 @@ def test_output_ignored_for_printer_ready_local_file(tmp_path, capsys, caplog):
     ready.write_bytes(b"x" * 10)
     out_dir = tmp_path / "unused_out"
     args = _parse(["job", str(ready), "--json", "--output", str(out_dir)])
-    steps = JobSteps(upload=fake_upload("model.3mf"))
+    steps = default_steps(upload=fake_upload("model.3mf"))
     _run_job(_ctx(), args, steps)
     assert not out_dir.exists()
     payload = _read_json(capsys)
@@ -666,7 +686,7 @@ def test_temp_workdir_cleanup_when_no_output_given(tmp_path):
         assert os.path.isdir(slice_args.output)
         return os.path.join(slice_args.output, "model.3mf")
 
-    steps = JobSteps(slice=_slice, upload=fake_upload("model.3mf"))
+    steps = default_steps(slice=_slice, upload=fake_upload("model.3mf"))
     _run_job(_ctx(), args, steps)
     assert captured_workdir["workdir"]
     assert not os.path.exists(captured_workdir["workdir"])
@@ -696,7 +716,7 @@ def test_url_job_reuses_download_workdir_and_cleans_up(tmp_path):
         return os.path.join(slice_args.output, "model.3mf")
 
     args = _parse(["job", "https://example.com/model.stl", "--json"])
-    steps = JobSteps(download=_download, slice=_slice, upload=fake_upload("model.3mf"))
+    steps = default_steps(download=_download, slice=_slice, upload=fake_upload("model.3mf"))
     _run_job(_ctx(), args, steps)
 
     assert captured["download_workdir"]
@@ -710,18 +730,22 @@ def test_default_job_steps_delegate_through_commands(tmp_path, capsys, monkeypat
     args = _parse(["job", str(ready), "--upload-only", "--json"])
 
     monkeypatch.setattr("bambu_cli.commands.cmd_upload", lambda ns: "model.3mf")
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "uploaded"
     assert payload["remote_name"] == "model.3mf"
 
 
-def test_cmd_job_shim_builds_context_and_default_steps(tmp_path, capsys, monkeypatch):
+def test_cmd_job_composition_root_wires_the_real_steps(tmp_path, capsys, monkeypatch):
+    # commands.cmd_job is the composition root: it owns the knowledge of which
+    # handlers implement each stage and hands them to the orchestrator.
+    from bambu_cli.commands import cmd_job
+
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--upload-only", "--json"])
-    monkeypatch.setattr("bambu_cli.commands.cmd_upload", lambda ns: "model.3mf")
-    job._cmd_job(args)
+    monkeypatch.setattr("bambu_cli.commands.files.cmd_upload", lambda ns: "model.3mf")
+    cmd_job(args)
     payload = _read_json(capsys)
     assert payload["status"] == "uploaded"
 
@@ -797,7 +821,7 @@ def test_unsafe_sliced_local_name_rejected_before_slicing(tmp_path, capsys):
 
     args = _parse(["job", str(stl), "--json"])
     with pytest.raises((SystemExit, BambuError)) as excinfo:
-        _run_job(_ctx(), args, JobSteps(slice=_slice))
+        _run_job(_ctx(), args, default_steps(slice=_slice))
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     assert sliced_called["n"] == 0
     payload = _read_json(capsys)
@@ -816,7 +840,7 @@ def test_unsafe_printer_ready_local_name_rejected_before_upload(tmp_path, capsys
 
     args = _parse(["job", str(ready), "--json"])
     with pytest.raises((SystemExit, BambuError)) as excinfo:
-        _run_job(_ctx(), args, JobSteps(upload=_upload))
+        _run_job(_ctx(), args, default_steps(upload=_upload))
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     assert upload_called["n"] == 0
     payload = _read_json(capsys)
@@ -908,7 +932,7 @@ def test_name_ignored_for_local_file_warns(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--name", "renamed.3mf", "--upload-only", "--json"])
-    steps = JobSteps(upload=fake_upload("model.3mf"))
+    steps = default_steps(upload=fake_upload("model.3mf"))
     with _capture_bambu_warnings() as records:
         _run_job(_ctx(), args, steps)
     payload = _read_json(capsys)
@@ -934,7 +958,7 @@ def test_url_download_success_flows_into_slice_and_upload(tmp_path, capsys):
         return str(downloaded)
 
     args = _parse(["job", "https://example.com/model.stl", "--json", "--output", str(out)])
-    steps = JobSteps(
+    steps = default_steps(
         download=_download,
         slice=fake_slice(str(out / "model.3mf")),
         upload=fake_upload("model.3mf"),
@@ -962,7 +986,7 @@ def test_url_download_reports_extracted_archive_member(tmp_path, capsys):
         return str(extracted)
 
     args = _parse(["job", "https://example.com/bundle.zip", "--json", "--output", str(out)])
-    steps = JobSteps(
+    steps = default_steps(
         download=_download,
         slice=fake_slice(str(out / "part.3mf")),
         upload=fake_upload("part.3mf"),
@@ -985,15 +1009,27 @@ def test_url_invalid_max_download_mb_fails(capsys):
     assert "--max-download-mb must be a positive integer" in payload["error"]
 
 
-def test_run_job_defaults_steps_when_omitted(tmp_path, capsys, monkeypatch):
-    # _run_job(ctx, args) with no steps arg builds default JobSteps() that
-    # late-bind to bambu_cli.commands handlers.
+def test_run_job_uses_injected_upload_step(tmp_path, capsys, monkeypatch):
+    # The orchestrator drives whatever the caller wired in; it no longer
+    # reaches up into bambu_cli.commands for a default.
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--upload-only", "--json"])
     monkeypatch.setattr("bambu_cli.commands.cmd_upload", lambda ns: "model.3mf")
-    _run_job(_ctx(), args)
+    _run_job(_ctx(), args, default_steps())
     assert _read_json(capsys)["status"] == "uploaded"
+
+
+def test_run_job_raises_when_a_needed_step_is_missing(tmp_path):
+    # A miswired caller fails loudly at the boundary rather than silently
+    # importing a handler from a higher layer.
+    from bambu_cli.job.steps import MissingJobStep
+
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(b"x" * 10)
+    args = _parse(["job", str(ready), "--upload-only", "--json"])
+    with pytest.raises(MissingJobStep, match="upload"):
+        _run_job(_ctx(), args, JobSteps())
 
 
 # ---------------------------------------------------------------------------
@@ -1079,7 +1115,7 @@ def test_copies_ignored_warns_for_printer_ready(tmp_path, capsys):
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--copies", "3", "--upload-only", "--json"])
     with _capture_bambu_warnings() as records:
-        _run_job(_ctx(), args, JobSteps(upload=fake_upload("model.3mf")))
+        _run_job(_ctx(), args, default_steps(upload=fake_upload("model.3mf")))
     payload = _read_json(capsys)
     assert payload.get("copies_ignored") is True
     assert any("--copies only applies" in r.getMessage() for r in records)
@@ -1089,7 +1125,7 @@ def test_copies_ignored_flagged_in_dry_run(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--copies", "2", "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_local_skipped"
     assert payload.get("copies_ignored") is True
@@ -1099,7 +1135,7 @@ def test_copies_one_does_not_flag_printer_ready(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
     args = _parse(["job", str(ready), "--upload-only", "--json"])
-    _run_job(_ctx(), args, JobSteps(upload=fake_upload("model.3mf")))
+    _run_job(_ctx(), args, default_steps(upload=fake_upload("model.3mf")))
     payload = _read_json(capsys)
     assert "copies_ignored" not in payload
 
@@ -1145,7 +1181,7 @@ def test_zip_printer_ready_member_copies_ignored_flagged(tmp_path, capsys):
         zf.writestr("plate.gcode.3mf", b"x" * 20)
     args = _parse(["job", str(zpath), "--copies", "3", "--dry-run", "--json"])
     with _capture_bambu_warnings() as records:
-        _run_job(_ctx(), args, JobSteps())
+        _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_local_skipped"
     assert payload["archive_entry"] == "plate.gcode.3mf"
@@ -1159,7 +1195,7 @@ def test_zip_sliceable_member_copies_not_flagged(tmp_path, capsys):
     with zipfile.ZipFile(zpath, "w") as zf:
         zf.writestr("model.stl", b"solid x")
     args = _parse(["job", str(zpath), "--copies", "3", "--dry-run", "--json"])
-    _run_job(_ctx(), args, JobSteps())
+    _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
     assert payload["status"] == "dry_run_local_skipped"
     assert payload["would_slice"] is True

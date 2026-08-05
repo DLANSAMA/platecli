@@ -1,43 +1,34 @@
-"""Injectable job step factories and JobSteps dataclass."""
+"""Injectable job step callables for the job/send orchestrator."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
 
-
-def _default_download():
-    from bambu_cli.commands import cmd_download
-
-    return cmd_download
+from bambu_cli.errors import BambuError
 
 
-def _default_slice():
-    from bambu_cli.commands import cmd_slice
+class MissingJobStep(BambuError):
+    """A pipeline stage was reached with no callable supplied for it.
 
-    return cmd_slice
-
-
-def _default_upload():
-    from bambu_cli.commands import cmd_upload
-
-    return cmd_upload
-
-
-def _default_print():
-    from bambu_cli.commands import cmd_print
-
-    return cmd_print
+    Raised rather than silently importing a default, so a miswired caller fails
+    loudly at the boundary instead of dragging the command layer into ``job``.
+    """
 
 
 @dataclass
 class JobSteps:
-    """Injectable step callables for the job/send orchestrator.
+    """The four callables the job/send orchestrator drives.
 
-    Each field defaults to a zero-arg factory that late-binds to the real
-    command handlers on ``bambu_cli.commands`` at call time. Tests inject a
-    custom ``JobSteps`` (or patch ``bambu_cli.commands.cmd_*``) rather than
-    patching the former ``bambu_cli.bambu`` facade.
+    ``job`` is an orchestrator: it sequences download -> slice -> upload ->
+    print, but it must not know *who* implements those. The handlers live in
+    ``bambu_cli.commands`` (a higher layer), so this dataclass previously
+    late-bound to them through function-local imports — an upward dependency
+    that ``scripts/check_layers.py`` rejects.
+
+    The caller now supplies them. ``bambu_cli.commands.cmd_job`` is the
+    composition root and wires the real handlers; tests pass fakes. A field left
+    as ``None`` is not defaulted — reaching that stage raises ``MissingJobStep``.
     """
 
     download: Callable | None = None
@@ -45,17 +36,21 @@ class JobSteps:
     upload: Callable | None = None
     print_: Callable | None = None
 
-    def _resolve(self, value, default_factory):
-        return value if value is not None else default_factory()
+    def _resolve(self, value, name):
+        if value is None:
+            raise MissingJobStep(
+                f"the job orchestrator reached the {name!r} step but no {name!r} callable was supplied to JobSteps"
+            )
+        return value
 
     def get_download(self):
-        return self._resolve(self.download, _default_download)
+        return self._resolve(self.download, "download")
 
     def get_slice(self):
-        return self._resolve(self.slice, _default_slice)
+        return self._resolve(self.slice, "slice")
 
     def get_upload(self):
-        return self._resolve(self.upload, _default_upload)
+        return self._resolve(self.upload, "upload")
 
     def get_print(self):
-        return self._resolve(self.print_, _default_print)
+        return self._resolve(self.print_, "print")

@@ -86,7 +86,7 @@ class TestCameraErrorPaths(unittest.TestCase):
 
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_bambu_error_from_printer_propagates(self, _mock_logger):
-        from bambu_cli import camera
+        from bambu_cli.protocols import camera
 
         tmpdir = tempfile.mkdtemp()
         args = self._snapshot_args(tmpdir)
@@ -103,7 +103,7 @@ class TestCameraErrorPaths(unittest.TestCase):
 
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_direct_write_oserror_becomes_file_error(self, _mock_logger):
-        from bambu_cli import camera
+        from bambu_cli.protocols import camera
         from bambu_cli.constants import EXIT_FILE_ERROR
 
         tmpdir = tempfile.mkdtemp()

@@ -15,7 +15,7 @@ def cmd_status(args, ctx=None):
 
     ctx = ctx or RuntimeContext.for_request(args)
     if bool(_namespace_get(args, "monitor", False)):
-        monitor_status(args)
+        monitor_status(args, ctx.printer())
         return
 
     printer = ctx.printer()

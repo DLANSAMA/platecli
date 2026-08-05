@@ -34,7 +34,6 @@ from bambu_cli.download.naming import (  # noqa: F401
     _has_command_injection_chars,
     _is_print_ready_name,
     _name_for_message,
-    _portable_basename,
     _print_ready_error_message,
     _reject_non_print_ready,
     _safe_remote_name,
@@ -55,6 +54,12 @@ from bambu_cli.download.validation import (  # noqa: F401
     _validate_http_url_or_exit,
     _validate_max_download_mb_or_exit,
 )
+from bambu_cli.fsutil import (  # noqa: F401
+    _download_partial_path,
+    _noncolliding_path,
+    _portable_basename,
+    _remove_partial_file,
+)
 from bambu_cli.netsafety import (  # noqa: F401
     MAX_DOWNLOAD_REDIRECT_HOPS,
     SafeHTTPHandler,
@@ -71,9 +76,4 @@ from bambu_cli.netsafety import (  # noqa: F401
 from bambu_cli.printables import (  # noqa: F401
     _is_printables_model_url,
     resolve_printables_url,
-)
-from bambu_cli.protocols.ftps import (  # noqa: F401
-    _download_partial_path,
-    _noncolliding_path,
-    _remove_partial_file,
 )

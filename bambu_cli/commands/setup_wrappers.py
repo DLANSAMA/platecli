@@ -40,7 +40,7 @@ def cmd_snapshot(args, ctx=None, **collaborators):
     Extra keyword args are forwarded to ``camera._cmd_snapshot`` (injectable
     collaborators: grab_frame, which, subprocess_run, access_code_loader, …).
     """
-    from bambu_cli.camera import _cmd_snapshot
+    from bambu_cli.protocols.camera import _cmd_snapshot
 
     ctx = ctx or RuntimeContext.for_request(args)
     _cmd_snapshot(args, ctx=ctx, **collaborators)
@@ -61,7 +61,20 @@ def cmd_config(args):
 
 
 def cmd_job(args):
-    """One-shot URL/local file workflow: download, slice, upload, optionally print."""
-    from bambu_cli.job import _cmd_job
+    """One-shot URL/local file workflow: download, slice, upload, optionally print.
 
-    return _cmd_job(args)
+    This is the composition root for the job pipeline: the orchestrator in
+    ``bambu_cli.job`` sequences the stages but does not know who implements
+    them, so the real handlers are wired in here and passed down.
+    """
+    from bambu_cli.commands.files import cmd_upload
+    from bambu_cli.commands.print_cmd import cmd_print
+    from bambu_cli.job import JobSteps, _cmd_job
+
+    steps = JobSteps(
+        download=cmd_download,
+        slice=cmd_slice,
+        upload=cmd_upload,
+        print_=cmd_print,
+    )
+    return _cmd_job(args, steps)

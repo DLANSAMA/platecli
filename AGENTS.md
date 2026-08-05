@@ -37,15 +37,16 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 
 | Module / package | Role |
 |------------------|------|
-| `cli.py` | argparse, `main()` dispatch; re-imports the shared helpers from `paths`/`jsonio`/`argutils` |
+| `cli.py` | `main()` dispatch and the **only** module holding `sys.exit`; re-exports `build_parser` from `cliparse` |
+| `cliparse.py` | The argparse tree (`build_parser`, `get_global_parser`, `JsonArgumentParser`). Split from `cli.py` so domain code can build a namespace without importing the entrypoint |
 | `paths.py` | Filesystem path helpers (`expand_path`, `display_path`, `path_for_message`, `exception_for_message`) shared by CLI and domain |
+| `fsutil.py` | Pure path/file mechanics (`_portable_basename`, `_remove_partial_file`, `_download_partial_path`, `_noncolliding_path`) shared by slicer/download without either importing the other |
 | `jsonio.py` | JSON-mode detection + URL-credential redaction for logs/JSON output |
 | `argutils.py` | argparse/`Namespace` coercion helpers (`namespace_get`, `exit_code_from_system_exit`, `setup_args_provided`) |
 | `commands/` | Printer subcommand handlers (`status`, `device`, `files`, `print_cmd`, `doctor`, `gcode`, thin `setup_wrappers`) |
 | `download/` | URL/filename validation, HTML scraping, ZIP extraction, `download` command |
 | `job/` | One-shot `job`/`send` orchestration, dry-run predict, print payloads, injectable `JobSteps` |
 | `setup_cmd/` | Guided/non-interactive setup, mDNS, config show/validate, preflight |
-| `camera.py` | Snapshot capture (injectable grab_frame / docker runners) |
 | `slicer/` | OrcaSlicer integration |
 | `interactive/` | Shared wizard core (`core.py`: `GoSteps`, presets, override validation) + the `plate go` session. Both interactive front-ends inject at this one seam |
 | `tui/` | Textual full-screen UI (`plate tui`), optional `[tui]` extra. A front-end over `interactive/core.py` — **not** an agent surface (see "human only" above) |
@@ -58,8 +59,22 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 | `context.py` | `Settings` / `RuntimeContext` process context |
 | `logging_utils.py` | Process logger proxy; tests use `set_logger` / patch `_BACKEND` |
 | `constants.py` | Exit codes, file-type tables, safety limits (immutable) |
-| `protocols/` | Low-level FTPS and MQTT clients used by `BambuPrinter` |
+| `protocols/` | Low-level FTPS, MQTT, and camera clients used by `BambuPrinter` (`camera.py` moved here — it is a TLS transport sharing `tlspin`) |
 | `errors.py` | `BambuError` hierarchy + `abort()` (domain never calls `sys.exit`) |
+
+**Layer boundaries are enforced (blocking CI):** `scripts/check_layers.py` assigns every module a rank and rejects any import that goes *upward*, plus any import between the three sibling adapters. Deferred (function-local) imports count — they break the import cycle, not the dependency.
+
+```
+70  cli.py (sys.exit lives here)          80  bambu.py (__main__ shim)
+50  commands/  interactive/  tui/         45  job/       40  download/  setup_cmd/
+35  printer.py                            30  protocols/ | slicer/ | printables/   <- MUST NOT import each other
+25  cliparse.py                           20  utils config context netsafety ams
+10  constants errors paths logging_utils argutils jsonio tlspin fsutil
+```
+
+The rule exists because directories alone never held it: `protocols/`, `slicer/` and `download/` were already separate packages and still drifted — `slicer/output.py` imported a **private FTPS helper** to delete a partial file, so a change to Bambu transport code silently changed slicer behavior. If you need a helper in two adapters, push it down to rank 10 (that is what `fsutil.py` is for); do not import sideways.
+
+Accepted debt lives in `ALLOWED` in that script, each entry with a reason. Shrink it; do not grow it. One edge is currently allowlisted: `context -> printer` (`RuntimeContext` lazily constructs a `BambuPrinter`; the real fix is a composition root that installs a printer factory).
 
 **Package inventory is derived:** setuptools finds `bambu_cli*`; syntax smoke and CLI help smoke auto-discover modules/commands (`scripts/syntax_smoke.py`, `scripts/cli_help_smoke.py`). Adding a module under `bambu_cli/` or a subcommand in `cli.py` is enough — no triplicated lists.
 
@@ -71,7 +86,9 @@ When adding tests, follow [docs/test-backlog.md](docs/test-backlog.md) and the q
 
 ### Known architecture debt (honest)
 
-- No remaining architecture debt tracked here. B.4 (cli extraction → paths/jsonio/argutils) and B.5 (single `verify_cert_fingerprint` in tlspin.py) both landed; see [docs/quality-roadmap.md](docs/quality-roadmap.md) for the current A+ gap list.
+- **`context.py` -> `printer.py`** (allowlisted in `scripts/check_layers.py`): `RuntimeContext.printer()` lazily constructs a `BambuPrinter`, so a core-services module depends on a transport facade. The fix is a composition root that installs a printer factory onto the context; deferred so the boundary work stayed reviewable.
+- **`protocols/mqtt.py` is ~880 LOC** — the largest module in the package and still mixed-concern. Not split during the boundary pass on purpose: doing both at once makes the diff unreadable.
+- B.4 (cli extraction → paths/jsonio/argutils) and B.5 (single `verify_cert_fingerprint` in tlspin.py) both landed; see [docs/quality-roadmap.md](docs/quality-roadmap.md) for the current gap list.
 
 ## Camera snapshots for agents
 
