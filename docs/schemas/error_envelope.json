@@ -3,17 +3,49 @@
   "$id": "https://platecli.local/schemas/error_envelope.json",
   "title": "platecli JSON error envelope",
   "type": "object",
-  "required": ["status", "command", "exit_code", "error"],
+  "required": [
+    "status",
+    "command",
+    "exit_code",
+    "error"
+  ],
   "properties": {
-    "status": {"const": "error"},
-    "command": {"type": "string", "minLength": 1},
-    "exit_code": {"type": "integer"},
-    "error": {"type": "string"},
-    "failed_step": {"type": "string"},
-    "printer_error_code": {"type": "integer"},
-    "printer_error_code_hex": {"type": "string"},
-    "next_command": {},
-    "detail": {"type": "object"}
+    "status": {
+      "const": "error",
+      "type": "string"
+    },
+    "command": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "error": {
+      "type": "string"
+    },
+    "failed_step": {
+      "type": "string"
+    },
+    "printer_error_code": {
+      "type": "integer"
+    },
+    "printer_error_code_hex": {
+      "type": "string"
+    },
+    "next_command": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "detail": {
+      "additionalProperties": true,
+      "type": "object"
+    }
   },
   "additionalProperties": true
 }

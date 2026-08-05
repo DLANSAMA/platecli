@@ -63,6 +63,12 @@ test = [
     "mutmut>=3.0",
     "hypothesis>=6.0",
     "textual>=0.86,<2.0",
+    # Build-time only: scripts/gen_schemas.py derives docs/schemas/*.json from
+    # the dataclasses in bambu_cli.contracts. Deliberately NOT a runtime
+    # dependency — bambu_cli never imports pydantic, because emit_json owns
+    # serialization (and its credential redaction). Keeping it here means users
+    # install 3 runtime deps, not 8, and no compiled wheel ships to them.
+    "pydantic>=2.0,<3.0; python_version >= '3.10'",
 ]
 
 [project.urls]

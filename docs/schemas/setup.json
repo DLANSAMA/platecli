@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platecli.local/schemas/setup.json",
   "title": "platecli setup summary envelope",
-  "description": "Reports whether each setting is configured rather than its value, so the summary stays safe to paste into a bug report. The access code itself is never included; access_code_storage says only where it lives.",
   "type": "object",
+  "description": "Reports whether each setting is configured rather than its value, so the summary stays safe to paste into a bug report. The access code itself is never included; access_code_storage says only where it lives.",
   "required": [
     "status",
     "command",
@@ -17,19 +17,57 @@
     "insecure_tls"
   ],
   "properties": {
-    "status": {"const": "configured"},
-    "command": {"const": "setup"},
-    "config_path": {"type": "string"},
-    "printer_ip_configured": {"type": "boolean"},
-    "serial_configured": {"type": "boolean"},
-    "access_code_storage": {"enum": ["file", "inline"]},
-    "model": {"type": ["string", "null"]},
-    "nozzle": {"type": ["string", "null"]},
-    "orca_slicer_configured": {"type": "boolean"},
-    "profiles_dir_configured": {"type": "boolean"},
-    "cert_fingerprint_configured": {"type": "boolean"},
-    "insecure_tls": {"type": "boolean"},
-    "access_code_file": {"type": "string"}
+    "status": {
+      "const": "configured",
+      "type": "string"
+    },
+    "command": {
+      "const": "setup",
+      "type": "string"
+    },
+    "config_path": {
+      "type": "string"
+    },
+    "printer_ip_configured": {
+      "type": "boolean"
+    },
+    "serial_configured": {
+      "type": "boolean"
+    },
+    "access_code_storage": {
+      "enum": [
+        "file",
+        "inline"
+      ],
+      "type": "string"
+    },
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nozzle": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "orca_slicer_configured": {
+      "type": "boolean"
+    },
+    "profiles_dir_configured": {
+      "type": "boolean"
+    },
+    "cert_fingerprint_configured": {
+      "type": "boolean"
+    },
+    "insecure_tls": {
+      "type": "boolean"
+    },
+    "access_code_file": {
+      "type": "string"
+    }
   },
   "additionalProperties": true
 }

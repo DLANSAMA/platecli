@@ -14,10 +14,12 @@
       "enum": [
         "update",
         "terminal"
-      ]
+      ],
+      "type": "string"
     },
     "command": {
-      "const": "status"
+      "const": "status",
+      "type": "string"
     },
     "gcode_state": {
       "type": "string"

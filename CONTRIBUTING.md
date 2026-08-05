@@ -117,8 +117,9 @@ SECURITY.md.
   `get_printer()` / `RuntimeContext` — do not grow `bambu_cli/bambu.py` beyond the thin entrypoint.
 - Prefer dependency injection over patching module globals (see `download/` for the pattern).
 - JSON success and error payloads: assert full shapes (`status`, `command`, `failed_step`,
-  `exit_code`, `next_command` where applicable); add or extend a schema under `docs/schemas/`
-  when introducing agent-facing fields.
+  `exit_code`, `next_command` where applicable). When introducing agent-facing fields, edit the
+  dataclass in `bambu_cli/contracts/` and run `python scripts/gen_schemas.py` — **never hand-edit
+  `docs/schemas/*.json`**, it is generated and CI diffs it.
 - Follow `docs/quality-roadmap.md` and `docs/test-backlog.md` when adding tests.
 - Do not add Claude-Session or similar trailers to commits or PRs.
 

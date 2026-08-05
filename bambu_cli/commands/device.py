@@ -5,6 +5,7 @@ import json
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.context import RuntimeContext
+from bambu_cli.contracts import Light, Pause, Resume, Stop
 from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.utils import emit_json, emit_json_error, get_sequence_id
@@ -36,14 +37,7 @@ def cmd_light(args, ctx=None):
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info(f"💡 Light turned {action}")
     if bool(_namespace_get(args, "json", False)):
-        emit_json(
-            {
-                "status": "light_changed",
-                "command": "light",
-                "action": action,
-                "changed": True,
-            }
-        )
+        emit_json(Light(status="light_changed", command="light", action=action, changed=True))
 
 
 def cmd_pause(args, ctx=None):
@@ -54,12 +48,12 @@ def cmd_pause(args, ctx=None):
         logger.warning("⚠️  This will PAUSE the current print. Add --confirm to proceed.")
         if bool(_namespace_get(args, "json", False)):
             emit_json(
-                {
-                    "status": "confirmation_required",
-                    "command": "pause",
-                    "paused": False,
-                    "next_command": ["pause", "--confirm", "--json"],
-                }
+                Pause(
+                    status="confirmation_required",
+                    command="pause",
+                    paused=False,
+                    next_command=["pause", "--confirm", "--json"],
+                )
             )
         abort("", exit_code=EXIT_COMMAND_ERROR)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "pause"}})
@@ -71,13 +65,7 @@ def cmd_pause(args, ctx=None):
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info("⏸️  Print paused")
     if bool(_namespace_get(args, "json", False)):
-        emit_json(
-            {
-                "status": "paused",
-                "command": "pause",
-                "paused": True,
-            }
-        )
+        emit_json(Pause(status="paused", command="pause", paused=True))
 
 
 def cmd_resume(args, ctx=None):
@@ -88,12 +76,12 @@ def cmd_resume(args, ctx=None):
         logger.warning("⚠️  This will RESUME the paused print. Add --confirm to proceed.")
         if bool(_namespace_get(args, "json", False)):
             emit_json(
-                {
-                    "status": "confirmation_required",
-                    "command": "resume",
-                    "resumed": False,
-                    "next_command": ["resume", "--confirm", "--json"],
-                }
+                Resume(
+                    status="confirmation_required",
+                    command="resume",
+                    resumed=False,
+                    next_command=["resume", "--confirm", "--json"],
+                )
             )
         abort("", exit_code=EXIT_COMMAND_ERROR)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "resume"}})
@@ -105,13 +93,7 @@ def cmd_resume(args, ctx=None):
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info("▶️  Print resumed")
     if bool(_namespace_get(args, "json", False)):
-        emit_json(
-            {
-                "status": "resumed",
-                "command": "resume",
-                "resumed": True,
-            }
-        )
+        emit_json(Resume(status="resumed", command="resume", resumed=True))
 
 
 def cmd_stop(args, ctx=None):
@@ -122,12 +104,12 @@ def cmd_stop(args, ctx=None):
         logger.warning("⚠️  This will STOP the current print. Add --confirm to proceed.")
         if bool(_namespace_get(args, "json", False)):
             emit_json(
-                {
-                    "status": "confirmation_required",
-                    "command": "stop",
-                    "stopped": False,
-                    "next_command": ["stop", "--confirm", "--json"],
-                }
+                Stop(
+                    status="confirmation_required",
+                    command="stop",
+                    stopped=False,
+                    next_command=["stop", "--confirm", "--json"],
+                )
             )
         abort("", exit_code=EXIT_COMMAND_ERROR)
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "stop"}})
@@ -139,10 +121,4 @@ def cmd_stop(args, ctx=None):
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info("⏹️  Print stopped")
     if bool(_namespace_get(args, "json", False)):
-        emit_json(
-            {
-                "status": "stopped",
-                "command": "stop",
-                "stopped": True,
-            }
-        )
+        emit_json(Stop(status="stopped", command="stop", stopped=True))

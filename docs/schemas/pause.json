@@ -3,12 +3,32 @@
   "$id": "https://platecli.local/schemas/pause.json",
   "title": "platecli pause success or confirmation envelope",
   "type": "object",
-  "required": ["status", "command", "paused"],
+  "required": [
+    "status",
+    "command",
+    "paused"
+  ],
   "properties": {
-    "status": {"enum": ["paused", "confirmation_required"]},
-    "command": {"const": "pause"},
-    "paused": {"type": "boolean"},
-    "next_command": {"type": "array", "items": {"type": "string"}}
+    "status": {
+      "enum": [
+        "paused",
+        "confirmation_required"
+      ],
+      "type": "string"
+    },
+    "command": {
+      "const": "pause",
+      "type": "string"
+    },
+    "paused": {
+      "type": "boolean"
+    },
+    "next_command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
   },
   "additionalProperties": true
 }

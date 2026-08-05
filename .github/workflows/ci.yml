@@ -170,6 +170,15 @@ jobs:
             echo "::error::@mockable/test indirection found in production code."
             exit 1
           fi
+      - name: JSON schemas match their contracts (blocking)
+        # docs/schemas/*.json is generated from bambu_cli/contracts/. This is
+        # the anti-drift gate: edit a payload, regenerate, commit both.
+        #
+        # Pinned to 3.12 on purpose. The generator needs 3.10+ to evaluate the
+        # contracts' `X | None` annotations, and pydantic is only installed
+        # above that floor (see the marker in pyproject). The package itself
+        # still runs on 3.9 — that leg is covered by the test matrix.
+        run: uv run --python 3.12 --with pydantic python scripts/gen_schemas.py --check
       - name: layer boundaries (blocking)
         # Directories alone never held: protocols/, slicer/ and download/ already
         # existed as packages and still drifted (slicer imported a private FTPS

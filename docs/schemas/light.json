@@ -3,12 +3,31 @@
   "$id": "https://platecli.local/schemas/light.json",
   "title": "platecli light success envelope",
   "type": "object",
-  "required": ["status", "command", "action", "changed"],
+  "required": [
+    "status",
+    "command",
+    "action",
+    "changed"
+  ],
   "properties": {
-    "status": {"const": "light_changed"},
-    "command": {"const": "light"},
-    "action": {"enum": ["on", "off"]},
-    "changed": {"type": "boolean"}
+    "status": {
+      "const": "light_changed",
+      "type": "string"
+    },
+    "command": {
+      "const": "light",
+      "type": "string"
+    },
+    "action": {
+      "enum": [
+        "on",
+        "off"
+      ],
+      "type": "string"
+    },
+    "changed": {
+      "type": "boolean"
+    }
   },
   "additionalProperties": true
 }

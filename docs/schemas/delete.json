@@ -3,13 +3,32 @@
   "$id": "https://platecli.local/schemas/delete.json",
   "title": "platecli delete success or confirmation envelope",
   "type": "object",
-  "required": ["status", "command", "file", "deleted"],
+  "required": [
+    "status",
+    "command",
+    "file",
+    "deleted"
+  ],
   "properties": {
-    "status": {"type": "string"},
-    "command": {"const": "delete"},
-    "file": {"type": "string"},
-    "deleted": {"type": "boolean"},
-    "next_command": {"type": "array"}
+    "status": {
+      "type": "string"
+    },
+    "command": {
+      "const": "delete",
+      "type": "string"
+    },
+    "file": {
+      "type": "string"
+    },
+    "deleted": {
+      "type": "boolean"
+    },
+    "next_command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
   },
   "additionalProperties": true
 }

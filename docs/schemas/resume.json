@@ -3,12 +3,32 @@
   "$id": "https://platecli.local/schemas/resume.json",
   "title": "platecli resume success or confirmation envelope",
   "type": "object",
-  "required": ["status", "command", "resumed"],
+  "required": [
+    "status",
+    "command",
+    "resumed"
+  ],
   "properties": {
-    "status": {"enum": ["resumed", "confirmation_required"]},
-    "command": {"const": "resume"},
-    "resumed": {"type": "boolean"},
-    "next_command": {"type": "array", "items": {"type": "string"}}
+    "status": {
+      "enum": [
+        "resumed",
+        "confirmation_required"
+      ],
+      "type": "string"
+    },
+    "command": {
+      "const": "resume",
+      "type": "string"
+    },
+    "resumed": {
+      "type": "boolean"
+    },
+    "next_command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
   },
   "additionalProperties": true
 }

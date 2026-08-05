@@ -3,13 +3,31 @@
   "$id": "https://platecli.local/schemas/doctor.json",
   "title": "platecli doctor result envelope",
   "type": "object",
-  "required": ["status", "command"],
+  "required": [
+    "status",
+    "command"
+  ],
   "properties": {
-    "status": {"type": "string"},
-    "command": {"const": "doctor"},
-    "checks": {"type": "array"},
-    "certificate_fingerprint": {},
-    "printer_reachable": {"type": "boolean"}
+    "status": {
+      "type": "string"
+    },
+    "command": {
+      "const": "doctor",
+      "type": "string"
+    },
+    "checks": {
+      "items": {},
+      "type": "array"
+    },
+    "certificate_fingerprint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "printer_reachable": {
+      "type": "boolean"
+    }
   },
   "additionalProperties": true
 }
