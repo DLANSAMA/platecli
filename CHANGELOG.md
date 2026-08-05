@@ -32,6 +32,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- **`plate tui` prepare screen is now two columns.** The form (source, material,
+  quality, supports, the Prepare/Settings buttons) sits on the left and what the
+  run produced — status, the time/filament estimate, and *Start print…* — on the
+  right, so the estimate you waited for is visible next to the form instead of a
+  scroll below it. The source box is one row with its label beside it, matching
+  the settings screen. Below 100 columns the two halves would be too narrow for
+  a material label, so the screen keeps the single-column layout there; on a
+  narrow terminal a finished prepare — or a failed one — now scrolls itself into
+  view instead of landing off-screen. The results side is a titled *Result* box
+  that says what pressing *Prepare* will put in it, rather than an empty half
+  screen with a disabled button floating in it, and the form's material,
+  quality, supports and button groups are one width, so the column has a
+  straight right edge instead of four different ones. Nothing about what the
+  screen does changed.
+- **`plate tui` no longer breaks up a long value in the print summary.** Model,
+  printer, material and estimate are laid out as a real two-column grid on both
+  the prepare screen and the confirmation dialog, so a value that wraps —
+  "Bambu Lab P1S, 0.4mm nozzle" on a narrow column — continues under the value
+  instead of restarting in the label column, where "nozzle" read like a field
+  name of its own. A long file name is now wrapped in full rather than cut short
+  with an ellipsis, and square brackets in a file name still render verbatim.
 - **`plate tui` advanced settings are clearer to fill in.** The screen previously
   asked you to hand-edit a `KEY=VALUE` string, with a `filament:` prefix to
   remember and no help on what a setting expects. Now the named flags with a

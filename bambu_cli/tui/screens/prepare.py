@@ -25,6 +25,7 @@ import argparse
 from functools import partial
 from typing import Any
 
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
@@ -42,8 +43,20 @@ from bambu_cli.interactive.core import (
     validate_source,
 )
 from bambu_cli.tui.services import PrepareResult
+from bambu_cli.tui.widgets.summary import summary_grid
 
 _SETUP_HINT = "Run 'plate setup' in a terminal, then start the TUI again."
+# What the results column says before there is a result. An empty bordered box
+# beside a filled-in form reads as a half-rendered widget, so the box says what
+# will land in it — and is replaced by the first real status, never mixed with
+# one.
+_RESULTS_TITLE = "Result"
+_RESULTS_PLACEHOLDER = (
+    'Nothing prepared yet.\n\nPress "Prepare" and the print time and filament estimate for this model will appear here.'
+)
+# Narrower than this and the two columns are too cramped for the radio labels,
+# so the prepare screen stacks them instead (see PrepareScreen._apply_layout).
+TWO_COLUMN_MIN_WIDTH = 100
 _PRESLICED_SETTINGS_CAVEAT = "Settings unavailable — pre-sliced file, material and slice settings are not applied."
 
 
@@ -125,50 +138,85 @@ class PrepareScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with VerticalScroll(id="prepare-body"):
-            yield Label("Model source — URL or local file path")
-            yield Input(
-                placeholder="https://… or ~/models/cube.stl",
-                id="source-input",
-            )
-            # markup=False: these render domain strings (paths, slicer errors)
-            # verbatim — a "[" in a filename must not be parsed as Rich markup.
-            yield Static("", id="source-error", markup=False)
-            yield Label("Material")
-            yield RadioSet(
-                *[
-                    RadioButton(
-                        _material_label(name),
-                        value=(name == MATERIAL_CHOICES[0]),
-                        id=f"material-{name.lower()}",
+        with VerticalScroll(id="prepare-body"), Horizontal(id="prepare-columns"):
+            # Left: everything the user fills in. Right: everything the run
+            # produces — so the estimate and "Start print…" land beside the form
+            # instead of a screen below it.
+            with VerticalScroll(id="prepare-inputs"):
+                # Label beside the control (the settings-screen idiom): a stacked
+                # label over a bordered Input costs four rows for one field.
+                with Horizontal(classes="settings-row"):
+                    yield Label("Model source", classes="settings-label")
+                    yield Input(
+                        placeholder="https://… or ~/models/cube.stl",
+                        id="source-input",
+                        classes="settings-input",
                     )
-                    for name in MATERIAL_CHOICES
-                ],
-                id="material-set",
-            )
-            yield Label("Quality")
-            yield RadioSet(
-                *[
-                    RadioButton(
-                        f"{name} — {QUALITY_GUIDANCE[name]}",
-                        value=(name == "standard"),
-                        id=f"quality-{name}",
-                    )
-                    for name in QUALITY_CHOICES
-                ],
-                id="quality-set",
-            )
-            yield Checkbox("Supports (big overhangs)", id="supports-check")
-            with Horizontal(id="prepare-actions"):
-                yield Button("Prepare", id="prepare-button", variant="primary")
-                yield Button("Settings…", id="settings-button")
-            yield Static("", id="settings-summary", markup=False)
-            yield Static("", id="prepare-status", markup=False)
-            yield Static("", id="preview", markup=False)
-            yield Button("Start print…", id="print-button", disabled=True)
+                # markup=False: these render domain strings (paths, slicer errors)
+                # verbatim — a "[" in a filename must not be parsed as Rich markup.
+                yield Static("", id="source-error", markup=False)
+                yield Label("Material", classes="prepare-group")
+                yield RadioSet(
+                    *[
+                        RadioButton(
+                            _material_label(name),
+                            value=(name == MATERIAL_CHOICES[0]),
+                            id=f"material-{name.lower()}",
+                        )
+                        for name in MATERIAL_CHOICES
+                    ],
+                    id="material-set",
+                )
+                yield Label("Quality", classes="prepare-group")
+                yield RadioSet(
+                    *[
+                        RadioButton(
+                            f"{name} — {QUALITY_GUIDANCE[name]}",
+                            value=(name == "standard"),
+                            id=f"quality-{name}",
+                        )
+                        for name in QUALITY_CHOICES
+                    ],
+                    id="quality-set",
+                )
+                yield Checkbox("Supports (big overhangs)", id="supports-check")
+                with Horizontal(id="prepare-actions"):
+                    yield Button("Prepare", id="prepare-button", variant="primary")
+                    yield Button("Settings…", id="settings-button")
+                # Beside the button it annotates ("Overrides: …", or why the
+                # settings door is shut) rather than in the results column,
+                # where it read as part of the preview.
+                yield Static("", id="settings-summary", markup=False)
+            with VerticalScroll(id="prepare-output"):
+                yield Static(_RESULTS_PLACEHOLDER, id="prepare-status", markup=False)
+                yield Static("", id="preview", markup=False)
+                yield Button("Start print…", id="print-button", disabled=True)
         yield Footer()
 
+    # --- responsive layout --------------------------------------------------
+
+    def _apply_layout(self, width: int) -> None:
+        """Two columns when there is room; stacked below ``TWO_COLUMN_MIN_WIDTH``.
+
+        Two halves of an 80-column terminal are ~38 columns each, which wraps
+        every material radio label ("ABS — strong, needs an enclosure  (detected
+        in AMS)"). Below the threshold the columns stack and ``#prepare-body``
+        scrolls, which is exactly the pre-restructure layout.
+        """
+        for columns in self.query("#prepare-columns"):
+            columns.set_class(width < TWO_COLUMN_MIN_WIDTH, "narrow")
+
+    def on_resize(self, event: events.Resize) -> None:
+        self._apply_layout(event.size.width)
+
     def on_mount(self) -> None:
+        # Resize normally arrives on mount, but the class must be right even for
+        # the first paint (and for a screen driven headlessly without one).
+        self._apply_layout(self.app.size.width)
+        # A framed box with no title is a box the reader has to identify (the
+        # same rule StatusPanel follows). round, not thick: a thick border
+        # renders as solid slabs top and bottom and reads as a broken widget.
+        self.query_one("#prepare-output").border_title = _RESULTS_TITLE
         self.query_one("#source-input", Input).focus()
         # The AMS read blocks on MQTT; do it off the UI thread and apply the
         # pre-selection when (and only when) it comes back with a known material.
@@ -444,6 +492,10 @@ class PrepareScreen(Screen):
             self.query_one("#print-button", Button).disabled = True
             status.update(result.error or "Preparing the model failed.")
             preview.update("")
+            # Stacked layout: the failure message lands below the fold exactly
+            # like a success does, and a run that silently appears to do nothing
+            # is the worse of the two.
+            self.call_after_refresh(partial(self._scroll_result_into_view, "#prepare-status"))
             return
         self.result = result
         self.query_one("#print-button", Button).disabled = False
@@ -454,7 +506,28 @@ class PrepareScreen(Screen):
         if presliced:
             self.query_one("#settings-summary", Static).update(_PRESLICED_SETTINGS_CAVEAT)
         status.update('Ready. Press "Start print…" to confirm.')
-        preview.update("\n".join(f"{label:<11}{value}" for label, value in result.rows))
+        # A grid, not f"{label:<11}{value}": a wrapped value used to continue in
+        # column 0 — inside the label column — so "Bambu Lab P1S, 0.4mm nozzle"
+        # read as a "Printer" row plus a field called "nozzle".
+        preview.update(summary_grid(result.rows))
+        # Stacked (narrow) layout only: the results sit below the form, so the
+        # estimate the user waited for would otherwise land off-screen. After a
+        # refresh, because the preview only just grew and scrolling against its
+        # old height stops short of the button.
+        self.call_after_refresh(partial(self._scroll_result_into_view, "#print-button"))
+
+    def _scroll_result_into_view(self, selector: str) -> None:
+        """Bring the finished run on-screen (a no-op when nothing scrolls).
+
+        On success the button is the last thing in the results column, so
+        scrolling *it* into view brings the whole preview with it; on failure
+        the message itself is the anchor, because it can be many lines long and
+        scrolling to the button below it would leave its first line above the
+        top of the screen.
+        """
+        if self._left_screen:
+            return
+        self.query_one(selector).scroll_visible(animate=False)
 
 
 def _material_label(name: str, *, detected: bool = False) -> str:

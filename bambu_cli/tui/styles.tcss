@@ -48,6 +48,71 @@ AmsPanel {
     padding: 0 2;
 }
 
+/* Two columns: the form on the left, what the run produced on the right, so
+   the estimate and "Start print…" are visible without scrolling past the form.
+   PrepareScreen adds .narrow below TWO_COLUMN_MIN_WIDTH columns, where two
+   halves are too thin for a material label and stacking reads better; there
+   #prepare-body does the scrolling instead of the columns. */
+#prepare-columns {
+    width: 100%;
+    height: 1fr;
+}
+
+#prepare-inputs {
+    width: 60;
+    height: 100%;
+    padding: 0 2 0 0;
+}
+
+/* A titled box, not a bare divider: before the first run this column holds only
+   a disabled button, and unframed that read as a half-rendered widget. round,
+   never thick — thick renders as solid slabs top and bottom (see 0d63378). */
+#prepare-output {
+    width: 1fr;
+    min-width: 24;
+    height: 100%;
+    border: round $primary;
+    border-title-color: $accent;
+    border-title-style: bold;
+    padding: 0 1;
+}
+
+#prepare-inputs .settings-label {
+    width: 14;
+}
+
+/* One form, not four boxes of unrelated size: the group controls all fill the
+   column, so its right edge is a straight line instead of a stair-step. */
+#prepare-inputs RadioSet,
+#prepare-inputs Checkbox,
+#prepare-inputs #prepare-actions {
+    width: 100%;
+}
+
+#prepare-actions Button {
+    width: 1fr;
+}
+
+.prepare-group {
+    text-style: bold;
+    color: $accent;
+    padding: 1 0 0 0;
+    height: 2;
+}
+
+#prepare-columns.narrow {
+    layout: vertical;
+    height: auto;
+}
+
+#prepare-columns.narrow > #prepare-inputs,
+#prepare-columns.narrow > #prepare-output {
+    width: 100%;
+    height: auto;
+    padding: 0;
+    border: none;
+}
+
 #source-error {
     color: $error;
     height: auto;

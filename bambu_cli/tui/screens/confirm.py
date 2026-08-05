@@ -239,16 +239,13 @@ def _with_output_tail(message: str, captured: str, *, lines: int = 3, width: int
 
 
 def _summary_table(rows: Any) -> Any:
-    """Render the preview rows as a compact label/value grid (empty if none)."""
-    from rich.table import Table
-    from rich.text import Text
+    """Render the preview rows as a compact label/value grid (empty if none).
 
-    table = Table.grid(padding=(0, 2))
-    table.add_column(justify="right", style="bold")
-    table.add_column()
-    for label, value in rows or []:
-        # Text(), not str: these rows carry filenames and slicer output, and a
-        # str cell is parsed as Rich markup — "model [remix].stl" would render
-        # as "model .stl", and "a[/b]c.gcode" would raise MarkupError.
-        table.add_row(Text(str(label)), Text(str(value)))
-    return table
+    The grid itself now lives in ``widgets/summary.py``: the prepare screen
+    renders the same rows and had its own (wrap-broken) formatter, and one grid
+    is the only way the two stay identical. Deferred import to keep this module
+    importable without touching rich until a modal is actually built.
+    """
+    from bambu_cli.tui.widgets.summary import summary_grid
+
+    return summary_grid(rows)
