@@ -107,9 +107,14 @@ It walks you from a model URL (or local file) to a running print without touchin
 ### Watch the printer while it works
 
 ```bash
-pip install 'platecli[tui]'
+pip install 'platecli[tui]'          # or: pipx install 'platecli[tui]'
+                                     # or: uv tool install 'platecli[tui]'
 plate tui    # or: plate tui --sim to explore it without a printer
 ```
+
+<sub>Install the extra the same way you installed `plate` — a `pip install` into your
+shell's Python does not reach a `pipx` / `uv tool` environment. Already installed
+without it? `pipx install --force 'platecli[tui]'` (or `pipx inject platecli textual`).</sub>
 
 `plate tui` is a live view of your printer: state, temperatures, layer and progress, and the AMS trays, on one screen that keeps updating — plus a job monitor that follows a running print to completion. You can start a print from it too, through the same prepare-and-confirm flow the wizard uses, so you never have to leave the screen.
 
@@ -127,7 +132,7 @@ It is a front-end, not new machinery: it slices and builds the `job` request thr
 - **Fully local & private** — talks straight to the printer over your LAN; no Bambu cloud account, ever.
 - **Deliberate-action gate** — physical commands refuse without `--confirm` (exit `5`), so a typo, a truncated argument list, or a replayed read-only command can't start a print. It is a gate against *accidents*, not an authorization boundary: `plate` cannot tell your `--confirm` from an agent's, so anything you let run `plate` can pass the flag. Sandbox agents accordingly.
 - **AI-agent ready** — every command speaks `--json` with published schemas, plus a `--sim` mode for hardware-free automation.
-- **Watch it live** — `plate status --monitor` follows a print with a live progress bar until it finishes.
+- **Watch it live** — `plate status --monitor` follows a print with a live progress bar until it finishes, or run the full-screen `plate tui` (optional `[tui]` extra) for a dashboard you can also start a print from.
 - **Fixes itself findable** — `plate doctor` checks network, FTPS, and MQTT health and tells you exactly what's wrong.
 - **Hardened where it counts** — TLS certificate pinning, SSRF-guarded downloads, and size-capped ZIP extraction.
 
@@ -155,7 +160,7 @@ you can put in a shell script or hand to an agent, use this.
 
 ## Built for AI agents
 
-Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a full fake printer for development without hardware, and the `--confirm` gate means physical actions never happen by accident. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
+Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a full fake printer for development without hardware, and the `--confirm` gate means physical actions never happen by accident. Two commands are deliberately human-only — the `go` wizard and the `tui` full-screen UI refuse `--json` and a non-TTY stdin with exit `5`; `plate job <url> --confirm` is the machine path that does the same work. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
 
 ## Documentation
 

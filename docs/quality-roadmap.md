@@ -15,13 +15,13 @@ Historical baseline (do not read as current), from the audit + full
 `pytest --cov=bambu_cli` on 2026-07-08: **368 tests**, **78%** line coverage
 (1105 / 4973 stmts missed), **130** `sys.exit` sites in `bambu_cli/`, **7**
 `@mockable` sites (def + 6 uses), **1** `BambuError` raise in production.
-The "Baseline" column below is that snapshot. **Current measured (2026-07-31,
-`feat/tui-settings-ux`): 1307 passed / 1308 collected, 88.53% branch coverage
-over 7755 statements (local Linux).** Read off the full CI matrix on `feat/tui`
-at `cc6f78c` (this branch has not reached CI yet)
-(CI runs a clean checkout, so its Linux legs sit a little higher):
-Windows 3.14 **88.09%** (still the binding leg), macOS 3.14 88.33%, Linux 3.9
-88.53% / 3.12 88.50% / 3.14 88.51%.
+The "Baseline" column below is that snapshot. **Current measured (2026-08-05, the
+released `0.5.0` commit `5b08720` on `main`): 1419 passed / 1 deselected, 89.1%
+branch coverage over 8120 statements (local Linux, py3.12).** The full CI matrix
+for that same commit (run `31044588411`; CI runs a clean checkout, so its numbers
+differ slightly from a local run — do not reconcile one to the other):
+Windows 3.14 **88.8%** (still the binding leg), macOS 3.14 89.1%, Linux 3.9
+89.3% / 3.12 89.2% / 3.14 89.2%.
 
 | Area | Baseline | Gate to A | Gate to A+ | Primary evidence |
 |------|----------|-----------|------------|------------------|
@@ -40,10 +40,13 @@ Windows 3.14 **88.09%** (still the binding leg), macOS 3.14 88.33%, Linux 3.9
 
 ## Scoreboard (current)
 
-Updated **2026-07-31** (TUI phases 1–5 landed; test/coverage numbers re-measured against CI run `30632442521`). Foundational phases
+Updated **2026-08-05** (`plate tui` shipped in **0.5.0**, PRs #97 + #104; test/coverage
+numbers re-measured against CI run `31044588411` on the release commit). Foundational phases
 (0/A/B) are done. Phase C **typing is done** (full package + `check_untyped_defs`);
-coverage floor is **83** (target 92). Phase D schemas largely landed but not
-complete for every command. The camera Docker bind default and camera pin
+coverage floor is **83** (target 92). Phase D's schema work is **complete** — every
+`--json` subcommand has a schema, and the schemas are now *generated* from
+`bambu_cli/contracts/` (`scripts/gen_schemas.py --check` is blocking in CI); what
+remains in D is the 1.0 prep itself, not the contracts. The camera Docker bind default and camera pin
 soft-fallback hardenings are now **fixed** (loopback-only default bind,
 fail-closed on pin mismatch and on `ssl.SSLError` during the handshake when a
 pin is configured); see [SECURITY.md](../SECURITY.md) for the remaining
@@ -61,9 +64,9 @@ security is not yet **A+**.
 | Correctness / bugs | **A** | dead flags fixed (global `--json` before subcommand); structured errors; purity greps; version single-sourced |
 | Typing | **A** | `uvx mypy -p bambu_cli` full package with `check_untyped_defs = true`; no residual excludes |
 | Error model | **A** | `sys.exit` only in `cli.py` (errors.py hits are docstrings); domain uses `abort` / `BambuError` |
-| Tests | **A−** | **1406** non-live tests collected / **1405** passing (2026-08-05; the Textual TUI phases 1-5 plus the structural refactor wave: layer-boundary enforcement, the Printables adapter's malformed-payload containment sweep, and round-trip tests proving each generated schema matches what its contract emits); **89.1%** coverage measured 2026-08-05 on Linux; CI floor **83**; per-module floors not enforced |
+| Tests | **A−** | **1420** non-live tests collected / **1419** passing (2026-08-05, `5b08720`; the Textual TUI phases 1-5 plus the structural refactor wave: layer-boundary enforcement, the Printables adapter's malformed-payload containment sweep, and round-trip tests proving each generated schema matches what its contract emits); **89.1%** branch coverage measured the same day on local Linux (89.2% on CI's Linux legs); CI floor **83**; per-module floors not enforced |
 | CI / release | **A−** | single pytest path; purity greps; bandit/audit/mypy blocking; **`--cov-fail-under=83`** (A+ target remains 92) |
-| Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS aligned (2026-07-24); prior AGENTS mypy-blocklist / backlog ≥98% claims corrected |
+| Docs / governance | **A−** | roadmap + backlog + SECURITY + AGENTS + CONTRIBUTING re-aligned in the 0.5.0 truth pass (2026-08-05); prior AGENTS mypy-blocklist / backlog ≥98% / "schemas incomplete" claims corrected. Not A+: `tests/test_docs_consistency.py` pins the coverage *floor* and the test count, but nothing pins the cited coverage *percentage*, so that number can still rot silently |
 | Product polish | **B+** | quality gates in place; still pre-1.0 Beta (version is single-sourced from `pyproject.toml`); coverage ratchet + camera defaults remain for 1.0 A+ |
 
 **Overall:** **solid A− / A** — error model, typing, security controls, architecture
@@ -71,16 +74,17 @@ security is not yet **A+**.
 is coverage toward 92 and documented camera hardenings. Tagging `v1.0.0` still requires §5.
 
 **Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26; bound by the Windows leg at 83.85%, not Linux's 84.10%).
-Measured branch total is **88.35%** on local Linux (2026-07-31), 88.51% on CI's Linux leg; the floor is set
+Measured branch total is **89.1%** on local Linux (2026-08-05, py3.12), 89.2% on CI's Linux legs; the floor is set
 at the multi-OS minimum so the matrix does not flake while still denying points
 of silent rot vs the old 79 gate.
 
-**Ratchet headroom (measured 2026-07-31, run `30632442521`):** every leg now sits
-above 88 — Windows 88.09%, macOS 88.33%, Linux 3.9/3.12/3.14 88.53/88.50/88.51% —
-against a gate of 83, so roughly five points of drift can pass unnoticed. Windows
-remains the binding leg, as it has at every ratchet. Raising the gate to **85** is
-supported by this data with ~3 points of margin; **88** is not, because Windows
-clears it by 0.09pt and would flake the matrix. Ratcheting means moving `ci.yml`,
+**Ratchet headroom (measured 2026-08-05, run `31044588411` on `5b08720`):** every
+leg now sits above 88 — Windows 88.8%, macOS 89.1%, Linux 3.9/3.12/3.14
+89.3/89.2/89.2% — against a gate of 83, so roughly six points of drift can pass
+unnoticed. Windows remains the binding leg, as it has at every ratchet. Raising
+the gate to **85** is supported by this data with ~3.8 points of margin; **88**
+now clears Windows by only 0.8pt, which is a thin margin for a matrix that has to
+stay green on every PR. Ratcheting means moving `ci.yml`,
 the citations in this file, and `docs/test-backlog.md` together — `tests/test_docs_consistency.py`
 and `tests/ci_workflow_smoke.py` both enforce that.
 
@@ -131,7 +135,7 @@ A+ for *this* project means all of the following are true simultaneously:
 | `slicer/` | ~75% | ≥85% | ≥92% |
 | `job/` | ~93% | ≥95% | ≥97% (keep) |
 | `commands/` | ~80% | ≥90% | ≥95% |
-| `tui/` (Textual front-end, optional extra) | measured 2026-07-31: **13 of 17 modules at 100%** (`app`/`deps`/`entry`/`services`/`settings_model`/`widgets/*`/`screens/dashboard`/`screens/help`); the other four are `screens/settings` 99.0%, `screens/confirm` 97.2%, `screens/prepare` 95.8%, `screens/monitor` 95.7% — **package minimum 95.7%** | ≥85% | ≥92% |
+| `tui/` (Textual front-end, optional extra) | measured 2026-08-05 (local Linux, after the #104 prepare-screen restructure that added `widgets/summary.py`): **14 of 18 modules at 100%** (`app`/`deps`/`entry`/`services`/`settings_model`/`widgets/*`/`screens/dashboard`/`screens/help`); the other four are `screens/settings` 98.4%, `screens/confirm` 97.3%, `screens/prepare` 96.1%, `screens/monitor` 95.8% — **package minimum 95.8%** | ≥85% | ≥92% |
 | JSON contract tests | partial (`test_json_contracts.py`) | every command | every command + schema file |
 | Property / adversarial tests | few | netsafety + zip + filenames | + redirect/SSRF fuzz |
 | Flakes in CI (30 consecutive green main runs) | unknown | 0 known | 0 |
@@ -636,11 +640,11 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 | 0 Trust & truth | **done** | local | 2026-07-08 | allow-private-ips, bare except, version single-source |
 | A Testing foundation | **done** | local | 2026-07-08 | TLS suite, markers, transport tests, cov~80% |
 | B Error model & seams | **done** | #11 | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed. **B.4** paths/jsonio/argutils extract done (domain no longer imports private cli helpers); **B.5** single pin helper done (PR #89) |
-| C Coverage & typing | **in progress** | #18 | 2026-07-09 | full-package mypy + `check_untyped_defs` done; cov ~84% with CI floor **83** (target 92); per-module floors not enforced |
-| D Contracts & 1.0 | **in progress** | local | — | schemas + contract harness + stability policy; remaining agent `--json` schemas land in follow-up PRs |
+| C Coverage & typing | **in progress** | #18 | — | full-package mypy + `check_untyped_defs` done (#18, 2026-07-09); **C.4** hermetic fake OrcaSlicer done; cov 89.2% on CI's Linux legs with CI floor **83** (target 92); per-module floors not enforced, so C.5 is the open item |
+| D Contracts & 1.0 | **in progress** | #101 | — | schemas + contract harness + stability policy done; **schemas are now generated** from `bambu_cli/contracts/` and every `--json` subcommand has one (#101). Open: support matrix (D.3), optional structured logging (D.5), and the 1.0 prep itself (D.6) |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
 | Doc truth pass | **done** | local | 2026-07-24 | versions de-literalized, prerequisites stated, camera guidance corrected, test/coverage numbers re-measured |
-| TUI (`plate tui`) | **done** (phases 1–5) | `feat/tui` | 2026-07-31 | Textual front-end over the shared `interactive/core.py`: dashboard, prepare, confirm modal (only `confirm=True` path), job monitor, help overlay, and advanced slice settings (the named `slice` flags plus a key/bucket/value override editor routed to `--set` / `--set-filament`). Optional `[tui]` extra; pilot-tested headlessly at 80×24; every `tui/` module ≥95.8% (measured 2026-08-01, most at 100%). **2026-08-01:** the "all settings" browser was cut before merge — it inferred each key's editor control from the values the installed profiles happened to hold, a tuned heuristic over OrcaSlicer's vocabulary that no test could catch drifting; see the cut note in [tui-plan.md](plans/tui-plan.md) if it is revisited |
+| TUI (`plate tui`) | **shipped in 0.5.0** | #97, #104 | 2026-08-05 | Textual front-end over the shared `interactive/core.py`: dashboard, prepare, confirm modal (only `confirm=True` path), job monitor, help overlay, and advanced slice settings (the named `slice` flags plus a key/bucket/value override editor routed to `--set` / `--set-filament`). Optional `[tui]` extra; pilot-tested headlessly at 80×24; every `tui/` module ≥95.8% (measured 2026-08-01, most at 100%). **2026-08-01:** the "all settings" browser was cut before merge — it inferred each key's editor control from the values the installed profiles happened to hold, a tuned heuristic over OrcaSlicer's vocabulary that no test could catch drifting; see the cut note in [tui-plan.md](plans/tui-plan.md) if it is revisited |
 
 > **Verified 2026-07-09** against a clean checkout — the "current scoreboard" above
 > was corrected the same day. Coverage floor raised 79→**81** (multi-OS minimum:
@@ -663,6 +667,16 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 > **Re-verified 2026-07-26**: 759 non-live tests passing; 83.6% branch coverage over
 > 5555 statements on Windows (Windows runs slightly below the Linux figure). Retained
 > as the dated record; superseded later the same day by the scoreboard above.
+>
+> **Re-verified 2026-08-05** (0.5.0 docs truth pass, commit `5b08720`): 1419 non-live
+> tests passing locally and on every CI leg but Windows (1414 + 5 skipped there);
+> 89.1% branch coverage over 8120 statements on local Linux, 88.8–89.3% across the
+> CI matrix (run `31044588411`). Floor holds at **83**. Corrected in this pass: the
+> claim that Phase D schemas were "not complete for every command" (they are, and
+> are generated), the pre-merge `feat/tui` framing of the TUI (shipped in 0.5.0),
+> and CONTRIBUTING's "coverage ~82% / helper extraction / TLS pin / remaining
+> schemas" gap list, all four of which had closed. Still **not** A+: coverage is
+> 89, not 92; no per-module floors; camera residuals stand.
 
 ### mockable count (burn-down)
 

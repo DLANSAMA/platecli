@@ -1,9 +1,14 @@
 # Implementation plan: interactive mode (`plate go`)
 
-**Status:** Draft for implementation — hand-off document for the implementing agent.
-**Prerequisite:** Ship **0.4.0** first (current `main` is `0.4.0.dev0` with an active
-Unreleased changelog). Interactive mode targets **0.5.0** on a stable base. Do not
-start Phase 1 until the 0.4.0 tag exists (see `docs/releasing.md`).
+**Status:** **Implemented — `plate go` shipped in 0.4.0.** Kept as the design record
+and rationale; it is no longer a to-do list, and the "current version" statements
+below are frozen at the time of writing. For current behaviour read
+[the manual](../manual.md#guided-mode-plate-go), not this file.
+
+*(Historical, as written:)* **Prerequisite:** Ship **0.4.0** first (`main` was
+`0.4.0.dev0` with an active Unreleased changelog). Interactive mode targeted
+**0.5.0** on a stable base; do not start Phase 1 until the 0.4.0 tag exists
+(see `docs/releasing.md`).
 
 ## 1. Goal
 

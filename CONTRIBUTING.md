@@ -14,6 +14,10 @@ uv sync --extra test   # test deps (pytest etc.) live in the "test" extra
 Plain `uv sync` installs runtime deps only — the test commands below then fail
 with `No module named pytest`. CI installs the same set via `uv pip install '.[test]'`.
 
+The `test` extra also pulls in `textual`, so the `plate tui` pilot tests run in the
+default suite. The user-facing install is the separate `[tui]` extra
+(`pip install 'platecli[tui]'`); Textual is never a runtime dependency.
+
 ## Running tests
 
 ```bash
@@ -91,7 +95,16 @@ uvx ruff format --check bambu_cli
 uvx mypy -p bambu_cli          # full package; check_untyped_defs; no residual excludes
 uvx bandit -c pyproject.toml -r bambu_cli -ll
 # pip-audit is also blocking in CI (dependency high/critical)
+
+# Also blocking in the same CI job, and cheap to run locally:
+python scripts/check_layers.py                 # import-layer boundaries
+uv run --python 3.12 --with pydantic python scripts/gen_schemas.py --check
 ```
+
+The lint job additionally runs three greps (no test-awareness in production code,
+`sys.exit` only in `cli.py`, no `@mockable`) and a `-m "security or contract"`
+pytest pass. `gen_schemas.py` is pinned to 3.12 because it needs 3.10+ to evaluate
+the contracts' `X | None` annotations — the package itself still runs on 3.9.
 
 CI pins these tool versions (see `.github/workflows/ci.yml`); running them unpinned locally is fine.
 
@@ -106,10 +119,14 @@ Agent/runtime rules: **[AGENTS.md](AGENTS.md)** (ships in sdist).
 Threat model: **[SECURITY.md](SECURITY.md)** (ships in sdist).  
 JSON contracts: **[docs/api.md](docs/api.md)** + **[docs/schemas/](docs/schemas/)** (ship in sdist).
 
-As of the 2026-07 codebase audit: overall **solid A− / A**. Main gaps to A+ / 1.0 are
-coverage (~82% vs target 92%), domain→`cli` helper extraction, single-sourced TLS pin
-verification, remaining JSON schemas, and a few camera-hardening items documented in
-SECURITY.md.
+As of 2026-08-05 (0.5.0): overall **solid A− / A**. The 2026-07 audit's four
+architecture/contract gaps have since closed — the domain→`cli` helper extraction
+(B.4), the single-sourced TLS pin verification (B.5), the remaining JSON schemas
+(now *generated* from `bambu_cli/contracts/`, one per `--json` subcommand), and the
+camera bind/pin-fallback hardenings. Main gaps to A+ / 1.0 are now coverage
+(89.2% measured on CI's Linux legs, CI floor **83**, target 92) and the camera
+residuals still listed in SECURITY.md. Do not read "A−/A" as "A+" — see the
+scoreboard for what is actually ticked.
 
 ## Code conventions
 
