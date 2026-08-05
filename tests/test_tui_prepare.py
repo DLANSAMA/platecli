@@ -612,6 +612,32 @@ async def test_narrow_terminal_stacks_the_columns(tmp_path):
         assert material.outer_size.height == len(("PLA", "PETG", "ABS", "TPU")) + 2  # + border
 
 
+async def test_detected_material_label_survives_the_form_scrollbar(tmp_path):
+    """A short terminal must not truncate WHICH material was detected.
+
+    The form is taller than a 25-row terminal, so #prepare-inputs grows a
+    vertical scrollbar — and a Textual scrollbar takes real cells rather than
+    overlaying. With the column at 60 that left the RadioSet 54 cells against a
+    53-cell button, then 52 once the scrollbar appeared, so the label rendered
+    as "…(detected in AMS" with the closing paren shaved off. Found by
+    recording the TUI and looking at the frames; no assertion had caught it.
+    """
+    _install_ready_settings(tmp_path)
+    app = PlateApp(_args(), _deps(ams_detector=lambda args: "PLA"))
+    async with app.run_test(size=(122, 25)) as pilot:
+        await _settle(pilot)
+        screen = await _open_prepare(pilot)
+
+        inputs = screen.query_one("#prepare-inputs")
+        assert inputs.show_vertical_scrollbar, "test is vacuous without the scrollbar"
+        from rich.text import Text
+
+        button = screen.query_one("#material-pla", RadioButton)
+        # +4 for the toggle glyph and its padding.
+        needed = Text.from_markup(str(button.label)).cell_len + 4
+        assert screen.query_one("#material-set").content_size.width >= needed
+
+
 async def test_narrow_terminal_scrolls_the_finished_run_into_view(tmp_path):
     """Stacked, the results start below the fold; the finished run must come up."""
     _install_ready_settings(tmp_path)
