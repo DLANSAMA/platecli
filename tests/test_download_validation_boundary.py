@@ -120,11 +120,15 @@ def test_reject_unsupported_extension_is_a_no_op_for_supported_types(capsys):
 
 
 def test_rejection_redacts_credentials_in_the_url(capsys):
-    secret = "https://bob:hunter2@example.com/archive.rar"
+    # Username-only + IP host: exercises the userinfo-stripping path without
+    # writing a literal `user:pass@host` or email into the repo, which
+    # tests/privacy_smoke.py rejects. Same convention as the sibling tests in
+    # test_job.py and test_mqtt_print_and_setup.py.
+    creds = "http://user@127.0.0.1/archive.rar"
     with pytest.raises(BambuError):
-        V._reject_unsupported_download_extension(_args(), secret, None, secret, "archive.rar")
+        V._reject_unsupported_download_extension(_args(), creds, None, creds, "archive.rar")
     emitted = capsys.readouterr().out
-    assert "hunter2" not in emitted, "credentials leaked into the error envelope"
+    assert "user@" not in emitted, "userinfo leaked into the error envelope"
 
 
 # --- unsupported content type ------------------------------------------------
