@@ -6,17 +6,17 @@
 This file is a short **remaining-gaps** list only. Refresh after each phase or audit.
 Do not treat historical “≥98% coverage” claims as current — see the snapshot below.
 
-## Snapshot (2026-07-31)
+## Snapshot (2026-08-05, release commit `5b08720`)
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **1406** collected / **1405** passing (measured 2026-08-05 on Linux; the Textual TUI phases 1-5 plus the structural refactor wave: layer-boundary enforcement, Printables-adapter containment, and generated-schema contract tests) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **89.1%** Linux measured 2026-08-05; **88.09%** Windows measured 2026-07-31 (not re-measured since); **floor 83** (Windows is the binding leg) | **≥92%** total; optional module floors |
+| Non-live tests collected | **1420** collected / **1419** passing (measured 2026-08-05 on Linux; the Textual TUI phases 1-5 plus the structural refactor wave: layer-boundary enforcement, Printables-adapter containment, and generated-schema contract tests) | ≥550 with zero known flakes ✅ size |
+| Line/branch coverage (CI) | CI run `31044588411`, 2026-08-05: **88.8%** Windows (the binding leg), 89.1% macOS, 89.2–89.3% Linux; **89.1%** measured the same day on local Linux; **floor 83** | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
-| JSON schemas | **26** files under `docs/schemas/` (`tui.json` added with the TUI) | every `--json` command + monitor goldens |
-| Mutation baseline | Pure safety modules; floor **40%** | hermetic Orca stub landed (C.4); re-run `mutmut` on `slicer/output.py` to raise its row |
+| JSON schemas | **26** files under `docs/schemas/`, **generated** from `bambu_cli/contracts/` (`tui.json` added with the TUI); coverage is derived from `build_parser()`, so a new subcommand cannot ship schema-less | monitor goldens; field-level api.md ↔ schema sync |
+| Mutation baseline | Pure safety modules; score **50.7%** measured 2026-08-04, CI floor raised 40 → **48** | the C.4 re-run happened and **disproved** the prediction: `slicer/output.py` stayed at 21.8% while its line coverage went 79.8% → 92.7%. See [mutation-baseline.md](mutation-baseline.md); raising that row needs a production refactor, not more tests |
 | Live printer | Documented opt-in harness | manual pre-release (optional scheduled lab) |
 | Product version | pre-1.0 Beta (single-sourced from `pyproject.toml`) | **v1.0.0** when roadmap §5 is complete |
 
@@ -50,7 +50,7 @@ Tracked in [SECURITY.md](../SECURITY.md) known limitations:
 |-----|-------|
 | Raise CI floor 83 → 85 → 88 → **92** | Residual: mqtt/ftps pin paths, pool recovery, wizard TTY, Orca process |
 | Per-module floors (optional) | mqtt / ftps / netsafety / download / camera |
-| ~~Hermetic fake Orca binary~~ | **Done (C.4).** `tests/fakes/orca_stub` + `tests/test_slice_stub_integration.py` run `cmd_slice` end-to-end through the real slicer subprocess (`_run_orcaslicer`/`_finalize_slice`); `slicer/output.py` line coverage 79.8%→~93%. Mutation re-run on that module still pending. |
+| ~~Hermetic fake Orca binary~~ | **Done (C.4).** `tests/fakes/orca_stub` + `tests/test_slice_stub_integration.py` run `cmd_slice` end-to-end through the real slicer subprocess (`_run_orcaslicer`/`_finalize_slice`); `slicer/output.py` line coverage 79.8%→92.7%. The mutation re-run is **done** (2026-08-04): the module's score did not move (21.8%), so the remaining work there is extracting the pure decision logic out of `_finalize_slice`, not more end-to-end tests. |
 
 ### P2 — Contracts & agent surface
 

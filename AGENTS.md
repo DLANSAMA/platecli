@@ -37,6 +37,8 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 
 | Module / package | Role |
 |------------------|------|
+| `bambu.py` | Thin entrypoint: the `plate` console script + a `main` re-export. Nothing else belongs here |
+| `printer.py` | `BambuPrinter` — the transport facade over `protocols/` (FTPS + MQTT); build it via `get_printer()` / `RuntimeContext.printer()` |
 | `cli.py` | `main()` dispatch and the **only** module holding `sys.exit`; re-exports `build_parser` from `cliparse` |
 | `cliparse.py` | The argparse tree (`build_parser`, `get_global_parser`, `JsonArgumentParser`). Split from `cli.py` so domain code can build a namespace without importing the entrypoint |
 | `paths.py` | Filesystem path helpers (`expand_path`, `display_path`, `path_for_message`, `exception_for_message`) shared by CLI and domain |
@@ -126,17 +128,19 @@ Published on PyPI as `platecli`; the installed command is `plate`.
 | **Wheel** | Runtime `bambu_cli` package only — no docs, scripts, or tests |
 | **Sdist** | Runtime + tests/scripts + **ship docs**: `README.md`, `AGENTS.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/api.md`, `docs/manual.md`, `docs/troubleshooting.md`, `docs/schemas/*` |
 
-**Repo-only (never in sdist/wheel):** `CONTRIBUTING.md`, `docs/quality-roadmap.md`, `docs/test-backlog.md`, `docs/mutation-baseline.md`, `docs/live-printer-smoke.md`, and local agent notes (not in repo). Enforced by `MANIFEST.in` + `tests/package_contents_smoke.py`.
+**Repo-only (never in sdist/wheel):** `CONTRIBUTING.md`, `docs/quality-roadmap.md`, `docs/test-backlog.md`, `docs/mutation-baseline.md`, `docs/live-printer-smoke.md`, `docs/releasing.md`, `docs/README.md`, `docs/plans/*`, and local agent notes (not in repo). `MANIFEST.in` ships only the files it lists, and `tests/package_contents_smoke.py` additionally asserts the first six are absent from the sdist (`FORBIDDEN_SDIST_FILES`).
 
 ## Quality gates (agents)
 
 | Gate | Command / note |
 |------|----------------|
 | Default tests | `uv run python -m pytest tests/ -q -m "not live"` — never contacts a printer |
-| Coverage (CI) | `--cov-fail-under=83` (CI run `30632442521`, 2026-07-31: Windows 88.09% / Linux 88.51% / macOS 88.33%; A+ target **92%** — see roadmap) |
+| Coverage (CI) | `--cov-fail-under=83` (CI run `31044588411` on `5b08720`, 2026-08-05: Windows 88.8% / Linux 3.9 89.3%, 3.12 89.2%, 3.14 89.2% / macOS 89.1%; A+ target **92%** — see roadmap) |
 | Lint | `uvx ruff check bambu_cli` + `uvx ruff format --check bambu_cli` |
 | Types | `uvx mypy -p bambu_cli` |
 | Security lint | `uvx bandit -c pyproject.toml -r bambu_cli -ll` |
+| Dependency audit | `pip-audit` over the exported lockfile (blocking high+; CI-only step) |
+| Contracts & layers | `python scripts/gen_schemas.py --check` and `python scripts/check_layers.py` — both blocking in the same lint job |
 | Smokes (not pytest) | `syntax`, `cli_help`, `ci_workflow`, `python_compat`, `dependency_resolution`, `release_readiness`, `privacy`, `agent_cli` — see [CONTRIBUTING.md](CONTRIBUTING.md). A green pytest says nothing about these. |
 | Mutation baseline | `./scripts/run_mutation_baseline.sh` — nightly / `workflow_dispatch` only; [docs/mutation-baseline.md](docs/mutation-baseline.md) |
 | Live printer | Opt-in only: `BAMBU_LIVE=1` + real config + `BAMBU_LIVE_SOURCE`. [docs/live-printer-smoke.md](docs/live-printer-smoke.md). Always ask the user before `--confirm` or `BAMBU_LIVE_PRINT_CONFIRM`. |

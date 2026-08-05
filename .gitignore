@@ -78,3 +78,12 @@ mutants/
 # hypothesis property-test cache (local machine paths; never ship)
 .hypothesis/
 
+
+# Raw VHS captures. The tapes write a full-length recording (docs/job-hero.mp4
+# is 2.3 MB of mostly dead air) and only the trimmed cut is worth committing —
+# scripts/trim_hero.sh turns one into the other. These are untracked AND were
+# unignored, so a `git add -A` swept a raw capture into an unrelated test PR
+# once (#102). Commit the *-post.* cut deliberately instead.
+docs/job-hero.mp4
+docs/*-raw.mp4
+docs/*-raw.gif

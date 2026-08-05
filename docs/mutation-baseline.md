@@ -1,7 +1,7 @@
 # Mutation testing baseline (Phase 3)
 
-**Baseline date:** 2026-07-09 (scores below; re-run before changing the floor)  
-**Doc refresh:** 2026-07-17 (scope/floor unchanged)  
+**Baseline date:** 2026-07-09 (original widened baseline; retained below for comparison)  
+**Current measurement:** 2026-08-04 — **50.7%**, floor raised 40 → **48** (re-run before changing the floor again)  
 **Tool:** mutmut 3.6.0  
 **Reproduce:** `./scripts/run_mutation_baseline.sh`  
 **CI:** `.github/workflows/mutation.yml` — `workflow_dispatch` + nightly `schedule` only  

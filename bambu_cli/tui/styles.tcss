@@ -58,8 +58,15 @@ AmsPanel {
     height: 1fr;
 }
 
+/* 62, not 60: the longest radio label is the AMS-detected material
+   ("PLA — easy, rigid, most models  (detected in AMS)") at 49 cells, and a
+   RadioButton adds 4 for its toggle and padding = 53. A 60-wide column leaves
+   the RadioSet 54 cells of content — one to spare — so the moment the form is
+   taller than the terminal and this column grows a scrollbar, content drops to
+   52 and the closing paren is clipped. Two extra columns absorb the scrollbar
+   instead of silently truncating which material was detected. */
 #prepare-inputs {
-    width: 60;
+    width: 62;
     height: 100%;
     padding: 0 2 0 0;
 }
