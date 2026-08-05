@@ -12,7 +12,12 @@ cd "$ROOT"
 # Documented in docs/mutation-baseline.md; keep CI and docs in sync.
 # Score = 100 * killed / max(1, killed + survived + timeout + suspicious + no_tests)
 # (mutmut "skipped"/equivalent rows are omitted from the denominator when absent).
-MUTATION_SCORE_FLOOR="${MUTATION_SCORE_FLOOR:-40}"
+#
+# MUST be exported: the score check below runs in a child python process, which
+# only inherits exported vars. Without this the child fell back to its own
+# hardcoded default, so a local run printed "floor: 40%" in this header and then
+# enforced a different number a few lines later.
+export MUTATION_SCORE_FLOOR="${MUTATION_SCORE_FLOOR:-48}"
 
 if [[ -x .venv/bin/mutmut ]]; then
   MUTMUT=(.venv/bin/mutmut)
@@ -50,7 +55,11 @@ import os
 import sys
 from pathlib import Path
 
-floor = float(os.environ.get("MUTATION_SCORE_FLOOR", "48"))
+floor_raw = os.environ.get("MUTATION_SCORE_FLOOR")
+if not floor_raw:
+    print("ERROR: MUTATION_SCORE_FLOOR not set — the caller must export it", file=sys.stderr)
+    sys.exit(2)
+floor = float(floor_raw)
 stats_path = Path("mutants/mutmut-cicd-stats.json")
 if not stats_path.is_file():
     print("ERROR: mutants/mutmut-cicd-stats.json missing after mutmut run", file=sys.stderr)

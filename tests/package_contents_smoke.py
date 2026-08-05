@@ -47,10 +47,11 @@ REQUIRED_SDIST_FILES = {
     "tests/test_config_and_logging.py",
     "tests/test_protocol_clients.py",
     "tests/test_cli_entry.py",
-    "tests/test_printer_commands.py",
+    "tests/test_cmd_status.py",
+    "tests/test_cmd_print.py",
     "tests/test_slice_cmd.py",
     "tests/test_download_cmd.py",
-    "tests/test_camera_cmd.py",
+    "tests/test_camera_capture.py",
     "tests/test_doctor_and_safety.py",
     "tests/contracts/test_schema_validation.py",
 }
