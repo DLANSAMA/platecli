@@ -54,7 +54,7 @@ classifiers = [
 # text comes back empty, an app.run_test()/pilot timing change between 1.x and
 # 8.x). Staying capped below 2.0 until that TUI-test breakage is diagnosed and
 # fixed on a newer textual.
-tui = ["textual>=0.86,<2.0"]
+tui = ["textual>=0.86,<9.0"]
 test = [
     "pytest",
     "pytest-cov",
@@ -62,7 +62,7 @@ test = [
     "pytest-asyncio",
     "mutmut>=3.0",
     "hypothesis>=6.0",
-    "textual>=0.86,<2.0",
+    "textual>=0.86,<9.0",
     # Build-time only: scripts/gen_schemas.py derives docs/schemas/*.json from
     # the dataclasses in bambu_cli.contracts. Deliberately NOT a runtime
     # dependency — bambu_cli never imports pydantic, because emit_json owns
