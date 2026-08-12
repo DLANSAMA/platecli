@@ -466,10 +466,15 @@ def test_tuideps_defaults_build_the_real_collaborators():
     from bambu_cli.tui.services import MonitorService, PipelineService, StatusService
 
     deps = TuiDeps()
-    assert isinstance(deps.get_status_provider(), StatusService)
+    provider = deps.get_status_provider()
+    assert isinstance(provider, StatusService)
+    assert deps.get_status_provider() is provider
     assert isinstance(deps.get_steps(), CoreGoSteps)
     assert isinstance(deps.get_pipeline(), PipelineService)
-    assert isinstance(deps.get_monitor_service(), MonitorService)
+    monitor = deps.get_monitor_service()
+    assert isinstance(monitor, MonitorService)
+    assert deps.get_monitor_service() is monitor
+    assert monitor._provider() is provider
     assert deps.get_ams_detector() is read_loaded_ams_material
     assert deps.get_poll_interval() == 3.0
 
@@ -692,14 +697,32 @@ def test_status_service_captures_every_failure_shape(monkeypatch):
     from bambu_cli.tui.services import StatusService, _short_error
 
     class EmptyPrinter:
+        def hold_mqtt(self, **kwargs):
+            pass
+
+        def release_mqtt(self):
+            pass
+
         def status(self):
             return {}
 
     class BoomPrinter:
+        def hold_mqtt(self, **kwargs):
+            pass
+
+        def release_mqtt(self):
+            pass
+
         def status(self):
             raise RuntimeError("mqtt exploded")
 
     class SilentPrinter:
+        def hold_mqtt(self, **kwargs):
+            pass
+
+        def release_mqtt(self):
+            pass
+
         def status(self):
             raise OSError()
 
@@ -717,6 +740,45 @@ def test_status_service_captures_every_failure_shape(monkeypatch):
     ctx.printer.return_value = SilentPrinter()
     assert StatusService().fetch(_args()).error == "Printer unreachable (OSError)."
     assert _short_error(ValueError("plain")) == "plain"
+
+
+def test_status_service_holds_one_printer_and_releases_mqtt():
+    from bambu_cli.tui.services import StatusService
+
+    class RecordingPrinter:
+        def __init__(self):
+            self.holds = 0
+            self.releases = 0
+            self.status_calls = 0
+
+        def hold_mqtt(self, **kwargs):
+            self.holds += 1
+
+        def release_mqtt(self):
+            self.releases += 1
+
+        def status(self):
+            self.status_calls += 1
+            return {
+                "gcode_state": "IDLE",
+                "mc_percent": 0,
+                "bed_temper": 25,
+                "nozzle_temper": 25,
+            }
+
+    printer = RecordingPrinter()
+    ctx = MagicMock()
+    ctx.printer.return_value = printer
+    service = StatusService(ctx=ctx)
+    first = service.fetch(_args())
+    second = service.fetch(_args())
+    assert first.ok and second.ok
+    assert printer.holds == 1
+    assert printer.status_calls == 2
+    assert ctx.printer.call_count == 1
+    service.close()
+    service.close()
+    assert printer.releases == 1
 
 
 def test_status_lines_show_targets_and_file():

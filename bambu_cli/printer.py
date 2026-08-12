@@ -4,6 +4,7 @@ import logging
 import os
 import secrets
 import ssl
+import threading
 import time
 from typing import Any, Optional
 
@@ -46,6 +47,38 @@ class BambuPrinter:
         # Network timeouts
         self.mqtt_timeout = 5.0
         self.ftps_timeout = 15.0
+
+        # Long-lived MQTT session. None for one-shot CLI (connect + teardown).
+        # The TUI calls hold_mqtt() so dashboard/monitor refreshes reuse one
+        # TLS connection instead of opening a new one every 10s.
+        self._mqtt_session: Any = None
+        self._mqtt_hold_lock = threading.Lock()
+
+    def hold_mqtt(self, *, client_factory=None) -> None:
+        """Keep one MQTT client for subsequent status/send_command/get_version.
+
+        No-op in simulation mode (nothing opens a socket). Safe to call twice.
+        Pair with ``release_mqtt()`` so the loop thread and socket do not leak.
+        """
+        if self.simulation_mode:
+            return
+        with self._mqtt_hold_lock:
+            if self._mqtt_session is None:
+                from bambu_cli.protocols.mqtt_session import MqttSession
+
+                self._mqtt_session = MqttSession(self, client_factory=client_factory)
+
+    def release_mqtt(self) -> None:
+        """Disconnect a held MQTT session. Safe to call twice."""
+        with self._mqtt_hold_lock:
+            session = self._mqtt_session
+            self._mqtt_session = None
+        if session is not None:
+            session.close()
+
+    @property
+    def mqtt_held(self) -> bool:
+        return self._mqtt_session is not None
 
     def send_command(self, payload: str, timeout: Optional[float] = None, retries: int = 2) -> bool:
         """Send a JSON command payload via MQTT."""

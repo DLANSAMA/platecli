@@ -30,6 +30,7 @@ Core printer interaction is `BambuPrinter` in `bambu_cli/printer.py`. Agents and
 - Secret-bearing files are tightened to `0600` automatically on POSIX: config.json on load, and the `access_code_file` when `load_access_code()` reads it. Windows relies on NTFS ACLs (see [SECURITY.md](SECURITY.md)).
 - Network operations support `timeout` and `retries` through `printer.send_command()` and `printer.status()`.
 - `printer.status()` returns a **complete** state snapshot, never a partial MQTT delta: the printer streams incremental updates on its report topic and only answers `pushall` with the whole state, so report messages are merged and the wait continues until `gcode_state`, `mc_percent`, `bed_temper`, and `nozzle_temper` are all present. If only deltas arrive it raises `PrinterStatusIncomplete` (exit `6`) instead of returning a partial — so `plate --json status` never emits a `printer` object missing `gcode_state`. Pass `require_complete=False` for liveness probes that only need to know MQTT works (this is what `doctor` and `print --dry-run` do).
+- A long-lived process can call `printer.hold_mqtt()` so `status` / `send_command` / `get_version` reuse one TLS session. The TUI does this: dashboard and monitor refreshes must not open a new connection every few seconds. One-shot CLI commands still connect and tear down. Always pair with `release_mqtt()` so the paho loop thread does not leak (CI runs with `-W error::ResourceWarning`).
 
 ### Module layout
 

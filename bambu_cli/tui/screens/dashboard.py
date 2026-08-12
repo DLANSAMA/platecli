@@ -3,10 +3,12 @@
 The blocking ``StatusService.fetch`` (``printer.status()`` waits on a
 ``threading.Event``) runs in a Textual *thread* worker so the UI never freezes;
 its result is applied to the widgets on the main thread via
-``App.call_from_thread`` (widget updates must not run off-thread). A refresh
-fires on ``r`` and on a 10 s interval that is only armed while this screen is
-active (disarmed on suspend, re-armed on resume) and cancelled on unmount — a
-leaked timer would trip the ``-W error::ResourceWarning`` CI mode.
+``App.call_from_thread`` (widget updates must not run off-thread). The service
+holds one MQTT session for the process, so a refresh does not open a new TLS
+connection. A refresh fires on ``r`` and on a 10 s interval that is only armed
+while this screen is active (disarmed on suspend, re-armed on resume) and
+cancelled on unmount — a leaked timer would trip the ``-W error::ResourceWarning``
+CI mode.
 
 A failed fetch is an ordinary ``StatusSnapshot(ok=False)`` value: the panels
 render an inline "unreachable" state and the app keeps running.

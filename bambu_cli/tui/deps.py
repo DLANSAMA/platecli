@@ -48,9 +48,9 @@ class TuiDeps:
     poll_interval: float = 3.0
 
     def get_status_provider(self) -> Any:
-        if self.status_provider is not None:
-            return self.status_provider
-        return StatusService()
+        if self.status_provider is None:
+            self.status_provider = StatusService()
+        return self.status_provider
 
     def get_steps(self) -> Any:
         if self.steps is not None:
@@ -63,9 +63,9 @@ class TuiDeps:
         return PipelineService(steps=self.get_steps())
 
     def get_monitor_service(self) -> Any:
-        if self.monitor_service is not None:
-            return self.monitor_service
-        return MonitorService(self.get_status_provider())
+        if self.monitor_service is None:
+            self.monitor_service = MonitorService(self.get_status_provider())
+        return self.monitor_service
 
     def get_poll_interval(self) -> float:
         return self.poll_interval

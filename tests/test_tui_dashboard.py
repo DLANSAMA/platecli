@@ -255,3 +255,34 @@ async def test_ams_panel_survives_a_markup_shaped_filament_type():
         await pilot.pause()
         text = _all_text(app)
     assert "a[/b]c" in text
+
+
+async def test_dashboard_timer_disarms_on_suspend_and_unmount():
+    """A leaked interval would trip ResourceWarning-as-error in CI."""
+    provider = FakeStatusProvider([_IDLE_SNAPSHOT])
+    app = PlateApp(_args(), TuiDeps(status_provider=provider))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        dash = app.screen
+        assert dash._timer is not None
+        dash.on_screen_suspend()
+        assert dash._timer is None
+        dash.on_screen_resume()
+        assert dash._timer is not None
+    assert dash._timer is None
+
+
+async def test_quit_releases_the_status_provider():
+    closed = []
+
+    class ClosingProvider(FakeStatusProvider):
+        def close(self):
+            closed.append(True)
+
+    provider = ClosingProvider([_IDLE_SNAPSHOT])
+    app = PlateApp(_args(), TuiDeps(status_provider=provider))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("q")
+        await pilot.pause()
+    assert closed

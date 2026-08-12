@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- The TUI dashboard and monitor keep one MQTT TLS session for the process
+  instead of opening a new connection on every refresh. One-shot CLI commands
+  still connect and tear down.
+
 - `--json` emitters construct `bambu_cli.contracts` objects. `status --json`
   no longer flattens firmware fields onto the envelope; they stay under
   `printer`. Errors go through `ErrorEnvelope`; `job` success/failure through
