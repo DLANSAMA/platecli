@@ -238,7 +238,7 @@ class TestBambuSimulation(unittest.TestCase):
         with (
             settings_ctx(simulation=True),
             patch("bambu_cli.commands.status.logger", mock_logger),
-            patch("bambu_cli.protocols.mqtt.logger", mock_logger),
+            patch("bambu_cli.protocols.mqtt_cmd.logger", mock_logger),
         ):
             cmd_status(args)
             self.assertTrue(

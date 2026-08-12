@@ -18,7 +18,7 @@ sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli.protocols import ftps as ftps_mod  # noqa: E402
-from bambu_cli.protocols import mqtt as mqtt_mod  # noqa: E402
+from bambu_cli.protocols import mqtt_tls as mqtt_tls  # noqa: E402
 from tests.bambu_test_base import _test_printer  # noqa: E402
 
 pytestmark = pytest.mark.security
@@ -28,129 +28,78 @@ _FP = hashlib.sha256(_DER).hexdigest()
 _FP_OTHER = "ab" * 32
 
 
-def _mqtt_client_with_pin_context(cert_fingerprint: str):
-    """Build an MQTT client under a fake SSLContext; return (client, ctx, base_wrap)."""
-    tls_sock = MagicMock(name="tls_sock")
-    tls_sock.getpeercert.return_value = _DER
-
-    ctx_inst = MagicMock(name="ssl_context")
-    base_wrap = MagicMock(return_value=tls_sock)
-    ctx_inst.wrap_socket = base_wrap
-
-    mock_client = MagicMock(name="mqtt_client")
-    with (
-        patch.object(mqtt_mod, "mqtt") as mock_mqtt_mod,
-        patch("ssl.SSLContext", return_value=ctx_inst),
-    ):
-        mock_mqtt_mod.Client.return_value = mock_client
-        mock_mqtt_mod.CallbackAPIVersion.VERSION2 = "v2"
-        printer = _test_printer(cert_fingerprint=cert_fingerprint, insecure_tls=False)
-        client = mqtt_mod.create_mqtt_client(printer)
-    return client, ctx_inst, base_wrap, tls_sock, mock_client
-
-
-def test_mqtt_create_client_with_pin_uses_context_and_insecure_flag():
-    client, ctx_inst, _base, _tls, mock_client = _mqtt_client_with_pin_context(_FP)
-    assert client is mock_client
-    mock_client.tls_set_context.assert_called_once_with(ctx_inst)
-    mock_client.tls_insecure_set.assert_called_once_with(True)
-    mock_client.tls_set.assert_not_called()
-
-
-def test_mqtt_pin_match_allows_wrap():
-    _client, ctx_inst, base_wrap, tls_sock, _mc = _mqtt_client_with_pin_context(_FP)
-    pinned_wrap = ctx_inst.wrap_socket
-    assert pinned_wrap is not base_wrap
-    assert pinned_wrap(object(), server_hostname="printer.local") is tls_sock
-    base_wrap.assert_called()
-
-
-def test_mqtt_pin_mismatch_raises_sslerror():
-    _client, ctx_inst, base_wrap, tls_sock, _mc = _mqtt_client_with_pin_context(_FP)
-    tls_sock.getpeercert.return_value = b"\x00wrong-cert"
-    with pytest.raises(ssl.SSLError, match="fingerprint mismatch"):
-        ctx_inst.wrap_socket(object())
-
-
-def test_mqtt_pin_missing_peer_cert_raises():
-    _client, ctx_inst, _base, tls_sock, _mc = _mqtt_client_with_pin_context(_FP)
-    tls_sock.getpeercert.return_value = None
-    with pytest.raises(ssl.SSLError, match="No peer certificate"):
-        ctx_inst.wrap_socket(object())
-
-
-def test_mqtt_pin_deferred_until_handshake():
-    """paho often connects with handshake deferred; pin must run on do_handshake."""
-    der = _DER
-    fp = _FP
-    tls_sock = MagicMock()
-    # First getpeercert (handshake probe) raises; after do_handshake it returns der.
+def _tls_sock(der=_DER):
+    tls = MagicMock(name="tls_sock")
     state = {"ready": False}
+
+    def do_handshake(*a, **k):
+        state["ready"] = True
 
     def getpeercert(binary_form=False):
         if not state["ready"]:
             raise ValueError("handshake not done")
         return der
 
-    tls_sock.getpeercert.side_effect = getpeercert
+    tls.do_handshake.side_effect = do_handshake
+    tls.getpeercert.side_effect = getpeercert
+    tls._pin_state = state
+    return tls
 
-    def do_handshake(*a, **k):
-        state["ready"] = True
-        return None
 
-    tls_sock.do_handshake = do_handshake
-
-    ctx_inst = MagicMock()
-    base_wrap = MagicMock(return_value=tls_sock)
-    ctx_inst.wrap_socket = base_wrap
-    mock_client = MagicMock()
-
-    with (
-        patch.object(mqtt_mod, "mqtt") as mock_mqtt_mod,
-        patch("ssl.SSLContext", return_value=ctx_inst),
-    ):
+def test_mqtt_create_client_with_pin_uses_pinning_context():
+    mock_client = MagicMock(name="mqtt_client")
+    with patch.object(mqtt_tls, "mqtt") as mock_mqtt_mod:
         mock_mqtt_mod.Client.return_value = mock_client
         mock_mqtt_mod.CallbackAPIVersion.VERSION2 = "v2"
-        mqtt_mod.create_mqtt_client(_test_printer(cert_fingerprint=fp))
+        client = mqtt_tls.create_mqtt_client(_test_printer(cert_fingerprint=_FP, insecure_tls=False))
+    assert client is mock_client
+    mock_client.tls_set_context.assert_called_once()
+    ctx = mock_client.tls_set_context.call_args[0][0]
+    assert isinstance(ctx, mqtt_tls.PinningSSLContext)
+    assert ctx.expected_fingerprint == _FP
+    mock_client.tls_insecure_set.assert_called_once_with(True)
+    mock_client.tls_set.assert_not_called()
 
-    out = ctx_inst.wrap_socket(object())
-    assert out is tls_sock
-    # Handshake wrapper installed; invoking it must pin successfully.
-    out.do_handshake()
-    assert state["ready"] is True
+
+def test_pinning_context_match_handshakes_then_verifies():
+    tls = _tls_sock(_DER)
+    ctx = mqtt_tls.pinning_ssl_context(_FP)
+    with patch.object(ssl.SSLContext, "wrap_socket", return_value=tls) as super_wrap:
+        assert ctx.wrap_socket(object(), server_hostname="printer.local") is tls
+    super_wrap.assert_called()
+    tls.do_handshake.assert_called_once()
+    assert tls._pin_state["ready"] is True
 
 
-def test_mqtt_pin_deferred_mismatch_on_handshake():
-    tls_sock = MagicMock()
-    state = {"ready": False}
-
-    def getpeercert(binary_form=False):
-        if not state["ready"]:
-            raise ValueError("handshake not done")
-        return b"\xffnot-the-pinned-cert"
-
-    tls_sock.getpeercert.side_effect = getpeercert
-
-    def do_handshake(*a, **k):
-        state["ready"] = True
-
-    tls_sock.do_handshake = do_handshake
-
-    ctx_inst = MagicMock()
-    ctx_inst.wrap_socket = MagicMock(return_value=tls_sock)
-    mock_client = MagicMock()
-
+def test_pinning_context_mismatch_raises_sslerror():
+    tls = _tls_sock(b"\x00wrong-cert")
+    ctx = mqtt_tls.pinning_ssl_context(_FP)
     with (
-        patch.object(mqtt_mod, "mqtt") as mock_mqtt_mod,
-        patch("ssl.SSLContext", return_value=ctx_inst),
+        patch.object(ssl.SSLContext, "wrap_socket", return_value=tls),
+        pytest.raises(ssl.SSLError, match="fingerprint mismatch"),
     ):
-        mock_mqtt_mod.Client.return_value = mock_client
-        mock_mqtt_mod.CallbackAPIVersion.VERSION2 = "v2"
-        mqtt_mod.create_mqtt_client(_test_printer(cert_fingerprint=_FP))
+        ctx.wrap_socket(object())
+    tls.do_handshake.assert_called_once()
 
-    sock = ctx_inst.wrap_socket(object())
-    with pytest.raises(ssl.SSLError, match="fingerprint mismatch"):
-        sock.do_handshake()
+
+def test_pinning_context_missing_peer_cert_raises():
+    tls = _tls_sock(None)
+    ctx = mqtt_tls.pinning_ssl_context(_FP)
+    with (
+        patch.object(ssl.SSLContext, "wrap_socket", return_value=tls),
+        pytest.raises(ssl.SSLError, match="No peer certificate"),
+    ):
+        ctx.wrap_socket(object())
+
+
+def test_pinning_context_malformed_pin_raises():
+    tls = _tls_sock(_DER)
+    ctx = mqtt_tls.pinning_ssl_context("а" + "b" * 63)
+    with (
+        patch.object(ssl.SSLContext, "wrap_socket", return_value=tls),
+        pytest.raises(ssl.SSLError, match="[Mm]alformed"),
+    ):
+        ctx.wrap_socket(object())
 
 
 def test_ftps_pin_match_on_connect():

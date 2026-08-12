@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- MQTT client construction, command/status, print-ack, and the monitor loop
+  live in separate `protocols/mqtt_*.py` modules. TLS pinning uses a real
+  `SSLContext` subclass (`PinningSSLContext`) instead of patching
+  `wrap_socket` on a stock context.
+
 - **`plate snapshot` no longer falls back to the Docker streamer by default.**
   The streamer does not honour `cert_fingerprint`, so a failed direct grab now
   aborts unless you set `camera_allow_streamer` in config or pass

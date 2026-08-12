@@ -108,7 +108,7 @@ def test_probe_cert_fingerprint_reads_der():
     ctx = MagicMock()
     ctx.wrap_socket.return_value = tls
     with (
-        patch("bambu_cli.protocols.mqtt.socket.create_connection", return_value=raw_cm),
+        patch("bambu_cli.protocols.mqtt_tls.socket.create_connection", return_value=raw_cm),
         patch("ssl.SSLContext", return_value=ctx),
     ):
         fp = mqtt_mod.probe_cert_fingerprint("10.0.0.1", 990, timeout=1)
