@@ -20,7 +20,6 @@ def test_status_success_shape(monkeypatch, tmp_path, capsys):
                 "status": {"enum": ["ok"]},
                 "command": {"enum": ["status"]},
                 "printer": DICT,
-                "gcode_state": STR,
             },
         },
     )

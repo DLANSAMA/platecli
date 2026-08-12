@@ -171,16 +171,18 @@ def _finalize_slice(
             abort("", exit_code=EXIT_FILE_ERROR)
         logger.info(f"✅ Sliced: {_path_for_message(outpath)} ({size // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
+            from bambu_cli.contracts import Slice
+
             emit_json(
-                {
-                    "status": "sliced",
-                    "command": "slice",
-                    "file": _expand_path(args.file),
-                    "path": outpath,
-                    "filename": os.path.basename(outpath),
-                    "bytes": size,
-                    "step_converted": step_converted,
-                }
+                Slice(
+                    status="sliced",
+                    command="slice",
+                    file=_expand_path(args.file),
+                    path=outpath,
+                    filename=os.path.basename(outpath),
+                    bytes=size,
+                    step_converted=step_converted,
+                )
             )
         return outpath
     else:

@@ -134,7 +134,10 @@ class TestSnapshotJsonMetadata(unittest.TestCase):
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=len(frame_data)),
             patch("bambu_cli.commands.snapshot._ensure_parent_dir"),
-            patch("bambu_cli.commands.snapshot.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
+            patch(
+                "bambu_cli.commands.snapshot.emit_json",
+                side_effect=lambda d: buf.write(json.dumps(d.to_payload() if hasattr(d, "to_payload") else d)),
+            ),
         ):
             cmd_snapshot(
                 args,
@@ -170,7 +173,10 @@ class TestSnapshotJsonMetadata(unittest.TestCase):
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=len(frame_data)),
             patch("bambu_cli.commands.snapshot._ensure_parent_dir"),
-            patch("bambu_cli.commands.snapshot.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
+            patch(
+                "bambu_cli.commands.snapshot.emit_json",
+                side_effect=lambda d: buf.write(json.dumps(d.to_payload() if hasattr(d, "to_payload") else d)),
+            ),
             settings_ctx(camera_allow_streamer=True),
         ):
             cmd_snapshot(

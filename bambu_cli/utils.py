@@ -154,15 +154,20 @@ def emit_json_error(args, command, exit_code, error, failed_step=None, **extra):
     global _JSON_EMITTED
     _JSON_EMITTED = True
     global _LAST_ERROR_PAYLOAD
-    payload = {
-        "status": "error",
-        "command": command,
-        "exit_code": exit_code,
-        "error": error,
-    }
-    if failed_step:
-        payload["failed_step"] = failed_step
-    payload.update(extra)
+    from bambu_cli.contracts import ErrorEnvelope
+
+    envelope = ErrorEnvelope(
+        status="error",
+        command=command,
+        exit_code=exit_code,
+        error=error,
+        failed_step=failed_step,
+        printer_error_code=extra.pop("printer_error_code", None),
+        printer_error_code_hex=extra.pop("printer_error_code_hex", None),
+        next_command=extra.pop("next_command", None),
+        detail=extra.pop("detail", None),
+    )
+    payload = envelope.to_payload(**extra)
     _LAST_ERROR_PAYLOAD = payload
     if not bool(_namespace_get(args, "json", False)):
         return
@@ -185,6 +190,15 @@ def record_error_detail(command, exit_code, error, failed_step=None, **extra):
 
 def _record_download_success(args, payload):
     global _LAST_DOWNLOAD_PAYLOAD
+    from bambu_cli.contracts import Download
+
+    if isinstance(payload, dict):
+        import dataclasses
+
+        known = {field.name for field in dataclasses.fields(Download)}
+        kwargs = {key: payload[key] for key in known if key in payload}
+        extras = {key: value for key, value in payload.items() if key not in known}
+        payload = Download(**kwargs).to_payload(**extras)
     _LAST_DOWNLOAD_PAYLOAD = payload
     if bool(_namespace_get(args, "json", False)):
         emit_json(payload)

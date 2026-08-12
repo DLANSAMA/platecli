@@ -169,9 +169,7 @@ One-shot query returns printer state, temperatures, and a normalized AMS block:
 }
 ```
 
-Top-level keys also mirror common fields from the raw printer map for convenience.
-
-`printer` is always a complete state snapshot. The printer publishes incremental
+`printer` is always a complete state snapshot. Envelope keys stay closed: firmware extras live under `printer`, not as siblings of `status` / `command`. The printer publishes incremental
 deltas on its MQTT report topic and answers `pushall` with the whole state, so
 `status` merges report messages and keeps waiting (re-requesting on each retry)
 until `gcode_state`, `mc_percent`, `bed_temper`, and `nozzle_temper` are all

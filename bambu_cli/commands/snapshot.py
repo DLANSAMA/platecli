@@ -274,16 +274,18 @@ def cmd_snapshot(
         sha256 = hashlib.sha256(_frame).hexdigest()
         logger.info(f"\U0001f4f8 Snapshot saved: {_path_for_message(outpath)} ({size // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
+            from bambu_cli.contracts import Snapshot
+
             emit_json(
-                {
-                    "status": "saved",
-                    "command": "snapshot",
-                    "output": outpath,
-                    "size_bytes": size,
-                    "captured_at": captured_at,
-                    "sha256": sha256,
-                    "method": "direct",
-                }
+                Snapshot(
+                    status="saved",
+                    command="snapshot",
+                    output=outpath,
+                    size_bytes=size,
+                    captured_at=captured_at,
+                    sha256=sha256,
+                    method="direct",
+                )
             )
         return
 
@@ -416,17 +418,19 @@ def cmd_snapshot(
         sha256 = hashlib.sha256(data).hexdigest()
         logger.info(f"✅ Snapshot saved: {_path_for_message(outpath)} ({size // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
+            from bambu_cli.contracts import Snapshot
+
             emit_json(
-                {
-                    "status": "saved",
-                    "command": "snapshot",
-                    "output": outpath,
-                    "size_bytes": size,
-                    "captured_at": captured_at,
-                    "sha256": sha256,
-                    "camera_image": camera_image,
-                    "docker_container": "bambu_camera",
-                }
+                Snapshot(
+                    status="saved",
+                    command="snapshot",
+                    output=outpath,
+                    size_bytes=size,
+                    captured_at=captured_at,
+                    sha256=sha256,
+                    camera_image=camera_image,
+                    docker_container="bambu_camera",
+                )
             )
     except urllib.error.URLError as e:
         message = f"Snapshot network error: {e}"

@@ -1,10 +1,31 @@
 """Printer status command."""
 
+import dataclasses
+
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.context import RuntimeContext
+from bambu_cli.contracts import PrinterState, Status
 from bambu_cli.errors import PrinterConnectionError
 from bambu_cli.logging_utils import logger
 from bambu_cli.utils import emit_json
+
+_PRINTER_STATE_FIELDS = {f.name for f in dataclasses.fields(PrinterState)}
+
+
+def _status_payload(data, ams):
+    """Build the Status contract. Firmware extras stay on ``printer``, never the envelope."""
+    known = {key: data[key] for key in _PRINTER_STATE_FIELDS if key in data and key != "ams"}
+    extras = {
+        key: value
+        for key, value in data.items()
+        if key not in _PRINTER_STATE_FIELDS and key not in {"status", "command", "printer", "ams"}
+    }
+    payload = Status(status="ok", command="status", printer=PrinterState(**known), ams=ams).to_payload()
+    if extras:
+        printer = dict(payload["printer"])
+        printer.update(extras)
+        payload["printer"] = printer
+    return payload
 
 
 def cmd_status(args, ctx=None):
@@ -30,16 +51,7 @@ def cmd_status(args, ctx=None):
     ams = parse_ams(data)
 
     if bool(_namespace_get(args, "json", False)):
-        payload = {
-            "status": "ok",
-            "command": "status",
-            "printer": data,
-        }
-        payload.update({k: v for k, v in data.items() if k not in ("status", "command")})
-        # Normalized AMS view (trays/filaments) for agents building --ams-mapping;
-        # None on printers without an AMS.
-        payload["ams"] = ams
-        emit_json(payload)
+        emit_json(_status_payload(data, ams))
         return
 
     state = data.get("gcode_state", "UNKNOWN")

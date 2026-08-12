@@ -130,10 +130,6 @@ class ErrorEnvelope(Contract):
 
     schema_name: ClassVar[str] = "error_envelope"
     schema_title: ClassVar[str] = "platecli JSON error envelope"
-    # `job`/`send` build their summary up front and emit `next_command: null`
-    # when there is no recovery step, so null is a real value here. The old
-    # hand-written schema typed this `{}` (anything), which hid that; the
-    # generated one is explicit.
     keep_none: ClassVar[frozenset[str]] = frozenset({"next_command"})
 
     status: Literal["error"]
@@ -157,8 +153,11 @@ class Status(Contract):
     schema_name: ClassVar[str] = "status"
     schema_title: ClassVar[str] = "platecli status success envelope"
     schema_description: ClassVar[str] = (
-        "JSON output of `plate status --json`. Printer fields appear both at the top level (raw MQTT data) and normalised under the `printer` key."
+        "JSON output of `plate status --json`. Guaranteed printer fields live under `printer` "
+        "(never flattened onto the envelope). Firmware extras stay on `printer` as additional "
+        "properties. `ams` is the normalised tray view for --ams-mapping."
     )
+    keep_none: ClassVar[frozenset[str]] = frozenset({"ams"})
 
     status: Literal["ok"]
     command: Literal["status"]
@@ -168,9 +167,13 @@ class Status(Contract):
         description=(
             "Complete printer state. Merged from the MQTT report topic and guaranteed to be a full "
             "snapshot, never a partial delta; the command fails with exit code 6 rather than emitting "
-            "an incomplete object."
+            "an incomplete object. Extra firmware keys stay here, not on the envelope."
         ),
         requires_keys=("gcode_state", "mc_percent", "bed_temper", "nozzle_temper"),
+    )
+    ams: dict[str, Any] | None = spec(
+        default=None,
+        description="Normalised AMS trays for --ams-mapping; null when the printer has no AMS.",
     )
 
 

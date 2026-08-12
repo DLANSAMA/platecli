@@ -5,6 +5,7 @@ from bambu_cli.argutils import exit_code_from_system_exit as _exit_code_from_sys
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
 from bambu_cli.context import RuntimeContext
+from bambu_cli.contracts import Print
 from bambu_cli.download.naming import (
     _is_print_ready_name,
     _name_for_message,
@@ -45,13 +46,13 @@ def cmd_print(args, ctx=None):
         logger.warning("⚠️  This will START a print. Add --confirm to proceed.")
         if bool(_namespace_get(args, "json", False)):
             emit_json(
-                {
-                    "status": "confirmation_required",
-                    "command": "print",
-                    "file": basename,
-                    "printed": False,
-                    "next_command": _print_next_command(args, basename),
-                }
+                Print(
+                    status="confirmation_required",
+                    command="print",
+                    file=basename,
+                    printed=False,
+                    next_command=_print_next_command(args, basename),
+                )
             )
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
@@ -88,12 +89,12 @@ def cmd_print(args, ctx=None):
         raise
     if bool(_namespace_get(args, "json", False)):
         emit_json(
-            {
-                "status": "dry_run_ok" if dry_run else "print_started",
-                "command": "print",
-                "file": basename,
-                "printed": not dry_run,
-                "dry_run": bool(dry_run),
-            }
+            Print(
+                status="dry_run_ok" if dry_run else "print_started",
+                command="print",
+                file=basename,
+                printed=not dry_run,
+                dry_run=bool(dry_run),
+            )
         )
     return basename

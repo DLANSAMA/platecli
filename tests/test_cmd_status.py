@@ -75,7 +75,8 @@ class TestBambuGetStatus(unittest.TestCase):
         payload = mock_emit_json.call_args[0][0]
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["command"], "status")
-        self.assertEqual(payload["gcode_state"], "IDLE")
+        self.assertNotIn("gcode_state", payload)
+        self.assertEqual(payload["printer"]["gcode_state"], "IDLE")
 
     @patch("bambu_cli.commands.status.emit_json")
     @patch("bambu_cli.protocols.mqtt.get_status")

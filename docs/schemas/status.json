@@ -3,7 +3,7 @@
   "$id": "https://platecli.local/schemas/status.json",
   "title": "platecli status success envelope",
   "type": "object",
-  "description": "JSON output of `plate status --json`. Printer fields appear both at the top level (raw MQTT data) and normalised under the `printer` key.",
+  "description": "JSON output of `plate status --json`. Guaranteed printer fields live under `printer` (never flattened onto the envelope). Firmware extras stay on `printer` as additional properties. `ams` is the normalised tray view for --ams-mapping.",
   "required": [
     "status",
     "command",
@@ -105,7 +105,15 @@
         "nozzle_temper"
       ],
       "additionalProperties": true,
-      "description": "Complete printer state. Merged from the MQTT report topic and guaranteed to be a full snapshot, never a partial delta; the command fails with exit code 6 rather than emitting an incomplete object."
+      "description": "Complete printer state. Merged from the MQTT report topic and guaranteed to be a full snapshot, never a partial delta; the command fails with exit code 6 rather than emitting an incomplete object. Extra firmware keys stay here, not on the envelope."
+    },
+    "ams": {
+      "description": "Normalised AMS trays for --ams-mapping; null when the printer has no AMS.",
+      "additionalProperties": true,
+      "type": [
+        "object",
+        "null"
+      ]
     }
   },
   "additionalProperties": true

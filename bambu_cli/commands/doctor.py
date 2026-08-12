@@ -237,14 +237,18 @@ def cmd_doctor(args, ctx=None):
     if json_mode:
         # Mask IP address inside doctor capabilities report unless --verbose is checked (A0530-SEC-16)
         reported_ip = ctx.settings.printer_ip if verbose else "<redacted>"
+        from bambu_cli.contracts import Doctor
+
         emit_json(
-            {
-                "command": "doctor",
-                "ok": True,
-                "status": "ok",
-                "output": cap_path,
-                "printer_ip": reported_ip,
-                "certificate_fingerprint": fp,
-                "capabilities": capabilities,
-            }
+            Doctor(
+                status="ok",
+                command="doctor",
+                certificate_fingerprint=fp,
+                printer_reachable=True,
+            ).to_payload(
+                ok=True,
+                output=cap_path,
+                printer_ip=reported_ip,
+                capabilities=capabilities,
+            )
         )

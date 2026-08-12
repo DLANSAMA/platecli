@@ -33,10 +33,32 @@ from bambu_cli.download import (
 from bambu_cli.utils import emit_json
 
 
+def _contract_from_mapping(cls, mapping, **overrides):
+    """Build ``cls`` from a dict, passing unknown keys through ``to_payload`` extra."""
+    import dataclasses
+
+    data = dict(mapping)
+    data.update(overrides)
+    known = {field.name for field in dataclasses.fields(cls)}
+    kwargs = {key: data[key] for key in known if key in data}
+    extras = {key: value for key, value in data.items() if key not in known}
+    payload = cls(**kwargs).to_payload()
+    payload.update(extras)
+    return payload
+
+
+def _emit_job_ok(summary):
+    from bambu_cli.contracts import JobOk
+
+    emit_json(_contract_from_mapping(JobOk, summary))
+
+
 def _emit_job_failure(args, summary, failed_step, exit_code, error=None, detail=None):
     """Emit a single machine-readable failure summary for job/send --json."""
     if not bool(_namespace_get(args, "json", False)):
         return
+    from bambu_cli.contracts import JobError
+
     payload = dict(summary)
     payload.update(
         {
@@ -48,7 +70,7 @@ def _emit_job_failure(args, summary, failed_step, exit_code, error=None, detail=
     )
     if detail:
         payload[f"{failed_step}_error"] = detail
-    emit_json(payload)
+    emit_json(_contract_from_mapping(JobError, payload))
 
 
 def _job_fail(args, summary, failed_step, exit_code, message):

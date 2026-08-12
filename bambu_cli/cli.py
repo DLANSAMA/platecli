@@ -35,7 +35,7 @@ from .constants import (
 # namespace without importing this entrypoint (audit item A1). Re-exported here
 # because build_parser() is the documented source of truth for the command set,
 # and the help/workflow smokes plus several tests import it from this module.
-from .contracts import Version
+from .contracts import ErrorEnvelope, Version
 from .jsonio import json_mode_requested as _json_mode_requested
 from .utils import emit_json, emit_json_error
 
@@ -150,13 +150,13 @@ def main():
         return
     if not args.cmd and bool(getattr(args, "json", False)):
         emit_json(
-            {
-                "status": "error",
-                "command": "main",
-                "failed_step": "parse",
-                "exit_code": EXIT_COMMAND_ERROR,
-                "error": "Missing subcommand. Put --json with a command that supports it.",
-            }
+            ErrorEnvelope(
+                status="error",
+                command="main",
+                failed_step="parse",
+                exit_code=EXIT_COMMAND_ERROR,
+                error="Missing subcommand. Put --json with a command that supports it.",
+            )
         )
         sys.exit(EXIT_COMMAND_ERROR)
 

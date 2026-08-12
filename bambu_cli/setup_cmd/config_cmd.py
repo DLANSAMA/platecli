@@ -77,14 +77,16 @@ def _cmd_config_show(args):
 
     redacted = _redacted_config(config)
     if _namespace_get(args, "json", False):
+        from bambu_cli.contracts import ConfigCmd
+
         emit_json(
-            {
-                "status": "ok",
-                "command": "config",
-                "action": "show",
-                "config_path": _display_path(config_path),
-                "config": redacted,
-            }
+            ConfigCmd(
+                status="ok",
+                command="config",
+                action="show",
+                config_path=_display_path(config_path),
+                config=redacted,
+            )
         )
         return
     logger.info(f"📄 Config: {_display_path(config_path)}")
@@ -106,19 +108,21 @@ def _cmd_config_validate(args):
         status = "warning"
 
     if _namespace_get(args, "json", False):
+        from bambu_cli.contracts import ConfigCmd
+
         emit_json(
-            {
-                "status": status,
-                "command": "config",
-                "action": "validate",
-                "exit_code": exit_code,
-                "ok": ok,
-                "errors": error_count,
-                "warnings": warning_count,
-                "strict": bool(_namespace_get(args, "strict", False)),
-                "config_path": _display_path(_config_path()),
-                "checks": checks,
-            }
+            ConfigCmd(
+                status=status,
+                command="config",
+                action="validate",
+                exit_code=exit_code,
+                ok=ok,
+                errors=error_count,
+                warnings=warning_count,
+                strict=bool(_namespace_get(args, "strict", False)),
+                config_path=_display_path(_config_path()),
+                checks=checks,
+            )
         )
     else:
         logger.info(f"🧪 Validating {_display_path(_config_path())}")
