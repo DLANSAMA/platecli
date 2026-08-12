@@ -47,14 +47,10 @@ classifiers = [
 
 [project.optional-dependencies]
 # Optional TUI extra: `pip install 'platecli[tui]'`. Textual is never a hard
-# runtime dependency (interactive-mode-plan precedent) — `cmd_tui` import-guards
-# it. Tested green against textual 1.0.0 (floor). Also tried 8.2.8 (current
-# latest, whose requires-python still fits this project's >=3.9 floor): our
-# dashboard tests fail there (`test_tui_dashboard.py`, 3 failures — rendered
-# text comes back empty, an app.run_test()/pilot timing change between 1.x and
-# 8.x). Staying capped below 2.0 until that TUI-test breakage is diagnosed and
-# fixed on a newer textual.
-tui = ["textual>=0.86,<2.0"]
+# runtime dependency — `cmd_tui` import-guards it. Pinned to the current 8.x
+# major (tested 8.2.8). 8.x dropped Static.renderable (tests read .content)
+# and Select.BLANK-as-False (no-selection is Select.NULL).
+tui = ["textual>=8.0,<9.0"]
 test = [
     "pytest",
     "pytest-cov",
@@ -62,7 +58,7 @@ test = [
     "pytest-asyncio",
     "mutmut>=3.0",
     "hypothesis>=6.0",
-    "textual>=0.86,<2.0",
+    "textual>=8.0,<9.0",
     # Build-time only: scripts/gen_schemas.py derives docs/schemas/*.json from
     # the dataclasses in bambu_cli.contracts. Deliberately NOT a runtime
     # dependency — bambu_cli never imports pydantic, because emit_json owns

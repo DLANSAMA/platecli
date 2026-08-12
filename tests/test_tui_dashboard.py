@@ -28,6 +28,7 @@ from bambu_cli.tui.deps import TuiDeps  # noqa: E402
 from bambu_cli.tui.services import StatusService, StatusSnapshot  # noqa: E402
 from bambu_cli.tui.widgets.ams_panel import AmsPanel  # noqa: E402
 from bambu_cli.tui.widgets.status_panel import StatusPanel  # noqa: E402
+from tests.tui_text import widget_text  # noqa: E402
 
 # A representative IDLE snapshot with a populated AMS, shaped like parse_ams output.
 _IDLE_SNAPSHOT = StatusSnapshot(
@@ -79,26 +80,17 @@ def _args(**kwargs):
     return argparse.Namespace(**base)
 
 
-def _render_to_text(renderable) -> str:
-    """Render a Rich renderable (or str) to plain text via a wide Console."""
-    from rich.console import Console
-
-    if renderable is None:
-        return ""
-    if isinstance(renderable, str):
-        return renderable
-    console = Console(width=200)
-    with console.capture() as capture:
-        console.print(renderable)
-    return capture.get()
-
-
 def _all_text(app):
-    """Concatenate the rendered text of the two dashboard panels."""
+    """Concatenate the rendered text of the two dashboard panels.
+
+    Textual 8's ``App.query`` does not descend into the active screen;
+    query the screen itself.
+    """
     parts = []
+    screen = app.screen
     for widget_type in (StatusPanel, AmsPanel):
-        for widget in app.query(widget_type):
-            parts.append(_render_to_text(getattr(widget, "renderable", None)))
+        for widget in screen.query(widget_type):
+            parts.append(widget_text(widget))
     return "\n".join(parts)
 
 

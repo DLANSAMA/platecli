@@ -34,6 +34,7 @@ from bambu_cli.tui.screens.help import HELP_ROWS, HelpScreen, help_text  # noqa:
 from bambu_cli.tui.screens.monitor import MonitorScreen  # noqa: E402
 from bambu_cli.tui.screens.prepare import PreflightErrorScreen, PrepareScreen  # noqa: E402
 from bambu_cli.tui.services import StatusSnapshot  # noqa: E402
+from tests.tui_text import widget_text  # noqa: E402
 
 _SMALL = (80, 24)
 
@@ -162,15 +163,7 @@ async def _settle(pilot):
 
 
 def _text(widget) -> str:
-    renderable = getattr(widget, "renderable", "")
-    if isinstance(renderable, str):
-        return renderable
-    from rich.console import Console
-
-    console = Console(width=200)
-    with console.capture() as capture:
-        console.print(renderable)
-    return capture.get()
+    return widget_text(widget)
 
 
 async def _prepared_modal(pilot, app, source):
