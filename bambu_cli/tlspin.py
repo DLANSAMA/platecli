@@ -27,7 +27,7 @@ import hashlib
 import hmac
 import re
 import ssl
-from typing import Callable
+from collections.abc import Callable
 
 # A normalized SHA-256 fingerprint: exactly 64 lowercase hex chars, no separators.
 _HEX64_RE = re.compile(r"\A[0-9a-f]{64}\Z")

@@ -18,8 +18,9 @@ import argparse
 import os
 import shutil
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from bambu_cli import utils
 from bambu_cli.constants import (

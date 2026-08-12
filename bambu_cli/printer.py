@@ -6,7 +6,7 @@ import secrets
 import ssl
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 from bambu_cli.protocols import ftps as ftps_protocol
 from bambu_cli.protocols import mqtt as mqtt_protocol
@@ -34,7 +34,7 @@ class BambuPrinter:
         serial: str,
         access_code: str,
         insecure_tls: bool = False,
-        cert_fingerprint: Optional[str] = None,
+        cert_fingerprint: str | None = None,
         simulation_mode: bool = False,
     ):
         self.ip = ip
@@ -80,13 +80,13 @@ class BambuPrinter:
     def mqtt_held(self) -> bool:
         return self._mqtt_session is not None
 
-    def send_command(self, payload: str, timeout: Optional[float] = None, retries: int = 2) -> bool:
+    def send_command(self, payload: str, timeout: float | None = None, retries: int = 2) -> bool:
         """Send a JSON command payload via MQTT."""
         return mqtt_protocol.send_command(self, payload, timeout=timeout, retries=retries)
 
     def status(
-        self, timeout: Optional[float] = None, retries: int = 2, *, require_complete: bool = True
-    ) -> Optional[dict[str, Any]]:
+        self, timeout: float | None = None, retries: int = 2, *, require_complete: bool = True
+    ) -> dict[str, Any] | None:
         """Get the printer status via MQTT.
 
         Returns a merged, complete state snapshot. Pass ``require_complete=False``
@@ -96,7 +96,7 @@ class BambuPrinter:
         return mqtt_protocol.get_status(self, timeout=timeout, retries=retries, require_complete=require_complete)
 
     @contextlib.contextmanager
-    def get_ftp_client(self, timeout: Optional[float] = None):
+    def get_ftp_client(self, timeout: float | None = None):
         """Context manager to get a connected FTP client."""
         if timeout is None:
             timeout = self.ftps_timeout
@@ -111,7 +111,7 @@ class BambuPrinter:
             except _FTP_SSL_ERRORS:
                 pass
 
-    def _probe_remote_size(self, ftp, remote_path: str) -> Optional[int]:
+    def _probe_remote_size(self, ftp, remote_path: str) -> int | None:
         """Best-effort remote file size lookup. Returns None if unavailable."""
         try:
             size = ftp.size(remote_path)
@@ -134,7 +134,7 @@ class BambuPrinter:
         self,
         local_path: str,
         remote_path: str,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         progress_callback=None,
         on_resume=None,
         sleep=time.sleep,
@@ -240,7 +240,7 @@ class BambuPrinter:
         return False
 
     def download_file(
-        self, remote_path: str, local_path: str, timeout: Optional[float] = None, progress_callback=None
+        self, remote_path: str, local_path: str, timeout: float | None = None, progress_callback=None
     ) -> bool:
         """Download a file via FTPS into a temp sibling, then atomically replace
         ``local_path``. A dropped/failed transfer therefore never truncates or
@@ -254,7 +254,7 @@ class BambuPrinter:
         import tempfile
 
         directory = os.path.dirname(os.path.abspath(local_path)) or "."
-        partial_fd: Optional[int]
+        partial_fd: int | None
         partial_fd, partial_path = tempfile.mkstemp(
             prefix=f".{os.path.basename(local_path) or 'download'}.", suffix=".part", dir=directory
         )
@@ -287,7 +287,7 @@ class BambuPrinter:
                 os.remove(partial_path)
             return False
 
-    def delete_file(self, remote_path: str, timeout: Optional[float] = None) -> bool:
+    def delete_file(self, remote_path: str, timeout: float | None = None) -> bool:
         """Delete a file from the printer via FTPS."""
         try:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp:
@@ -297,7 +297,7 @@ class BambuPrinter:
             logger.error(f"Delete failed: {e}")
             return False
 
-    def list_files(self, remote_dir: str = "/model/", timeout: Optional[float] = None) -> Optional[list]:
+    def list_files(self, remote_dir: str = "/model/", timeout: float | None = None) -> list | None:
         """List files in a remote directory via FTPS."""
         try:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp:
@@ -306,7 +306,7 @@ class BambuPrinter:
             logger.error(f"List files failed: {e}")
             return None
 
-    def get_version(self, timeout: Optional[float] = 5.0, retries: int = 1) -> Optional[list]:
+    def get_version(self, timeout: float | None = 5.0, retries: int = 1) -> list | None:
         """Get version info via MQTT."""
         return mqtt_protocol.get_version(self, timeout=timeout, retries=retries)
 

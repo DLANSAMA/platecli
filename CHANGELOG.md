@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Removed
+
+- Python 3.9 support. The floor is 3.10 so every install resolves patched
+  `zeroconf` (no 3.9-only advisory residual).
+
 ### Changed
 
 - The `[tui]` extra now requires Textual 8.x (`textual>=8.0,<9.0`). The

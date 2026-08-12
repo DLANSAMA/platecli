@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON_FLOOR = "3.9"
+PYTHON_FLOOR = "3.10"
 REQUIRED_PACKAGES = {"paho-mqtt", "zeroconf", "rich"}
 
 

@@ -16,7 +16,8 @@ from __future__ import annotations
 import json
 import ssl
 import threading
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from bambu_cli.errors import PrinterStatusIncomplete
 from bambu_cli.logging_utils import logger

@@ -33,20 +33,16 @@ uv run python -W error::ResourceWarning -m pytest tests/ -m "not live" \
 python scripts/syntax_smoke.py
 python scripts/cli_help_smoke.py
 uv run python tests/ci_workflow_smoke.py
-uv run python tests/python_compat_smoke.py       # 3.9 floor: syntax + PEP 604 unions
+uv run python tests/python_compat_smoke.py       # 3.10 floor: syntax parse
 uv run python tests/dependency_resolution_smoke.py
 uv run python tests/release_readiness_smoke.py
 uv run python tests/privacy_smoke.py
 uv run python tests/agent_cli_smoke.py
 ```
 
-`python_compat_smoke.py` is worth running by hand before any push. The project
-supports Python 3.9, most contributors do not develop on it, and the failure mode
-is invisible locally: `X | None` (PEP 604) is accepted by ruff and mypy and runs
-fine on 3.10+, but raises `TypeError` on 3.9 the moment it is evaluated in a
-**runtime** position — a class base, a `cast()` argument, a `TypeVar` bound, a
-module-level alias. `from __future__ import annotations` defers *annotations*
-only and does not help there. Use `typing.Optional` / `typing.Union` instead.
+`python_compat_smoke.py` parses the package and tests as Python 3.10 so a
+3.11-only construct cannot sneak in on a newer laptop. The advertised floor
+is 3.10.
 `release_readiness_smoke.py` flags local `__pycache__` / `build` / `dist` noise
 that CI's clean checkout does not have — expected locally, not a failure to chase.
 
@@ -103,8 +99,8 @@ uv run --python 3.12 --with pydantic python scripts/gen_schemas.py --check
 
 The lint job additionally runs three greps (no test-awareness in production code,
 `sys.exit` only in `cli.py`, no `@mockable`) and a `-m "security or contract"`
-pytest pass. `gen_schemas.py` is pinned to 3.12 because it needs 3.10+ to evaluate
-the contracts' `X | None` annotations — the package itself still runs on 3.9.
+pytest pass. `gen_schemas.py` needs 3.10+ to evaluate the contracts' `X | None`
+annotations and is pinned to 3.12 in CI.
 
 CI pins these tool versions (see `.github/workflows/ci.yml`); running them unpinned locally is fine.
 
