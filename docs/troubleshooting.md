@@ -25,7 +25,7 @@ the `plate doctor` output — but check first that no access code is visible.
 - [zeroconf is not installed, so auto-discovery is disabled](#zeroconf-is-not-installed-so-auto-discovery-is-disabled)
 - [Docker not found in PATH when taking a snapshot](#docker-not-found-in-path-when-taking-a-snapshot)
 - [The camera TLS certificate does not match the pinned fingerprint](#the-camera-tls-certificate-does-not-match-the-pinned-fingerprint)
-- [Snapshot fails with "falling back to the Docker streamer was refused"](#snapshot-fails-with-falling-back-to-the-docker-streamer-was-refused)
+- [Snapshot fails and mentions `camera_allow_streamer`](#snapshot-fails-and-mentions-camera_allow_streamer)
 - [Printer returned only partial status updates](#printer-returned-only-partial-status-updates)
 - [The file was not found on the printer](#the-file-was-not-found-on-the-printer)
 - [Timed out waiting for the printer to acknowledge print start](#timed-out-waiting-for-the-printer-to-acknowledge-print-start)
@@ -336,14 +336,18 @@ If you have no pin at all, `plate` warns that no `cert_fingerprint` is pinned
 for the camera connection and tells you to run `plate setup` to pin one. Pin it
 — don't set `insecure_tls`.
 
-## Snapshot fails with "falling back to the Docker streamer was refused"
+## Snapshot fails and mentions `camera_allow_streamer`
 
-If you see an error about `camera_direct_only` being set, the direct port-6000
-camera grab failed and `plate` refused to fall back to the Docker streamer because
-`camera_direct_only: true` is in your `config.json`. Remove or set it to `false`
-to restore the Docker streamer fallback, or diagnose and fix the direct grab
-failure (check that port 6000 is reachable with `nc -vz <printer-ip> 6000` and
-that a `cert_fingerprint` is pinned).
+The Docker streamer is opt-in because it does not honour `cert_fingerprint`.
+If the direct port-6000 grab failed, `snapshot` aborts unless you set
+`camera_allow_streamer: true` in `config.json` or pass `--allow-camera-streamer`.
+X1-series printers have no port-6000 camera and need that opt-in.
+
+If the message names `camera_direct_only`, that key is also set and **forbids**
+the streamer even when the opt-in is present. Remove `camera_direct_only` first.
+
+To diagnose a failed direct grab on P1/A1: check that port 6000 is reachable
+with `nc -vz <printer-ip> 6000` and that a `cert_fingerprint` is pinned.
 
 ## Printer returned only partial status updates
 

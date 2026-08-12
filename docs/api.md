@@ -391,6 +391,8 @@ Schema: [`snapshot.json`](schemas/snapshot.json) — `"status": "saved"`, `"outp
 `"size_bytes"`, `"captured_at"` (ISO-8601 UTC), `"sha256"` (hex digest of JPEG bytes),
 plus `method` (`direct`) or Docker-related fields when the streamer path is used.
 Use `--unique` to get a timestamped filename so repeated captures never overwrite/confuse.
+The Docker streamer path is opt-in (`--allow-camera-streamer` or
+`camera_allow_streamer` in config); without it a failed direct grab is an error.
 Agents should compare `sha256` / `captured_at` to verify a new frame was captured before
 sending the image to a user.
 

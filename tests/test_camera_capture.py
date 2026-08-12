@@ -7,23 +7,25 @@ import hashlib
 from tests.bambu_test_base import *  # noqa: F401,F403
 from bambu_cli.errors import BambuError
 
+
 class TestCameraPortIsValid(unittest.TestCase):
     def test_rejects_out_of_range_container_port(self):
         """A container port above 65535 must be rejected: \\d{1,5} alone lets
         '99999' match the regex even though it is not a valid port number."""
-        from bambu_cli.protocols.camera import _camera_port_is_valid
+        from bambu_cli.commands.snapshot import _camera_port_is_valid
 
         self.assertFalse(_camera_port_is_valid("1985:99999"))
         self.assertFalse(_camera_port_is_valid("0"))
         self.assertFalse(_camera_port_is_valid("70000-70005"))
 
     def test_accepts_valid_container_ports(self):
-        from bambu_cli.protocols.camera import _camera_port_is_valid
+        from bambu_cli.commands.snapshot import _camera_port_is_valid
 
         self.assertTrue(_camera_port_is_valid("127.0.0.1:1985:1984"))
         self.assertTrue(_camera_port_is_valid("1984"))
         self.assertTrue(_camera_port_is_valid("1984/tcp"))
         self.assertTrue(_camera_port_is_valid("1984-1989/udp"))
+
 
 class TestGrabCameraFrameDirect(unittest.TestCase):
     def _mock_net(self):

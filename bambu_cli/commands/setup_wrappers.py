@@ -1,7 +1,5 @@
 """Thin command wrappers that delegate to focused packages."""
 
-from bambu_cli.context import RuntimeContext
-
 
 def cmd_setup(args):
     """Interactive or non-interactive printer configuration setup."""
@@ -32,18 +30,6 @@ def cmd_slice(args, **collaborators):
     if collaborators:
         return _cmd_slice(args, **collaborators)
     return _cmd_slice(args)
-
-
-def cmd_snapshot(args, ctx=None, **collaborators):
-    """Capture a camera snapshot using the RTSP Streamer Docker container.
-
-    Extra keyword args are forwarded to ``camera._cmd_snapshot`` (injectable
-    collaborators: grab_frame, which, subprocess_run, access_code_loader, …).
-    """
-    from bambu_cli.protocols.camera import _cmd_snapshot
-
-    ctx = ctx or RuntimeContext.for_request(args)
-    _cmd_snapshot(args, ctx=ctx, **collaborators)
 
 
 def cmd_preflight(args):

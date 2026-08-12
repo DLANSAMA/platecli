@@ -72,9 +72,8 @@ def test_settings_from_config_defaults_for_missing_keys():
     assert settings.camera_container_name == "bambu_camera"
     assert settings.camera_port == "127.0.0.1:1985:1984"
     assert settings.camera_stream_url == "http://localhost:1985/api/frame.jpeg?src=p1s"
-    # Off unless opted in: enabling it by default would break every X1-series user,
-    # whose snapshots legitimately require the Docker streamer.
     assert settings.camera_direct_only is False
+    assert settings.camera_allow_streamer is False
 
 
 def test_settings_from_config_camera_direct_only_is_a_sticky_config_key():
@@ -89,6 +88,8 @@ def test_settings_from_config_camera_direct_only_is_a_sticky_config_key():
     assert context.Settings.from_config({"camera_direct_only": False}).camera_direct_only is False
     # Coerced, so a JSON string cannot arrive as a non-bool.
     assert context.Settings.from_config({"camera_direct_only": "yes"}).camera_direct_only is True
+    assert context.Settings.from_config({"camera_allow_streamer": True}).camera_allow_streamer is True
+    assert context.Settings.from_config({}).camera_allow_streamer is False
     # Contrast with the forced-False key, which must keep ignoring config.
     assert context.Settings.from_config({"allow_private_ips": True}).allow_private_ips is False
 

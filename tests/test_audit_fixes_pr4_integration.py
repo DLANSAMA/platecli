@@ -86,7 +86,7 @@ class TestCameraErrorPaths(unittest.TestCase):
 
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_bambu_error_from_printer_propagates(self, _mock_logger):
-        from bambu_cli.protocols import camera
+        from bambu_cli.commands import snapshot as camera
 
         tmpdir = tempfile.mkdtemp()
         args = self._snapshot_args(tmpdir)
@@ -98,12 +98,12 @@ class TestCameraErrorPaths(unittest.TestCase):
         fake_ctx.printer.side_effect = BambuError("bad access code", exit_code=13)
 
         with self.assertRaises(BambuError) as cm:
-            camera._cmd_snapshot(args, ctx=fake_ctx)
+            camera.cmd_snapshot(args, ctx=fake_ctx)
         self.assertEqual(cm.exception.exit_code, 13)
 
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_direct_write_oserror_becomes_file_error(self, _mock_logger):
-        from bambu_cli.protocols import camera
+        from bambu_cli.commands import snapshot as camera
         from bambu_cli.constants import EXIT_FILE_ERROR
 
         tmpdir = tempfile.mkdtemp()
@@ -115,7 +115,7 @@ class TestCameraErrorPaths(unittest.TestCase):
 
         with patch.object(camera, "_write_snapshot_atomic", side_effect=OSError("No space left on device")):
             with self.assertRaises(BambuError) as cm:
-                camera._cmd_snapshot(args, ctx=fake_ctx, grab_frame=lambda printer: b"\xff\xd8jpegbytes")
+                camera.cmd_snapshot(args, ctx=fake_ctx, grab_frame=lambda printer: b"\xff\xd8jpegbytes")
         # A file write failure exits EXIT_FILE_ERROR, not the generic command
         # error the uncaught OSError would have produced.
         self.assertEqual(cm.exception.exit_code, EXIT_FILE_ERROR)

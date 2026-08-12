@@ -5,6 +5,7 @@ import hashlib
 from tests.bambu_test_base import *  # noqa: F401,F403
 from bambu_cli.errors import BambuError
 
+
 class TestBambuCmdSnapshot(unittest.TestCase):
     def _logger_patch(self):
         return patch("bambu_cli.logging_utils.logger", new=MagicMock())
@@ -21,7 +22,10 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
-            settings_ctx(camera_stream_url="http://evil.example.com:8080/frame.jpeg"),
+            settings_ctx(
+                camera_stream_url="http://evil.example.com:8080/frame.jpeg",
+                camera_allow_streamer=True,
+            ),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
             cmd_snapshot(
@@ -71,6 +75,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
 
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
+            settings_ctx(camera_allow_streamer=True),
             patch("sys.exit", side_effect=SystemExit(2)),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
@@ -101,6 +106,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
 
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
+            settings_ctx(camera_allow_streamer=True),
             patch("sys.exit", side_effect=SystemExit(5)),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
@@ -194,10 +200,44 @@ class TestBambuCmdSnapshot(unittest.TestCase):
             any("TLS error with a cert pin configured" in c[0][0] for c in mock_logger.error.call_args_list)
         )
 
-    def test_cmd_snapshot_ssl_error_without_pin_falls_back_to_docker(self):
-        """The same ssl.SSLError, but with no pin configured, must still fall
-        through to the Docker streamer -- this preserves the existing
-        no-pin-configured fallback behavior."""
+    def test_cmd_snapshot_ssl_error_without_pin_fails_closed_by_default(self):
+        """No pin and no streamer opt-in: an ssl.SSLError must abort, not Docker."""
+        import ssl as ssl_mod
+
+        from bambu_cli.commands import cmd_snapshot
+        from bambu_cli.context import Settings as _Settings
+
+        mock_logger, mock_run, mock_urlopen = MagicMock(), MagicMock(), MagicMock()
+        args = MagicMock()
+        args.output = "snap.jpg"
+
+        def _grab(printer):
+            raise ssl_mod.SSLError("no pin configured")
+
+        with (
+            patch("bambu_cli.logging_utils._BACKEND", mock_logger),
+            settings_ctx(cert_fingerprint=None, insecure_tls=False),
+            self.assertRaises((SystemExit, BambuError)) as cm,
+        ):
+            cmd_snapshot(
+                args,
+                grab_frame=_grab,
+                which=lambda name: "/usr/bin/docker",
+                subprocess_run=mock_run,
+                urlopen=mock_urlopen,
+            )
+
+        self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
+        mock_run.assert_not_called()
+        mock_urlopen.assert_not_called()
+        self.assertTrue(
+            any("camera_allow_streamer" in c[0][0] for c in mock_logger.error.call_args_list),
+            "refusal must name the opt-in so X1 users can find it",
+        )
+        self.assertFalse(_Settings().camera_allow_streamer)
+
+    def test_cmd_snapshot_ssl_error_without_pin_uses_streamer_when_opted_in(self):
+        """The same ssl.SSLError falls through to Docker only when opted in."""
         import ssl as ssl_mod
 
         from bambu_cli.commands import cmd_snapshot
@@ -205,9 +245,9 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         mock_logger = MagicMock()
         mock_subproc = MagicMock(
             side_effect=[
-                MagicMock(returncode=1),  # inspect fails
-                MagicMock(returncode=0),  # rm
-                MagicMock(returncode=0),  # run
+                MagicMock(returncode=1),
+                MagicMock(returncode=0),
+                MagicMock(returncode=0),
             ]
         )
         mock_response = MagicMock()
@@ -225,12 +265,12 @@ class TestBambuCmdSnapshot(unittest.TestCase):
 
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
-            settings_ctx(cert_fingerprint=None, insecure_tls=False),
+            settings_ctx(cert_fingerprint=None, insecure_tls=False, camera_allow_streamer=True),
             patch("os.path.exists", return_value=True),
             patch("os.fdopen", mock_open()),
             patch("os.unlink"),
             patch("os.path.getsize", return_value=2048),
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic"),
             patch("builtins.open", new_callable=mock_open),
         ):
             cmd_snapshot(
@@ -244,11 +284,6 @@ class TestBambuCmdSnapshot(unittest.TestCase):
             )
 
         mock_subproc.assert_called()
-        # Guards the default: camera_direct_only must be OFF unless opted in, or this
-        # existing fallback (and every X1-series user) would break.
-        from bambu_cli.context import Settings as _Settings
-
-        self.assertFalse(_Settings().camera_direct_only)
 
     # --- camera_direct_only: the streamer fallback is refused entirely. ---
     # SECURITY.md promises this option closes the two accepted camera residuals (the
@@ -398,7 +433,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
 
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic"),
             patch("os.path.getsize", return_value=2048),
         ):
             cmd_snapshot(
@@ -441,11 +476,12 @@ class TestBambuCmdSnapshot(unittest.TestCase):
 
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
+            settings_ctx(camera_allow_streamer=True),
             patch("os.path.exists", return_value=True),
             patch("os.fdopen", mock_open()),
             patch("os.unlink"),
             patch("os.path.getsize", return_value=2048),
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic"),
             patch("builtins.open", new_callable=mock_open),
         ):
             cmd_snapshot(
@@ -480,7 +516,7 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
-            settings_ctx(camera_port="not-a-port"),
+            settings_ctx(camera_port="not-a-port", camera_allow_streamer=True),
             self.assertRaises((SystemExit, BambuError)) as cm,
         ):
             cmd_snapshot(
@@ -509,9 +545,9 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic"),
             patch("os.path.getsize", return_value=1024),
-            settings_ctx(camera_port="0.0.0.0:1985:1984"),
+            settings_ctx(camera_port="0.0.0.0:1985:1984", camera_allow_streamer=True),
         ):
             cmd_snapshot(
                 args,
@@ -546,9 +582,9 @@ class TestBambuCmdSnapshot(unittest.TestCase):
         args.output = "snap.jpg"
         with (
             patch("bambu_cli.logging_utils._BACKEND", mock_logger),
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic"),
             patch("os.path.getsize", return_value=1024),
-            settings_ctx(camera_port="127.0.0.1:1985:1984"),  # config is safe
+            settings_ctx(camera_port="127.0.0.1:1985:1984", camera_allow_streamer=True),
         ):
             cmd_snapshot(
                 args,

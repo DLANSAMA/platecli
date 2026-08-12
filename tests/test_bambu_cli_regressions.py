@@ -11,7 +11,8 @@ These pin four real bugs that shipped because CI only tested `scripts.bambu`:
   (c) The download success path must be able to resolve `_record_download_success`
       (it was a NameError) -- bambu_cli/download/downloader.py `_cmd_download`.
   (d) snapshot must prefer the direct camera grab and NOT shell out to Docker when
-      a frame is obtained -- bambu_cli/protocols/camera.py `_cmd_snapshot` + `_grab_camera_frame_direct`.
+      a frame is obtained -- bambu_cli/commands/snapshot.py ``cmd_snapshot`` +
+      bambu_cli/protocols/camera.py `_grab_camera_frame_direct`.
 """
 
 import os
@@ -323,7 +324,7 @@ def test_c_cmd_download_references_record_download_success_without_nameerror():
 
 
 def test_d_snapshot_uses_direct_grab_not_docker():
-    from bambu_cli.protocols.camera import _cmd_snapshot
+    from bambu_cli.commands.snapshot import cmd_snapshot as _cmd_snapshot
 
     jpeg = b"\xff\xd8" + b"\x00" * 256 + b"\xff\xd9"
     with tempfile.TemporaryDirectory() as tmpdir:

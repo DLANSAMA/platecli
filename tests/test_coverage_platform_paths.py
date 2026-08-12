@@ -18,7 +18,7 @@ sys.modules.setdefault("paho", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
-from bambu_cli.protocols import camera as camera_mod  # noqa: E402
+from bambu_cli.commands import snapshot as snapshot_mod  # noqa: E402
 from bambu_cli import commands as commands_mod  # noqa: E402
 from bambu_cli import config as config_mod  # noqa: E402
 from bambu_cli import slicer as slicer_mod  # noqa: E402
@@ -63,13 +63,8 @@ def test_convert_step_gmsh_missing(monkeypatch):
 def test_camera_simulation_snapshot(tmp_path, capsys):
     out = tmp_path / "snap.jpg"
     args = Namespace(output=str(out), json=True, direct=True)
-    printer = _test_printer(simulation_mode=True, insecure_tls=True)
-    with (
-        patch("bambu_cli.protocols.camera.get_printer", return_value=printer, create=True),
-        patch("bambu_cli.printer.get_printer", return_value=printer),
-        patch.object(camera_mod, "_grab_camera_frame_direct", return_value=b"\xff\xd8\xfffakejpeg"),
-    ):
-        camera_mod._cmd_snapshot(args)
+    with patch.object(snapshot_mod, "_grab_camera_frame_direct", return_value=b"\xff\xd8\xfffakejpeg"):
+        snapshot_mod.cmd_snapshot(args)
     assert out.is_file()
     assert out.read_bytes().startswith(b"\xff\xd8\xff")
     payload = json.loads(capsys.readouterr().out)
