@@ -67,15 +67,12 @@ class BambuPrinter:
         """Context manager to get a connected FTP client."""
         if timeout is None:
             timeout = self.ftps_timeout
-        # We can implement pooling here in the future
         client = ftps_protocol._create_raw_ftp(self, timeout=timeout)
         try:
             yield client
         finally:
-            try:
-                client.quit()
-            except _FTP_SSL_ERRORS:
-                pass
+            # Bambu's FTPS control channel can hang in quit(); close() tears
+            # the socket down without waiting for the 221 reply.
             try:
                 client.close()
             except _FTP_SSL_ERRORS:
@@ -288,7 +285,8 @@ def get_printer(*, access_code_loader=None) -> BambuPrinter:
     inject a fake instead of patching module globals.
     """
     from bambu_cli.config import load_access_code
-    from bambu_cli.context import _normalize_fingerprint, current_settings, current_simulation
+    from bambu_cli.context import current_settings, current_simulation
+    from bambu_cli.tlspin import normalize_fingerprint
 
     _load = access_code_loader if access_code_loader is not None else load_access_code
     settings = current_settings()
@@ -300,6 +298,6 @@ def get_printer(*, access_code_loader=None) -> BambuPrinter:
         # require credentials (load_access_code exits when unconfigured).
         access_code="" if simulation_mode else _load(),
         insecure_tls=settings.insecure_tls,
-        cert_fingerprint=_normalize_fingerprint(settings.cert_fingerprint),
+        cert_fingerprint=normalize_fingerprint(settings.cert_fingerprint),
         simulation_mode=simulation_mode,
     )

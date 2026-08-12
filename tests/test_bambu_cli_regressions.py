@@ -7,7 +7,7 @@ These pin four real bugs that shipped because CI only tested `scripts.bambu`:
       of headless GL / thumbnail noise (`_benign_rc` in bambu_cli/slicer/output.py),
       but must still FAIL on a genuine error ("nothing to be sliced", no .3mf).
   (b) FTPS teardown must use close(), never the hanging quit()
-      (bambu_cli/protocols/ftps.py ConnectionManager.clear / PooledFTPWrapper.__exit__).
+      (bambu_cli/printer.py BambuPrinter.get_ftp_client).
   (c) The download success path must be able to resolve `_record_download_success`
       (it was a NameError) -- bambu_cli/download/downloader.py `_cmd_download`.
   (d) snapshot must prefer the direct camera grab and NOT shell out to Docker when
@@ -267,23 +267,26 @@ class _RecordingFtp:
         self.calls.append("voidcmd")
 
 
-def test_b_connection_manager_clear_uses_close_not_quit():
-    mgr = ftps.ConnectionManager()
+def test_b_get_ftp_client_teardown_uses_close_not_quit():
+    from tests.bambu_test_base import _test_printer
+
+    printer = _test_printer()
     fake = _RecordingFtp()
-    mgr._ftp_client = fake
-    mgr.clear()
-    assert "close" in fake.calls, "clear() must close the FTP connection"
-    assert "quit" not in fake.calls, "clear() must NOT call the hanging quit()"
-    assert mgr._ftp_client is None
+    with patch.object(ftps, "_create_raw_ftp", return_value=fake):
+        with printer.get_ftp_client(timeout=5):
+            pass
+    assert "close" in fake.calls, "get_ftp_client must close the FTP connection"
+    assert "quit" not in fake.calls, "get_ftp_client must NOT call the hanging quit()"
 
 
-def test_b_pooled_wrapper_exit_on_error_uses_close_not_quit():
-    mgr = ftps.ConnectionManager()
+def test_b_get_ftp_client_teardown_uses_close_not_quit_on_error():
+    from tests.bambu_test_base import _test_printer
+
+    printer = _test_printer()
     fake = _RecordingFtp()
-    mgr._ftp_client = fake
-    wrapper = ftps.PooledFTPWrapper(fake, mgr)
-    wrapper.__enter__()  # acquires usage lock
-    wrapper.__exit__(RuntimeError, RuntimeError("boom"), None)
+    with patch.object(ftps, "_create_raw_ftp", return_value=fake), pytest.raises(RuntimeError):
+        with printer.get_ftp_client(timeout=5):
+            raise RuntimeError("boom")
     assert "close" in fake.calls, "__exit__ on error must close the FTP connection"
     assert "quit" not in fake.calls, "__exit__ must NOT call the hanging quit()"
 

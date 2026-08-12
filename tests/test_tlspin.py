@@ -146,3 +146,14 @@ def test_no_peer_cert_uses_exc_factory():
 )
 def test_normalize_fingerprint(raw, expected):
     assert normalize_fingerprint(raw) == expected
+
+
+def test_config_and_context_delegate_to_tlspin():
+    from bambu_cli.config import _expected_fingerprint
+    from bambu_cli.context import _normalize_fingerprint
+    from tests.bambu_test_base import config_ctx
+
+    raw = "AA:BB:CC:DD"
+    assert _normalize_fingerprint(raw) == normalize_fingerprint(raw)
+    with config_ctx({"cert_fingerprint": raw}):
+        assert _expected_fingerprint() == normalize_fingerprint(raw)

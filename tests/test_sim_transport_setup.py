@@ -148,18 +148,10 @@ def test_noncolliding_path_creates_sibling(tmp_path):
 
 
 def test_get_ftp_simulation():
-    ftps_mod.connection_manager.clear()
     printer = _test_printer(simulation_mode=True)
-    client = ftps_mod.get_ftp(printer, timeout=5)
-    assert client is not None
-    with client:
-        pass
-    # Reuse pooled sim client (exercises voidcmd health check).
-    client2 = ftps_mod.get_ftp(printer, timeout=5)
-    assert client2 is not None
-    with client2:
-        pass
-    ftps_mod.connection_manager.clear()
+    with printer.get_ftp_client(timeout=5) as client:
+        assert client is not None
+        assert "simulated_file.3mf" in client.nlst()
 
 
 # --- netsafety extras ---------------------------------------------------------
@@ -301,17 +293,6 @@ def test_get_status_timeout_returns_none():
             Ev.return_value = inst
             result = mqtt_mod.get_status(printer, timeout=0.01, retries=0)
     assert result is None
-
-
-def test_connection_manager_clear():
-    mgr = ftps_mod.ConnectionManager()
-    fake = MagicMock()
-    mgr._ftp_client = fake
-    mgr.clear()
-    fake.close.assert_called()
-    assert mgr._ftp_client is None
-    # close_all should not raise when empty
-    mgr.close_all()
 
 
 def test_common_looks_like_placeholder():

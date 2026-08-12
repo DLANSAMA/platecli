@@ -26,7 +26,7 @@ class TestDoctorCameraCapability(unittest.TestCase):
     @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[])
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)
     @patch("bambu_cli.protocols.mqtt.get_status")
-    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     @patch("builtins.open")
     def _run_doctor_json(
@@ -113,13 +113,9 @@ class TestCameraErrorPaths(unittest.TestCase):
         fake_ctx = MagicMock()
         fake_ctx.printer.return_value = fake_printer
 
-        with patch.object(
-            camera, "_write_snapshot_atomic", side_effect=OSError("No space left on device")
-        ):
+        with patch.object(camera, "_write_snapshot_atomic", side_effect=OSError("No space left on device")):
             with self.assertRaises(BambuError) as cm:
-                camera._cmd_snapshot(
-                    args, ctx=fake_ctx, grab_frame=lambda printer: b"\xff\xd8jpegbytes"
-                )
+                camera._cmd_snapshot(args, ctx=fake_ctx, grab_frame=lambda printer: b"\xff\xd8jpegbytes")
         # A file write failure exits EXIT_FILE_ERROR, not the generic command
         # error the uncaught OSError would have produced.
         self.assertEqual(cm.exception.exit_code, EXIT_FILE_ERROR)

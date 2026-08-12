@@ -50,8 +50,6 @@ def assert_shape(payload, spec, path="$"):
       - "enum": iterable of allowed values for this exact node.
       - "items": subspec applied to every element when type is list.
     """
-    assert isinstance(payload, dict) or "type" in spec or True, path
-
     if "type" in spec:
         expected_type = spec["type"]
         assert isinstance(payload, expected_type), (
@@ -99,7 +97,6 @@ def base_error_spec(command=None, require_failed_step=True):
     return {"type": dict, "required": required}
 
 
-
 # ---------------------------------------------------------------------------
 # Harness
 # ---------------------------------------------------------------------------
@@ -142,5 +139,3 @@ def make_ready_file(tmp_path, name="ready.3mf", content="simulated 3mf content")
     path = tmp_path / name
     path.write_text(content, encoding="utf-8")
     return path
-
-

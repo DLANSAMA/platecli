@@ -10,9 +10,8 @@ Design guarantees (all fail *closed* — a failure never verifies as OK):
 * No pin configured where a pin is required, a mismatched pin, or an
   unobtainable peer cert all raise; none of them return normally.
 * The compare is constant-time (``hmac.compare_digest``) on normalized hex.
-* Inputs are normalized identically to :func:`bambu_cli.config._expected_fingerprint`
-  and :func:`bambu_cli.context._normalize_fingerprint`: lowercased with ``:`` and
-  ASCII spaces stripped. Accepted pin formats therefore include
+* Inputs are normalized by :func:`normalize_fingerprint`: lowercased with ``:``
+  and ASCII spaces stripped. Accepted pin formats therefore include
   ``AA:BB:CC...`` (colon-separated, any case), ``aa bb cc ...`` (space-separated),
   and the bare 64-hex-char digest.
 

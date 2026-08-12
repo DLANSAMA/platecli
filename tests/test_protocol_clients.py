@@ -136,50 +136,37 @@ import socket
 
 
 class TestGetFtp(unittest.TestCase):
-    def setUp(self):
-        from bambu_cli.protocols.ftps import connection_manager
-
-        connection_manager.clear()
-        self.addCleanup(connection_manager.clear)
-
     @patch("bambu_cli.protocols.ftps.ImplicitFTPS")
-    def test_get_ftp_success(self, mock_implicit_ftps):
-        # Setup mocks
+    def test_create_raw_ftp_success(self, mock_implicit_ftps):
+        from bambu_cli.protocols.ftps import _create_raw_ftp
+
         mock_ftp_instance = MagicMock()
         mock_implicit_ftps.return_value = mock_ftp_instance
         printer = _test_printer(ip="192.168.1.100", access_code="mock_access_code")
 
-        # get_ftp/_create_raw_ftp now take the printer object
-        result = get_ftp(printer)
+        result = _create_raw_ftp(printer)
 
-        # Assertions
         mock_implicit_ftps.assert_called_once()
         mock_ftp_instance.connect.assert_called_once_with("192.168.1.100", 990, timeout=60)
-        mock_ftp_instance_login = mock_ftp_instance.login
-        mock_ftp_instance_login.assert_called_once_with("bblp", "mock_access_code")
+        mock_ftp_instance.login.assert_called_once_with("bblp", "mock_access_code")
         mock_ftp_instance.prot_p.assert_called_once()
-
-        from bambu_cli.protocols.ftps import PooledFTPWrapper
-
-        self.assertIsInstance(result, PooledFTPWrapper)
-        self.assertEqual(result._ftp, mock_ftp_instance)
+        self.assertIs(result, mock_ftp_instance)
 
     @patch("bambu_cli.protocols.ftps.ImplicitFTPS")
-    def test_get_ftp_connect_failure(self, mock_implicit_ftps):
-        # Setup mock to raise an exception on connect
+    def test_create_raw_ftp_connect_failure(self, mock_implicit_ftps):
+        from bambu_cli.protocols.ftps import _create_raw_ftp
+
         mock_ftp_instance = MagicMock()
         mock_implicit_ftps.return_value = mock_ftp_instance
         mock_ftp_instance.connect.side_effect = OSError("Connection Refused")
         printer = _test_printer(ip="192.168.1.100", access_code="mock_access_code")
 
-        # Call the function and assert it raises
         with self.assertRaises(Exception) as context:
-            get_ftp(printer)
+            _create_raw_ftp(printer)
 
         self.assertEqual(str(context.exception), "Connection Refused")
         mock_implicit_ftps.assert_called_once()
         mock_ftp_instance.connect.assert_called_once_with("192.168.1.100", 990, timeout=60)
-        # Ensure it doesn't try to login if connect fails
         mock_ftp_instance.login.assert_not_called()
         mock_ftp_instance.prot_p.assert_not_called()
 
