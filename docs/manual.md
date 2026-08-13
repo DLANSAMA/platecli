@@ -32,7 +32,7 @@ pip install .
 
 `--json` is a global flag accepted by every command that produces structured output. Responses follow published JSON Schema files under [`docs/schemas/`](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) — agents can validate against them or use them to understand the exact shape of each response.
 
-`--sim` (simulation mode) replaces the real printer with a local stub, so an agent can develop, test, or exercise the full command surface without any hardware present.
+`--sim` (simulation mode) replaces the real printer with a **canned** local stub — fixed status, files, and camera bytes. It is not a protocol test of MQTT/FTPS. Use it to develop agents and scripts without hardware.
 
 Destructive and physical actions — starting a print, pausing or resuming a print, stopping a job, deleting a file, or sending raw G-code — are gated behind an explicit `--confirm` flag. An agent that omits `--confirm` gets a refusal (exit code `5`, `"status": "confirmation_required"`) instead of a physical action, so accidental physical operations never happen. Note this is a gate against accidents, not an authorization boundary: anything that can run `plate` can also pass `--confirm`.
 

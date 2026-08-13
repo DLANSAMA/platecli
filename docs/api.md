@@ -107,7 +107,7 @@ form when looking a code up; the human-readable log line shows both.
 | [`resume.json`](schemas/resume.json) | `resume` |
 | [`stop.json`](schemas/stop.json) | `stop` (incl. confirmation_required) |
 | [`snapshot.json`](schemas/snapshot.json) | `snapshot` |
-| [`upload.json`](schemas/upload.json) | `upload` success / `--dry-run` |
+| [`upload.json`](schemas/upload.json) | `upload` success / `--dry-run` (`size_verified` is `false` when the printer did not answer FTPS `SIZE`) |
 | [`files.json`](schemas/files.json) | `files` listing |
 | [`setup.json`](schemas/setup.json) | `setup` summary |
 | [`migrate_access_code.json`](schemas/migrate_access_code.json) | `setup --migrate-access-code` |

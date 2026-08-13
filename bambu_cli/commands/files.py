@@ -25,8 +25,6 @@ from bambu_cli.utils import emit_json
 
 def cmd_upload(args, ctx=None):
     """Upload a file to the printer via FTPS with binary retry/resume."""
-    from bambu_cli.printer import get_printer
-
     ctx = ctx or RuntimeContext.for_request(args)
     filepath = _expand_path(args.file)
     if filepath.startswith("-"):
@@ -91,7 +89,7 @@ def cmd_upload(args, ctx=None):
         )
     if getattr(args, "dry_run", False):
         logger.info(f"🔍 Dry Run: Validating printer connectivity for {filename}...")
-        printer = get_printer()
+        printer = ctx.printer()
         try:
             # Uploads go over FTPS, so the dry-run must exercise FTPS, not MQTT.
             with printer.get_ftp_client(timeout=5):
@@ -138,7 +136,7 @@ def cmd_upload(args, ctx=None):
 
     logger.info(f"📤 Uploading {filename} ({filesize // 1024}KB)...")
 
-    printer = get_printer()
+    printer = ctx.printer()
 
     progress = None
     task_id = None
@@ -193,6 +191,7 @@ def cmd_upload(args, ctx=None):
                     remote_name=filename,
                     bytes=filesize,
                     uploaded=True,
+                    size_verified=printer.last_size_verified,
                 )
             )
         return filename

@@ -120,6 +120,7 @@ def test_clean_success_with_size_verified(monkeypatch, local_file):
 
     printer = make_printer()
     assert printer.upload_file(path, "/model/job.gcode") is True
+    assert printer.last_size_verified is True
     assert ftp.deleted == ["/model/job.gcode"]
     assert len(ftp.stor_calls) == 1
     assert ftp.stor_calls[0]["rest"] is None
@@ -152,6 +153,7 @@ def test_size_raises_after_success_accepts_with_warning(monkeypatch, local_file,
     with caplog.at_level("WARNING", logger="bambu.printer"):
         result = printer.upload_file(path, "/model/job.gcode")
     assert result is True
+    assert printer.last_size_verified is False
     assert any("Could not verify remote size" in r.message for r in caplog.records)
 
 

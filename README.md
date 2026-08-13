@@ -164,7 +164,7 @@ you can put in a shell script or hand to an agent, use this.
 
 ## Built for AI agents
 
-Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a full fake printer for development without hardware, and the `--confirm` gate means physical actions never happen by accident. Two commands are deliberately human-only — the `go` wizard and the `tui` full-screen UI refuse `--json` and a non-TTY stdin with exit `5`; `plate job <url> --confirm` is the machine path that does the same work. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
+Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a canned printer (not a protocol test) for development without hardware, and the `--confirm` gate means physical actions never happen by accident. Two commands are deliberately human-only — the `go` wizard and the `tui` full-screen UI refuse `--json` and a non-TTY stdin with exit `5`; `plate job <url> --confirm` is the machine path that does the same work. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
 
 ## Documentation
 

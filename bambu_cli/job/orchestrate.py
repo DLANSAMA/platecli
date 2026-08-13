@@ -521,6 +521,9 @@ def _run_job(ctx, args, steps=None):
             raise
         summary["remote_name"] = remote_name
         summary["uploaded"] = True
+        printer = getattr(ctx, "_printer", None)
+        if printer is not None and printer.last_size_verified is not None:
+            summary["size_verified"] = printer.last_size_verified
 
         if getattr(args, "upload_only", False):
             logger.info(f"✅ Job uploaded {remote_name}; print not started because --upload-only was set.")
