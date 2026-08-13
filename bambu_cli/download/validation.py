@@ -53,22 +53,36 @@ def _is_http_url(value):
 def _validate_http_url_or_exit(value):
     parsed = urlparse(value)
     if parsed.scheme.lower() not in ("http", "https"):
-        safe_log_error(f"Invalid URL scheme: {parsed.scheme or 'none'}")
-        abort("", exit_code=EXIT_COMMAND_ERROR)
+        message = f"Invalid URL scheme: {parsed.scheme or 'none'}"
+        safe_log_error(message)
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
     if not parsed.netloc:
-        safe_log_error("Invalid URL: missing host")
-        abort("", exit_code=EXIT_COMMAND_ERROR)
+        message = "Invalid URL: missing host"
+        safe_log_error(message)
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
     if parsed.username is not None or parsed.password is not None:
-        safe_log_error("Invalid URL: embedded credentials are not supported")
-        abort("", exit_code=EXIT_COMMAND_ERROR)
+        message = "Invalid URL: embedded credentials are not supported"
+        safe_log_error(message)
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
 
 
 def _validate_download_url_or_exit(args, source_url, normalized_source, url, failed_step, label):
-    """Validate a download URL and emit structured, redacted JSON on failure."""
+    """Validate a download URL and attach redacted source fields on failure."""
     try:
         _validate_http_url_or_exit(url)
-    except BambuError:
-        raise
+    except BambuError as exc:
+        extra = {
+            "source": _redact_url_credentials(source_url),
+            "normalized_source": _redact_url_credentials(normalized_source),
+            "download_url": _redact_url_credentials(url),
+        }
+        extra.update(exc.extra or {})
+        abort(
+            str(exc),
+            exit_code=exc.exit_code,
+            failed_step=failed_step or exc.failed_step,
+            extra=extra,
+        )
 
 
 def _known_unsupported_download_extension(value):
