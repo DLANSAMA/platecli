@@ -7,15 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import ssl
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli.protocols import ftps as ftps_mod  # noqa: E402
 from bambu_cli.protocols import mqtt_tls as mqtt_tls  # noqa: E402
@@ -26,7 +20,6 @@ pytestmark = pytest.mark.security
 _DER = b"\x30\x82fake-der-bytes-for-pin-tests"
 _FP = hashlib.sha256(_DER).hexdigest()
 _FP_OTHER = "ab" * 32
-
 
 def _tls_sock(der=_DER):
     tls = MagicMock(name="tls_sock")
@@ -45,7 +38,6 @@ def _tls_sock(der=_DER):
     tls._pin_state = state
     return tls
 
-
 def test_mqtt_create_client_with_pin_uses_pinning_context():
     mock_client = MagicMock(name="mqtt_client")
     with patch.object(mqtt_tls, "mqtt") as mock_mqtt_mod:
@@ -60,7 +52,6 @@ def test_mqtt_create_client_with_pin_uses_pinning_context():
     mock_client.tls_insecure_set.assert_called_once_with(True)
     mock_client.tls_set.assert_not_called()
 
-
 def test_pinning_context_match_handshakes_then_verifies():
     tls = _tls_sock(_DER)
     ctx = mqtt_tls.pinning_ssl_context(_FP)
@@ -69,7 +60,6 @@ def test_pinning_context_match_handshakes_then_verifies():
     super_wrap.assert_called()
     tls.do_handshake.assert_called_once()
     assert tls._pin_state["ready"] is True
-
 
 def test_pinning_context_mismatch_raises_sslerror():
     tls = _tls_sock(b"\x00wrong-cert")
@@ -81,7 +71,6 @@ def test_pinning_context_mismatch_raises_sslerror():
         ctx.wrap_socket(object())
     tls.do_handshake.assert_called_once()
 
-
 def test_pinning_context_missing_peer_cert_raises():
     tls = _tls_sock(None)
     ctx = mqtt_tls.pinning_ssl_context(_FP)
@@ -91,7 +80,6 @@ def test_pinning_context_missing_peer_cert_raises():
     ):
         ctx.wrap_socket(object())
 
-
 def test_pinning_context_malformed_pin_raises():
     tls = _tls_sock(_DER)
     ctx = mqtt_tls.pinning_ssl_context("а" + "b" * 63)
@@ -100,7 +88,6 @@ def test_pinning_context_malformed_pin_raises():
         pytest.raises(ssl.SSLError, match="[Mm]alformed"),
     ):
         ctx.wrap_socket(object())
-
 
 def test_ftps_pin_match_on_connect():
     mock_raw = MagicMock()
@@ -128,7 +115,6 @@ def test_ftps_pin_match_on_connect():
     assert mock_ctx.verify_mode == ssl.CERT_NONE
     mock_ctx.wrap_socket.assert_called_once()
 
-
 def test_ftps_pin_mismatch_on_connect():
     mock_raw = MagicMock()
     mock_raw.family = 2
@@ -149,7 +135,6 @@ def test_ftps_pin_mismatch_on_connect():
         pytest.raises(ssl.SSLError, match="fingerprint mismatch"),
     ):
         ftp.connect("192.168.1.1", 990, 5)
-
 
 def test_ftps_data_channel_pin_mismatch():
     """Data-channel wrap must re-check the pin (not only the control channel)."""
@@ -174,7 +159,6 @@ def test_ftps_data_channel_pin_mismatch():
         pytest.raises(ssl.SSLError, match="fingerprint mismatch"),
     ):
         ftp.ntransfercmd("STOR /model/x.3mf")
-
 
 def test_ftps_data_channel_pin_mismatch_closes_socket():
     """Fingerprint mismatch must close the data socket before re-raising (no FD leak)."""
@@ -202,7 +186,6 @@ def test_ftps_data_channel_pin_mismatch_closes_socket():
         ftp.ntransfercmd("STOR /model/x.3mf")
 
     data_tls.close.assert_called_once()
-
 
 def test_ftps_data_channel_malformed_pin_closes_socket():
     """A malformed (non-ASCII) pin must also fail closed as an ssl.SSLError and

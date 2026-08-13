@@ -6,7 +6,7 @@ These assert observable outcomes for netsafety handlers and preflight edge cases
 from __future__ import annotations
 
 import urllib.request
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

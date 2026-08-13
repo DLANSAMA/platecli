@@ -4,21 +4,14 @@ from __future__ import annotations
 
 import json
 import socket
-import sys
 from argparse import Namespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
-
 from bambu_cli.errors import BambuError  # noqa: E402
 from bambu_cli.setup_cmd import common as common_mod  # noqa: E402
 from bambu_cli.setup_cmd import wizard as wizard_mod  # noqa: E402
-
 
 def test_service_info_parsed_addresses():
     info = MagicMock()
@@ -26,13 +19,11 @@ def test_service_info_parsed_addresses():
     info.addresses = []
     assert wizard_mod._service_info_address(info) == "10.0.0.9"
 
-
 def test_service_info_raw_ipv4():
     info = MagicMock()
     info.parsed_addresses = None
     info.addresses = [socket.inet_aton("192.168.1.5")]
     assert wizard_mod._service_info_address(info) == "192.168.1.5"
-
 
 def test_service_info_no_address():
     info = MagicMock()
@@ -41,21 +32,17 @@ def test_service_info_no_address():
     with pytest.raises(ValueError):
         wizard_mod._service_info_address(info)
 
-
 def test_parse_mdns_identity_model_prefix():
     serial, model = wizard_mod._parse_mdns_printer_identity("BBLP-P1S-01P00A123456789._bblp._tcp.local.")
     assert model in ("P1S", "P1P") or serial
-
 
 def test_parse_mdns_identity_plain():
     serial, model = wizard_mod._parse_mdns_printer_identity("something-else.local")
     assert model == "P1P"
 
-
 def test_normalize_model_nozzle():
     assert common_mod._normalize_model("x1c", "P1P") == "X1C"
     assert common_mod._normalize_nozzle("0.6") == "0.6"
-
 
 def test_build_and_write_setup_config(tmp_path, monkeypatch):
     cfg_path = tmp_path / "config.json"
@@ -82,7 +69,6 @@ def test_build_and_write_setup_config(tmp_path, monkeypatch):
     summary = common_mod._setup_summary(config)
     assert summary.get("printer_ip_configured") is True or "printer_ip" in summary
 
-
 def _rerun_setup(cfg_path, monkeypatch, **overrides):
     """Build a fresh wizard config and write it over cfg_path, as a setup re-run does."""
     monkeypatch.setattr(common_mod, "_config_path", lambda: str(cfg_path))
@@ -98,7 +84,6 @@ def _rerun_setup(cfg_path, monkeypatch, **overrides):
     kwargs.update(overrides)
     common_mod._write_setup_config(common_mod._build_setup_config(**kwargs))
     return json.loads(cfg_path.read_text(encoding="utf-8"))
-
 
 def test_setup_rerun_preserves_unmanaged_keys(tmp_path, monkeypatch):
     """Re-running setup must not delete keys the wizard does not manage.
@@ -134,7 +119,6 @@ def test_setup_rerun_preserves_unmanaged_keys(tmp_path, monkeypatch):
     assert data["printer_ip"] == "10.1.2.3"
     assert data["serial"] == "SNABC"
 
-
 def test_setup_rerun_does_not_resurrect_inline_access_code(tmp_path, monkeypatch):
     """Moving an inline access_code into a file must REMOVE the inline copy.
 
@@ -159,7 +143,6 @@ def test_setup_rerun_does_not_resurrect_inline_access_code(tmp_path, monkeypatch
     assert data["access_code_file"] == str(code_path)
     assert data["camera_port"] == "127.0.0.1:1985:1984"  # unmanaged key still preserved
 
-
 def test_setup_rerun_clears_declined_insecure_tls(tmp_path, monkeypatch):
     """Declining insecure_tls must turn it off, not preserve the old true.
 
@@ -173,7 +156,6 @@ def test_setup_rerun_clears_declined_insecure_tls(tmp_path, monkeypatch):
     assert "insecure_tls" not in data
     assert data["camera_port"] == "127.0.0.1:1985:1984"
 
-
 def test_setup_rerun_survives_unreadable_existing_config(tmp_path, monkeypatch):
     """A corrupt existing config must not abort setup; it warns and writes fresh."""
     cfg_path = tmp_path / "config.json"
@@ -183,7 +165,6 @@ def test_setup_rerun_survives_unreadable_existing_config(tmp_path, monkeypatch):
     assert data["printer_ip"] == "10.1.2.3"
     assert any("could not be preserved" in str(c) for c in mock_logger.warning.call_args_list)
 
-
 def test_setup_first_run_with_no_existing_config(tmp_path, monkeypatch):
     """No config on disk is the normal first run, not an error."""
     cfg_path = tmp_path / "nested" / "config.json"
@@ -191,11 +172,9 @@ def test_setup_first_run_with_no_existing_config(tmp_path, monkeypatch):
     assert data["printer_ip"] == "10.1.2.3"
     assert data["serial"] == "SNABC"
 
-
 def test_setup_summary_and_path_details():
     details = common_mod._setup_path_details(access_code_file="/tmp/x")
     assert "access_code_file" in details
-
 
 def test_validate_access_code_file_missing(tmp_path):
     args = Namespace(json=False)
@@ -203,11 +182,9 @@ def test_validate_access_code_file_missing(tmp_path):
         # path that looks invalid with leading dash
         common_mod._validate_setup_access_code_file(args, "-bad")
 
-
 def test_default_access_code_file_path():
     p = common_mod._default_access_code_file_path()
     assert "access_code" in p or "bambu" in p
-
 
 def test_noninteractive_access_code_env(monkeypatch, tmp_path):
     cfg = tmp_path / "c.json"
@@ -236,7 +213,6 @@ def test_noninteractive_access_code_env(monkeypatch, tmp_path):
     data = json.loads(cfg.read_text(encoding="utf-8"))
     assert data["printer_ip"] == "10.0.0.3"
 
-
 def test_noninteractive_access_code_file(tmp_path, monkeypatch):
     cfg = tmp_path / "c.json"
     code = tmp_path / "code"
@@ -262,7 +238,6 @@ def test_noninteractive_access_code_file(tmp_path, monkeypatch):
     ):
         wizard_mod._cmd_setup_noninteractive(args)
     assert cfg.is_file()
-
 
 def test_service_info_parsed_addresses_raises():
     info = MagicMock()

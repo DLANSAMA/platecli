@@ -12,6 +12,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- Tests import the real `paho-mqtt` package instead of stubbing it in
+  `sys.modules`. Audit-named test files are renamed to topic names.
+
 - The `[tui]` extra now requires Textual 8.x (`textual>=8.0,<9.0`). The
   previous `<2.0` cap was hiding an 8.x `Select` API change (`Select.NULL`
   replaced `Select.BLANK`/`False` for no selection). Pilot tests read

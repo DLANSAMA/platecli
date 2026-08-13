@@ -24,14 +24,8 @@ import dataclasses
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli import contracts  # noqa: E402
 from bambu_cli.contracts import Contract, all_contracts  # noqa: E402
@@ -46,15 +40,12 @@ _needs_generator = pytest.mark.skipif(
     reason="schema generation needs 3.10+ to evaluate `X | None`; runtime does not",
 )
 
-
 # --- the registry ------------------------------------------------------------
-
 
 def test_contracts_are_discovered():
     found = all_contracts()
     assert found, "no contracts discovered — all_contracts() derivation is broken"
     assert len({c.schema_name for c in found}) == len(found), "two contracts claim the same schema_name"
-
 
 def test_every_schema_file_has_a_contract_and_vice_versa():
     """Drift in both directions is a failure.
@@ -68,20 +59,16 @@ def test_every_schema_file_has_a_contract_and_vice_versa():
         f"schema-only={sorted(on_disk - modelled)}, contract-only={sorted(modelled - on_disk)}"
     )
 
-
 def test_every_contract_declares_a_title():
     for contract in all_contracts():
         assert contract.schema_title, f"{contract.__name__} has no schema_title"
 
-
 # --- to_payload semantics ----------------------------------------------------
-
 
 def test_unset_optionals_are_omitted_not_nulled():
     payload = contracts.Pause(status="paused", command="pause", paused=True).to_payload()
     assert payload == {"status": "paused", "command": "pause", "paused": True}
     assert "next_command" not in payload
-
 
 def test_keep_none_fields_are_emitted_as_null():
     # setup reports model/nozzle as null rather than dropping them: a consumer
@@ -97,12 +84,10 @@ def test_keep_none_fields_are_emitted_as_null():
     assert payload["model"] is None
     assert payload["nozzle"] is None
 
-
 def test_key_order_follows_field_order():
     # Agents pattern-match on the leading status/command pair.
     payload = contracts.Light(status="light_changed", command="light", action="on", changed=True).to_payload()
     assert list(payload)[:2] == ["status", "command"]
-
 
 def test_extra_keys_pass_through():
     # The schemas allow additional properties; commands add detail beyond the
@@ -112,22 +97,18 @@ def test_extra_keys_pass_through():
     ).to_payload(sequence_id="42")
     assert payload["sequence_id"] == "42"
 
-
 def test_extra_none_is_dropped_like_a_declared_optional():
     payload = contracts.Light(
         status="light_changed", command="light", action="on", changed=True
     ).to_payload(irrelevant=None)
     assert "irrelevant" not in payload
 
-
 def test_contracts_are_frozen():
     light = contracts.Light(status="light_changed", command="light", action="on", changed=True)
     with pytest.raises(dataclasses.FrozenInstanceError):
         light.changed = False  # type: ignore[misc]
 
-
 # --- runtime does not need the generator's Python -----------------------------
-
 
 def test_contracts_import_without_evaluating_annotations():
     """The package must not call get_type_hints() on these models.
@@ -144,7 +125,6 @@ def test_contracts_import_without_evaluating_annotations():
             f"{contract.__name__} has resolved annotations — something called get_type_hints()"
         )
 
-
 def test_pydantic_is_not_a_runtime_dependency():
     """Importing the package must never pull pydantic in.
 
@@ -160,9 +140,7 @@ def test_pydantic_is_not_a_runtime_dependency():
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == "False", "importing bambu_cli pulled in pydantic"
 
-
 # --- generated schemas agree with the models AND with to_payload --------------
-
 
 @_needs_generator
 def test_committed_schemas_match_the_contracts():
@@ -171,7 +149,6 @@ def test_committed_schemas_match_the_contracts():
     import gen_schemas
 
     assert gen_schemas.main(["--check"]) == 0, "docs/schemas is stale — run python scripts/gen_schemas.py"
-
 
 # One representative instance per contract. Kept explicit rather than
 # auto-constructed: the point is to check a *realistic* payload shape.
@@ -246,10 +223,8 @@ SAMPLES = [
     contracts.Tui(status="error", command="tui", exit_code=5, error="interactive only", failed_step="parse"),
 ]
 
-
 def test_samples_cover_every_contract():
     assert {type(s).schema_name for s in SAMPLES} == {c.schema_name for c in all_contracts()}
-
 
 @pytest.mark.parametrize("sample", SAMPLES, ids=lambda s: type(s).schema_name)
 def test_payload_validates_against_its_generated_schema(sample):
@@ -259,7 +234,6 @@ def test_payload_validates_against_its_generated_schema(sample):
     schema = json.loads((SCHEMA_DIR / f"{type(sample).schema_name}.json").read_text(encoding="utf-8"))
     payload = json.loads(json.dumps(sample.to_payload(), default=_as_plain))
     _validate(payload, schema)
-
 
 def _as_plain(obj):
     """Nested contracts/dataclasses render as plain dicts, same as emit_json sees."""

@@ -1,21 +1,11 @@
-"""Regression tests for the config/secrets hardening deep audit.
-
-Each test corresponds to a confirmed audit finding; every one was
-sabotage-verified (revert the fix -> the test fails).
-"""
+"""Config/secrets: insecure_tls coercion, chmod, migration, overwrite."""
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from argparse import Namespace
-from unittest.mock import MagicMock, patch
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
+from unittest.mock import patch
 
 import bambu_cli.config as config
 import bambu_cli.setup_cmd as setup_cmd
@@ -23,9 +13,7 @@ from bambu_cli import context
 from bambu_cli.errors import BambuError
 from bambu_cli.setup_cmd import wizard as wizard_mod
 
-
 # --- Finding 4: insecure_tls strict, fail-CLOSED coercion --------------------
-
 
 class TestInsecureTlsCoercion(unittest.TestCase):
     def test_json_string_false_does_not_disable_tls(self):
@@ -51,9 +39,7 @@ class TestInsecureTlsCoercion(unittest.TestCase):
         self.assertIs(s.insecure_tls, False)
         self.assertTrue(mock_warn.called)
 
-
 # --- Finding 5: chmod failure degrades to a warning, still reads config ------
-
 
 @unittest.skipIf(os.name == "nt", "POSIX permission enforcement only")
 class TestChmodFailureDegradesToWarning(unittest.TestCase):
@@ -77,9 +63,7 @@ class TestChmodFailureDegradesToWarning(unittest.TestCase):
         joined = "\n".join(cm.output)
         self.assertIn("Could not tighten permissions", joined)
 
-
 # --- Finding 1: migration leaves no plaintext-secret .bak --------------------
-
 
 class TestMigrationNoSecretBackup(unittest.TestCase):
     def setUp(self):
@@ -102,9 +86,7 @@ class TestMigrationNoSecretBackup(unittest.TestCase):
             with open(bak, encoding="utf-8") as f:
                 self.assertNotIn("SECRET123", f.read())
 
-
 # --- Finding 7: migration is idempotent / retryable across its two writes -----
-
 
 class TestMigrationRetryable(unittest.TestCase):
     def setUp(self):
@@ -179,9 +161,7 @@ class TestMigrationRetryable(unittest.TestCase):
         with open(self.config_path, encoding="utf-8") as f:
             self.assertEqual(json.load(f)["access_code"], "SECRET123")
 
-
 # --- Findings 3 & 9: BOM-tolerant config reads --------------------------------
-
 
 class TestBomTolerantConfigReads(unittest.TestCase):
     def setUp(self):
@@ -200,9 +180,7 @@ class TestBomTolerantConfigReads(unittest.TestCase):
         result = setup_cmd.migrate_access_code(config_path=self.config_path, access_code_file_path=acf)
         self.assertEqual(result["status"], "migrated")
 
-
 # --- Findings 2 & 4: preflight warnings for config conflicts ------------------
-
 
 class TestPreflightWarnings(unittest.TestCase):
     def _run_preflight(self, cfg):
@@ -249,9 +227,7 @@ class TestPreflightWarnings(unittest.TestCase):
         self.assertEqual(conflict[0]["status"], "warning")
         self.assertNotIn("STALE", conflict[0]["message"])
 
-
 # --- Finding 6: interactive wizard rejects an empty access code ---------------
-
 
 class TestInteractiveEmptyAccessCode(unittest.TestCase):
     def test_empty_input_is_rejected(self):
@@ -266,9 +242,7 @@ class TestInteractiveEmptyAccessCode(unittest.TestCase):
             code = wizard_mod._prompt_interactive_access_code(args, max_attempts=3)
         self.assertEqual(code, "REAL_CODE")
 
-
 # --- Finding 8: setup refuses to clobber an existing differing secret file ----
-
 
 class TestSetupBothFlagsNoClobber(unittest.TestCase):
     def _args(self, tmp_path, code_file, force=False):
@@ -323,9 +297,7 @@ class TestSetupBothFlagsNoClobber(unittest.TestCase):
             wizard_mod._cmd_setup_noninteractive(args)
         self.assertEqual(code_file.read_text(encoding="utf-8").strip(), "NEW_CODE")
 
-
 # --- Review item 2: overwrite guard fails closed on an unreadable file --------
-
 
 class TestOverwriteConflictFailsClosed(unittest.TestCase):
     def setUp(self):
@@ -355,9 +327,7 @@ class TestOverwriteConflictFailsClosed(unittest.TestCase):
         self.assertIsNotNone(conflict)
         self.assertIn("could not be read", conflict)
 
-
 # --- Review item 3: interactive wizard confirms before clobbering -------------
-
 
 class TestInteractiveOverwriteConfirmation(unittest.TestCase):
     def setUp(self):
@@ -384,7 +354,6 @@ class TestInteractiveOverwriteConfirmation(unittest.TestCase):
             f.write("SAME\n")
         with patch.object(wizard_mod, "_prompt_text", side_effect=AssertionError("should not prompt")):
             wizard_mod._confirm_interactive_access_code_file_overwrite(args, self.code_file, "SAME")
-
 
 if __name__ == "__main__":
     unittest.main()

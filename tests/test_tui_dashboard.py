@@ -9,15 +9,8 @@ These run headless on Linux/macOS/Windows CI (no PTY assumptions).
 from __future__ import annotations
 
 import argparse
-import sys
-from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 pytest.importorskip("textual")
 
@@ -60,7 +53,6 @@ _IDLE_SNAPSHOT = StatusSnapshot(
     },
 )
 
-
 class FakeStatusProvider:
     """Returns scripted snapshots; records how many fetches happened."""
 
@@ -73,12 +65,10 @@ class FakeStatusProvider:
         idx = min(self.calls - 1, len(self._snapshots) - 1)
         return self._snapshots[idx]
 
-
 def _args(**kwargs):
     base = {"cmd": "tui", "sim": False, "json": False, "verbose": False}
     base.update(kwargs)
     return argparse.Namespace(**base)
-
 
 def _all_text(app):
     """Concatenate the rendered text of the two dashboard panels.
@@ -93,13 +83,11 @@ def _all_text(app):
             parts.append(widget_text(widget))
     return "\n".join(parts)
 
-
 @pytest.fixture(autouse=True)
 def _reset_context():
     saved = _context.get_current()
     yield
     _context.set_current(saved)
-
 
 async def test_dashboard_renders_status_and_ams():
     provider = FakeStatusProvider([_IDLE_SNAPSHOT])
@@ -113,7 +101,6 @@ async def test_dashboard_renders_status_and_ams():
     assert "TPU" in text
     assert provider.calls >= 1
 
-
 async def test_r_key_triggers_a_refresh():
     provider = FakeStatusProvider([_IDLE_SNAPSHOT])
     app = PlateApp(_args(), TuiDeps(status_provider=provider))
@@ -123,7 +110,6 @@ async def test_r_key_triggers_a_refresh():
         await pilot.press("r")
         await pilot.pause()
     assert provider.calls > before
-
 
 async def test_q_key_quits():
     provider = FakeStatusProvider([_IDLE_SNAPSHOT])
@@ -135,7 +121,6 @@ async def test_q_key_quits():
     # The app is no longer running after quit.
     assert app.is_running is False
 
-
 async def test_unreachable_printer_renders_error_state():
     bad = StatusSnapshot(ok=False, error="Printer unreachable (timeout).")
     provider = FakeStatusProvider([bad])
@@ -144,7 +129,6 @@ async def test_unreachable_printer_renders_error_state():
         await pilot.pause()
         text = _all_text(app)
     assert "unreachable" in text.lower()
-
 
 async def test_dashboard_against_sim_transport():
     """End-to-end sim path: real StatusService + simulation-mode printer."""
@@ -169,7 +153,6 @@ async def test_dashboard_against_sim_transport():
     assert "IDLE" in text
     assert "PLA" in text
 
-
 # --- printer-supplied text is data, never Rich markup ----------------------
 #
 # Every cell in these two panels carries strings the *printer* chose: the name
@@ -177,7 +160,6 @@ async def test_dashboard_against_sim_transport():
 # Rich table is markup-parsed, which both eats content ("model [remix].stl"
 # renders as "model .stl") and can raise ``MarkupError`` mid-render on a name
 # shaped like a closing tag. Passing ``Text`` is what stops both.
-
 
 def _bracketed_file_snapshot(name):
     return StatusSnapshot(
@@ -191,7 +173,6 @@ def _bracketed_file_snapshot(name):
         },
         ams={"units": []},
     )
-
 
 def _tray_type_snapshot(ftype):
     return StatusSnapshot(
@@ -210,7 +191,6 @@ def _tray_type_snapshot(ftype):
         },
     )
 
-
 async def test_status_panel_renders_a_bracketed_filename_verbatim():
     """A "[remix]" tag in the running file's name must survive to the screen."""
     provider = FakeStatusProvider([_bracketed_file_snapshot("model [remix].stl")])
@@ -219,7 +199,6 @@ async def test_status_panel_renders_a_bracketed_filename_verbatim():
         await pilot.pause()
         text = _all_text(app)
     assert "model [remix].stl" in text
-
 
 async def test_status_panel_survives_a_markup_shaped_filename():
     """A closing-tag shape must not blow the render up (MarkupError)."""
@@ -230,7 +209,6 @@ async def test_status_panel_survives_a_markup_shaped_filename():
         text = _all_text(app)  # raises rich.errors.MarkupError against a str cell
     assert "a[/b]c.gcode" in text
 
-
 async def test_ams_panel_renders_a_bracketed_filament_type_verbatim():
     provider = FakeStatusProvider([_tray_type_snapshot("PLA [matte]")])
     app = PlateApp(_args(), TuiDeps(status_provider=provider))
@@ -239,7 +217,6 @@ async def test_ams_panel_renders_a_bracketed_filament_type_verbatim():
         text = _all_text(app)
     assert "PLA [matte]" in text
 
-
 async def test_ams_panel_survives_a_markup_shaped_filament_type():
     provider = FakeStatusProvider([_tray_type_snapshot("a[/b]c")])
     app = PlateApp(_args(), TuiDeps(status_provider=provider))
@@ -247,7 +224,6 @@ async def test_ams_panel_survives_a_markup_shaped_filament_type():
         await pilot.pause()
         text = _all_text(app)
     assert "a[/b]c" in text
-
 
 async def test_dashboard_timer_disarms_on_suspend_and_unmount():
     """A leaked interval would trip ResourceWarning-as-error in CI."""
@@ -262,7 +238,6 @@ async def test_dashboard_timer_disarms_on_suspend_and_unmount():
         dash.on_screen_resume()
         assert dash._timer is not None
     assert dash._timer is None
-
 
 async def test_quit_releases_the_status_provider():
     closed = []

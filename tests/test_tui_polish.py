@@ -8,17 +8,11 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 pytest.importorskip("textual")
 
@@ -37,7 +31,6 @@ from bambu_cli.tui.services import StatusSnapshot  # noqa: E402
 from tests.tui_text import widget_text  # noqa: E402
 
 _SMALL = (80, 24)
-
 
 def _snap(state="IDLE", percent=0):
     return StatusSnapshot(
@@ -65,7 +58,6 @@ def _snap(state="IDLE", percent=0):
         },
     )
 
-
 class ScriptedStatus:
     def __init__(self, snapshots=None):
         self._snapshots = list(snapshots) if snapshots else [_snap()]
@@ -74,7 +66,6 @@ class ScriptedStatus:
     def fetch(self, args):
         self.calls += 1
         return self._snapshots[min(self.calls - 1, len(self._snapshots) - 1)]
-
 
 class Recorder:
     def __init__(self, return_value=None, raises=None):
@@ -88,7 +79,6 @@ class Recorder:
             raise self.raises
         return self.return_value
 
-
 @pytest.fixture(autouse=True)
 def _isolated_cwd(tmp_path, monkeypatch):
     """Never let a declined print drop its preserved file in the repo.
@@ -98,13 +88,11 @@ def _isolated_cwd(tmp_path, monkeypatch):
     """
     monkeypatch.chdir(tmp_path)
 
-
 @pytest.fixture(autouse=True)
 def _reset_context():
     saved = _context.get_current()
     yield
     _context.set_current(saved)
-
 
 def _install_ready_settings(tmp_path, **overrides):
     from dataclasses import replace
@@ -127,12 +115,10 @@ def _install_ready_settings(tmp_path, **overrides):
     _context.set_current(RuntimeContext(settings=settings))
     return settings
 
-
 def _args(**kwargs):
     base = {"cmd": "tui", "sim": False, "json": False, "verbose": False}
     base.update(kwargs)
     return argparse.Namespace(**base)
-
 
 def _sliced_3mf(path, name="cube.gcode.3mf"):
     p = Path(path) / name
@@ -144,10 +130,8 @@ def _sliced_3mf(path, name="cube.gcode.3mf"):
         )
     return str(p)
 
-
 def _slicer_into_workdir(ns=None, **kwargs):
     return _sliced_3mf(ns.output)
-
 
 def _deps(**kwargs):
     kwargs.setdefault("status_provider", ScriptedStatus())
@@ -155,16 +139,13 @@ def _deps(**kwargs):
     kwargs.setdefault("poll_interval", 0.01)
     return TuiDeps(**kwargs)
 
-
 async def _settle(pilot):
     await pilot.pause()
     await pilot.app.workers.wait_for_complete()
     await pilot.pause()
 
-
 def _text(widget) -> str:
     return widget_text(widget)
-
 
 async def _prepared_modal(pilot, app, source):
     """dashboard -> n -> prepare(source) -> confirm modal (returns the modal)."""
@@ -182,7 +163,6 @@ async def _prepared_modal(pilot, app, source):
     assert isinstance(modal, ConfirmModal)
     return modal
 
-
 def _footer_keys(app) -> set[str]:
     """The keys the Footer of the active screen advertises."""
     keys: set[str] = set()
@@ -192,11 +172,9 @@ def _footer_keys(app) -> set[str]:
                 keys.add(active.binding.key)
     return keys
 
-
 # ---------------------------------------------------------------------------
 # Help overlay
 # ---------------------------------------------------------------------------
-
 
 def test_help_text_lists_every_section_and_key():
     text = help_text()
@@ -206,7 +184,6 @@ def test_help_text_lists_every_section_and_key():
             assert key in text
             assert description in text
     assert "confirm dialog" in text  # the safety model is spelled out
-
 
 def test_help_rows_only_document_keys_that_are_really_bound():
     """The overlay must not advertise a key nothing answers to."""
@@ -234,7 +211,6 @@ def test_help_rows_only_document_keys_that_are_really_bound():
     for key in documented:
         assert normalized.get(key, key) in bound, f"help documents unbound key {key!r}"
 
-
 async def test_question_mark_opens_and_closes_the_help_overlay(tmp_path):
     _install_ready_settings(tmp_path)
     app = PlateApp(_args(), _deps())
@@ -250,7 +226,6 @@ async def test_question_mark_opens_and_closes_the_help_overlay(tmp_path):
         assert sum(isinstance(s, HelpScreen) for s in app.screen_stack) == 0
         # ... and the dashboard is back underneath.
         assert isinstance(app.screen, DashboardScreen)
-
 
 async def test_help_closes_with_escape_and_with_q_without_quitting(tmp_path):
     _install_ready_settings(tmp_path)
@@ -270,7 +245,6 @@ async def test_help_closes_with_escape_and_with_q_without_quitting(tmp_path):
         # q closed the overlay; it did NOT quit the app out from under the user.
         assert app.is_running is True
         assert isinstance(app.screen, DashboardScreen)
-
 
 async def test_help_is_reachable_from_every_screen(tmp_path):
     _install_ready_settings(tmp_path)
@@ -316,11 +290,9 @@ async def test_help_is_reachable_from_every_screen(tmp_path):
         await _settle(pilot)
         assert isinstance(app.screen, HelpScreen)
 
-
 # ---------------------------------------------------------------------------
 # Footer consistency
 # ---------------------------------------------------------------------------
-
 
 async def test_footer_advertises_only_keys_that_work_on_that_screen(tmp_path):
     _install_ready_settings(tmp_path)
@@ -339,7 +311,6 @@ async def test_footer_advertises_only_keys_that_work_on_that_screen(tmp_path):
         assert "q" not in prepare_keys
         assert "r" not in prepare_keys
         assert "n" not in prepare_keys
-
 
 async def test_monitor_and_preflight_footers(tmp_path):
     settings = _install_ready_settings(tmp_path)
@@ -361,11 +332,9 @@ async def test_monitor_and_preflight_footers(tmp_path):
         assert isinstance(app.screen, PreflightErrorScreen)
         assert {"escape", "q", "question_mark"} <= _footer_keys(app)
 
-
 # ---------------------------------------------------------------------------
 # 80x24
 # ---------------------------------------------------------------------------
-
 
 async def test_main_flow_at_80x24(tmp_path):
     """Every screen renders and works at the smallest supported terminal."""
@@ -421,7 +390,6 @@ async def test_main_flow_at_80x24(tmp_path):
     assert len(job.calls) == 1
     assert job.calls[0].confirm is True
 
-
 async def test_long_error_text_fits_at_80x24(tmp_path):
     """A very long slicer error wraps inside the prepare panel."""
     from bambu_cli.errors import BambuError
@@ -447,11 +415,9 @@ async def test_long_error_text_fits_at_80x24(tmp_path):
         assert status.outer_size.width <= 80
         assert app.screen.container_size.width <= 80
 
-
 # ---------------------------------------------------------------------------
 # Wiring gaps (previously uncovered branches)
 # ---------------------------------------------------------------------------
-
 
 def test_tuideps_defaults_build_the_real_collaborators():
     from bambu_cli.interactive.core import GoSteps as CoreGoSteps
@@ -471,7 +437,6 @@ def test_tuideps_defaults_build_the_real_collaborators():
     assert deps.get_ams_detector() is read_loaded_ams_material
     assert deps.get_poll_interval() == 3.0
 
-
 def test_tuideps_injection_beats_every_default():
     sentinel = object()
     deps = TuiDeps(
@@ -489,7 +454,6 @@ def test_tuideps_injection_beats_every_default():
     assert deps.get_monitor_service() is sentinel
     assert deps.get_poll_interval() == 0.5
 
-
 def test_run_app_constructs_and_runs_the_app(monkeypatch):
     """``run_app`` is the production entry: it builds PlateApp and runs it."""
     from bambu_cli.tui import app as app_mod
@@ -505,7 +469,6 @@ def test_run_app_constructs_and_runs_the_app(monkeypatch):
     app_mod.run_app(_args(sim=True), deps)
     assert ran["deps"] is deps
     assert ran["args"].sim is True
-
 
 async def test_refresh_key_is_a_no_op_on_screens_without_status(tmp_path):
     """`r` delegates to the active screen only when it can refresh."""
@@ -527,7 +490,6 @@ async def test_refresh_key_is_a_no_op_on_screens_without_status(tmp_path):
         app.action_new_print()
         await _settle(pilot)
         assert sum(isinstance(s, PrepareScreen) for s in app.screen_stack) == 1
-
 
 async def test_second_start_press_cannot_double_submit(tmp_path):
     """Guards on the modal's re-entrant paths (running job blocks everything)."""
@@ -572,7 +534,6 @@ async def test_second_start_press_cannot_double_submit(tmp_path):
     finally:
         gate.set()
 
-
 async def test_unexpected_job_error_is_reported_with_captured_output(tmp_path):
     """A non-BambuError from the job surfaces, with a tail of what it printed."""
     _install_ready_settings(tmp_path)
@@ -606,7 +567,6 @@ async def test_unexpected_job_error_is_reported_with_captured_output(tmp_path):
         modal.query_one("#confirm-cancel").press()
         await _settle(pilot)
 
-
 def test_output_tail_is_bounded():
     from bambu_cli.tui.screens.confirm import _with_output_tail
 
@@ -619,7 +579,6 @@ def test_output_tail_is_bounded():
     assert tailed.endswith("line 49")
     long_line = _with_output_tail("boom", "x" * 500, width=20)
     assert long_line.splitlines()[1] == "x" * 20
-
 
 async def test_app_exit_with_the_modal_open_cleans_the_workdir(tmp_path):
     """Quitting mid-decision deletes the temp workdir (the wizard's finally)."""
@@ -647,7 +606,6 @@ async def test_app_exit_with_the_modal_open_cleans_the_workdir(tmp_path):
         await _settle(pilot)
 
     assert not os.path.exists(workdir)
-
 
 async def test_dashboard_ignores_a_refresh_while_one_is_in_flight(tmp_path):
     import threading
@@ -680,11 +638,9 @@ async def test_dashboard_ignores_a_refresh_while_one_is_in_flight(tmp_path):
     finally:
         gate.set()
 
-
 # ---------------------------------------------------------------------------
 # Service-level branches (pure; no pilot)
 # ---------------------------------------------------------------------------
-
 
 def test_status_service_captures_every_failure_shape(monkeypatch):
     from bambu_cli.tui.services import StatusService, _short_error
@@ -734,7 +690,6 @@ def test_status_service_captures_every_failure_shape(monkeypatch):
     assert StatusService().fetch(_args()).error == "Printer unreachable (OSError)."
     assert _short_error(ValueError("plain")) == "plain"
 
-
 def test_status_service_holds_one_printer_and_releases_mqtt():
     from bambu_cli.tui.services import StatusService
 
@@ -773,7 +728,6 @@ def test_status_service_holds_one_printer_and_releases_mqtt():
     service.close()
     assert printer.releases == 1
 
-
 def test_status_lines_show_targets_and_file():
     from bambu_cli.tui.services import status_lines
 
@@ -794,7 +748,6 @@ def test_status_lines_show_targets_and_file():
     assert rows["Bed"] == "55°C → 60°C"
     assert rows["File"] == "cube.gcode.3mf"
 
-
 def test_job_progress_names_the_file_and_survives_junk():
     from bambu_cli.tui.services import job_progress_lines, progress_percent
 
@@ -805,14 +758,12 @@ def test_job_progress_names_the_file_and_survives_junk():
     assert dict(job_progress_lines(snapshot))["File"] == "cube.gcode.3mf"
     assert progress_percent(snapshot) == 0  # a non-numeric percent is not a crash
 
-
 def test_pipeline_and_monitor_services_build_their_own_collaborators():
     from bambu_cli.interactive.core import GoSteps as CoreGoSteps
     from bambu_cli.tui.services import MonitorService, PipelineService, StatusService
 
     assert isinstance(PipelineService()._get_steps(), CoreGoSteps)
     assert isinstance(MonitorService()._provider(), StatusService)
-
 
 def test_pipeline_cleanup_tolerates_none_and_missing_dirs(tmp_path):
     from bambu_cli.interactive.core import WizardState, make_workdir
@@ -826,7 +777,6 @@ def test_pipeline_cleanup_tolerates_none_and_missing_dirs(tmp_path):
     assert not os.path.exists(workdir)
     service.cleanup_workdir(workdir)  # already gone: still fine
 
-
 def test_pressed_helper_falls_back_when_nothing_is_selected():
     from bambu_cli.tui.screens.prepare import _pressed
 
@@ -836,11 +786,9 @@ def test_pressed_helper_falls_back_when_nothing_is_selected():
     assert _pressed(NoSelection(), ["PLA", "PETG"]) == "PLA"
     assert _pressed(NoSelection(), ["draft", "standard"], default="standard") == "standard"
 
-
 # ---------------------------------------------------------------------------
 # Prepare-screen wiring
 # ---------------------------------------------------------------------------
-
 
 async def test_print_button_opens_the_confirm_modal(tmp_path):
     """The preview's button — not just the API — reaches the modal."""
@@ -867,7 +815,6 @@ async def test_print_button_opens_the_confirm_modal(tmp_path):
         app.screen.query_one("#confirm-cancel").press()
         await _settle(pilot)
 
-
 async def test_confirm_dismissed_without_an_outcome_returns_ownership(tmp_path):
     """Defensive path: a screen dismissal with no outcome destroys nothing."""
     _install_ready_settings(tmp_path)
@@ -892,7 +839,6 @@ async def test_confirm_dismissed_without_an_outcome_returns_ownership(tmp_path):
         assert prepare.result is handed
         assert os.path.exists(printable)
 
-
 async def test_open_confirm_is_refused_without_a_prepared_file(tmp_path):
     _install_ready_settings(tmp_path)
     app = PlateApp(_args(), _deps())
@@ -904,7 +850,6 @@ async def test_open_confirm_is_refused_without_a_prepared_file(tmp_path):
         prepare.open_confirm()  # nothing prepared yet
         await _settle(pilot)
         assert isinstance(app.screen, PrepareScreen)
-
 
 async def test_app_level_help_and_refresh_actions_are_idempotent(tmp_path):
     _install_ready_settings(tmp_path)
@@ -922,7 +867,6 @@ async def test_app_level_help_and_refresh_actions_are_idempotent(tmp_path):
         app.action_help()  # already open: no second overlay
         await _settle(pilot)
         assert sum(isinstance(s, HelpScreen) for s in app.screen_stack) == 1
-
 
 async def test_preflight_screen_quit_goes_through_the_app_guard(tmp_path):
     settings = _install_ready_settings(tmp_path)
@@ -944,7 +888,6 @@ async def test_preflight_screen_quit_goes_through_the_app_guard(tmp_path):
         await pilot.pause()
     assert app.is_running is False
 
-
 async def test_monitor_worker_stops_when_the_screen_goes_away_mid_interval(tmp_path):
     """Leaving between polls ends the loop immediately, not after the interval."""
     _install_ready_settings(tmp_path)
@@ -960,7 +903,6 @@ async def test_monitor_worker_stops_when_the_screen_goes_away_mid_interval(tmp_p
         # If the interruptible wait were a plain sleep, this would hang for 30s.
         await pilot.app.workers.wait_for_complete()
         assert isinstance(app.screen, DashboardScreen)
-
 
 async def test_prepare_ignores_a_second_start_while_one_is_running(tmp_path):
     import threading
@@ -999,7 +941,6 @@ async def test_prepare_ignores_a_second_start_while_one_is_running(tmp_path):
     finally:
         gate.set()
 
-
 async def test_help_is_refused_while_a_job_is_in_flight(tmp_path):
     """No overlay may cover the confirm modal while its job worker runs."""
     import threading
@@ -1032,7 +973,6 @@ async def test_help_is_refused_while_a_job_is_in_flight(tmp_path):
             assert isinstance(app.screen, MonitorScreen)
     finally:
         gate.set()
-
 
 async def test_job_outcome_lands_even_if_an_overlay_covers_the_modal(tmp_path):
     """Second layer: an overlay pushed over the modal cannot strand the result.
@@ -1074,7 +1014,6 @@ async def test_job_outcome_lands_even_if_an_overlay_covers_the_modal(tmp_path):
     finally:
         gate.set()
 
-
 async def test_upload_only_outcome_lands_from_under_an_overlay(tmp_path):
     """Same repair for upload-only: the prepare screen gets its message."""
     import threading
@@ -1107,7 +1046,6 @@ async def test_upload_only_outcome_lands_from_under_an_overlay(tmp_path):
     finally:
         gate.set()
 
-
 async def test_dashboard_shows_the_progress_bar_only_while_a_job_runs(tmp_path):
     """A 0% bar on an idle printer reads as a stalled print, so it stays hidden."""
     from bambu_cli.tui.widgets.job_progress import JobProgress
@@ -1127,7 +1065,6 @@ async def test_dashboard_shows_the_progress_bar_only_while_a_job_runs(tmp_path):
         await pilot.press("r")
         await _settle(pilot)
         assert bar.display is False  # FINISH is not an active state
-
 
 async def test_confirm_modal_says_what_it_is_about_to_print(tmp_path):
     """The riskiest dialog in the app must show more than a temp path."""

@@ -10,27 +10,19 @@ Ground rules (docs/test-backlog.md): never touch the network.
 """
 
 import json
-import sys
 from unittest.mock import MagicMock, patch
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
 
 from bambu_cli import constants, netsafety  # noqa: E402
 from bambu_cli.printables import PrintablesAdapter, resolve_printables_url  # noqa: E402
-
 
 def _clear_ua_caches():
     netsafety.platecli_user_agent.cache_clear()
     netsafety._default_user_agent.cache_clear()
 
-
 def _gql_response(payload):
     resp = MagicMock()
     resp.read.return_value = json.dumps(payload).encode()
     return resp
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_printables_gql_headers_are_honest_and_unforged(mock_logger):
@@ -82,7 +74,6 @@ def test_printables_gql_headers_are_honest_and_unforged(mock_logger):
         assert req.get_header("Origin") is None
         assert req.get_header("Referer") is None
 
-
 def test_user_agent_for_url_policy():
     try:
         _clear_ua_caches()
@@ -113,7 +104,6 @@ def test_user_agent_for_url_policy():
         assert netsafety._host_of(MagicMock()) == ""
     finally:
         _clear_ua_caches()
-
 
 def test_platecli_user_agent_uses_version_source_of_truth():
     had = "VERSION" in constants.__dict__

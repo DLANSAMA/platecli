@@ -17,11 +17,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
-
 from bambu_cli import fsutil  # noqa: E402
 from bambu_cli import netsafety  # noqa: E402
 from bambu_cli.download import extract as extract_mod  # noqa: E402
@@ -35,9 +30,7 @@ from tests.bambu_test_base import _test_printer, settings_ctx  # noqa: E402
 
 pytestmark = pytest.mark.security
 
-
 # --- MQTT sim / status helpers ------------------------------------------------
-
 
 def test_sim_mqtt_client_callbacks_fire():
     client = mqtt_mod._SimMqttClient()
@@ -57,18 +50,15 @@ def test_sim_mqtt_client_callbacks_fire():
     assert client.socket() is None
     assert connected and published
 
-
 def test_get_status_simulation_includes_ams():
     status = mqtt_mod.get_status(_test_printer(simulation_mode=True))
     assert status["gcode_state"] == "IDLE"
     assert "ams" in status
     assert status["ams"]["ams"][0]["tray"][0]["tray_type"] == "PLA"
 
-
 def test_get_version_simulation():
     mods = mqtt_mod.get_version(_test_printer(simulation_mode=True))
     assert mods[0]["name"] == "ota"
-
 
 def test_status_event_int_coercion():
     ev = mqtt_mod._status_event({"gcode_state": "RUNNING", "mc_percent": "42", "layer_num": None}, "update")
@@ -76,7 +66,6 @@ def test_status_event_int_coercion():
     assert ev["mc_percent"] == 42
     assert ev["layer_num"] == 0
     assert ev["command"] == "status"
-
 
 def test_monitor_status_simulation_ndjson(capsys):
     args = Namespace(json=True, sim=True)
@@ -89,10 +78,8 @@ def test_monitor_status_simulation_ndjson(capsys):
     assert events[-1]["event"] == "terminal"
     assert events[-1]["gcode_state"] == "FINISH"
 
-
 def test_send_command_simulation_true():
     assert mqtt_mod.send_command(_test_printer(simulation_mode=True), "{}") is True
-
 
 def test_probe_cert_fingerprint_reads_der():
     der = b"\x30\x82probe"
@@ -114,9 +101,7 @@ def test_probe_cert_fingerprint_reads_der():
         fp = mqtt_mod.probe_cert_fingerprint("10.0.0.1", 990, timeout=1)
     assert fp == expected
 
-
 # --- FTPS sim / naming --------------------------------------------------------
-
 
 def test_sim_ftp_store_list_delete():
     ftp = ftps_mod._SimFtp()
@@ -130,12 +115,10 @@ def test_sim_ftp_store_list_delete():
     f.quit()
     f.close()
 
-
 def test_sim_ftp_size_missing():
     ftp = ftps_mod._SimFtp()
     with pytest.raises((OSError, Exception)):
         ftp.size("/model/nope.3mf")
-
 
 def test_noncolliding_path_creates_sibling(tmp_path):
     p = tmp_path / "model.stl"
@@ -146,16 +129,13 @@ def test_noncolliding_path_creates_sibling(tmp_path):
     assert out.endswith(".stl")
     assert Path(out).parent == tmp_path
 
-
 def test_get_ftp_simulation():
     printer = _test_printer(simulation_mode=True)
     with printer.get_ftp_client(timeout=5) as client:
         assert client is not None
         assert "simulated_file.3mf" in client.nlst()
 
-
 # --- netsafety extras ---------------------------------------------------------
-
 
 def test_safe_http_handler_open_methods():
     opener = netsafety.build_safe_opener()
@@ -164,7 +144,6 @@ def test_safe_http_handler_open_methods():
     assert ua.startswith("Mozilla/5.0")
     # Even the CDN-compatibility UA must carry an honest, attributable token.
     assert "platecli/" in ua
-
 
 def test_link_local_refused():
     with (
@@ -175,9 +154,7 @@ def test_link_local_refused():
         netsafety._get_safe_connection("ll.example", 443, 5, None)
     conn.assert_not_called()
 
-
 # --- ZIP extract safety -------------------------------------------------------
-
 
 def test_extract_zip_rejects_no_model(tmp_path):
     zpath = tmp_path / "empty.zip"
@@ -186,7 +163,6 @@ def test_extract_zip_rejects_no_model(tmp_path):
     args = Namespace(max_download_mb=10, name=None)
     with pytest.raises(ValueError, match="supported model"):
         extract_mod._extract_zip_model(str(zpath), str(tmp_path), args)
-
 
 def test_extract_zip_selects_stl(tmp_path):
     zpath = tmp_path / "m.zip"
@@ -198,14 +174,11 @@ def test_extract_zip_selects_stl(tmp_path):
     assert str(path).endswith(".stl")
     assert Path(path).is_file()
 
-
 def test_sanitize_windows_reserved_names():
     name = naming_mod._sanitize_download_filename("CON.stl")
     assert "CON" not in name.upper() or name != "CON.stl"
 
-
 # --- migrate / preflight ------------------------------------------------------
-
 
 def test_migrate_access_code_writes_file(tmp_path):
     cfg_path = tmp_path / "config.json"
@@ -229,7 +202,6 @@ def test_migrate_access_code_writes_file(tmp_path):
     if sys.platform != "win32":
         assert (code_path.stat().st_mode & 0o777) == 0o600
 
-
 def test_migrate_noop_when_file_already_configured(tmp_path):
     cfg_path = tmp_path / "config.json"
     cfg_path.write_text(
@@ -239,11 +211,9 @@ def test_migrate_noop_when_file_already_configured(tmp_path):
     result = migrate_mod.migrate_access_code(config_path=str(cfg_path))
     assert result["status"] == "noop"
 
-
 def test_preflight_collect_checks_has_python():
     checks = preflight_mod.collect_preflight_checks()
     assert any(c.get("id") == "python" or c.get("name") == "python" or "Python" in str(c) for c in checks)
-
 
 def test_preflight_placeholder_ip_is_error():
     with settings_ctx(printer_ip="192.168.0.XXX"):
@@ -251,16 +221,13 @@ def test_preflight_placeholder_ip_is_error():
     statuses = [c.get("status") or c.get("level") for c in checks]
     assert "error" in statuses or any("placeholder" in str(c).lower() or "printer" in str(c).lower() for c in checks)
 
-
 # --- camera pin missing already covered; docker URL localhost -----------------
-
 
 def test_camera_stream_url_localhost_default():
     from bambu_cli.context import Settings
 
     s = Settings.from_config({"camera_port": "1985:1984"})
     assert "localhost" in s.camera_stream_url
-
 
 def test_send_command_retry_then_fail():
     printer = _test_printer(simulation_mode=False)
@@ -269,7 +236,6 @@ def test_send_command_retry_then_fail():
     with patch.object(mqtt_mod, "create_mqtt_client", return_value=client), patch.object(mqtt_mod.time, "sleep"):
         assert mqtt_mod.send_command(printer, "{}", timeout=0.01, retries=1) is False
     assert client.connect.call_count >= 2
-
 
 def test_get_status_timeout_returns_none():
     printer = _test_printer(simulation_mode=False)
@@ -294,13 +260,11 @@ def test_get_status_timeout_returns_none():
             result = mqtt_mod.get_status(printer, timeout=0.01, retries=0)
     assert result is None
 
-
 def test_common_looks_like_placeholder():
     from bambu_cli.setup_cmd import common as common
 
     assert common._looks_like_placeholder("192.168.0.XXX", {"192.168.0.XXX"})
     assert not common._looks_like_placeholder("10.0.0.5", {"192.168.0.XXX"})
-
 
 def test_common_secure_write_json(tmp_path):
     from bambu_cli.setup_cmd import common as common
@@ -311,12 +275,10 @@ def test_common_secure_write_json(tmp_path):
     if sys.platform != "win32":
         assert (path.stat().st_mode & 0o777) == 0o600
 
-
 def test_migrate_cmd_file_not_found():
     args = Namespace(access_code_file=None, json=False)
     with patch.object(migrate_mod, "_config_path", return_value="/no/such/config.json"), pytest.raises(BambuError):
         migrate_mod._cmd_migrate_access_code(args)
-
 
 def test_migrate_cmd_noop_logs(tmp_path, capsys):
     cfg = tmp_path / "c.json"
@@ -325,7 +287,6 @@ def test_migrate_cmd_noop_logs(tmp_path, capsys):
     with patch.object(migrate_mod, "_config_path", return_value=str(cfg)):
         migrate_mod._cmd_migrate_access_code(args)
     assert "noop" in capsys.readouterr().out
-
 
 def test_secure_write_json_is_atomic_and_backs_up(tmp_path):
     """config.json writes keep a .bak; access-code writes do not.
@@ -357,7 +318,6 @@ def test_secure_write_json_is_atomic_and_backs_up(tmp_path):
     assert not (tmp_path / "access_code.bak").exists()
     assert list(tmp_path.glob("*.tmp")) == []
 
-
 def test_secure_write_falls_back_when_rename_crosses_a_device_boundary(tmp_path):
     """A redirected directory must not make config/secret writes impossible.
 
@@ -387,13 +347,11 @@ def test_secure_write_falls_back_when_rename_crosses_a_device_boundary(tmp_path)
         if sys.platform != "win32":
             assert (sec.stat().st_mode & 0o777) == 0o600
 
-
 def _winerror_oserror():
     """An OSError shaped like Windows ERROR_NOT_SAME_DEVICE (winerror 17)."""
     exc = OSError("The system cannot move the file to a different disk drive")
     exc.winerror = 17
     return exc
-
 
 def test_cross_device_fallback_overwrites_existing_content(tmp_path):
     """The in-place path must fully replace, not append to, a shorter/longer file."""
@@ -405,7 +363,6 @@ def test_cross_device_fallback_overwrites_existing_content(tmp_path):
         common._secure_write_text(str(sec), "SHORT")
     assert sec.read_text() == "SHORT"
 
-
 def test_secure_write_still_raises_on_unrelated_oserror(tmp_path):
     """Only cross-device failures degrade; a real error must not be swallowed."""
     from bambu_cli.setup_cmd import common as common
@@ -415,7 +372,6 @@ def test_secure_write_still_raises_on_unrelated_oserror(tmp_path):
     with patch.object(common.os, "replace", side_effect=denied), pytest.raises(OSError):
         common._secure_write_json(str(path), {"a": 1})
     assert list(tmp_path.glob("*.tmp")) == []
-
 
 def test_secure_write_json_leaves_original_intact_on_serialization_failure(tmp_path):
     from bambu_cli.setup_cmd import common as common

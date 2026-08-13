@@ -20,16 +20,10 @@ Ground rules (docs/test-backlog.md): never touch the network.
 from __future__ import annotations
 
 import json
-import sys
 import urllib.error
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli.printables import (  # noqa: E402
     PrintablesAdapter,
@@ -40,9 +34,7 @@ from bambu_cli.printables import (  # noqa: E402
 
 MODEL_URL = "https://www.printables.com/model/12345-test-model"
 
-
 # --- fakes -------------------------------------------------------------------
-
 
 class _FakeResponse:
     def __init__(self, body):
@@ -56,7 +48,6 @@ class _FakeResponse:
 
     def __exit__(self, *_exc):
         return False
-
 
 class _FakeOpener:
     """Yields the queued responses in order; raises if one is an Exception."""
@@ -74,22 +65,17 @@ class _FakeOpener:
             raise nxt
         return _FakeResponse(nxt)
 
-
 def _adapter(*responses):
     opener = _FakeOpener(*responses)
     return PrintablesAdapter(opener_factory=lambda: opener), opener
 
-
 def _model(stls=None, gcodes=None, name="Test Model"):
     return {"data": {"print": {"name": name, "stls": stls or [], "gcodes": gcodes or []}}}
-
 
 def _link(url):
     return {"data": {"getDownloadLink": {"ok": True, "output": {"link": url}}}}
 
-
 # --- URL detection -----------------------------------------------------------
-
 
 @pytest.mark.parametrize(
     "url",
@@ -101,7 +87,6 @@ def _link(url):
 )
 def test_recognises_model_urls(url):
     assert is_printables_url(url) is True
-
 
 @pytest.mark.parametrize(
     "url",
@@ -119,7 +104,6 @@ def test_recognises_model_urls(url):
 def test_rejects_non_model_urls(url):
     assert is_printables_url(url) is False
 
-
 def test_non_printables_url_resolves_to_a_typed_refusal_without_network():
     adapter, opener = _adapter()  # no responses queued: any call would assert
     result = adapter.resolve("https://www.thingiverse.com/thing:12345")
@@ -127,9 +111,7 @@ def test_non_printables_url_resolves_to_a_typed_refusal_without_network():
     assert result.reason == "not_a_printables_url"
     assert opener.requests == []
 
-
 # --- happy paths -------------------------------------------------------------
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_resolves_stl_to_a_download_url(_log):
@@ -142,7 +124,6 @@ def test_resolves_stl_to_a_download_url(_log):
     assert result.url == "https://download.example.com/part1.stl"
     assert result.filename == "part1.stl"
     assert len(opener.requests) == 2
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_picks_the_largest_of_several_stls(_log):
@@ -157,7 +138,6 @@ def test_picks_the_largest_of_several_stls(_log):
     )
     assert adapter.resolve(MODEL_URL).filename == "part2.stl"
 
-
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_falls_back_to_step_when_no_stl(_log):
     adapter, _ = _adapter(
@@ -167,7 +147,6 @@ def test_falls_back_to_step_when_no_stl(_log):
     result = adapter.resolve(MODEL_URL)
     assert result.ok is True
     assert result.filename == "part1.step"
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_falls_back_to_3mf_and_warns_it_cannot_be_resliced(mock_log):
@@ -179,7 +158,6 @@ def test_falls_back_to_3mf_and_warns_it_cannot_be_resliced(mock_log):
     assert result.ok is True
     assert result.filename == "part1.3mf"
     assert any("falling back to 3MF" in c[0][0] for c in mock_log.warning.call_args_list)
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_stl_is_preferred_over_step_and_3mf(_log):
@@ -195,9 +173,7 @@ def test_stl_is_preferred_over_step_and_3mf(_log):
     )
     assert adapter.resolve(MODEL_URL).filename == "small.stl"
 
-
 # --- failure taxonomy --------------------------------------------------------
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_network_error_is_reported_as_unavailable(_log):
@@ -208,7 +184,6 @@ def test_network_error_is_reported_as_unavailable(_log):
     assert "Network" in result.error
     assert result.remedy
 
-
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_missing_model_is_reported_as_model_unavailable(_log):
     adapter, _ = _adapter({"data": {"print": None}})
@@ -217,7 +192,6 @@ def test_missing_model_is_reported_as_model_unavailable(_log):
     assert result.reason == "printables_model_unavailable"
     assert "12345" in result.error
 
-
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_model_without_printable_files_is_model_unavailable(_log):
     adapter, _ = _adapter(_model(stls=[{"id": "1", "name": "readme.txt", "fileSize": 10}]))
@@ -225,7 +199,6 @@ def test_model_without_printable_files_is_model_unavailable(_log):
     assert result.ok is False
     assert result.reason == "printables_model_unavailable"
     assert "No STL, STEP, or 3MF" in result.error
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_refused_download_link_surfaces_the_servers_reason(_log):
@@ -238,7 +211,6 @@ def test_refused_download_link_surfaces_the_servers_reason(_log):
     assert result.reason == "printables_model_unavailable"
     assert "Download limit reached" in result.error
 
-
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_non_json_body_is_reported_as_a_contract_change(_log):
     adapter, _ = _adapter(b"<html>we redesigned our API</html>")
@@ -248,7 +220,6 @@ def test_non_json_body_is_reported_as_a_contract_change(_log):
     # The remedy must tell the user this is not something retrying will fix.
     assert "manually" in result.remedy or "browser" in result.remedy
 
-
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_file_record_without_id_is_a_contract_change_not_a_crash(_log):
     # id/name are what the download step needs; losing them means the schema moved.
@@ -256,7 +227,6 @@ def test_file_record_without_id_is_a_contract_change_not_a_crash(_log):
     result = adapter.resolve(MODEL_URL)
     assert result.ok is False
     assert result.reason == "printables_contract_changed"
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_ok_link_with_no_url_is_a_contract_change(_log):
@@ -267,7 +237,6 @@ def test_ok_link_with_no_url_is_a_contract_change(_log):
     result = adapter.resolve(MODEL_URL)
     assert result.ok is False
     assert result.reason == "printables_contract_changed"
-
 
 # --- containment: the reason this package exists -----------------------------
 
@@ -292,7 +261,6 @@ HOSTILE_PAYLOADS = [
     pytest.param(b"\x00\x01\x02 not json", id="binary-garbage"),
 ]
 
-
 @pytest.mark.parametrize("payload", HOSTILE_PAYLOADS)
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_malformed_api_response_never_raises(_log, payload):
@@ -302,7 +270,6 @@ def test_malformed_api_response_never_raises(_log, payload):
     assert result.reason
     assert result.error
     assert result.as_tuple() == (None, None)
-
 
 # Factories, not instances: pytest derives parameter ids from the values at
 # collection time, and building an HTTPError up here made it probe attributes
@@ -330,7 +297,6 @@ def test_unexpected_exception_is_contained_not_propagated(_log, make_error):
     assert result.ok is False
     assert result.error
 
-
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_keyboard_interrupt_is_never_swallowed(_log):
     # Containment must not break Ctrl-C.
@@ -338,9 +304,7 @@ def test_keyboard_interrupt_is_never_swallowed(_log):
     with pytest.raises(KeyboardInterrupt):
         adapter.resolve(MODEL_URL)
 
-
 # --- legacy tuple surface ----------------------------------------------------
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_resolve_printables_url_keeps_the_tuple_contract(_log):
@@ -353,12 +317,10 @@ def test_resolve_printables_url_keeps_the_tuple_contract(_log):
         "part1.stl",
     )
 
-
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_resolve_printables_url_returns_none_pair_on_failure(_log):
     adapter, _ = _adapter({"data": {"print": None}})
     assert resolve_printables_url(MODEL_URL, adapter=adapter) == (None, None)
-
 
 @patch("bambu_cli.logging_utils._BACKEND")
 def test_resolve_printables_exposes_the_reason_the_tuple_hides(_log):

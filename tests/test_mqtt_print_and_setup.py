@@ -7,16 +7,10 @@ from __future__ import annotations
 
 import json
 import ssl
-import sys
 from argparse import Namespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli.protocols import camera as camera_mod  # noqa: E402
 from bambu_cli import commands as commands_mod  # noqa: E402
@@ -32,7 +26,6 @@ from bambu_cli.setup_cmd import common as common_mod  # noqa: E402
 from bambu_cli.setup_cmd import migrate as migrate_mod  # noqa: E402
 from bambu_cli.setup_cmd import wizard as wizard_mod  # noqa: E402
 from tests.bambu_test_base import _test_printer  # noqa: E402
-
 
 def test_get_version_with_mock_client():
     printer = _test_printer(simulation_mode=False)
@@ -54,7 +47,6 @@ def test_get_version_with_mock_client():
         mods = mqtt_mod.get_version(printer, timeout=1, retries=0)
     assert mods == [{"name": "ota", "sw_ver": "1"}]
 
-
 def test_get_version_connect_rc_fail():
     printer = _test_printer(simulation_mode=False)
     client = MagicMock()
@@ -70,12 +62,10 @@ def test_get_version_connect_rc_fail():
     ):
         assert mqtt_mod.get_version(printer, timeout=0.01, retries=0) is None
 
-
 def test_execute_print_simulation_missing_file():
     printer = _test_printer(simulation_mode=True)
     with pytest.raises(BambuError):
         mqtt_mod.execute_print_command(printer, "{}", "missing.3mf", dry_run=False)
-
 
 def test_remove_partial_and_download_path(tmp_path):
     p = tmp_path / "x.stl"
@@ -85,12 +75,10 @@ def test_remove_partial_and_download_path(tmp_path):
     fsutil._remove_partial_file(partial)
     fsutil._remove_partial_file(str(tmp_path / "nope"))
 
-
 def test_migrate_noop_no_inline(tmp_path):
     cfg = tmp_path / "c.json"
     cfg.write_text(json.dumps({"printer_ip": "1.1.1.1", "serial": "s"}), encoding="utf-8")
     assert migrate_mod.migrate_access_code(str(cfg))["status"] == "noop"
-
 
 def test_migrate_error_target_exists(tmp_path):
     cfg = tmp_path / "c.json"
@@ -99,7 +87,6 @@ def test_migrate_error_target_exists(tmp_path):
     cfg.write_text(json.dumps({"access_code": "abc", "serial": "s", "printer_ip": "1.1.1.1"}), encoding="utf-8")
     res = migrate_mod.migrate_access_code(str(cfg), str(target))
     assert res["status"] == "error"
-
 
 def test_cmd_migrate_json(tmp_path, capsys, monkeypatch):
     cfg = tmp_path / "c.json"
@@ -110,7 +97,6 @@ def test_cmd_migrate_json(tmp_path, capsys, monkeypatch):
         migrate_mod._cmd_migrate_access_code(args)
     out = capsys.readouterr().out
     assert "migrated" in out
-
 
 def test_camera_missing_pin_raises():
     printer = _test_printer(insecure_tls=False, cert_fingerprint=None)
@@ -124,15 +110,12 @@ def test_camera_missing_pin_raises():
         with patch("ssl.create_default_context", return_value=ctx):
             camera_mod._grab_camera_frame_direct(printer, timeout=1)
 
-
 def test_slicer_normalize_wall_type():
     assert slicer_mod._normalize_wall_type("archaic") == "classic"
     assert isinstance(slicer_mod._normalize_wall_type("inner outer"), (str, type(None)))
 
-
 def test_slicer_executable_problem_missing():
     assert slicer_mod._slicer_executable_problem("/no/such/orca") is not None
-
 
 def test_naming_portable_and_extension():
     assert naming_mod._file_extension("a.STL") == ".stl"
@@ -140,24 +123,20 @@ def test_naming_portable_and_extension():
         "a/b/c.stl"
     )
 
-
 def test_validation_rejects_credentials():
     # Username-only + loopback: still trips embedded-credential rejection without
     # matching privacy_smoke's email / user:pass@host literal patterns.
     with pytest.raises(BambuError):
         validation_mod._validate_http_url_or_exit("http://user@127.0.0.1/a.stl")
 
-
 def test_netsafety_https_connection_class():
     # Instantiation only — connect is mocked at higher level
     c = netsafety.SafeHTTPSConnection("example.com", 443)
     assert c.host == "example.com"
 
-
 def test_slicer_sliced_output_path():
     p = slicer_mod._sliced_output_path("/tmp/foo.stl", "/out", copies=1)
     assert p.endswith(".3mf") or "foo" in p
-
 
 def test_slicer_validate_options_ok():
     args = Namespace(copies=1, infill=15, pattern="grid", walls=None, wall_type=None)
@@ -165,13 +144,11 @@ def test_slicer_validate_options_ok():
     err = slicer_mod._validate_slice_options(args)
     assert err is None
 
-
 def test_slicer_validate_options_invalid():
     # Invalid infill must produce an error string, not None.
     args = Namespace(copies=1, infill=150, pattern="grid", walls=None, wall_type=None)
     err = slicer_mod._validate_slice_options(args)
     assert isinstance(err, str) and len(err) > 0
-
 
 def test_utils_sequence_id():
     from bambu_cli import utils
@@ -179,7 +156,6 @@ def test_utils_sequence_id():
     a = utils.get_sequence_id()
     b = utils.get_sequence_id()
     assert a != b
-
 
 def test_printer_list_delete_sim():
     from bambu_cli.printer import BambuPrinter
@@ -195,7 +171,6 @@ def test_printer_list_delete_sim():
     # status() must return a dict in sim mode (never None).
     assert isinstance(p.status(), dict)
 
-
 def test_printer_upload_sim(tmp_path):
     from bambu_cli.printer import BambuPrinter
 
@@ -203,7 +178,6 @@ def test_printer_upload_sim(tmp_path):
     f.write_bytes(b"0" * 100)
     p = BambuPrinter("1.1.1.1", "S", "c", simulation_mode=True)
     assert p.upload_file(str(f), "/model/a.3mf") is True
-
 
 def test_execute_print_simulation_ok():
     from bambu_cli.protocols.ftps import _SIM_FTP_FILES
@@ -213,7 +187,6 @@ def test_execute_print_simulation_ok():
     # Should complete without raising
     mqtt_mod.execute_print_command(printer, "{}", "ok.3mf", dry_run=False)
     assert "ok.3mf" in _SIM_FTP_FILES
-
 
 def test_execute_print_dry_run_success():
     printer = _test_printer(simulation_mode=False)
@@ -225,7 +198,6 @@ def test_execute_print_dry_run_success():
     with patch.object(printer, "status", return_value={"gcode_state": "IDLE"}):
         mqtt_mod.execute_print_command(printer, "{}", "ok.3mf", dry_run=True)
     mock_ftp.nlst.assert_called()
-
 
 def test_monitor_non_sim_reaches_terminal(capsys):
     printer = _test_printer(simulation_mode=False)
@@ -254,7 +226,6 @@ def test_monitor_non_sim_reaches_terminal(capsys):
         mqtt_mod.monitor_status(args, printer)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.strip()]
     assert any("terminal" in ln or "FINISH" in ln for ln in lines)
-
 
 def test_monitor_merges_deltas_into_streamed_state(capsys):
     """A delta must not stream as gcode_state=UNKNOWN at 0% — it updates the merged state."""
@@ -292,7 +263,6 @@ def test_monitor_merges_deltas_into_streamed_state(capsys):
     assert all(e["total_layer_num"] == 200 for e in events)
     assert events[-1]["gcode_state"] == "FINISH"
 
-
 def test_execute_print_printer_error_code():
     printer = _test_printer(simulation_mode=False)
     client = MagicMock()
@@ -314,7 +284,6 @@ def test_execute_print_printer_error_code():
     ):
         mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
 
-
 def test_cmd_light_failure_raises():
     args = Namespace(action="on", json=False)
     printer = MagicMock()
@@ -325,7 +294,6 @@ def test_cmd_light_failure_raises():
         fr.return_value = ctx
         with pytest.raises(BambuError):
             commands_mod.cmd_light(args)
-
 
 @pytest.mark.parametrize(
     ("cmd_name", "args"),
@@ -372,7 +340,6 @@ def test_json_envelope_survives_logger_failure(cmd_name, args, capsys):
     # The handler really was called; safe_log_error absorbed its RuntimeError.
     broken_logger.error.assert_called_once()
 
-
 def test_slicer_process_profile_compatible(tmp_path):
     p = tmp_path / "p.json"
     p.write_text(json.dumps({"compatible_printers": ["X"]}), encoding="utf-8")
@@ -380,7 +347,6 @@ def test_slicer_process_profile_compatible(tmp_path):
     assert slicer_mod._process_profile_compatible(str(p), "X") is True
     # A printer not in the list must return False.
     assert slicer_mod._process_profile_compatible(str(p), "Y") is False
-
 
 def test_setup_noninteractive_full_success(tmp_path, capsys):
     cfg = tmp_path / "config.json"
@@ -417,7 +383,6 @@ def test_setup_noninteractive_full_success(tmp_path, capsys):
         data = json.loads(out)
         assert data.get("command") in ("setup", "config") or data.get("status")
 
-
 def test_setup_conflicting_access_flags():
     args = Namespace(
         printer_ip="10.0.0.1",
@@ -429,7 +394,6 @@ def test_setup_conflicting_access_flags():
     )
     with pytest.raises(BambuError):
         wizard_mod._cmd_setup_noninteractive(args)
-
 
 def test_setup_placeholder_ip():
     args = Namespace(
@@ -449,7 +413,6 @@ def test_setup_placeholder_ip():
     with pytest.raises(BambuError):
         wizard_mod._cmd_setup_noninteractive(args)
 
-
 def test_send_command_on_connect_fail_rc():
     printer = _test_printer(simulation_mode=False)
     client = MagicMock()
@@ -464,7 +427,6 @@ def test_send_command_on_connect_fail_rc():
         patch.object(mqtt_mod.time, "sleep"),
     ):
         assert mqtt_mod.send_command(printer, "{}", timeout=0.01, retries=0) is False
-
 
 def test_execute_print_real_accept():
     printer = _test_printer(simulation_mode=False)
@@ -499,7 +461,6 @@ def test_execute_print_real_accept():
         "a MagicMock default means the MQTT accept path is unwired"
     )
 
-
 def test_cmd_pause_success(capsys):
     args = Namespace(json=True, confirm=True)
     printer = MagicMock()
@@ -515,7 +476,6 @@ def test_cmd_pause_success(capsys):
     printer.send_command.assert_called_once()
     out = capsys.readouterr().out
     assert "paused" in out.lower() or '"status"' in out
-
 
 def test_setup_noninteractive_writes_config(tmp_path, capsys):
     cfg = tmp_path / "config.json"
@@ -550,14 +510,12 @@ def test_setup_noninteractive_writes_config(tmp_path, capsys):
     assert data["printer_ip"] == "192.168.1.50"
     assert data["serial"] == "01P00A000000000"
 
-
 def test_printer_error_hex_rendering():
     assert mqtt_mod._printer_error_hex(83935248) == "0x0500C010"
     assert mqtt_mod._printer_error_hex(1234) == "0x000004D2"
     assert mqtt_mod._printer_error_hex("nope") is None
     assert mqtt_mod._printer_error_hex(True) is None
     assert mqtt_mod._printer_error_hex(None) is None
-
 
 def test_execute_print_printer_error_code_records_hex():
     from bambu_cli import utils as utils_mod
@@ -586,7 +544,6 @@ def test_execute_print_printer_error_code_records_hex():
     payload = utils_mod._LAST_ERROR_PAYLOAD
     assert payload["printer_error_code"] == 83935248
     assert payload["printer_error_code_hex"] == "0x0500C010"
-
 
 def test_execute_print_connect_refused_is_network_error():
     """rc != 0 (bad CONNACK / wrong access code) must fail, not report success.
@@ -619,7 +576,6 @@ def test_execute_print_connect_refused_is_network_error():
     assert payload["printed"] is False
     # The publish must never have happened on a refused connection.
     assert not client.publish.called
-
 
 def test_execute_print_rejected_result_is_printer_error():
     """A project_file ack with result=fail must not report success."""
@@ -655,7 +611,6 @@ def test_execute_print_rejected_result_is_printer_error():
     assert payload["exit_code"] == EXIT_PRINTER_ERROR
     assert payload["printed"] is False
     assert "invalid ams_mapping" in payload["error"]
-
 
 def test_execute_print_stale_error_before_ack_is_not_blamed():
     """A latched print_error from a prior job (a lone periodic report arriving
@@ -697,7 +652,6 @@ def test_execute_print_stale_error_before_ack_is_not_blamed():
         # Must NOT raise: the stale error predates our ack and is not ours.
         mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
 
-
 def test_execute_print_error_after_ack_is_blamed():
     """An error arriving with/after our project_file ack is still reported."""
     printer = _test_printer(simulation_mode=False)
@@ -723,7 +677,6 @@ def test_execute_print_error_after_ack_is_blamed():
         pytest.raises(BambuError),
     ):
         mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
-
 
 def test_execute_print_on_connect_publishes_once_but_resubscribes():
     """paho auto-reconnect re-firing on_connect must not re-publish the print,
@@ -752,7 +705,6 @@ def test_execute_print_on_connect_publishes_once_but_resubscribes():
     # ack after a mid-window reconnect would be invisible and time the print out.
     report_subscribes = [c for c in client.subscribe.call_args_list if c.args and str(c.args[0]).endswith("/report")]
     assert len(report_subscribes) == 2
-
 
 def test_send_command_on_connect_publishes_once():
     """send_command must not re-publish on a paho auto-reconnect either."""

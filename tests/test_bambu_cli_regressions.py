@@ -16,7 +16,6 @@ These pin four real bugs that shipped because CI only tested `scripts.bambu`:
 """
 
 import os
-import sys
 import types
 import inspect
 import tempfile
@@ -25,19 +24,10 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from tests.bambu_test_base import settings_ctx
-
-# paho-mqtt is an optional/heavy dep; stub it the same way the main suite does so
-# importing the package never fails on environments without it installed.
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
-
-from bambu_cli import bambu  # noqa: E402
-from bambu_cli import slicer  # noqa: E402
-from bambu_cli.protocols import ftps  # noqa: E402
+from bambu_cli import bambu
+from bambu_cli import slicer
+from bambu_cli.protocols import ftps
 from bambu_cli.errors import BambuError
-
 
 def _slice_args(tmpdir, infile):
     """A plain namespace with every attribute cmd_slice reads via getattr/args.x."""
@@ -58,7 +48,6 @@ def _slice_args(tmpdir, infile):
         json=False,
         sim=False,
     )
-
 
 def _fake_popen_factory(returncode, stdout="", stderr="", touch_path=None):
     """Return a class that stands in for subprocess.Popen and yields the given result.
@@ -96,7 +85,6 @@ def _fake_popen_factory(returncode, stdout="", stderr="", touch_path=None):
 
     return _FakePopen
 
-
 def _write_profiles(tmpdir):
     paths = {}
     for nm in ("machine.json", "process.json", "filament.json"):
@@ -106,11 +94,9 @@ def _write_profiles(tmpdir):
         paths[nm] = p
     return paths
 
-
 # ---------------------------------------------------------------------------
 # (a) benign GL/thumbnail non-zero exit is treated as success; real errors fail
 # ---------------------------------------------------------------------------
-
 
 def _write_valid_3mf(path):
     """Write a minimal non-corrupt Bambu-style .3mf (zip with expected members)."""
@@ -123,7 +109,6 @@ def _write_valid_3mf(path):
         )
         zf.writestr("3D/3dmodel.model", '<?xml version="1.0"?><model></model>')
         zf.writestr("Metadata/plate_1.gcode", "; plate\nG28\n")
-
 
 def test_a_benign_gl_noise_nonzero_is_success():
     """rc=1 with GLFW/skip-thumbnail noise + a valid non-empty .3mf -> returns path."""
@@ -165,7 +150,6 @@ def test_a_benign_gl_noise_nonzero_is_success():
 
         assert result == outpath, "benign GL-noise non-zero exit should be treated as success"
 
-
 def test_a_corrupt_3mf_rejected_despite_benign_gl_noise():
     """Non-empty but corrupt/truncated .3mf must fail even with GLFW noise present."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -206,7 +190,6 @@ def test_a_corrupt_3mf_rejected_despite_benign_gl_noise():
         code = getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None))
         assert code not in (0, None), f"corrupt .3mf must exit non-zero, got {code!r}"
 
-
 def test_a_real_error_still_fails():
     """rc=1 with 'nothing to be sliced' and no .3mf -> must sys.exit non-zero."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -246,11 +229,9 @@ def test_a_real_error_still_fails():
         code = getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None))
         assert code not in (0, None), f"real slice error must exit non-zero, got {code!r}"
 
-
 # ---------------------------------------------------------------------------
 # (b) FTPS teardown uses close(), never quit()
 # ---------------------------------------------------------------------------
-
 
 class _RecordingFtp:
     """Fake ftp object that records which teardown methods were called."""
@@ -267,7 +248,6 @@ class _RecordingFtp:
     def voidcmd(self, *a, **k):
         self.calls.append("voidcmd")
 
-
 def test_b_get_ftp_client_teardown_uses_close_not_quit():
     from tests.bambu_test_base import _test_printer
 
@@ -278,7 +258,6 @@ def test_b_get_ftp_client_teardown_uses_close_not_quit():
             pass
     assert "close" in fake.calls, "get_ftp_client must close the FTP connection"
     assert "quit" not in fake.calls, "get_ftp_client must NOT call the hanging quit()"
-
 
 def test_b_get_ftp_client_teardown_uses_close_not_quit_on_error():
     from tests.bambu_test_base import _test_printer
@@ -291,17 +270,14 @@ def test_b_get_ftp_client_teardown_uses_close_not_quit_on_error():
     assert "close" in fake.calls, "__exit__ on error must close the FTP connection"
     assert "quit" not in fake.calls, "__exit__ must NOT call the hanging quit()"
 
-
 # ---------------------------------------------------------------------------
 # (c) download path can resolve _record_download_success (was a NameError)
 # ---------------------------------------------------------------------------
-
 
 def test_c_record_download_success_importable():
     from bambu_cli.utils import _record_download_success
 
     assert callable(_record_download_success)
-
 
 def test_c_cmd_download_references_record_download_success_without_nameerror():
     """The _cmd_download body must reference a *resolvable* name.
@@ -317,11 +293,9 @@ def test_c_cmd_download_references_record_download_success_without_nameerror():
     exec("from bambu_cli.utils import _record_download_success", ns)
     assert callable(ns["_record_download_success"])
 
-
 # ---------------------------------------------------------------------------
 # (d) snapshot prefers the direct camera grab and does NOT use Docker
 # ---------------------------------------------------------------------------
-
 
 def test_d_snapshot_uses_direct_grab_not_docker():
     from bambu_cli.commands.snapshot import cmd_snapshot as _cmd_snapshot
@@ -352,11 +326,9 @@ def test_d_snapshot_uses_direct_grab_not_docker():
             assert "docker" not in joined.lower(), f"snapshot must not call docker, saw: {cmd!r}"
         assert mock_run.call_count == 0, "direct grab path must not shell out at all"
 
-
 # ---------------------------------------------------------------------------
 # Download hardening regressions (SSRF + size limits)
 # ---------------------------------------------------------------------------
-
 
 def test_get_safe_connection_blocks_private_ip():
     """DNS resolving to a private address must be refused (SSRF guard)."""
@@ -370,7 +342,6 @@ def test_get_safe_connection_blocks_private_ip():
         with pytest.raises(urllib.error.URLError):
             download._get_safe_connection("evil.example.com", 80, 5, None)
         download._dns_cache.clear()
-
 
 def test_safe_opener_has_no_default_http_handlers():
     """Every hop (including redirects) must connect via the Safe* handlers, and
@@ -390,7 +361,6 @@ def test_safe_opener_has_no_default_http_handlers():
     proxy_handlers = [h for h in opener.handlers if isinstance(h, urllib.request.ProxyHandler)]
     for handler in proxy_handlers:
         assert not handler.proxies
-
 
 def test_download_enforces_size_limit_mid_stream(tmp_path):
     """A response with no Content-Length must still be cut off at the limit."""
@@ -415,7 +385,6 @@ def test_download_enforces_size_limit_mid_stream(tmp_path):
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
-
 
 def test_ftps_data_socket_unwrap_is_noop():
     """Bambu firmware never answers TLS close-notify on the data channel;

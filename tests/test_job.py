@@ -13,10 +13,8 @@ import logging
 import os
 import sys
 import zipfile
-from unittest.mock import MagicMock
 
 import pytest
-
 
 @contextlib.contextmanager
 def _capture_bambu_warnings():
@@ -35,12 +33,6 @@ def _capture_bambu_warnings():
     finally:
         log.removeHandler(handler)
 
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
-
 from bambu_cli import bambu  # noqa: E402
 from bambu_cli import job  # noqa: E402
 from bambu_cli import utils  # noqa: E402
@@ -50,7 +42,6 @@ from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR  # noqa: E40
 from bambu_cli.context import RuntimeContext  # noqa: E402
 from bambu_cli.job import JobSteps, _run_job  # noqa: E402
 from bambu_cli.errors import BambuError
-
 
 def default_steps(**overrides):
     """``JobSteps`` wired to the real command handlers, with optional fakes.
@@ -71,19 +62,15 @@ def default_steps(**overrides):
     steps.update(overrides)
     return JobSteps(**steps)
 
-
 def _parse(argv):
     return build_parser().parse_args(argv)
-
 
 def _ctx():
     return RuntimeContext()
 
-
 def _read_json(capsys):
     out = capsys.readouterr().out
     return json.loads(out)
-
 
 def fake_download(path):
     def _run(args):
@@ -91,13 +78,11 @@ def fake_download(path):
 
     return _run
 
-
 def fake_slice(path):
     def _run(args):
         return path
 
     return _run
-
 
 def fake_upload(remote_name):
     def _run(args):
@@ -105,13 +90,11 @@ def fake_upload(remote_name):
 
     return _run
 
-
 def fake_print():
     def _run(args):
         return None
 
     return _run
-
 
 def failing_step(command, exit_code, error, **extra):
     """Build a fake step that mimics a real cmd_* failure: records the
@@ -125,7 +108,6 @@ def failing_step(command, exit_code, error, **extra):
 
     return _run
 
-
 @pytest.fixture(autouse=True)
 def _reset_last_error():
     utils._LAST_ERROR_PAYLOAD = None
@@ -134,11 +116,9 @@ def _reset_last_error():
     utils._LAST_ERROR_PAYLOAD = None
     utils._LAST_DOWNLOAD_PAYLOAD = None
 
-
 # ---------------------------------------------------------------------------
 # Delegated-step failure payloads
 # ---------------------------------------------------------------------------
-
 
 def test_download_failure_detail_flows_through(tmp_path, capsys):
     url = "https://example.com/model.stl"
@@ -157,7 +137,6 @@ def test_download_failure_detail_flows_through(tmp_path, capsys):
     assert payload["download_error"]["error"] == "Could not connect"
     # Dual-write onto ctx.last_error.
     assert ctx.last_error["command"] == "download"
-
 
 def test_slice_failure_detail_flows_through(tmp_path):
     stl = tmp_path / "model.stl"
@@ -182,7 +161,6 @@ def test_slice_failure_detail_flows_through(tmp_path):
     assert payload["slice_error"]["failed_step"] == "orca"
     assert ctx.last_error["command"] == "slice"
 
-
 def test_upload_failure_detail_flows_through(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -196,7 +174,6 @@ def test_upload_failure_detail_flows_through(tmp_path, capsys):
     assert payload["failed_step"] == "upload"
     assert payload["upload_error"]["error"] == "FTPS connection refused"
     assert ctx.last_error["command"] == "upload"
-
 
 def test_print_failure_detail_flows_through(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
@@ -217,11 +194,9 @@ def test_print_failure_detail_flows_through(tmp_path, capsys):
     assert "recovery_hint" in payload
     assert ctx.last_error["command"] == "print"
 
-
 # ---------------------------------------------------------------------------
 # next_command payloads
 # ---------------------------------------------------------------------------
-
 
 def test_uploaded_only_next_command(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
@@ -235,7 +210,6 @@ def test_uploaded_only_next_command(tmp_path, capsys):
     assert payload["printed"] is False
     assert payload["next_command"] == ["print", "model.3mf", "--confirm", "--json"]
 
-
 def test_uploaded_not_printed_next_command(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -245,7 +219,6 @@ def test_uploaded_not_printed_next_command(tmp_path, capsys):
     payload = _read_json(capsys)
     assert payload["status"] == "uploaded_not_printed"
     assert payload["next_command"] == ["print", "model.3mf", "--confirm", "--json"]
-
 
 def test_uploaded_next_command_includes_ams_and_flags(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
@@ -280,11 +253,9 @@ def test_uploaded_next_command_includes_ams_and_flags(tmp_path, capsys):
         "--skip-flow-cali",
     ]
 
-
 def _bad_ams_argv(source, *extra):
     """--ams-mapping without --use-ams: rejected by `print`, so job must reject it too."""
     return ["job", str(source), "--json", "--ams-mapping", "0,1", *extra]
-
 
 @pytest.mark.parametrize(
     "extra",
@@ -316,7 +287,6 @@ def test_print_options_validated_without_confirm(tmp_path, capsys, extra):
     assert payload["printed"] is False
     assert payload["next_command"] is None
 
-
 def test_upload_only_next_command_is_itself_valid(tmp_path, capsys):
     """Whatever next_command we hand back must survive `print`'s own validation.
 
@@ -337,7 +307,6 @@ def test_upload_only_next_command_is_itself_valid(tmp_path, capsys):
     _, error = _parse_print_options(replayed)
     assert error is None, f"job emitted a next_command that print rejects: {error}"
 
-
 def test_valid_and_absent_print_options_still_pass(tmp_path, capsys):
     """The new validation must not reject the ordinary cases."""
     ready = tmp_path / "model.3mf"
@@ -348,7 +317,6 @@ def test_valid_and_absent_print_options_still_pass(tmp_path, capsys):
     ):
         _run_job(_ctx(), _parse(argv), default_steps(upload=fake_upload("model.3mf")))
         assert _read_json(capsys)["status"] == "dry_run_local_skipped"
-
 
 def test_printed_success(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
@@ -361,11 +329,9 @@ def test_printed_success(tmp_path, capsys):
     assert payload["printed"] is True
     assert payload["uploaded"] is True
 
-
 # ---------------------------------------------------------------------------
 # Dry-run matrix
 # ---------------------------------------------------------------------------
-
 
 @pytest.mark.parametrize(
     "filename,would_slice,would_extract",
@@ -395,7 +361,6 @@ def test_dry_run_direct_url(filename, would_slice, would_extract, capsys):
     if not would_extract:
         assert payload["remote_name"] is not None
 
-
 def test_dry_run_printables_model_url_predicts_slice(capsys):
     """Regression: a Printables model page dry-run must report would_slice=True.
 
@@ -416,7 +381,6 @@ def test_dry_run_printables_model_url_predicts_slice(capsys):
     # Remote name stays unpredictable offline for a Printables page; would_slice
     # being True must not fabricate one.
     assert payload["remote_name"] is None
-
 
 def test_predictor_and_doer_share_slice_predicate():
     """The dry-run URL prediction routes through the same predicate as the real run.
@@ -448,7 +412,6 @@ def test_predictor_and_doer_share_slice_predicate():
         # simulate by feeding the predicted extension back through it.
         assert _ext_would_slice(_file_extension(f"x{predicted_ext}")) is expected, url
 
-
 def test_dry_run_extensionless_url_predicts_slice(capsys):
     """An extension-less direct link predicts slicing, matching the doer's fallback.
 
@@ -464,7 +427,6 @@ def test_dry_run_extensionless_url_predicts_slice(capsys):
     assert payload["would_slice"] is True
     assert payload["would_extract"] is False
 
-
 def test_dry_run_local_model_file(tmp_path, capsys):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
@@ -476,7 +438,6 @@ def test_dry_run_local_model_file(tmp_path, capsys):
     assert payload["would_upload"] is True
     assert payload["would_download"] is False
     assert payload["remote_name"]
-
 
 def test_dry_run_local_zip(tmp_path, capsys):
     zpath = tmp_path / "model.zip"
@@ -490,7 +451,6 @@ def test_dry_run_local_zip(tmp_path, capsys):
     assert payload["would_slice"] is True
     assert payload["would_upload"] is True
 
-
 def test_dry_run_local_printer_ready_file(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -501,7 +461,6 @@ def test_dry_run_local_printer_ready_file(tmp_path, capsys):
     assert payload["would_upload"] is True
     assert payload["would_slice"] is False
     assert payload["printable_path"] == _display_path(str(ready))
-
 
 def test_dry_run_local_gcode_3mf_is_print_ready_not_sliced(tmp_path, capsys):
     """A local .gcode.3mf is print-ready: dry-run must report would_slice=False."""
@@ -514,7 +473,6 @@ def test_dry_run_local_gcode_3mf_is_print_ready_not_sliced(tmp_path, capsys):
     assert payload["would_slice"] is False
     assert payload["would_upload"] is True
     assert payload["remote_name"] == "plate.gcode.3mf"
-
 
 @pytest.mark.parametrize(
     "member,would_slice",
@@ -542,7 +500,6 @@ def test_dry_run_local_zip_member_slice_matches_predicate(tmp_path, member, woul
     assert payload["would_slice"] is would_slice
     assert payload["would_upload"] is True
 
-
 def test_dry_run_local_printer_ready_empty_file_fails(tmp_path):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"")
@@ -550,7 +507,6 @@ def test_dry_run_local_printer_ready_empty_file_fails(tmp_path):
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
-
 
 def test_dry_run_would_create_output_dir(tmp_path, capsys):
     stl = tmp_path / "model.stl"
@@ -562,11 +518,9 @@ def test_dry_run_would_create_output_dir(tmp_path, capsys):
     assert payload["would_create_output_dir"] is True
     assert not missing_out.exists()
 
-
 # ---------------------------------------------------------------------------
 # ZIP paths
 # ---------------------------------------------------------------------------
-
 
 def test_zip_bad_archive_fails(tmp_path):
     bad_zip = tmp_path / "bad.zip"
@@ -575,7 +529,6 @@ def test_zip_bad_archive_fails(tmp_path):
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
-
 
 def test_zip_no_supported_member_fails(tmp_path):
     zpath = tmp_path / "empty.zip"
@@ -586,7 +539,6 @@ def test_zip_no_supported_member_fails(tmp_path):
         _run_job(_ctx(), args, JobSteps())
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
 
-
 def test_zip_oversized_member_fails_in_dry_run(tmp_path, capsys):
     zpath = tmp_path / "big.zip"
     with zipfile.ZipFile(zpath, "w") as zf:
@@ -595,7 +547,6 @@ def test_zip_oversized_member_fails_in_dry_run(tmp_path, capsys):
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
-
 
 def test_zip_unsafe_member_filename_fails(tmp_path, capsys):
     # The sanitized member name is short/safe on its own, but the predicted
@@ -614,7 +565,6 @@ def test_zip_unsafe_member_filename_fails(tmp_path, capsys):
     assert "unsafe printer filename" in payload["error"].lower()
     assert payload["archive_entry"] is None
 
-
 def test_zip_archive_entry_propagates_to_summary(tmp_path, capsys):
     zpath = tmp_path / "model.zip"
     with zipfile.ZipFile(zpath, "w") as zf:
@@ -632,11 +582,9 @@ def test_zip_archive_entry_propagates_to_summary(tmp_path, capsys):
     assert payload["extracted_path"] is not None
     assert payload["uploaded"] is True
 
-
 # ---------------------------------------------------------------------------
 # --output handling
 # ---------------------------------------------------------------------------
-
 
 def test_output_created_when_needed(tmp_path, capsys):
     stl = tmp_path / "model.stl"
@@ -653,7 +601,6 @@ def test_output_created_when_needed(tmp_path, capsys):
     assert payload["workdir"] == _display_path(str(out_dir))
     assert payload["uploaded"] is True
 
-
 def test_output_ignored_for_printer_ready_local_file(tmp_path, capsys, caplog):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -665,7 +612,6 @@ def test_output_ignored_for_printer_ready_local_file(tmp_path, capsys, caplog):
     payload = _read_json(capsys)
     assert payload["uploaded"] is True
 
-
 def test_output_invalid_dash_prefixed_value_fails(tmp_path):
     stl = tmp_path / "model.stl"
     stl.write_bytes(b"solid x")
@@ -673,7 +619,6 @@ def test_output_invalid_dash_prefixed_value_fails(tmp_path):
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
-
 
 def test_temp_workdir_cleanup_when_no_output_given(tmp_path):
     stl = tmp_path / "model.stl"
@@ -691,11 +636,9 @@ def test_temp_workdir_cleanup_when_no_output_given(tmp_path):
     assert captured_workdir["workdir"]
     assert not os.path.exists(captured_workdir["workdir"])
 
-
 # ---------------------------------------------------------------------------
 # Late-binding default JobSteps still resolve real command handlers.
 # ---------------------------------------------------------------------------
-
 
 def test_url_job_reuses_download_workdir_and_cleans_up(tmp_path):
     # Regression test: a URL-sourced job that slices used to allocate a
@@ -723,7 +666,6 @@ def test_url_job_reuses_download_workdir_and_cleans_up(tmp_path):
     assert captured["slice_workdir"] == captured["download_workdir"]
     assert not os.path.exists(captured["download_workdir"])
 
-
 def test_default_job_steps_delegate_through_commands(tmp_path, capsys, monkeypatch):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -734,7 +676,6 @@ def test_default_job_steps_delegate_through_commands(tmp_path, capsys, monkeypat
     payload = _read_json(capsys)
     assert payload["status"] == "uploaded"
     assert payload["remote_name"] == "model.3mf"
-
 
 def test_cmd_job_composition_root_wires_the_real_steps(tmp_path, capsys, monkeypatch):
     # commands.cmd_job is the composition root: it owns the knowledge of which
@@ -749,11 +690,9 @@ def test_cmd_job_composition_root_wires_the_real_steps(tmp_path, capsys, monkeyp
     payload = _read_json(capsys)
     assert payload["status"] == "uploaded"
 
-
 # ---------------------------------------------------------------------------
 # Source-validation failures (fail before any step runs, so no steps needed)
 # ---------------------------------------------------------------------------
-
 
 def test_non_http_url_scheme_rejected(capsys):
     args = _parse(["job", "ftp://example.com/model.stl", "--json"])
@@ -763,7 +702,6 @@ def test_non_http_url_scheme_rejected(capsys):
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "invalid url source" in payload["error"].lower()
-
 
 def test_http_url_with_embedded_credentials_rejected_and_redacted(capsys):
     # Username-only + IP host: still trips the embedded-credentials rejection,
@@ -777,7 +715,6 @@ def test_http_url_with_embedded_credentials_rejected_and_redacted(capsys):
     # Userinfo must be stripped from the machine-readable failure.
     assert "user@" not in json.dumps(payload)
 
-
 def test_local_file_not_found_fails(tmp_path, capsys):
     args = _parse(["job", str(tmp_path / "missing.stl"), "--json"])
     with pytest.raises((SystemExit, BambuError)) as excinfo:
@@ -787,14 +724,12 @@ def test_local_file_not_found_fails(tmp_path, capsys):
     assert payload["failed_step"] == "validate"
     assert "file not found" in payload["error"].lower()
 
-
 def test_directory_source_fails(tmp_path, capsys):
     args = _parse(["job", str(tmp_path), "--json"])
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     assert _read_json(capsys)["failed_step"] == "validate"
-
 
 def test_unsupported_local_file_type_fails(tmp_path, capsys):
     junk = tmp_path / "notes.txt"
@@ -806,7 +741,6 @@ def test_unsupported_local_file_type_fails(tmp_path, capsys):
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "unsupported source file type" in payload["error"].lower()
-
 
 def test_unsafe_sliced_local_name_rejected_before_slicing(tmp_path, capsys):
     # A 150-char stem is fine on its own, but the predicted "<stem>_sliced.3mf"
@@ -828,7 +762,6 @@ def test_unsafe_sliced_local_name_rejected_before_slicing(tmp_path, capsys):
     assert payload["failed_step"] == "validate"
     assert "unsafe printer filename" in payload["error"].lower()
 
-
 def test_unsafe_printer_ready_local_name_rejected_before_upload(tmp_path, capsys):
     ready = tmp_path / (("a" * 200) + ".3mf")
     ready.write_bytes(b"x" * 10)
@@ -847,11 +780,9 @@ def test_unsafe_printer_ready_local_name_rejected_before_upload(tmp_path, capsys
     assert payload["failed_step"] == "validate"
     assert "unsafe name" in payload["error"].lower()
 
-
 # ---------------------------------------------------------------------------
 # Slice- and print-option validation
 # ---------------------------------------------------------------------------
-
 
 def test_invalid_slice_option_fails(tmp_path, capsys):
     stl = tmp_path / "model.stl"
@@ -864,7 +795,6 @@ def test_invalid_slice_option_fails(tmp_path, capsys):
     assert payload["failed_step"] == "validate"
     assert "--copies" in payload["error"]
 
-
 def test_ams_mapping_without_use_ams_fails(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -876,7 +806,6 @@ def test_ams_mapping_without_use_ams_fails(tmp_path, capsys):
     assert payload["failed_step"] == "validate"
     assert "--ams-mapping requires --use-ams" in payload["error"]
 
-
 def test_ams_mapping_non_integer_fails(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -886,7 +815,6 @@ def test_ams_mapping_non_integer_fails(tmp_path, capsys):
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     assert "Invalid AMS mapping format" in _read_json(capsys)["error"]
 
-
 def test_ams_mapping_negative_slot_fails(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -895,7 +823,6 @@ def test_ams_mapping_negative_slot_fails(tmp_path, capsys):
         _run_job(_ctx(), args, JobSteps())
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
     assert "zero or positive" in _read_json(capsys)["error"].lower()
-
 
 def test_ams_mapping_slot_too_high_fails(tmp_path, capsys):
     """AMS has 4 slots/unit; reject indexes beyond a realistic multi-AMS max."""
@@ -909,7 +836,6 @@ def test_ams_mapping_slot_too_high_fails(tmp_path, capsys):
     assert payload["failed_step"] == "validate"
     assert "100" in payload["error"] or "slot" in payload["error"].lower()
 
-
 def test_use_ams_without_mapping_fails(tmp_path, capsys):
     """--use-ams with no mapping must not silently omit ams_mapping for firmware defaults."""
     ready = tmp_path / "model.3mf"
@@ -922,11 +848,9 @@ def test_use_ams_without_mapping_fails(tmp_path, capsys):
     assert payload["failed_step"] == "validate"
     assert "--use-ams" in payload["error"] and "--ams-mapping" in payload["error"]
 
-
 # ---------------------------------------------------------------------------
 # --name is URL-only; warn and ignore for a local source
 # ---------------------------------------------------------------------------
-
 
 def test_name_ignored_for_local_file_warns(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
@@ -943,11 +867,9 @@ def test_name_ignored_for_local_file_warns(tmp_path, capsys):
     # The remote name comes from the file, not --name.
     assert payload["remote_name"] == "model.3mf"
 
-
 # ---------------------------------------------------------------------------
 # Successful URL download -> continue (the archive-detection branch)
 # ---------------------------------------------------------------------------
-
 
 def test_url_download_success_flows_into_slice_and_upload(tmp_path, capsys):
     downloaded = tmp_path / "model.stl"
@@ -969,7 +891,6 @@ def test_url_download_success_flows_into_slice_and_upload(tmp_path, capsys):
     assert payload["downloaded_path"] == _display_path(str(downloaded))
     assert payload["uploaded"] is True
     assert payload["remote_name"] == "model.3mf"
-
 
 def test_url_download_reports_extracted_archive_member(tmp_path, capsys):
     # Simulate cmd_download having transparently extracted a ZIP: it records a
@@ -998,7 +919,6 @@ def test_url_download_reports_extracted_archive_member(tmp_path, capsys):
     assert payload["extracted_path"] == _display_path(str(extracted))
     assert payload["uploaded"] is True
 
-
 def test_url_invalid_max_download_mb_fails(capsys):
     args = _parse(["job", "https://example.com/model.stl", "--json", "--max-download-mb", "0"])
     with pytest.raises((SystemExit, BambuError)) as excinfo:
@@ -1007,7 +927,6 @@ def test_url_invalid_max_download_mb_fails(capsys):
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
     assert "--max-download-mb must be a positive integer" in payload["error"]
-
 
 def test_run_job_uses_injected_upload_step(tmp_path, capsys, monkeypatch):
     # The orchestrator drives whatever the caller wired in; it no longer
@@ -1018,7 +937,6 @@ def test_run_job_uses_injected_upload_step(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr("bambu_cli.commands.cmd_upload", lambda ns: "model.3mf")
     _run_job(_ctx(), args, default_steps())
     assert _read_json(capsys)["status"] == "uploaded"
-
 
 def test_run_job_raises_when_a_needed_step_is_missing(tmp_path):
     # A miswired caller fails loudly at the boundary rather than silently
@@ -1031,11 +949,9 @@ def test_run_job_raises_when_a_needed_step_is_missing(tmp_path):
     with pytest.raises(MissingJobStep, match="upload"):
         _run_job(_ctx(), args, JobSteps())
 
-
 # ---------------------------------------------------------------------------
 # generate_print_payload
 # ---------------------------------------------------------------------------
-
 
 def test_generate_print_payload_includes_ams_mapping():
     payload = json.loads(job.generate_print_payload("m.3mf", use_ams=True, ams_mapping=[0, 1]))
@@ -1045,7 +961,6 @@ def test_generate_print_payload_includes_ams_mapping():
     assert "m.3mf" in payload["print"]["url"]
     assert payload["print"]["bed_leveling"] is True
     assert payload["print"]["flow_cali"] is True
-
 
 def test_generate_print_payload_flags_and_url_encoding():
     payload = json.loads(
@@ -1064,12 +979,10 @@ def test_generate_print_payload_flags_and_url_encoding():
     assert " " not in print_cmd["url"]  # basename is percent-encoded
     assert print_cmd["subtask_name"] == "part name.3mf"
 
-
 def test_generate_print_payload_omits_ams_mapping_without_use_ams():
     payload = json.loads(job.generate_print_payload("m.3mf", use_ams=False, ams_mapping=[0, 1]))
     assert payload["print"]["use_ams"] is False
     assert "ams_mapping" not in payload["print"]
-
 
 def test_parse_print_options_requires_use_ams_pairing():
     from argparse import Namespace
@@ -1094,7 +1007,6 @@ def test_parse_print_options_requires_use_ams_pairing():
     mapping, err = job._parse_print_options(Namespace(use_ams=True, ams_mapping="nope"))
     assert mapping is None and err is not None
 
-
 def test_predicted_sliced_remote_name_copies():
     name = job._predicted_sliced_remote_name("model.stl", copies=1)
     assert name.endswith("_sliced.3mf")
@@ -1102,11 +1014,9 @@ def test_predicted_sliced_remote_name_copies():
     name3 = job._predicted_sliced_remote_name("/tmp/foo.stl", copies=3)
     assert "x3" in name3 or "foo" in name3
 
-
 # ---------------------------------------------------------------------------
 # Deep-audit regressions: job/orchestrate.py + job/support.py
 # ---------------------------------------------------------------------------
-
 
 def test_copies_ignored_warns_for_printer_ready(tmp_path, capsys):
     """--copies only multiplies models during slicing; a printer-ready file must
@@ -1120,7 +1030,6 @@ def test_copies_ignored_warns_for_printer_ready(tmp_path, capsys):
     assert payload.get("copies_ignored") is True
     assert any("--copies only applies" in r.getMessage() for r in records)
 
-
 def test_copies_ignored_flagged_in_dry_run(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -1130,7 +1039,6 @@ def test_copies_ignored_flagged_in_dry_run(tmp_path, capsys):
     assert payload["status"] == "dry_run_local_skipped"
     assert payload.get("copies_ignored") is True
 
-
 def test_copies_one_does_not_flag_printer_ready(tmp_path, capsys):
     ready = tmp_path / "model.3mf"
     ready.write_bytes(b"x" * 10)
@@ -1138,7 +1046,6 @@ def test_copies_one_does_not_flag_printer_ready(tmp_path, capsys):
     _run_job(_ctx(), args, default_steps(upload=fake_upload("model.3mf")))
     payload = _read_json(capsys)
     assert "copies_ignored" not in payload
-
 
 def test_zip_oserror_routes_through_structured_failure(tmp_path, capsys, monkeypatch):
     """An OSError opening the ZIP must emit the structured job-failure summary
@@ -1161,7 +1068,6 @@ def test_zip_oserror_routes_through_structured_failure(tmp_path, capsys, monkeyp
     assert payload["failed_step"] == "extract"
     assert payload["status"] == "error"
 
-
 def test_dry_run_empty_model_file_fails(tmp_path):
     """Symmetric with the printer-ready branch: a 0-byte sliceable model must
     fail dry-run instead of reporting would_slice success."""
@@ -1171,7 +1077,6 @@ def test_dry_run_empty_model_file_fails(tmp_path):
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
-
 
 def test_zip_printer_ready_member_copies_ignored_flagged(tmp_path, capsys):
     """Symmetry: a printer-ready ZIP member with --copies must warn + flag
@@ -1189,7 +1094,6 @@ def test_zip_printer_ready_member_copies_ignored_flagged(tmp_path, capsys):
     assert payload.get("copies_ignored") is True
     assert any("--copies only applies" in r.getMessage() for r in records)
 
-
 def test_zip_sliceable_member_copies_not_flagged(tmp_path, capsys):
     zpath = tmp_path / "bundle.zip"
     with zipfile.ZipFile(zpath, "w") as zf:
@@ -1201,7 +1105,6 @@ def test_zip_sliceable_member_copies_not_flagged(tmp_path, capsys):
     assert payload["would_slice"] is True
     assert "copies_ignored" not in payload
 
-
 def test_zip_only_empty_member_fails_dry_run(tmp_path):
     """A ZIP whose only model member is 0 bytes must fail dry-run (knowable
     offline), not report success — symmetric with the empty-file checks."""
@@ -1212,7 +1115,6 @@ def test_zip_only_empty_member_fails_dry_run(tmp_path):
     with pytest.raises((SystemExit, BambuError)) as excinfo:
         _run_job(_ctx(), args, JobSteps())
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
-
 
 def test_dry_run_output_dir_writability_uses_real_probe(tmp_path, capsys, monkeypatch):
     """The dry-run output-dir writability check must use a real create-probe
