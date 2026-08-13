@@ -571,6 +571,14 @@ def _cmd_download(
         _remove_partial_file(partial_path)
         _cleanup_reserved()
         message = f"Download failed: HTTP Error {e.code} ({e.reason})"
+        if e.code == 404:
+            logger.info("   The requested file or model does not exist. Check that the URL is correct.")
+        elif e.code == 403:
+            logger.info("   Access is forbidden. Printables or the host may be blocking automated requests.")
+        try:
+            e.close()
+        except Exception:
+            pass
         emit_json_error(
             args,
             "download",
@@ -583,16 +591,6 @@ def _cmd_download(
             http_status=e.code,
             path=outpath,
         )
-        safe_log_error(message)
-        if e.code == 404:
-            logger.info("   The requested file or model does not exist. Check that the URL is correct.")
-        elif e.code == 403:
-            logger.info("   Access is forbidden. Printables or the host may be blocking automated requests.")
-        try:
-            e.close()
-        except Exception:
-            pass
-        abort("", exit_code=EXIT_NETWORK_ERROR)
     except urllib.error.URLError as e:
         _remove_partial_file(partial_path)
         _cleanup_reserved()
@@ -613,6 +611,7 @@ def _cmd_download(
             safe_log_error(message)
             abort("", exit_code=EXIT_COMMAND_ERROR)
         message = f"Network error during download: {e}"
+        logger.info("   Please check your internet connection or verify the domain name resolves correctly.")
         emit_json_error(
             args,
             "download",
@@ -624,9 +623,6 @@ def _cmd_download(
             download_url=_redact_url_credentials(url),
             path=outpath,
         )
-        safe_log_error(message)
-        logger.info("   Please check your internet connection or verify the domain name resolves correctly.")
-        abort("", exit_code=EXIT_NETWORK_ERROR)
     except OSError as e:
         _remove_partial_file(partial_path)
         _cleanup_reserved()

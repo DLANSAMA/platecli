@@ -210,6 +210,12 @@ SAMPLES = [
         serial_configured=True,
         access_code_storage="file",
     ),
+    contracts.MigrateAccessCode(
+        status="migrated",
+        command="migrate-access-code",
+        config_path="/tmp/config.json",
+        access_code_file="/tmp/access_code",
+    ),
     contracts.ConfigCmd(status="ok", command="config", action="show"),
     contracts.Preflight(
         status="ok",

@@ -83,10 +83,13 @@ def test_preflight_permission_check(tmp_path):
 
 def test_common_setup_json_error(capsys):
     args = Namespace(json=True)
-    common_mod._setup_json_error(args, "boom", foo=1)
-    data = json.loads(capsys.readouterr().out)
+    with pytest.raises(BambuError) as ei:
+        common_mod._setup_json_error(args, "boom", foo=1)
+    assert capsys.readouterr().out == ""
+    data = ei.value.to_error_payload("setup")
     assert data["status"] == "error"
     assert data["error"] == "boom"
+    assert data["foo"] == 1
 
 def test_ftps_connection_error_path_cleanup():
     ftp = ftps_mod.ImplicitFTPS()

@@ -372,24 +372,24 @@ def _write_setup_config(config, access_code_file_secret=None):
 
 
 def _setup_summary(config):
+    from bambu_cli.contracts import Setup
+
     access_code_file = config.get("access_code_file")
-    payload = {
-        "status": "configured",
-        "command": "setup",
-        "config_path": _display_path(_config_path()),
-        "printer_ip_configured": bool(config.get("printer_ip")),
-        "serial_configured": bool(config.get("serial")),
-        "access_code_storage": "file" if access_code_file else "inline",
-        "model": config.get("model"),
-        "nozzle": config.get("nozzle"),
-        "orca_slicer_configured": bool(config.get("orca_slicer")),
-        "profiles_dir_configured": bool(config.get("profiles_dir")),
-        "cert_fingerprint_configured": bool(config.get("cert_fingerprint")),
-        "insecure_tls": bool(config.get("insecure_tls", False)),
-    }
-    if access_code_file:
-        payload["access_code_file"] = _display_path(access_code_file)
-    return payload
+    return Setup(
+        status="configured",
+        command="setup",
+        config_path=_display_path(_config_path()),
+        printer_ip_configured=bool(config.get("printer_ip")),
+        serial_configured=bool(config.get("serial")),
+        access_code_storage="file" if access_code_file else "inline",
+        model=config.get("model"),
+        nozzle=config.get("nozzle"),
+        orca_slicer_configured=bool(config.get("orca_slicer")),
+        profiles_dir_configured=bool(config.get("profiles_dir")),
+        cert_fingerprint_configured=bool(config.get("cert_fingerprint")),
+        insecure_tls=bool(config.get("insecure_tls", False)),
+        access_code_file=_display_path(access_code_file) if access_code_file else None,
+    ).to_payload()
 
 
 def _setup_path_details(**paths):

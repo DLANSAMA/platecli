@@ -444,6 +444,22 @@ class Preflight(Contract):
 
 
 @dataclass(frozen=True)
+class MigrateAccessCode(Contract):
+    schema_name: ClassVar[str] = "migrate_access_code"
+    schema_title: ClassVar[str] = "platecli setup --migrate-access-code envelope"
+    schema_description: ClassVar[str] = (
+        "Result of moving an inline access_code out of config.json into a separate secret file. "
+        "Never includes the access code value itself."
+    )
+
+    status: Literal["migrated", "noop", "error"]
+    command: Literal["migrate-access-code"]
+    config_path: str | None = None
+    access_code_file: str | None = None
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
 class Doctor(Contract):
     schema_name: ClassVar[str] = "doctor"
     schema_title: ClassVar[str] = "platecli doctor result envelope"

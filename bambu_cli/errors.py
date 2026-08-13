@@ -179,11 +179,19 @@ def abort(
     detail=None,
     next_command=None,
     extra=None,
+    command: str | None = None,
 ) -> NoReturn:
-    """Raise the appropriate structured error for ``exit_code`` (domain code never calls ``sys.exit``)."""
+    """Raise the appropriate structured error for ``exit_code`` (domain code never calls ``sys.exit``).
+
+    ``command`` is accepted so leftover ``emit_json_error`` call sites can pass
+    it through; the exception does not store it — callers that need a payload
+    use ``BambuError.to_error_payload(command)``.
+    """
+    extra = dict(extra or {})
+    resolved = message or f"Command failed (exit {exit_code})"
     cls = _EXIT_TO_EXC.get(exit_code, BambuError)
     raise cls(
-        message or f"Command failed (exit {exit_code})",
+        resolved,
         exit_code=exit_code,
         failed_step=failed_step,
         detail=detail,

@@ -183,10 +183,20 @@ class RuntimeContext:
     def printer(self) -> BambuPrinter:
         """Return a cached ``BambuPrinter`` built from ``self.settings``.
 
-        Mirrors ``bambu_cli.printer.get_printer()``: empty access_code in
-        simulation mode, otherwise loaded via ``load_access_code()``.
+        When this context is the installed process current (the ``cmd_*``
+        path via ``for_request``), construction goes through
+        ``bambu_cli.printer.get_printer()`` so there is one factory — tests
+        that patch ``get_printer`` keep working. A detached context still
+        builds from ``self.settings`` so library callers do not pick up a
+        different process-wide context.
         """
         if self._printer is not None:
+            return self._printer
+
+        if _current is self:
+            from bambu_cli.printer import get_printer
+
+            self._printer = get_printer()
             return self._printer
 
         from bambu_cli.config import load_access_code

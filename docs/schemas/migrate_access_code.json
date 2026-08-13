@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platecli.local/schemas/migrate_access_code.json",
+  "title": "platecli setup --migrate-access-code envelope",
+  "type": "object",
+  "description": "Result of moving an inline access_code out of config.json into a separate secret file. Never includes the access code value itself.",
+  "required": [
+    "status",
+    "command"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "migrated",
+        "noop",
+        "error"
+      ],
+      "type": "string"
+    },
+    "command": {
+      "const": "migrate-access-code",
+      "type": "string"
+    },
+    "config_path": {
+      "type": "string"
+    },
+    "access_code_file": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

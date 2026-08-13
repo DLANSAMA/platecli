@@ -471,9 +471,9 @@ def test_json_mode_emits_error_envelope_and_exits_5(tmp_path, capsys):
     with pytest.raises(BambuError) as ei:
         cmd_go(_args(json=True))
     assert ei.value.exit_code == 5
-    import json as _json
-
-    payload = _json.loads(capsys.readouterr().out)
+    assert ei.value.failed_step == "parse"
+    assert capsys.readouterr().out == ""
+    payload = ei.value.to_error_payload("go")
     assert payload["status"] == "error"
     assert payload["command"] == "go"
     assert payload["exit_code"] == 5

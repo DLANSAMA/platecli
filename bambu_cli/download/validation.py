@@ -82,6 +82,7 @@ def _validate_download_url_or_exit(args, source_url, normalized_source, url, fai
             exit_code=exc.exit_code,
             failed_step=failed_step or exc.failed_step,
             extra=extra,
+            command="download",
         )
 
 
@@ -180,6 +181,7 @@ def _reject_oversized_download(
         message = f"Download is too large: {content_length} bytes exceeds the {limit_mb} MB safety limit."
     else:
         message = f"Download exceeded the {limit_mb} MB safety limit."
+    safe_log_error(message)
     abort(
         message,
         exit_code=EXIT_FILE_ERROR,

@@ -110,6 +110,7 @@ form when looking a code up; the human-readable log line shows both.
 | [`upload.json`](schemas/upload.json) | `upload` success / `--dry-run` |
 | [`files.json`](schemas/files.json) | `files` listing |
 | [`setup.json`](schemas/setup.json) | `setup` summary |
+| [`migrate_access_code.json`](schemas/migrate_access_code.json) | `setup --migrate-access-code` |
 | [`go.json`](schemas/go.json) | `go` error envelope (`--json` always errors) |
 | [`tui.json`](schemas/tui.json) | `tui` error envelope (`--json` always errors) |
 

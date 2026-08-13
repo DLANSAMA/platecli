@@ -188,16 +188,6 @@ def _finalize_slice(
     else:
         rc = result.returncode if result is not None else -1
         message = f"Slicing failed (RC={rc})"
-        emit_json_error(
-            args,
-            "slice",
-            EXIT_COMMAND_ERROR,
-            message,
-            failed_step="slicer",
-            file=filepath,
-            output=outpath,
-            returncode=rc,
-        )
         safe_log_error(message)
         all_output = ""
         if result is not None:
@@ -213,4 +203,10 @@ def _finalize_slice(
 
         if not error_found:
             logger.info("   Check OrcaSlicer profiles or syntax.")
-        abort("", exit_code=EXIT_COMMAND_ERROR)
+        abort(
+            message,
+            exit_code=EXIT_COMMAND_ERROR,
+            failed_step="slicer",
+            extra={"file": filepath, "output": outpath, "returncode": rc},
+            command="slice",
+        )

@@ -18,7 +18,6 @@ import argparse
 import importlib.util
 import sys
 
-from bambu_cli import utils
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR
 from bambu_cli.errors import abort
 
@@ -41,14 +40,7 @@ def cmd_tui(args: argparse.Namespace) -> None:
     json_mode = bool(getattr(args, "json", False))
     if json_mode:
         # Interactive mode has no machine contract; agents already have `job`.
-        utils.emit_json_error(
-            args,
-            "tui",
-            EXIT_COMMAND_ERROR,
-            _NON_TTY_MESSAGE,
-            failed_step="parse",
-        )
-        abort(_NON_TTY_MESSAGE, exit_code=EXIT_COMMAND_ERROR, failed_step="parse")
+        abort(_NON_TTY_MESSAGE, exit_code=EXIT_COMMAND_ERROR, failed_step="parse", command="tui")
 
     if not sys.stdin.isatty():
         abort(_NON_TTY_MESSAGE, exit_code=EXIT_COMMAND_ERROR, failed_step="parse")
