@@ -35,6 +35,10 @@
     },
     "uploaded": {
       "type": "boolean"
+    },
+    "size_verified": {
+      "description": "False when the printer did not report SIZE after STOR; True when SIZE matched.",
+      "type": "boolean"
     }
   },
   "additionalProperties": true

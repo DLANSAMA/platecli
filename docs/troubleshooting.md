@@ -16,6 +16,7 @@ the `plate doctor` output — but check first that no access code is visible.
 - ["Connection failed: rc=5" (or any other rc)](#connection-failed-rc5-or-any-other-rc)
 - [LAN mode is off, or the access code rotated](#lan-mode-is-off-or-the-access-code-rotated)
 - [Certificate fingerprint mismatch](#certificate-fingerprint-mismatch)
+- [Upload or download succeeded but `size_verified` is false](#upload-or-download-succeeded-but-size_verified-is-false)
 - [FTPS connection failed, or uploads hang at 0%](#ftps-connection-failed-or-uploads-hang-at-0)
 - [The printer is on the network but nothing reaches it (VLAN / AP isolation / guest Wi-Fi)](#the-printer-is-on-the-network-but-nothing-reaches-it-vlan--ap-isolation--guest-wi-fi)
 - [OrcaSlicer or its BBL profiles were not found](#orcaslicer-or-its-bbl-profiles-were-not-found)
@@ -146,6 +147,14 @@ think you are on first.
 `insecure_tls: true` disables verification entirely. It is a last resort, the
 CLI warns whenever it is set, and it should never be your permanent answer to
 this error.
+
+## Upload or download succeeded but `size_verified` is false
+
+Some firmware omits the FTPS `SIZE` reply after `STOR`/`RETR`. `plate` still
+treats the transfer as success (a warning on stderr) and sets
+`"size_verified": false` on `--json` `upload` / `job`. When `SIZE` is present
+and disagrees with the local file, the transfer is a failure and is retried.
+This is not a hang.
 
 ## FTPS connection failed, or uploads hang at 0%
 

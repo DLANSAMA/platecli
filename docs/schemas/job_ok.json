@@ -28,6 +28,10 @@
     "remote_path": {
       "type": "string"
     },
+    "size_verified": {
+      "description": "False when the printer omitted FTPS SIZE after upload.",
+      "type": "boolean"
+    },
     "print_started": {
       "type": "boolean"
     },

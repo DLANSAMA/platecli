@@ -53,6 +53,8 @@ class BambuPrinter:
         # TLS connection instead of opening a new one every 10s.
         self._mqtt_session: Any = None
         self._mqtt_hold_lock = threading.Lock()
+        # Last FTPS transfer: True if SIZE matched, False if SIZE was missing.
+        self.last_size_verified: bool | None = None
 
     def hold_mqtt(self, *, client_factory=None) -> None:
         """Keep one MQTT client for subsequent status/send_command/get_version.
@@ -171,8 +173,10 @@ class BambuPrinter:
                         # Server doesn't support SIZE (or it failed) after a successful STOR.
                         # Don't turn flaky SIZE support into a new failure mode.
                         logger.warning(f"⚠️ Could not verify remote size for {remote_path}; assuming upload succeeded.")
+                        self.last_size_verified = False
                         return True
                     if remote_size == filesize:
+                        self.last_size_verified = True
                         return True
 
                     # Sizes disagree even though STOR didn't raise; treat as a failed
@@ -270,6 +274,7 @@ class BambuPrinter:
             if remote_size is None:
                 # Server doesn't support SIZE; don't invent a new failure mode.
                 logger.warning(f"⚠️ Could not verify remote size for {remote_path}; assuming download succeeded.")
+                self.last_size_verified = False
             elif written != remote_size:
                 logger.error(f"Download failed: size mismatch (local {written}, remote {remote_size})")
                 with contextlib.suppress(OSError):
@@ -277,6 +282,8 @@ class BambuPrinter:
                 return False
 
             os.replace(partial_path, local_path)
+            if remote_size is not None:
+                self.last_size_verified = True
             return True
         except _FTP_SSL_OS_ERRORS as e:
             logger.error(f"Download failed: {e}")

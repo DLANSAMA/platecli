@@ -46,6 +46,10 @@
     },
     "archive_entry": {
       "type": "string"
+    },
+    "size_verified": {
+      "description": "Set on FTPS printer downloads when SIZE was checked; omitted for HTTP downloads.",
+      "type": "boolean"
     }
   },
   "additionalProperties": true

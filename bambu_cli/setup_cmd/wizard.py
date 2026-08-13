@@ -412,7 +412,7 @@ def _cmd_setup_interactive(args):
         # 990 (FTPS), and 6000 (camera) — true for Bambu firmware to date.
         cert_fingerprint = probe_cert_fingerprint(ip, 8883, timeout=5)
         logger.info(f"   Fingerprint: {cert_fingerprint}")
-        logger.info("   (trust-on-first-use: verify this matches your printer if on an untrusted network)")
+        logger.info("   Trust-on-first-use: a hostile LAN can poison this pin. Confirm the fingerprint on the printer.")
     except Exception as e:
         logger.warning(f"⚠️  Could not fetch TLS certificate: {e}")
         logger.warning("   Connections may fail if the fingerprint is required.")

@@ -128,6 +128,7 @@ def cmd_doctor(args, ctx=None):
             logger.info("      The printer uses a self-signed certificate. Pin it by adding to config.json:")
             logger.info(f'        "cert_fingerprint": "{fp}"')
             logger.info("      then re-run doctor.")
+            logger.info("      Trust-on-first-use: a hostile LAN can poison this pin. Confirm it on the printer.")
 
     verbose = bool(_namespace_get(args, "verbose", False))
 

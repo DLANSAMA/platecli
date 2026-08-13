@@ -280,6 +280,10 @@ class Upload(Contract):
     remote_name: str
     bytes: int = spec(required=True, minimum=0)
     uploaded: bool = spec(required=True)
+    size_verified: bool | None = spec(
+        default=None,
+        description="False when the printer did not report SIZE after STOR; True when SIZE matched.",
+    )
 
 
 @dataclass(frozen=True)
@@ -337,6 +341,10 @@ class Download(Contract):
     filename: str = spec(required=True, min_length=1, default="")
     bytes: int = spec(required=True, default=0)
     archive_entry: str | None = None
+    size_verified: bool | None = spec(
+        default=None,
+        description="Set on FTPS printer downloads when SIZE was checked; omitted for HTTP downloads.",
+    )
 
 
 @dataclass(frozen=True)
@@ -488,6 +496,10 @@ class JobOk(Contract):
     source: str | None = None
     local_path: str | None = None
     remote_path: str | None = None
+    size_verified: bool | None = spec(
+        default=None,
+        description="False when the printer omitted FTPS SIZE after upload.",
+    )
     print_started: bool | None = None
     dry_run: bool | None = None
     copies_ignored: bool | None = None

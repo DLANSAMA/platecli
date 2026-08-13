@@ -12,6 +12,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- `upload` / `job` `--json` include `size_verified` (`false` when the printer
+  omitted FTPS `SIZE` after the transfer). Mismatch is still a failure.
+
 - Command handlers raise `BambuError` instead of emitting a JSON error and
   then aborting. `cli.main` is the sole error-envelope writer
   (`write_error_envelope`). Soft statuses (`confirmation_required`, etc.)
