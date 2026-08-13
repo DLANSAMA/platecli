@@ -116,15 +116,17 @@ def cmd_upload(args, ctx=None):
 
         logger.info(f"   ✅ Local file {_path_for_message(filepath)} exists ({filesize // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
+            from bambu_cli.contracts import Upload
+
             emit_json(
-                {
-                    "status": "dry_run_ok",
-                    "command": "upload",
-                    "file": filepath,
-                    "remote_name": filename,
-                    "bytes": filesize,
-                    "uploaded": False,
-                }
+                Upload(
+                    status="dry_run_ok",
+                    command="upload",
+                    file=filepath,
+                    remote_name=filename,
+                    bytes=filesize,
+                    uploaded=False,
+                )
             )
         return filename
 
@@ -175,15 +177,17 @@ def cmd_upload(args, ctx=None):
     if success:
         logger.info(f"✅ Uploaded {filename} to printer")
         if bool(_namespace_get(args, "json", False)):
+            from bambu_cli.contracts import Upload
+
             emit_json(
-                {
-                    "status": "uploaded",
-                    "command": "upload",
-                    "file": filepath,
-                    "remote_name": filename,
-                    "bytes": filesize,
-                    "uploaded": True,
-                }
+                Upload(
+                    status="uploaded",
+                    command="upload",
+                    file=filepath,
+                    remote_name=filename,
+                    bytes=filesize,
+                    uploaded=True,
+                )
             )
         return filename
     else:
@@ -215,13 +219,15 @@ def cmd_files(args, ctx=None):
             raise Exception("Failed to list files via printer API")
         remote_files = [{"name": _portable_basename(path), "path": path} for path in files]
         if json_mode:
+            from bambu_cli.contracts import Files, RemoteFile
+
             emit_json(
-                {
-                    "status": "ok",
-                    "command": "files",
-                    "count": len(remote_files),
-                    "files": remote_files,
-                }
+                Files(
+                    status="ok",
+                    command="files",
+                    count=len(remote_files),
+                    files=[RemoteFile(name=item["name"], path=item["path"]) for item in remote_files],
+                )
             )
             return
         if not files:
@@ -251,14 +257,16 @@ def cmd_delete(args, ctx=None):
     if not args.confirm:
         logger.warning(f"⚠️  This will DELETE '{filename}' from the printer. Add --confirm to proceed.")
         if bool(_namespace_get(args, "json", False)):
+            from bambu_cli.contracts import Delete
+
             emit_json(
-                {
-                    "status": "confirmation_required",
-                    "command": "delete",
-                    "file": filename,
-                    "deleted": False,
-                    "next_command": ["delete", filename, "--confirm", "--json"],
-                }
+                Delete(
+                    status="confirmation_required",
+                    command="delete",
+                    file=filename,
+                    deleted=False,
+                    next_command=["delete", filename, "--confirm", "--json"],
+                )
             )
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
@@ -267,14 +275,9 @@ def cmd_delete(args, ctx=None):
         if printer.delete_file(f"/model/{filename}"):
             logger.info(f"🗑️  Deleted {filename} from printer")
             if bool(_namespace_get(args, "json", False)):
-                emit_json(
-                    {
-                        "status": "deleted",
-                        "command": "delete",
-                        "file": filename,
-                        "deleted": True,
-                    }
-                )
+                from bambu_cli.contracts import Delete
+
+                emit_json(Delete(status="deleted", command="delete", file=filename, deleted=True))
         else:
             raise Exception("Delete operation failed in printer client.")
     except Exception as e:

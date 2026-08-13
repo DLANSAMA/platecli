@@ -672,8 +672,10 @@ def smoke_sim_lower_level_json(root):
     status = json_stdout(run_cli(["--sim", "status", "--json"], env))
     if status.get("status") != "ok" or status.get("command") != "status":
         assert False, f"status JSON is not self-describing: {status}"
-    if status.get("printer", {}).get("gcode_state") != "IDLE" or status.get("gcode_state") != "IDLE":
+    if status.get("printer", {}).get("gcode_state") != "IDLE":
         assert False, f"status JSON did not preserve printer state fields: {status}"
+    if "gcode_state" in status:
+        assert False, f"status JSON flattened firmware fields onto the envelope: {status}"
 
     files = json_stdout(run_cli(["--sim", "files", "--json"], env))
     if files.get("status") != "ok" or files.get("command") != "files":

@@ -5,6 +5,7 @@ import json
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.context import RuntimeContext
+from bambu_cli.contracts import Gcode
 from bambu_cli.download.naming import _has_command_injection_chars
 from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger, safe_log_error
@@ -29,13 +30,13 @@ def cmd_gcode(args, ctx=None):
         logger.warning("⚠️  This will SEND raw G-code to the printer. Add --confirm to proceed.")
         if bool(_namespace_get(args, "json", False)):
             emit_json(
-                {
-                    "status": "confirmation_required",
-                    "command": "gcode",
-                    "gcode": gcode,
-                    "sent": False,
-                    "next_command": ["gcode", gcode, "--confirm", "--json"],
-                }
+                Gcode(
+                    status="confirmation_required",
+                    command="gcode",
+                    gcode=gcode,
+                    sent=False,
+                    next_command=["gcode", gcode, "--confirm", "--json"],
+                )
             )
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
@@ -48,11 +49,4 @@ def cmd_gcode(args, ctx=None):
         abort("", exit_code=EXIT_NETWORK_ERROR)
     logger.info(f"📡 Sent: {gcode}")
     if bool(_namespace_get(args, "json", False)):
-        emit_json(
-            {
-                "status": "sent",
-                "command": "gcode",
-                "gcode": gcode,
-                "sent": True,
-            }
-        )
+        emit_json(Gcode(status="sent", command="gcode", gcode=gcode, sent=True))

@@ -48,6 +48,7 @@ from bambu_cli.job.predict import (
 from bambu_cli.job.steps import JobSteps
 from bambu_cli.job.support import (
     _emit_job_failure,
+    _emit_job_ok,
     _exit_code_from_error,
     _job_fail,
     _last_error_for,
@@ -61,7 +62,6 @@ from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.printables import is_printables_url
 from bambu_cli.slicer import _directory_input_message, _is_directory_input, _validate_slice_options
-from bambu_cli.utils import emit_json
 
 
 def _cmd_job(args, steps):
@@ -197,7 +197,7 @@ def _run_job(ctx, args, steps=None):
                 getattr(args, "upload_only", False)
             )
             if getattr(args, "json", False):
-                emit_json(summary)
+                _emit_job_ok(summary)
             return None
 
         if _is_http_url(source):
@@ -345,7 +345,7 @@ def _run_job(ctx, args, steps=None):
                     getattr(args, "upload_only", False)
                 )
                 if getattr(args, "json", False):
-                    emit_json(summary)
+                    _emit_job_ok(summary)
                 return source_path
             try:
                 extracted_path, extracted_filename, archive_entry, _ = _extract_zip_model(
@@ -416,7 +416,7 @@ def _run_job(ctx, args, steps=None):
                     getattr(args, "upload_only", False)
                 )
                 if getattr(args, "json", False):
-                    emit_json(summary)
+                    _emit_job_ok(summary)
                 return source_path
             try:
                 utils._LAST_ERROR_PAYLOAD = None
@@ -485,7 +485,7 @@ def _run_job(ctx, args, steps=None):
                     getattr(args, "upload_only", False)
                 )
                 if getattr(args, "json", False):
-                    emit_json(summary)
+                    _emit_job_ok(summary)
                 return source_path
             printable_path = source_path
         else:
@@ -527,7 +527,7 @@ def _run_job(ctx, args, steps=None):
             if getattr(args, "json", False):
                 summary["status"] = "uploaded"
                 summary["next_command"] = _print_next_command(args, remote_name)
-                emit_json(summary)
+                _emit_job_ok(summary)
             return printable_path
 
         if not getattr(args, "confirm", False):
@@ -535,7 +535,7 @@ def _run_job(ctx, args, steps=None):
             if getattr(args, "json", False):
                 summary["status"] = "uploaded_not_printed"
                 summary["next_command"] = _print_next_command(args, remote_name)
-                emit_json(summary)
+                _emit_job_ok(summary)
             return printable_path
 
         summary["would_print"] = True
@@ -572,7 +572,7 @@ def _run_job(ctx, args, steps=None):
         summary["printed"] = True
         summary["status"] = "printed"
         if getattr(args, "json", False):
-            emit_json(summary)
+            _emit_job_ok(summary)
         return printable_path
     finally:
         if os.environ.get("BAMBU_KEEP_WORKDIR") != "1":

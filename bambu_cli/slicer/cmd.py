@@ -55,15 +55,17 @@ def _list_settings(args: argparse.Namespace, settings) -> str:
             "set 'profiles_dir' in config.json (see 'preflight')."
         )
     if bool(_namespace_get(args, "json", False)):
+        from bambu_cli.contracts import FilamentSettings, ProcessSettings, SliceListSettings
+
         emit_json(
-            {
-                "status": "ok",
-                "command": "slice",
-                "action": "list_settings",
-                "profiles_dir": profiles_dir,
-                "process": {"count": len(process), "settings": process},
-                "filament": {"count": len(filament), "settings": filament},
-            }
+            SliceListSettings(
+                status="ok",
+                command="slice",
+                action="list_settings",
+                profiles_dir=profiles_dir,
+                process=ProcessSettings(count=len(process), settings=process),
+                filament=FilamentSettings(count=len(filament), settings=filament),
+            )
         )
     else:
         # The settings list is DATA, so it goes to stdout while the header and the

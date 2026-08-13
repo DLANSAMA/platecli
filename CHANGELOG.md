@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- `--json` emitters construct `bambu_cli.contracts` objects. `status --json`
+  no longer flattens firmware fields onto the envelope; they stay under
+  `printer`. Errors go through `ErrorEnvelope`; `job` success/failure through
+  `JobOk` / `JobError`.
+
 - MQTT client construction, command/status, print-ack, and the monitor loop
   live in separate `protocols/mqtt_*.py` modules. TLS pinning uses a real
   `SSLContext` subclass (`PinningSSLContext`) instead of patching

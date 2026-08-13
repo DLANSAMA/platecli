@@ -100,21 +100,39 @@ class Contract:
     def to_payload(self, **extra: Any) -> dict[str, Any]:
         """Render to the dict ``emit_json`` takes.
 
-        ``extra`` carries command-specific keys that are not part of the
-        guaranteed contract — legal because the schemas allow additional
-        properties. Redaction still happens downstream in ``emit_json``; this
-        method deliberately does no escaping or scrubbing of its own.
+        Nested dataclasses (and nested ``Contract`` instances) become plain
+        dicts so ``json.dumps`` never sees a model object. ``extra`` carries
+        command-specific keys that are not part of the guaranteed contract —
+        legal because the schemas allow additional properties. Redaction still
+        happens downstream in ``emit_json``.
         """
         payload: dict[str, Any] = {}
         for field in dataclasses.fields(self):
             value = getattr(self, field.name)
             if value is None and field.name not in self.keep_none:
                 continue
-            payload[field.name] = value
+            payload[field.name] = _to_jsonable(value)
         for key, value in extra.items():
             if value is not None or key in self.keep_none:
-                payload[key] = value
+                payload[key] = _to_jsonable(value)
         return payload
+
+
+def _to_jsonable(value: Any) -> Any:
+    if isinstance(value, Contract):
+        return value.to_payload()
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        out: dict[str, Any] = {}
+        for key, item in dataclasses.asdict(value).items():
+            if item is None:
+                continue
+            out[key] = _to_jsonable(item)
+        return out
+    if isinstance(value, list):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _to_jsonable(item) for key, item in value.items()}
+    return value
 
 
 def all_contracts() -> list[type[Contract]]:

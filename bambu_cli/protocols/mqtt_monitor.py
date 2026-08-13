@@ -6,6 +6,7 @@ import json
 import sys
 import threading
 
+from bambu_cli.contracts import StatusEvent
 from bambu_cli.logging_utils import logger
 from bambu_cli.protocols.mqtt_cmd import (
     TERMINAL_GCODE_STATES,
@@ -25,20 +26,21 @@ def _status_event(p, event):
         except (TypeError, ValueError):
             return default
 
-    return {
-        "event": event,
-        "command": "status",
-        "gcode_state": p.get("gcode_state", "UNKNOWN"),
-        "mc_percent": _int(p.get("mc_percent", 0)),
-        "layer_num": _int(p.get("layer_num", 0)),
-        "total_layer_num": _int(p.get("total_layer_num", 0)),
-        "mc_remaining_time": _int(p.get("mc_remaining_time", 0)),
-        "nozzle_temper": p.get("nozzle_temper"),
-        "nozzle_target_temper": p.get("nozzle_target_temper"),
-        "bed_temper": p.get("bed_temper"),
-        "bed_target_temper": p.get("bed_target_temper"),
-        "gcode_file": p.get("gcode_file", ""),
-    }
+    return StatusEvent(
+        event=event,
+        command="status",
+        gcode_state=p.get("gcode_state", "UNKNOWN"),
+        mc_percent=_int(p.get("mc_percent", 0)),
+    ).to_payload(
+        layer_num=_int(p.get("layer_num", 0)),
+        total_layer_num=_int(p.get("total_layer_num", 0)),
+        mc_remaining_time=_int(p.get("mc_remaining_time", 0)),
+        nozzle_temper=p.get("nozzle_temper"),
+        nozzle_target_temper=p.get("nozzle_target_temper"),
+        bed_temper=p.get("bed_temper"),
+        bed_target_temper=p.get("bed_target_temper"),
+        gcode_file=p.get("gcode_file", ""),
+    )
 
 
 def monitor_status(args, printer):

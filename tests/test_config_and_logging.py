@@ -224,6 +224,8 @@ class TestCmdConfig(unittest.TestCase):
         with patch("bambu_cli.setup_cmd.config_cmd.emit_json") as mock_emit:
             _cmd_config(self._args("show", json_mode=True))
         payload = mock_emit.call_args[0][0]
+        if hasattr(payload, "to_payload"):
+            payload = payload.to_payload()
         self.assertEqual(payload["command"], "config")
         self.assertEqual(payload["action"], "show")
         self.assertEqual(payload["config"]["access_code"], "<redacted>")
@@ -256,6 +258,8 @@ class TestCmdConfig(unittest.TestCase):
         ):
             _cmd_config(self._args("validate", json_mode=True))
         payload = mock_emit.call_args[0][0]
+        if hasattr(payload, "to_payload"):
+            payload = payload.to_payload()
         self.assertEqual(payload["action"], "validate")
         self.assertEqual({c["name"] for c in payload["checks"]}, {"printer-ip", "access-code"})
         # Warnings without --strict still validate (same semantics as preflight).
