@@ -18,8 +18,12 @@
 # which is not the layout we want to show off. vhs Width/Height are PIXELS,
 # not cells — at FontSize 15 Hack a cell is ~10.5x18.6 px, and Margin(36)+
 # Padding(24) eat 120 px of each axis, so 1100 px is only ~93 columns and
-# records the narrow layout. 1400x700 gives ~122x31 — tall enough that the
-# prepare form shows its Prepare/Settings buttons without scrolling. If you change FontSize
+# records a layout no user sees. 1200x570 is ~103x24 — 24 rows is the
+# SUPPORTED MINIMUM, and recording at it is both honest and the tightest
+# framing that still fits everything. Go shorter and the dashboard's progress
+# bar scrolls out of frame (17 rows loses it); go much taller and the screen
+# floats in dead space, which is what made the first cut of this GIF
+# unreadable. If you change FontSize
 # or Padding, recompute this and re-check the frames.
 #
 # Before committing a re-record: extract frames with ffmpeg and LOOK at them
@@ -33,8 +37,8 @@ Output docs/tui.gif
 Set Shell "bash"
 Set FontFamily "Hack"
 Set FontSize 15
-Set Width 1400
-Set Height 700
+Set Width 1200
+Set Height 570
 Set Padding 24
 Set Margin 36
 Set MarginFill "#16295e"
@@ -52,22 +56,14 @@ Type "plate tui"
 Sleep 500ms
 Enter
 
-# Dashboard: state, temperatures, layer and progress, AMS trays — refreshing
-# on a timer against the real printer.
-Sleep 8s
+# Dashboard: hold long enough to actually read it, and long enough for the
+# 10 s refresh timer to tick the progress forward on screen.
+Sleep 12s
 
-# The job monitor: follows the running print toward its terminal state.
+# The job monitor.
 Type "m"
-Sleep 7s
-Escape
-Sleep 1s
+Sleep 9s
 
-# The prepare screen — the two-column form the 0.5.0 restructure is about.
-Type "n"
-Sleep 5s
-
-# Back out and quit cleanly so the last frame is a shell prompt, not a
-# half-torn-down alternate screen buffer.
 Escape
 Sleep 1s
 Type "q"
