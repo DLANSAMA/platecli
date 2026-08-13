@@ -34,6 +34,7 @@ from bambu_cli.tui.screens.confirm import ConfirmModal  # noqa: E402
 from bambu_cli.tui.screens.monitor import MonitorScreen  # noqa: E402
 from bambu_cli.tui.screens.prepare import PrepareScreen  # noqa: E402
 from bambu_cli.tui.services import StatusSnapshot  # noqa: E402
+from tests.tui_text import renderable_text, widget_text  # noqa: E402
 
 _IDLE = StatusSnapshot(ok=True, raw={"gcode_state": "IDLE", "mc_percent": 0}, ams={"units": []})
 
@@ -150,8 +151,7 @@ async def _settle(pilot):
 
 
 def _text(widget) -> str:
-    renderable = getattr(widget, "renderable", "")
-    return renderable if isinstance(renderable, str) else str(renderable)
+    return widget_text(widget)
 
 
 async def _prepare_to_preview(pilot, source):
@@ -424,20 +424,6 @@ async def test_start_print_opens_the_monitor(tmp_path):
 # --- the summary grid renders filenames as data, not Rich markup -----------
 
 
-def _render_to_text(renderable) -> str:
-    """Render a Rich renderable (or str) to plain text via a wide Console."""
-    from rich.console import Console
-
-    if renderable is None:
-        return ""
-    if isinstance(renderable, str):
-        return renderable
-    console = Console(width=200)
-    with console.capture() as capture:
-        console.print(renderable)
-    return capture.get()
-
-
 async def test_confirm_summary_shows_a_bracketed_filename_verbatim(tmp_path):
     """The one screen that names the file must not let Rich eat part of it.
 
@@ -454,7 +440,7 @@ async def test_confirm_summary_shows_a_bracketed_filename_verbatim(tmp_path):
         await _settle(pilot)
         screen = await _prepare_to_preview(pilot, stl)
         modal = await _open_modal(pilot, screen)
-        summary = _render_to_text(modal.query_one("#confirm-summary", Static).renderable)
+        summary = widget_text(modal.query_one("#confirm-summary", Static))
         await _press_button(pilot, modal, "#confirm-cancel")
 
     assert "model [remix].stl" in summary
@@ -465,6 +451,6 @@ def test_confirm_summary_survives_a_markup_shaped_value():
     from bambu_cli.tui.screens.confirm import _summary_table
 
     rows = [("Model", "a[/b]c.gcode"), ("Overrides", "process: layer_height=[0.98]")]
-    text = _render_to_text(_summary_table(rows))  # raises MarkupError against str cells
+    text = renderable_text(_summary_table(rows))  # raises MarkupError against str cells
     assert "a[/b]c.gcode" in text
     assert "[0.98]" in text

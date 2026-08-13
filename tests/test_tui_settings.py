@@ -40,6 +40,7 @@ from bambu_cli.tui.deps import TuiDeps  # noqa: E402
 from bambu_cli.tui.screens.prepare import PrepareScreen  # noqa: E402
 from bambu_cli.tui.screens.settings import SettingsScreen  # noqa: E402
 from bambu_cli.tui.services import StatusSnapshot  # noqa: E402
+from tests.tui_text import widget_text  # noqa: E402
 
 _IDLE = StatusSnapshot(ok=True, raw={"gcode_state": "IDLE", "mc_percent": 0}, ams={"units": []})
 
@@ -126,20 +127,7 @@ async def _settle(pilot):
 
 
 def _text(widget) -> str:
-    """Plain text of a widget's renderable — Rich grids included.
-
-    ``str(table)`` is a repr, not the rendered rows, so a grid-backed panel
-    (the preview) has to go through a Console to be asserted on at all.
-    """
-    renderable = getattr(widget, "renderable", "")
-    if isinstance(renderable, str):
-        return renderable
-    from rich.console import Console
-
-    console = Console(width=200)
-    with console.capture() as capture:
-        console.print(renderable)
-    return capture.get()
+    return widget_text(widget)
 
 
 # ---------------------------------------------------------------------------
@@ -318,18 +306,6 @@ def test_collect_field_overrides_reports_every_bad_field():
     assert len(errors) == 2
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Pilot: the screen and the plumbing
 # ---------------------------------------------------------------------------
@@ -347,8 +323,6 @@ def _profiles_with_keys(tmp_path):
         json.dumps({"type": "filament", "name": "f", "filament_flow_ratio": ["0.98"]}), encoding="utf-8"
     )
     return profiles
-
-
 
 
 async def _add_override(pilot, settings, key, value, bucket=None):
@@ -426,14 +400,6 @@ async def test_form_values_land_on_the_slice_namespace(tmp_path):
     # Untouched fields keep the preset value, exactly as an unset flag would.
     assert ns.infill == 15
     assert "Overrides" in preview and "3 set" in preview
-
-
-
-
-
-
-
-
 
 
 async def test_non_numeric_field_is_refused_inline(tmp_path):
@@ -802,8 +768,6 @@ def test_field_for_unknown_dest_is_none():
     assert sm.field_for("not_a_real_dest") is None
 
 
-
-
 async def test_s_key_cannot_bypass_the_pre_sliced_settings_gate(tmp_path):
     """The key path is gated exactly like the button, not just the button.
 
@@ -900,8 +864,6 @@ async def test_bucket_picker_routes_a_filament_key(tmp_path):
     assert ns.set_process == ["top_shell_layers=5"]
 
 
-
-
 async def test_named_choice_fields_are_dropdowns(tmp_path):
     """The closed-option flags are picked, not typed — nothing to mistype."""
     from bambu_cli.interactive.core import GoSteps
@@ -917,17 +879,13 @@ async def test_named_choice_fields_are_dropdowns(tmp_path):
             widget = settings.query_one(f"#{field.widget_id}")
             assert isinstance(widget, Select), dest
             # Untouched means "no override", exactly like an unset CLI flag.
-            assert widget.value is Select.BLANK, dest
+            assert widget.is_blank(), dest
 
         settings.query_one("#set-seam-position", Select).value = "aligned"
         settings.action_apply()
         await _settle(pilot)
     # Only the field that was picked is set; the other three stay absent.
     assert prepare.overrides.fields == {"seam_position": "aligned"}
-
-
-
-
 
 
 async def test_remove_with_nothing_selected_says_so(tmp_path):
@@ -1008,8 +966,6 @@ async def test_an_empty_value_is_a_real_override(tmp_path):
     assert prepare.overrides.process == {"machine_start_gcode": ""}
 
 
-
-
 async def test_settings_screen_fits_80x24(tmp_path):
     """The screen gained controls; it still has to work on the smallest terminal.
 
@@ -1069,13 +1025,3 @@ async def test_option_prompts_bypass_rich_markup(tmp_path):
             "[process] spiral_mode=1",
             "[filament] filament_flow_ratio=[0.98]",
         ]
-
-
-
-
-
-
-
-
-
-

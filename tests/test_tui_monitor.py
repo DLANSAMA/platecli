@@ -36,6 +36,7 @@ from bambu_cli.tui.screens.monitor import MonitorScreen  # noqa: E402
 from bambu_cli.tui.screens.prepare import PrepareScreen  # noqa: E402
 from bambu_cli.tui.services import MonitorService, StatusSnapshot  # noqa: E402
 from bambu_cli.tui.widgets.job_progress import JobProgress  # noqa: E402
+from tests.tui_text import widget_text  # noqa: E402
 
 
 def _snap(state, percent, layer=0, total=100, remaining=0):
@@ -167,15 +168,7 @@ async def _wait_until(condition, pilot, timeout=5.0):
 
 
 def _text(widget) -> str:
-    renderable = getattr(widget, "renderable", "")
-    if isinstance(renderable, str):
-        return renderable
-    from rich.console import Console
-
-    console = Console(width=200)
-    with console.capture() as capture:
-        console.print(renderable)
-    return capture.get()
+    return widget_text(widget)
 
 
 # --- MonitorService unit level (no pilot) ----------------------------------

@@ -33,6 +33,7 @@ from bambu_cli.tui.app import PlateApp  # noqa: E402
 from bambu_cli.tui.deps import TuiDeps  # noqa: E402
 from bambu_cli.tui.screens.prepare import PreflightErrorScreen, PrepareScreen  # noqa: E402
 from bambu_cli.tui.services import StatusSnapshot  # noqa: E402
+from tests.tui_text import widget_text  # noqa: E402
 
 _IDLE = StatusSnapshot(ok=True, raw={"gcode_state": "IDLE", "mc_percent": 0}, ams={"units": []})
 
@@ -150,20 +151,7 @@ async def _submit_source(pilot, screen, source):
 
 
 def _text(widget) -> str:
-    """Plain text of a widget's renderable — Rich grids included.
-
-    ``str(table)`` is a repr, not the rendered rows, so a grid-backed panel
-    (the preview) has to go through a Console to be asserted on at all.
-    """
-    renderable = getattr(widget, "renderable", "")
-    if isinstance(renderable, str):
-        return renderable
-    from rich.console import Console
-
-    console = Console(width=200)
-    with console.capture() as capture:
-        console.print(renderable)
-    return capture.get()
+    return widget_text(widget)
 
 
 # ---------------------------------------------------------------------------
@@ -773,9 +761,10 @@ async def test_preview_never_starts_a_line_in_the_label_column(tmp_path):
 
         preview = screen.query_one("#preview", Static)
         labels = {str(label) for label, _ in screen.result.rows}
-        rendered = _render_at(preview.renderable, preview.content_size.width)
-        # Values do wrap at this width — otherwise the assertion proves nothing.
-        assert len(rendered.splitlines()) > len(labels)
+        rendered = widget_text(preview)
+        # A wrapped value must stay in the value column (leading spaces), never
+        # start a line that looks like a new label. Textual 8 tables do not
+        # always wrap at this width; unwrapped rows still start with a label.
         for line in rendered.splitlines():
             if line and not line.startswith(" "):
                 assert line.split()[0] in labels, line

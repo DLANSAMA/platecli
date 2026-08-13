@@ -14,9 +14,8 @@ Point 2 is the one that catches a bad model: a schema derived from a model is
 trivially consistent with itself, but it is *not* trivially consistent with
 what ``to_payload`` actually emits (omitted-vs-null, key order, defaults).
 
-Runtime import must work on the 3.9 floor; only schema *generation* needs 3.10+
-(the contracts annotate optionals as ``X | None``, which 3.9 cannot evaluate).
-That split is asserted below.
+Runtime import never evaluates the PEP 604 annotations (it reads
+``dataclasses.fields()``); only schema generation resolves them.
 """
 
 from __future__ import annotations
@@ -133,9 +132,9 @@ def test_contracts_are_frozen():
 def test_contracts_import_without_evaluating_annotations():
     """The package must not call get_type_hints() on these models.
 
-    ``X | None`` annotations only evaluate on 3.10+. If any runtime path
-    resolved them, importing bambu_cli would break on the supported 3.9 floor —
-    a failure CI would only catch on one leg.
+    If any runtime path resolved them, a missing ``from __future__ import
+    annotations`` would evaluate ``X | None`` at class-body time. The
+    generator is the only code allowed to do that.
     """
     for contract in all_contracts():
         fields = dataclasses.fields(contract)

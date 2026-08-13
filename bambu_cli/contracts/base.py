@@ -14,12 +14,10 @@ credentials and compacts home directories on *every* emitted string. A pydantic
 used by the generator to derive JSON Schema from these dataclasses; it is never
 imported at runtime and never ships to users.
 
-**Annotations are never evaluated at runtime.** They use ``X | None`` (PEP 604),
-which only *evaluates* on Python 3.10+. ``from __future__ import annotations``
-keeps them as strings, and everything here reads fields via
-``dataclasses.fields()`` rather than ``typing.get_type_hints()``, so the package
-imports and works fine on the 3.9 floor. Only the generator resolves them, and
-it requires 3.10+.
+**Annotations are never evaluated at runtime.** They use ``X | None`` (PEP 604).
+``from __future__ import annotations`` keeps them as strings, and everything
+here reads fields via ``dataclasses.fields()`` rather than
+``typing.get_type_hints()``. Only the schema generator resolves them.
 """
 
 from __future__ import annotations

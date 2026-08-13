@@ -14,9 +14,7 @@ and is never imported by the package — ``bambu_cli.utils.emit_json`` still own
 serialization, because that pass applies credential redaction that a
 ``model_dump_json()`` would bypass.
 
-Requires Python 3.10+: the contracts annotate optionals as ``X | None``, which
-only *evaluates* on 3.10+. The package itself never evaluates them (it reads
-``dataclasses.fields()``), so runtime support for the 3.9 floor is unaffected.
+Requires Python 3.10+: the contracts annotate optionals as ``X | None``.
 """
 
 from __future__ import annotations
@@ -34,8 +32,7 @@ SCHEMA_ID_BASE = "https://platecli.local/schemas"
 
 if sys.version_info < (3, 10):  # pragma: no cover -- guarded in CI by job config
     raise SystemExit(
-        "gen_schemas.py needs Python 3.10+ to evaluate `X | None` annotations.\n"
-        "This is a dev/build tool only — the package still supports 3.9."
+        "gen_schemas.py needs Python 3.10+ to evaluate `X | None` annotations."
     )
 
 sys.path.insert(0, str(ROOT))

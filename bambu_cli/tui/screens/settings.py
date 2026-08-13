@@ -30,7 +30,7 @@ open. Nothing leaves this screen unvalidated.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -61,11 +61,7 @@ from bambu_cli.tui.settings_model import (
 _NO_OVERRIDE_PROMPT = "(profile default)"
 
 
-# NOTE: ``Optional[...]`` and not ``SliceOverrides | None``. A class base is a
-# runtime expression -- ``from __future__ import annotations`` does not defer it
-# -- and ``type | None`` is a TypeError before Python 3.10. tests/python_compat_smoke.py
-# guards this; see the class-base rule there.
-class SettingsScreen(Screen[Optional[SliceOverrides]]):
+class SettingsScreen(Screen[SliceOverrides | None]):
     """Collect advanced slice overrides; dismisses with them, or None on cancel."""
 
     # Header watches screen.sub_title; without this every screen claimed to be
@@ -172,7 +168,7 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
         """Pre-selected dropdown value, or BLANK when there is no override."""
         current = self._fields.get(dest)
         text = "" if current is None else str(current)
-        return text if text in choices else Select.BLANK
+        return text if text in choices else Select.NULL
 
     def on_mount(self) -> None:
         self._refresh_override_list()
@@ -285,7 +281,7 @@ class SettingsScreen(Screen[Optional[SliceOverrides]]):
         """The form's current text for one field, whichever control renders it."""
         if field.kind == "choice" and field.choices:
             select = self.query_one(f"#{field.widget_id}", Select)
-            return "" if select.value is Select.BLANK else str(select.value)
+            return "" if select.is_blank() else str(select.value)
         return self.query_one(f"#{field.widget_id}", Input).value
 
     def action_apply(self) -> None:

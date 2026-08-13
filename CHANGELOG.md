@@ -5,7 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Removed
+
+- Python 3.9 support. The floor is 3.10 so every install resolves patched
+  `zeroconf` (no 3.9-only advisory residual).
+
 ### Changed
+
+- The `[tui]` extra now requires Textual 8.x (`textual>=8.0,<9.0`). The
+  previous `<2.0` cap was hiding an 8.x `Select` API change (`Select.NULL`
+  replaced `Select.BLANK`/`False` for no selection). Pilot tests read
+  `Static.content` instead of the removed `renderable`.
 
 - The TUI dashboard and monitor keep one MQTT TLS session for the process
   instead of opening a new connection on every refresh. One-shot CLI commands
