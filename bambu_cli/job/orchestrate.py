@@ -222,7 +222,7 @@ def _run_job(ctx, args, steps=None):
                     )
                 )
             except BambuError as exc:
-                detail = _last_error_for("download", ctx)
+                detail = _last_error_for("download", ctx, exc)
                 _emit_job_failure(
                     args,
                     summary,
@@ -423,7 +423,7 @@ def _run_job(ctx, args, steps=None):
                 printable_path = steps.get_slice()(_slice_args_for_job(source_path, args, workdir))
             except BambuError as exc:
                 summary["printable_path"] = source_path
-                detail = _last_error_for("slice", ctx)
+                detail = _last_error_for("slice", ctx, exc)
                 _emit_job_failure(
                     args,
                     summary,
@@ -509,7 +509,7 @@ def _run_job(ctx, args, steps=None):
                 )
             )
         except BambuError as exc:
-            detail = _last_error_for("upload", ctx)
+            detail = _last_error_for("upload", ctx, exc)
             _emit_job_failure(
                 args,
                 summary,
@@ -555,7 +555,7 @@ def _run_job(ctx, args, steps=None):
                 )
             )
         except BambuError as exc:
-            detail = _last_error_for("print", ctx)
+            detail = _last_error_for("print", ctx, exc)
             summary["next_command"] = ["status", "--json"]
             summary["recovery_hint"] = (
                 "Upload succeeded but print start was not confirmed. Check printer status before retrying."

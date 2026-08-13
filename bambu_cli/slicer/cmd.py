@@ -248,6 +248,12 @@ def cmd_slice(
             # The envelope needs detected_orca, so resolve it before emitting; the human
             # log lines come afterwards so a failing handler cannot eat the envelope.
             detected_orca = detect_orca_slicer()
+            if detected_orca and detected_orca != settings.orca_slicer:
+                logger.info(
+                    f'Detected OrcaSlicer at {_display_path(detected_orca)} — set "orca_slicer" to this in config.json.'
+                )
+            else:
+                logger.info("Please update 'orca_slicer' in your config.json or place it in the tools/ directory.")
             emit_json_error(
                 args,
                 "slice",
@@ -258,14 +264,6 @@ def cmd_slice(
                 orca_slicer=settings.orca_slicer,
                 detected_orca_slicer=detected_orca,
             )
-            safe_log_error(message)
-            if detected_orca and detected_orca != settings.orca_slicer:
-                logger.info(
-                    f'Detected OrcaSlicer at {_display_path(detected_orca)} — set "orca_slicer" to this in config.json.'
-                )
-            else:
-                logger.info("Please update 'orca_slicer' in your config.json or place it in the tools/ directory.")
-            abort("", exit_code=EXIT_CONFIG_ERROR)
 
         if not os.path.exists(process):
             compatible_printer = f"{full_model_name} {settings.nozzle_size} nozzle"
@@ -299,6 +297,8 @@ def cmd_slice(
                 message = f"Missing {name} profile: {_path_for_message(path)}"
                 # detected_profiles feeds the envelope, so diagnose first, emit, then log.
                 hint, detected_profiles = _profiles_dir_diagnostic(settings.profiles_dir)
+                if hint:
+                    logger.info(hint)
                 emit_json_error(
                     args,
                     "slice",
@@ -311,10 +311,6 @@ def cmd_slice(
                     profiles_dir=settings.profiles_dir,
                     detected_profiles_dir=detected_profiles,
                 )
-                safe_log_error(message)
-                if hint:
-                    logger.info(hint)
-                abort("", exit_code=EXIT_CONFIG_ERROR)
 
         try:
             tmp_process, tmp_filament = _create_temp_profiles(process, filament, args)

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
-import json as _json
 import sys
 
 import pytest
@@ -43,7 +42,9 @@ def test_json_mode_emits_error_envelope_and_exits_5(capsys):
     with pytest.raises(BambuError) as ei:
         cmd_tui(_args(json=True))
     assert ei.value.exit_code == 5
-    payload = _json.loads(capsys.readouterr().out)
+    assert ei.value.failed_step == "parse"
+    assert capsys.readouterr().out == ""
+    payload = ei.value.to_error_payload("tui")
     assert payload["status"] == "error"
     assert payload["command"] == "tui"
     assert payload["exit_code"] == 5

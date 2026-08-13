@@ -122,9 +122,8 @@ class TestCameraErrorPaths(unittest.TestCase):
 
 
 class TestUploadDryRunReason(unittest.TestCase):
-    @patch("bambu_cli.commands.files.safe_log_error")
     @patch("bambu_cli.printer.get_printer")
-    def test_dry_run_surfaces_ssl_pin_reason(self, mock_get_printer, mock_safe_log):
+    def test_dry_run_surfaces_ssl_pin_reason(self, mock_get_printer):
         from bambu_cli.commands import files
         from bambu_cli.constants import EXIT_NETWORK_ERROR
 
@@ -142,16 +141,13 @@ class TestUploadDryRunReason(unittest.TestCase):
 
         args = argparse.Namespace(file=fpath, dry_run=True, json=True, verbose=False)
 
-        buf = io.StringIO()
-        with settings_ctx(simulation=False), redirect_stdout(buf):
+        with settings_ctx(simulation=False):
             with self.assertRaises(BambuError) as cm:
                 files.cmd_upload(args)
         self.assertEqual(cm.exception.exit_code, EXIT_NETWORK_ERROR)
-        payload = json.loads(buf.getvalue())
         # The real cause (SSL/fingerprint) must appear — not the old fixed
         # "Could not reach printer." string with no detail.
-        self.assertIn("fingerprint", payload["error"].lower())
-        self.assertNotEqual(payload["error"], "Dry run failed: Could not reach printer.")
+        self.assertIn("fingerprint", str(cm.exception).lower())
 
 
 # ---------------------------------------------------------------------------

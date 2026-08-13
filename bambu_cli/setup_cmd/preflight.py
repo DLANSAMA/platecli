@@ -332,17 +332,17 @@ def _cmd_preflight(args):
         status = "warning"
 
     if getattr(args, "json", False):
-        payload = {
-            "status": status,
-            "command": "preflight",
-            "exit_code": exit_code,
-            "ok": ok,
-            "errors": error_count,
-            "warnings": warning_count,
-            "strict": bool(getattr(args, "strict", False)),
-            "checks": checks,
-        }
-        emit_json(payload)
+        from bambu_cli.contracts import Preflight
+
+        emit_json(
+            Preflight(status=status, command="preflight", checks=checks).to_payload(
+                exit_code=exit_code,
+                ok=ok,
+                errors=error_count,
+                warnings=warning_count,
+                strict=bool(getattr(args, "strict", False)),
+            )
+        )
     else:
         logger.info("🧪 platecli preflight")
         for check in checks:

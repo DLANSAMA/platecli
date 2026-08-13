@@ -106,7 +106,7 @@ _COMMAND_SCHEMAS = {
 
 # Schemas that are not tied to one subcommand: the shared envelopes plus
 # `--version`, which is a global flag rather than a subcommand.
-_SHARED_SCHEMAS = {"error_envelope.json", "ok_envelope.json", "version.json"}
+_SHARED_SCHEMAS = {"error_envelope.json", "ok_envelope.json", "version.json", "migrate_access_code.json"}
 
 def _parser_subcommands():
     """Same derivation idiom as scripts/cli_help_smoke.py, deliberately."""

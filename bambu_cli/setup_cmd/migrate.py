@@ -164,12 +164,17 @@ def _cmd_migrate_access_code(args):
     else:
         logger.error(result["reason"])
 
-    payload = {
-        "command": "migrate-access-code",
-        "status": status,
-        **{k: v for k, v in result.items() if k != "status"},
-    }
     if _namespace_get(args, "json", False):
-        emit_json(payload)
+        from bambu_cli.contracts import MigrateAccessCode
+
+        emit_json(
+            MigrateAccessCode(
+                status=status,
+                command="migrate-access-code",
+                config_path=result.get("config_path"),
+                access_code_file=result.get("access_code_file"),
+                reason=result.get("reason"),
+            )
+        )
     if status == "error":
         abort("", exit_code=EXIT_CONFIG_ERROR)

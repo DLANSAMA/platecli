@@ -149,9 +149,14 @@ def _require_localhost_streamer_url(args, streamer_url, outpath):
     parsed = urlparse(streamer_url)
     if parsed.scheme not in ("http", "https") or parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
         message = "Security Error: camera_stream_url must point to localhost."
-        emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="validate", output=outpath)
         safe_log_error(message)
-        abort("", exit_code=EXIT_CONFIG_ERROR)
+        abort(
+            message,
+            exit_code=EXIT_CONFIG_ERROR,
+            failed_step="validate",
+            extra={"output": outpath},
+            command="snapshot",
+        )
 
 
 def _write_snapshot_atomic(outpath, data):

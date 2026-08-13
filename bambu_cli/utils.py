@@ -150,7 +150,8 @@ def _namespace_get(args, key, default=None):
     return getattr(args, key, default)
 
 
-def emit_json_error(args, command, exit_code, error, failed_step=None, **extra):
+def write_error_envelope(args, command, exit_code, error, failed_step=None, **extra):
+    """Write the JSON error envelope. Does not raise — ``cli.main`` owns process exit."""
     global _JSON_EMITTED
     _JSON_EMITTED = True
     global _LAST_ERROR_PAYLOAD
@@ -172,6 +173,24 @@ def emit_json_error(args, command, exit_code, error, failed_step=None, **extra):
     if not bool(_namespace_get(args, "json", False)):
         return
     emit_json(payload)
+
+
+def emit_json_error(args, command, exit_code, error, failed_step=None, **extra):
+    """Domain failure: log, record extras, then raise. ``cli.main`` emits JSON.
+
+    Kept as a thin wrapper so remaining call sites become a single raise
+    instead of emit-then-abort. New code should call ``abort`` directly.
+    """
+    from bambu_cli.errors import abort
+    from bambu_cli.logging_utils import safe_log_error
+
+    extra = dict(extra)
+    record_error_detail(
+        command, exit_code, error or f"Command failed (exit {exit_code})", failed_step=failed_step, **extra
+    )
+    if error:
+        safe_log_error(error)
+    abort(error, exit_code=exit_code, failed_step=failed_step, extra=extra, command=command)
 
 
 def record_error_detail(command, exit_code, error, failed_step=None, **extra):

@@ -329,11 +329,13 @@ def test_json_envelope_survives_logger_failure(cmd_name, args, capsys):
         ctx = MagicMock()
         ctx.printer.return_value = printer
         fr.return_value = ctx
-        with pytest.raises(BambuError):
+        with pytest.raises(BambuError) as ei:
             getattr(commands_mod, cmd_name)(args)
 
-    # The envelope reached stdout even though the log handler exploded.
-    payload = json.loads(capsys.readouterr().out)
+    # Domain raises; cli.main writes the envelope. The exception must still
+    # carry the contract fields, and the exploding handler must not leak.
+    assert capsys.readouterr().out == ""
+    payload = ei.value.to_error_payload(cmd_name.removeprefix("cmd_"))
     assert payload["status"] == "error"
     assert payload["command"] == cmd_name.removeprefix("cmd_")
     assert payload["failed_step"] == "mqtt"

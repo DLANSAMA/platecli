@@ -21,7 +21,6 @@ from bambu_cli.jsonio import looks_like_schemeless_credential_url as _looks_like
 from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import safe_log_error
 from bambu_cli.paths import expand_path as _expand_path
-from bambu_cli.utils import emit_json_error
 
 
 def _looks_like_url(value):
@@ -54,32 +53,37 @@ def _is_http_url(value):
 def _validate_http_url_or_exit(value):
     parsed = urlparse(value)
     if parsed.scheme.lower() not in ("http", "https"):
-        safe_log_error(f"Invalid URL scheme: {parsed.scheme or 'none'}")
-        abort("", exit_code=EXIT_COMMAND_ERROR)
+        message = f"Invalid URL scheme: {parsed.scheme or 'none'}"
+        safe_log_error(message)
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
     if not parsed.netloc:
-        safe_log_error("Invalid URL: missing host")
-        abort("", exit_code=EXIT_COMMAND_ERROR)
+        message = "Invalid URL: missing host"
+        safe_log_error(message)
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
     if parsed.username is not None or parsed.password is not None:
-        safe_log_error("Invalid URL: embedded credentials are not supported")
-        abort("", exit_code=EXIT_COMMAND_ERROR)
+        message = "Invalid URL: embedded credentials are not supported"
+        safe_log_error(message)
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
 
 
 def _validate_download_url_or_exit(args, source_url, normalized_source, url, failed_step, label):
-    """Validate a download URL and emit structured, redacted JSON on failure."""
+    """Validate a download URL and attach redacted source fields on failure."""
     try:
         _validate_http_url_or_exit(url)
     except BambuError as exc:
-        emit_json_error(
-            args,
-            "download",
-            getattr(exc, "exit_code", getattr(exc, "code", 5)),
-            f"{label}: {_redact_url_credentials(url)}",
-            failed_step=failed_step,
-            source=_redact_url_credentials(source_url),
-            normalized_source=_redact_url_credentials(normalized_source),
-            download_url=_redact_url_credentials(url),
+        extra = {
+            "source": _redact_url_credentials(source_url),
+            "normalized_source": _redact_url_credentials(normalized_source),
+            "download_url": _redact_url_credentials(url),
+        }
+        extra.update(exc.extra or {})
+        abort(
+            str(exc),
+            exit_code=exc.exit_code,
+            failed_step=failed_step or exc.failed_step,
+            extra=extra,
+            command="download",
         )
-        raise
 
 
 def _known_unsupported_download_extension(value):
@@ -103,19 +107,17 @@ def _reject_unsupported_download_extension(args, source_url, normalized_source, 
     if not ext:
         return
     message = _unsupported_download_message(ext)
-    emit_json_error(
-        args,
-        "download",
-        EXIT_FILE_ERROR,
+    abort(
         message,
+        exit_code=EXIT_FILE_ERROR,
         failed_step=failed_step,
-        source=_redact_url_credentials(source_url),
-        normalized_source=_redact_url_credentials(normalized_source),
-        download_url=_redact_url_credentials(url),
-        extension=ext,
+        extra={
+            "source": _redact_url_credentials(source_url),
+            "normalized_source": _redact_url_credentials(normalized_source),
+            "download_url": _redact_url_credentials(url),
+            "extension": ext,
+        },
     )
-    safe_log_error(message)
-    abort("", exit_code=EXIT_FILE_ERROR)
 
 
 def _known_unsupported_content_type(content_type):
@@ -135,19 +137,17 @@ def _reject_unsupported_content_type(args, source_url, normalized_source, url, c
     if not media_type:
         return
     message = f"Download URL returned unsupported content type '{media_type}', not a model file."
-    emit_json_error(
-        args,
-        "download",
-        EXIT_FILE_ERROR,
+    abort(
         message,
+        exit_code=EXIT_FILE_ERROR,
         failed_step="download",
-        source=_redact_url_credentials(source_url),
-        normalized_source=_redact_url_credentials(normalized_source),
-        download_url=_redact_url_credentials(url),
-        content_type=media_type,
+        extra={
+            "source": _redact_url_credentials(source_url),
+            "normalized_source": _redact_url_credentials(normalized_source),
+            "download_url": _redact_url_credentials(url),
+            "content_type": media_type,
+        },
     )
-    safe_log_error(message)
-    abort("", exit_code=EXIT_FILE_ERROR)
 
 
 def _max_download_mb_error(args):
@@ -164,9 +164,11 @@ def _max_download_mb_error(args):
 def _validate_max_download_mb_or_exit(args, command="download"):
     message = _max_download_mb_error(args)
     if message:
-        emit_json_error(args, command, EXIT_COMMAND_ERROR, message, failed_step="validate")
-        safe_log_error(message)
-        abort("", exit_code=EXIT_COMMAND_ERROR)
+        abort(
+            message,
+            exit_code=EXIT_COMMAND_ERROR,
+            failed_step="validate",
+        )
     max_download_mb = int(_namespace_get(args, "max_download_mb", DEFAULT_MAX_DOWNLOAD_MB))
     return max_download_mb * 1024 * 1024
 
@@ -179,19 +181,18 @@ def _reject_oversized_download(
         message = f"Download is too large: {content_length} bytes exceeds the {limit_mb} MB safety limit."
     else:
         message = f"Download exceeded the {limit_mb} MB safety limit."
-    emit_json_error(
-        args,
-        "download",
-        EXIT_FILE_ERROR,
-        message,
-        failed_step="download",
-        source=_redact_url_credentials(source_url),
-        normalized_source=_redact_url_credentials(normalized_source),
-        download_url=_redact_url_credentials(url),
-        path=outpath,
-        received_bytes=received_bytes,
-        content_length=content_length,
-        max_download_bytes=max_bytes,
-    )
     safe_log_error(message)
-    abort("", exit_code=EXIT_FILE_ERROR)
+    abort(
+        message,
+        exit_code=EXIT_FILE_ERROR,
+        failed_step="download",
+        extra={
+            "source": _redact_url_credentials(source_url),
+            "normalized_source": _redact_url_credentials(normalized_source),
+            "download_url": _redact_url_credentials(url),
+            "path": outpath,
+            "received_bytes": received_bytes,
+            "content_length": content_length,
+            "max_download_bytes": max_bytes,
+        },
+    )

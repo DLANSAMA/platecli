@@ -210,9 +210,10 @@ def test_nonzero_exit_failure_aborts(orca_env):
 
 def test_nonzero_exit_failure_json_envelope(orca_env, capsys):
     args = _slice_args(orca_env.model, orca_env.outdir, json=True)
-    with pytest.raises(BambuError):
+    with pytest.raises(BambuError) as ei:
         orca_env("fail", args=args)
-    payload = _last_json_object(capsys.readouterr().out)
+    assert capsys.readouterr().out == ""
+    payload = ei.value.to_error_payload("slice")
     assert payload["status"] == "error"
     assert payload["command"] == "slice"
     assert payload["failed_step"] == "slicer"
@@ -269,9 +270,10 @@ def test_stale_output_json_envelope_reports_slicer_failure(orca_env, capsys):
     old = os.stat(orca_env.outpath)
     os.utime(orca_env.outpath, ns=(old.st_atime_ns - 10_000_000_000, old.st_mtime_ns - 10_000_000_000))
     args = _slice_args(orca_env.model, orca_env.outdir, json=True)
-    with pytest.raises(BambuError):
+    with pytest.raises(BambuError) as ei:
         orca_env("benign_gl_no_write", args=args)
-    payload = _last_json_object(capsys.readouterr().out)
+    assert capsys.readouterr().out == ""
+    payload = ei.value.to_error_payload("slice")
     assert payload["status"] == "error"
     assert payload["failed_step"] == "slicer"
 

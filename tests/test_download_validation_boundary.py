@@ -47,9 +47,6 @@ def _reset_json_state():
 def _args(**kw):
     return Namespace(json=True, **kw)
 
-def _payload(capsys):
-    return json.loads(capsys.readouterr().out)
-
 # --- unsupported source extension -------------------------------------------
 
 @pytest.mark.parametrize("value", ["archive.rar", "notes.pdf", "/path/to/render.png", "a.tar", "b.7z"])
@@ -84,8 +81,9 @@ def test_reject_unsupported_extension_aborts_with_file_error(capsys):
     with pytest.raises(BambuError) as excinfo:
         V._reject_unsupported_download_extension(_args(), URL, None, URL, "archive.rar")
     assert getattr(excinfo.value, "exit_code", None) == EXIT_FILE_ERROR
+    assert capsys.readouterr().out == ""
 
-    payload = _payload(capsys)
+    payload = excinfo.value.to_error_payload("download")
     assert payload["status"] == "error"
     assert payload["command"] == "download"
     assert payload["failed_step"] == "validate"
@@ -93,9 +91,10 @@ def test_reject_unsupported_extension_aborts_with_file_error(capsys):
 
 def test_reject_unsupported_extension_honours_the_caller_step(capsys):
     # The same refusal happens mid-download after a redirect; the step must say so.
-    with pytest.raises(BambuError):
+    with pytest.raises(BambuError) as excinfo:
         V._reject_unsupported_download_extension(_args(), URL, None, URL, "archive.rar", failed_step="download")
-    assert _payload(capsys)["failed_step"] == "download"
+    assert capsys.readouterr().out == ""
+    assert excinfo.value.to_error_payload("download")["failed_step"] == "download"
 
 def test_reject_unsupported_extension_is_a_no_op_for_supported_types(capsys):
     V._reject_unsupported_download_extension(_args(), URL, None, URL, "model.stl")
@@ -107,9 +106,10 @@ def test_rejection_redacts_credentials_in_the_url(capsys):
     # tests/privacy_smoke.py rejects. Same convention as the sibling tests in
     # test_job.py and test_mqtt_print_and_setup.py.
     creds = "http://user@127.0.0.1/archive.rar"
-    with pytest.raises(BambuError):
+    with pytest.raises(BambuError) as excinfo:
         V._reject_unsupported_download_extension(_args(), creds, None, creds, "archive.rar")
-    emitted = capsys.readouterr().out
+    assert capsys.readouterr().out == ""
+    emitted = json.dumps(excinfo.value.to_error_payload("download"))
     assert "user@" not in emitted, "userinfo leaked into the error envelope"
 
 # --- unsupported content type ------------------------------------------------
@@ -144,8 +144,9 @@ def test_reject_unsupported_content_type_reports_the_download_step(capsys):
     with pytest.raises(BambuError) as excinfo:
         V._reject_unsupported_content_type(_args(), URL, None, URL, "image/png")
     assert getattr(excinfo.value, "exit_code", None) == EXIT_FILE_ERROR
+    assert capsys.readouterr().out == ""
 
-    payload = _payload(capsys)
+    payload = excinfo.value.to_error_payload("download")
     # It failed after the request went out, so this is `download`, not `validate`.
     assert payload["failed_step"] == "download"
     assert payload["content_type"] == "image/png"
@@ -162,9 +163,9 @@ def test_failure_detail_is_recorded_for_non_json_callers(capsys):
     Without --json nothing is printed, but the detail must still be captured or
     a pipeline failure loses the reason it failed.
     """
-    with pytest.raises(BambuError):
+    with pytest.raises(BambuError) as excinfo:
         V._reject_unsupported_download_extension(Namespace(json=False), URL, None, URL, "archive.rar")
     assert capsys.readouterr().out == ""
-    assert utils._LAST_ERROR_PAYLOAD is not None
-    assert utils._LAST_ERROR_PAYLOAD["failed_step"] == "validate"
-    assert utils._LAST_ERROR_PAYLOAD["extension"] == ".rar"
+    payload = excinfo.value.to_error_payload("download")
+    assert payload["failed_step"] == "validate"
+    assert payload["extension"] == ".rar"

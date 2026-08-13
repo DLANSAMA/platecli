@@ -17,7 +17,7 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_upload(args)
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
-        mock_logger.error.assert_called_with("Invalid filepath: -invalid.gcode")
+        self.assertIn("Invalid filepath", str(cm.exception))
 
     @patch("os.path.exists")
     @patch("bambu_cli.logging_utils._BACKEND")
@@ -32,7 +32,7 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         with self.assertRaises((SystemExit, BambuError)) as cm:
             cmd_upload(args)
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 3)
-        mock_logger.error.assert_called_with("File not found: missing.gcode")
+        self.assertIn("File not found", str(cm.exception))
 
     @patch("os.path.exists")
     @patch("os.path.getsize")
@@ -84,7 +84,7 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         # The dry-run now surfaces the real cause instead of a fixed, misleading
         # "Could not reach printer." (a cert-pin mismatch must be distinguishable
         # from an off printer) — see fix/audit-cli-json-camera.
-        mock_logger.error.assert_called_with("Dry run failed: could not reach printer: FTP Error")
+        self.assertIn("FTP Error", str(cm.exception))
 
     @patch("os.path.exists")
     @patch("os.path.getsize")
@@ -162,7 +162,7 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
             cmd_upload(args)
 
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
-        mock_logger.error.assert_called_with("❌ Upload failed after 4 attempts.")
+        self.assertIn("Upload failed", str(cm.exception))
 
 class TestBambuUploadRetry(unittest.TestCase):
     @patch("bambu_cli.printer.get_printer")

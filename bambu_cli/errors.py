@@ -47,14 +47,41 @@ class BambuError(Exception):
     exit_code: int = EXIT_COMMAND_ERROR
     failed_step: str | None = None
 
-    def __init__(self, message, *, detail=None, next_command=None, exit_code=None, failed_step=None):
+    def __init__(
+        self,
+        message,
+        *,
+        detail=None,
+        next_command=None,
+        exit_code=None,
+        failed_step=None,
+        extra=None,
+    ):
         super().__init__(message)
         self.detail = detail or {}
         self.next_command = next_command
+        self.extra = extra or {}
         if exit_code is not None:
             self.exit_code = exit_code
         if failed_step is not None:
             self.failed_step = failed_step
+
+    def to_error_payload(self, command: str) -> dict:
+        """Shape job/support reads when a step raises instead of emitting JSON."""
+        payload = {
+            "status": "error",
+            "command": command,
+            "exit_code": self.exit_code,
+            "error": str(self),
+        }
+        if self.failed_step:
+            payload["failed_step"] = self.failed_step
+        payload.update(self.extra or {})
+        if self.detail:
+            payload["detail"] = self.detail
+        if self.next_command:
+            payload["next_command"] = self.next_command
+        return payload
 
 
 class ConfigError(BambuError):
@@ -151,13 +178,23 @@ def abort(
     failed_step=None,
     detail=None,
     next_command=None,
+    extra=None,
+    command: str | None = None,
 ) -> NoReturn:
-    """Raise the appropriate structured error for ``exit_code`` (domain code never calls ``sys.exit``)."""
+    """Raise the appropriate structured error for ``exit_code`` (domain code never calls ``sys.exit``).
+
+    ``command`` is accepted so leftover ``emit_json_error`` call sites can pass
+    it through; the exception does not store it — callers that need a payload
+    use ``BambuError.to_error_payload(command)``.
+    """
+    extra = dict(extra or {})
+    resolved = message or f"Command failed (exit {exit_code})"
     cls = _EXIT_TO_EXC.get(exit_code, BambuError)
     raise cls(
-        message or f"Command failed (exit {exit_code})",
+        resolved,
         exit_code=exit_code,
         failed_step=failed_step,
         detail=detail,
         next_command=next_command,
+        extra=extra,
     )

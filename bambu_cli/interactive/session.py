@@ -343,14 +343,7 @@ def cmd_go(args: argparse.Namespace, deps: GoDeps | None = None) -> None:
     json_mode = bool(getattr(args, "json", False))
     if json_mode:
         # Interactive mode has no machine contract; agents already have `job`.
-        utils.emit_json_error(
-            args,
-            "go",
-            EXIT_COMMAND_ERROR,
-            _NON_TTY_MESSAGE,
-            failed_step="parse",
-        )
-        abort(_NON_TTY_MESSAGE, exit_code=EXIT_COMMAND_ERROR, failed_step="parse")
+        abort(_NON_TTY_MESSAGE, exit_code=EXIT_COMMAND_ERROR, failed_step="parse", command="go")
 
     if not sys.stdin.isatty():
         abort(_NON_TTY_MESSAGE, exit_code=EXIT_COMMAND_ERROR, failed_step="parse")
