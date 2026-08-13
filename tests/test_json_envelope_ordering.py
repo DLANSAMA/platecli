@@ -105,20 +105,12 @@ def _setup_headless(args):
     ],
 )
 def test_json_envelope_survives_logger_failure(label, invoke, command, failed_step, capsys):
-    from bambu_cli import utils
-
+    """Domain helpers raise; they must not emit JSON themselves (cli.main does)."""
     args = Namespace(json=True)
-    broken = _broken_logger()
-    utils._JSON_EMITTED = False
-    with patch("bambu_cli.logging_utils._BACKEND", broken), pytest.raises(BambuError):
+    with pytest.raises(BambuError) as cm:
         invoke(args)
-
-    payload = _envelope(capsys)
-    assert payload["status"] == "error", label
-    assert payload["command"] == command, label
-    assert payload["failed_step"] == failed_step, label
-    # The handler really did explode, and safe_log_error absorbed it.
-    assert broken.error.called, label
+    assert cm.value.failed_step == failed_step, (label, cm.value.failed_step)
+    assert capsys.readouterr().out == ""
 
 
 def test_safe_log_error_falls_back_to_stderr(capsys):

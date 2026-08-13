@@ -8,8 +8,8 @@ from bambu_cli.context import RuntimeContext
 from bambu_cli.contracts import Gcode
 from bambu_cli.download.naming import _has_command_injection_chars
 from bambu_cli.errors import abort
-from bambu_cli.logging_utils import logger, safe_log_error
-from bambu_cli.utils import emit_json, emit_json_error, get_sequence_id
+from bambu_cli.logging_utils import logger
+from bambu_cli.utils import emit_json, get_sequence_id
 
 
 def cmd_gcode(args, ctx=None):
@@ -21,10 +21,12 @@ def cmd_gcode(args, ctx=None):
     # Reject empty/whitespace-only and CR/LF/NUL (shared helper with remote-name
     # sanitization — same command-injection risk on MQTT as on FTP lines).
     if not gcode.strip() or _has_command_injection_chars(gcode):
-        message = "Invalid G-code: must be non-empty and must not contain control characters (CR/LF/NUL)."
-        emit_json_error(args, "gcode", EXIT_COMMAND_ERROR, message, failed_step="validate", gcode=gcode, sent=False)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_COMMAND_ERROR)
+        abort(
+            "Invalid G-code: must be non-empty and must not contain control characters (CR/LF/NUL).",
+            exit_code=EXIT_COMMAND_ERROR,
+            failed_step="validate",
+            extra={"gcode": gcode, "sent": False},
+        )
 
     if not args.confirm:
         logger.warning("⚠️  This will SEND raw G-code to the printer. Add --confirm to proceed.")
@@ -43,10 +45,12 @@ def cmd_gcode(args, ctx=None):
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "gcode_line", "param": gcode}})
     printer = ctx.printer()
     if not printer.send_command(payload):
-        message = "Failed to send G-code command."
-        emit_json_error(args, "gcode", EXIT_NETWORK_ERROR, message, failed_step="mqtt", gcode=gcode, sent=False)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_NETWORK_ERROR)
+        abort(
+            "Failed to send G-code command.",
+            exit_code=EXIT_NETWORK_ERROR,
+            failed_step="mqtt",
+            extra={"gcode": gcode, "sent": False},
+        )
     logger.info(f"📡 Sent: {gcode}")
     if bool(_namespace_get(args, "json", False)):
         emit_json(Gcode(status="sent", command="gcode", gcode=gcode, sent=True))

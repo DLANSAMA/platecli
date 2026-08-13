@@ -7,8 +7,8 @@ from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.context import RuntimeContext
 from bambu_cli.contracts import Light, Pause, Resume, Stop
 from bambu_cli.errors import abort
-from bambu_cli.logging_utils import logger, safe_log_error
-from bambu_cli.utils import emit_json, emit_json_error, get_sequence_id
+from bambu_cli.logging_utils import logger
+from bambu_cli.utils import emit_json, get_sequence_id
 
 
 def cmd_light(args, ctx=None):
@@ -31,10 +31,12 @@ def cmd_light(args, ctx=None):
     )
     printer = ctx.printer()
     if not printer.send_command(payload):
-        message = "Failed to send light command."
-        emit_json_error(args, "light", EXIT_NETWORK_ERROR, message, failed_step="mqtt", action=action, changed=False)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_NETWORK_ERROR)
+        abort(
+            "Failed to send light command.",
+            exit_code=EXIT_NETWORK_ERROR,
+            failed_step="mqtt",
+            extra={"action": action, "changed": False},
+        )
     logger.info(f"💡 Light turned {action}")
     if bool(_namespace_get(args, "json", False)):
         emit_json(Light(status="light_changed", command="light", action=action, changed=True))
@@ -59,10 +61,12 @@ def cmd_pause(args, ctx=None):
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "pause"}})
     printer = ctx.printer()
     if not printer.send_command(payload):
-        message = "Failed to send pause command."
-        emit_json_error(args, "pause", EXIT_NETWORK_ERROR, message, failed_step="mqtt", paused=False)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_NETWORK_ERROR)
+        abort(
+            "Failed to send pause command.",
+            exit_code=EXIT_NETWORK_ERROR,
+            failed_step="mqtt",
+            extra={"paused": False},
+        )
     logger.info("⏸️  Print paused")
     if bool(_namespace_get(args, "json", False)):
         emit_json(Pause(status="paused", command="pause", paused=True))
@@ -87,10 +91,12 @@ def cmd_resume(args, ctx=None):
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "resume"}})
     printer = ctx.printer()
     if not printer.send_command(payload):
-        message = "Failed to send resume command."
-        emit_json_error(args, "resume", EXIT_NETWORK_ERROR, message, failed_step="mqtt", resumed=False)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_NETWORK_ERROR)
+        abort(
+            "Failed to send resume command.",
+            exit_code=EXIT_NETWORK_ERROR,
+            failed_step="mqtt",
+            extra={"resumed": False},
+        )
     logger.info("▶️  Print resumed")
     if bool(_namespace_get(args, "json", False)):
         emit_json(Resume(status="resumed", command="resume", resumed=True))
@@ -115,10 +121,12 @@ def cmd_stop(args, ctx=None):
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "stop"}})
     printer = ctx.printer()
     if not printer.send_command(payload):
-        message = "Failed to send stop command."
-        emit_json_error(args, "stop", EXIT_NETWORK_ERROR, message, failed_step="mqtt", stopped=False)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_NETWORK_ERROR)
+        abort(
+            "Failed to send stop command.",
+            exit_code=EXIT_NETWORK_ERROR,
+            failed_step="mqtt",
+            extra={"stopped": False},
+        )
     logger.info("⏹️  Print stopped")
     if bool(_namespace_get(args, "json", False)):
         emit_json(Stop(status="stopped", command="stop", stopped=True))

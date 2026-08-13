@@ -37,7 +37,7 @@ from .constants import (
 # and the help/workflow smokes plus several tests import it from this module.
 from .contracts import ErrorEnvelope, Version
 from .jsonio import json_mode_requested as _json_mode_requested
-from .utils import emit_json, emit_json_error
+from .utils import emit_json, write_error_envelope
 
 
 def setup_logging(verbose=False, json_mode=False):
@@ -191,12 +191,12 @@ def main():
         # Emit the machine-readable envelope FIRST: stdout must stay parseable even if the
         # human-readable log line below fails to render.
         if _json_mode_requested(args) and not utils._JSON_EMITTED:
-            extra = {}
+            extra = dict(getattr(exc, "extra", None) or {})
             if exc.detail:
                 extra["detail"] = exc.detail
             if exc.next_command:
                 extra["next_command"] = exc.next_command
-            emit_json_error(
+            write_error_envelope(
                 args,
                 command_name,
                 exc.exit_code,
@@ -214,7 +214,7 @@ def main():
         # failure branch) and send the human line to stderr, not stdout.
         message = "Operation cancelled by user."
         if _json_mode_requested(interrupt_args) and not utils._JSON_EMITTED:
-            emit_json_error(
+            write_error_envelope(
                 interrupt_args,
                 command_name,
                 EXIT_COMMAND_ERROR,
@@ -236,14 +236,14 @@ def main():
         printer_ip = _context.current_settings().printer_ip
         if printer_ip == "0.0.0.0":
             message = "Printer IP is not configured. Please run `plate setup` first."
-            emit_json_error(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
+            write_error_envelope(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
             logger.error(message)
             sys.exit(EXIT_CONFIG_ERROR)
         try:
             socket.getaddrinfo(printer_ip, None)
         except socket.gaierror:
             message = f"Invalid printer_ip or hostname in config: {printer_ip}"
-            emit_json_error(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
+            write_error_envelope(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
             logger.error(message)
             sys.exit(EXIT_CONFIG_ERROR)
 
@@ -254,7 +254,7 @@ def main():
         except SystemExit as exc:
             exit_code = _exit_code_from_system_exit(exc)
             if exit_code != EXIT_SUCCESS and _json_mode_requested(args) and not utils._JSON_EMITTED:
-                emit_json_error(
+                write_error_envelope(
                     args,
                     args.cmd,
                     exit_code,
@@ -268,7 +268,7 @@ def main():
         except Exception as exc:
             # Envelope first — see _safe_log_error: a logging failure must not eat stdout.
             if _json_mode_requested(args) and not utils._JSON_EMITTED:
-                emit_json_error(
+                write_error_envelope(
                     args,
                     args.cmd,
                     EXIT_COMMAND_ERROR,

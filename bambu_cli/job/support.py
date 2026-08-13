@@ -91,19 +91,20 @@ def _validate_predicted_remote_name_or_fail(args, summary, remote_name, message_
         )
 
 
-def _last_error_for(command, ctx=None):
-    """Return the last-error payload for ``command``, dual-writing it onto
-    ``ctx.last_error`` when a RuntimeContext is supplied.
+def _last_error_for(command, ctx=None, exc=None):
+    """Return the error payload for ``command`` from ``exc`` or the last abort.
 
-    The legacy global (``utils._LAST_ERROR_PAYLOAD``) remains the source of
-    truth that step implementations write to; ``ctx.last_error`` is a typed
-    mirror for callers migrating away from the module global.
+    Prefer the raised ``BambuError`` (the single write path). Fall back to
+    ``utils._LAST_ERROR_PAYLOAD`` only for steps that still record then raise.
     """
-    payload = utils._LAST_ERROR_PAYLOAD
-    result = payload if isinstance(payload, dict) and payload.get("command") == command else None
+    payload = None
+    if isinstance(exc, BambuError):
+        payload = exc.to_error_payload(command)
+    elif isinstance(utils._LAST_ERROR_PAYLOAD, dict) and utils._LAST_ERROR_PAYLOAD.get("command") == command:
+        payload = utils._LAST_ERROR_PAYLOAD
     if ctx is not None:
-        ctx.last_error = result
-    return result
+        ctx.last_error = payload
+    return payload
 
 
 def _dir_is_writable(directory):

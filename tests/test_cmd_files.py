@@ -69,12 +69,12 @@ class TestBambuCmdFiles(unittest.TestCase):
         self._printer_with_ftp(mock_get_printer, mock_get_ftp)
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises((SystemExit, BambuError)):
+        with self.assertRaises(BambuError) as cm:
             cmd_files(args)
 
         mock_get_ftp.assert_called_once()
         mock_ftp.nlst.assert_called_once_with("/model/")
-        mock_logger.error.assert_called_with("Error listing files: Failed to list files via printer API")
+        self.assertIn("Failed to list files", str(cm.exception))
 
     @patch("bambu_cli.printer.get_printer")
     @patch("bambu_cli.logging_utils._BACKEND")
@@ -88,11 +88,11 @@ class TestBambuCmdFiles(unittest.TestCase):
         self._printer_with_ftp(mock_get_printer, mock_get_ftp)
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises((SystemExit, BambuError)):
+        with self.assertRaises(BambuError) as cm:
             cmd_files(args)
 
         mock_get_ftp.assert_called_once()
-        mock_logger.error.assert_called_with("Error listing files: Failed to list files via printer API")
+        self.assertIn("Failed to list files", str(cm.exception))
 
 
 class TestBambuCmdDelete(unittest.TestCase):
@@ -158,9 +158,9 @@ class TestBambuCmdDelete(unittest.TestCase):
         mock_get_printer.return_value = printer
         mock_exit.side_effect = SystemExit(2)
 
-        with self.assertRaises((SystemExit, BambuError)):
+        with self.assertRaises(BambuError) as cm:
             cmd_delete(args)
 
         mock_get_ftp.assert_called_once()
         mock_ftp.delete.assert_called_once_with("/model/test.3mf")
-        mock_logger.error.assert_called_with("Delete failed: Delete operation failed in printer client.")
+        self.assertIn("Delete", str(cm.exception))

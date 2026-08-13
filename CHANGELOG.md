@@ -12,6 +12,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- Command handlers raise `BambuError` instead of emitting a JSON error and
+  then aborting. `cli.main` is the sole error-envelope writer
+  (`write_error_envelope`). Soft statuses (`confirmation_required`, etc.)
+  still emit their own contracts.
+
 - Tests import the real `paho-mqtt` package instead of stubbing it in
   `sys.modules`. Audit-named test files are renamed to topic names.
 
