@@ -2,21 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 from argparse import Namespace
-from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli.download import naming as N  # noqa: E402
 from bambu_cli.download import validation as V  # noqa: E402
 from bambu_cli.errors import BambuError  # noqa: E402
-
 
 def test_has_command_injection_chars():
     assert N._has_command_injection_chars("G28") is False
@@ -25,7 +17,6 @@ def test_has_command_injection_chars():
     assert N._has_command_injection_chars("a\x00b") is True
     assert N._has_command_injection_chars("") is False
     assert N._has_command_injection_chars(None) is False
-
 
 def test_safe_remote_name_rejects_controls_and_paths():
     assert N._safe_remote_name("model.3mf") == "model.3mf"
@@ -39,12 +30,10 @@ def test_safe_remote_name_rejects_controls_and_paths():
     assert N._safe_remote_name("CON.3mf") is None
     assert N._safe_remote_name("a" * 200 + ".3mf") is None
 
-
 def test_sanitize_download_filename_reserved_and_controls():
     assert "\n" not in N._sanitize_download_filename("x\ny.stl")
     name = N._sanitize_download_filename("CON.stl")
     assert name.upper().startswith("_") or name != "CON.stl"
-
 
 # Names that broke one of the two functions, or plausibly could. Kept as one corpus
 # so the round-trip property below covers every case the individual tests assert.
@@ -99,7 +88,6 @@ _HOSTILE_NAMES = [
     "Ünïcodé Mödel.stl",
 ]
 
-
 @pytest.mark.parametrize("raw", _HOSTILE_NAMES)
 def test_sanitized_names_are_always_accepted_by_the_remote_check(raw):
     """The repairer must never emit a name the printer-side check refuses.
@@ -113,14 +101,12 @@ def test_sanitized_names_are_always_accepted_by_the_remote_check(raw):
     fixed = N._sanitize_download_filename(raw)
     assert N._safe_remote_name(fixed) is not None, f"{raw!r} repaired to {fixed!r}, which _safe_remote_name rejects"
 
-
 @pytest.mark.parametrize("raw", _HOSTILE_NAMES)
 def test_sanitize_is_idempotent(raw):
     """Re-sanitizing must be a no-op, or the same model downloaded twice could land
     under two different names."""
     once = N._sanitize_download_filename(raw)
     assert N._sanitize_download_filename(once) == once
-
 
 @pytest.mark.parametrize("raw", _HOSTILE_NAMES)
 def test_sanitized_names_carry_no_dangerous_characters(raw):
@@ -130,7 +116,6 @@ def test_sanitized_names_carry_no_dangerous_characters(raw):
         assert char not in fixed, f"{raw!r} repaired to {fixed!r}, which still contains {char!r}"
     assert fixed == fixed.strip(" ."), f"{fixed!r} has a leading/trailing space or dot"
     assert fixed not in (".", "..", "")
-
 
 def test_reserved_device_names_are_caught_before_the_first_dot():
     """Regression: `aux.gcode.3mf` passed both functions because splitext() left the
@@ -144,11 +129,9 @@ def test_reserved_device_names_are_caught_before_the_first_dot():
     assert N._sanitize_download_filename("aux.gcode.3mf") == "_aux.gcode.3mf"
     assert N._safe_remote_name("aux.gcode.3mf") is None
 
-
 # Inputs that correctly yield "model.stl": the degenerate ones, plus two whose real
 # basename simply *is* model.stl. Anything else must keep something of the original.
 _EXPECTED_FALLBACKS = {".", "..", "", "   ", "...", "C:\\Windows\\model.stl", "/abs/path/model.stl"}
-
 
 @pytest.mark.parametrize("raw", [n for n in _HOSTILE_NAMES if n not in _EXPECTED_FALLBACKS])
 def test_repair_never_degrades_a_usable_name(raw):
@@ -159,7 +142,6 @@ def test_repair_never_degrades_a_usable_name(raw):
     an input that can be repaired.
     """
     assert N._sanitize_download_filename(raw) != "model.stl"
-
 
 def test_name_budget_is_bytes_not_characters():
     """160 CJK characters is 480 UTF-8 bytes, which ext4 refuses (ENAMETOOLONG).
@@ -181,13 +163,11 @@ def test_name_budget_is_bytes_not_characters():
     # The rejecter has to use the same rule, or the round-trip breaks.
     assert N._safe_remote_name(raw) is None
 
-
 def test_ordinary_names_are_left_alone():
     """Repair must not churn names that were already fine -- users would see files
     renamed for no reason."""
     for name in ("USB-C Cover.stl", "part #3.stl", "50%off.stl", "benchy.gcode.3mf"):
         assert N._sanitize_download_filename(name) == name
-
 
 def test_content_disposition_percent_is_not_double_decoded():
     """A literal `%20` in a plain `filename=` param is not an escape sequence, so it
@@ -195,36 +175,30 @@ def test_content_disposition_percent_is_not_double_decoded():
     got = N._filename_from_content_disposition('attachment; filename="save%20file.stl"')
     assert got == "save%20file.stl"
 
-
 def test_content_disposition_rfc5987_still_decodes():
     """The RFC 5987 `filename*` path does its own decoding and must keep working."""
     got = N._filename_from_content_disposition("attachment; filename*=UTF-8''%E6%97%A5%E6%9C%AC.3mf")
     assert got == "日本.3mf"
-
 
 def test_is_print_ready_name():
     assert N._is_print_ready_name("a.3mf") is True
     assert N._is_print_ready_name("a.gcode") is True
     assert N._is_print_ready_name("a.stl") is False
 
-
 def test_looks_like_and_normalize_url():
     assert V._looks_like_url("https://example.com/x.stl") is True
     assert V._looks_like_url("/local/path.stl") is False
     assert V._normalize_url_input("example.com/x.stl").startswith("http")
 
-
 def test_validate_http_url_rejects_file_scheme():
     with pytest.raises((BambuError, SystemExit)):
         V._validate_http_url_or_exit("file:///etc/passwd")
-
 
 def test_max_download_mb_error_and_validate():
     args = Namespace(max_download_mb=0)
     assert V._max_download_mb_error(args)
     with pytest.raises((BambuError, SystemExit)):
         V._validate_max_download_mb_or_exit(args)
-
 
 def test_ams_helpers():
     from bambu_cli import ams
@@ -236,7 +210,6 @@ def test_ams_helpers():
     assert ams._normalize_color(None) is None
     assert ams.parse_ams({}) is None
 
-
 def test_print_ready_error_message_and_reject():
     msg = N._print_ready_error_message("model.stl", "print")
     assert "model.stl" in msg
@@ -245,12 +218,10 @@ def test_print_ready_error_message_and_reject():
     with pytest.raises((BambuError, SystemExit)):
         N._reject_non_print_ready("model.stl", "print")
 
-
 def test_looks_like_url_requires_scheme_or_domain_shape():
     assert V._looks_like_url("not a url") is False
     assert V._is_http_url("https://example.com/a.stl") is True
     assert V._is_http_url("ftp://example.com/a.stl") is False
-
 
 def test_reject_oversized_download_when_content_length_set():
     args = Namespace(max_download_mb=1, json=False)

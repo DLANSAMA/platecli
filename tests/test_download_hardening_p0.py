@@ -12,22 +12,16 @@ never touch the network.
 
 import os
 import socket
-import sys
 import types
 import urllib.error
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-
 from bambu_cli import bambu  # noqa: E402
 from bambu_cli import download  # noqa: E402
 from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR  # noqa: E402
 from bambu_cli.errors import BambuError
-
 
 def _args(tmp_path, url, **overrides):
     base = dict(
@@ -41,12 +35,10 @@ def _args(tmp_path, url, **overrides):
     base.update(overrides)
     return types.SimpleNamespace(**base)
 
-
 def _mock_opener(mock_resp):
     opener = MagicMock()
     opener.open.return_value.__enter__.return_value = mock_resp
     return opener
-
 
 def _base_resp(url, body=b"x" * 100, content_type="model/stl", content_disposition=None):
     resp = MagicMock()
@@ -72,11 +64,9 @@ def _base_resp(url, body=b"x" * 100, content_type="model/stl", content_dispositi
     resp.read.side_effect = read
     return resp
 
-
 # ---------------------------------------------------------------------------
 # Redirect hop cap
 # ---------------------------------------------------------------------------
-
 
 def test_redirect_hop_cap_enforced():
     """More than MAX_DOWNLOAD_REDIRECT_HOPS hops must raise a clear URLError."""
@@ -88,7 +78,6 @@ def test_redirect_hop_cap_enforced():
         handler.redirect_request(req, None, 302, "Found", {}, "https://example.com/next")
     assert "Too many redirects" in str(excinfo.value)
 
-
 def test_safe_opener_uses_capped_redirect_handler():
     import urllib.request
 
@@ -98,11 +87,9 @@ def test_safe_opener_uses_capped_redirect_handler():
     # A plain HTTPRedirectHandler (no hop cap) must not also be registered.
     assert urllib.request.HTTPRedirectHandler not in handler_types
 
-
 # ---------------------------------------------------------------------------
 # Redirect revalidation: SSRF + extension
 # ---------------------------------------------------------------------------
-
 
 def test_redirect_to_private_ip_blocked(tmp_path):
     """A redirected connection resolving to a private IP must be refused,
@@ -113,7 +100,6 @@ def test_redirect_to_private_ip_blocked(tmp_path):
         with pytest.raises(urllib.error.URLError):
             download._get_safe_connection("internal.example.com", 443, 5, None)
     download._dns_cache.clear()
-
 
 def test_redirected_url_with_unsupported_extension_rejected(tmp_path):
     """If the response's final (post-redirect) URL has a disallowed
@@ -132,11 +118,9 @@ def test_redirected_url_with_unsupported_extension_rejected(tmp_path):
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
 
-
 # ---------------------------------------------------------------------------
 # Mid-stream size enforcement / short reads / empty files
 # ---------------------------------------------------------------------------
-
 
 def test_mid_stream_oversize_deletes_partial_file(tmp_path):
     """Even without a Content-Length header, exceeding max_download_mb mid
@@ -155,7 +139,6 @@ def test_mid_stream_oversize_deletes_partial_file(tmp_path):
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
-
 
 def test_short_read_detected_and_partial_removed(tmp_path):
     """Content-Length promised more bytes than the body actually delivered."""
@@ -189,7 +172,6 @@ def test_short_read_detected_and_partial_removed(tmp_path):
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
 
-
 def test_empty_download_rejected(tmp_path):
     url = "https://example.com/model.stl"
     resp = _base_resp(url, body=b"", content_type="model/stl")
@@ -209,11 +191,9 @@ def test_empty_download_rejected(tmp_path):
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
 
-
 # ---------------------------------------------------------------------------
 # Content-Disposition filename hardening
 # ---------------------------------------------------------------------------
-
 
 def test_rfc2231_filename_star_decoded_and_sanitized():
     """filename* (RFC 2231/5987) must be decoded and then sanitized just like
@@ -224,7 +204,6 @@ def test_rfc2231_filename_star_decoded_and_sanitized():
     assert "/" not in result
     assert ".." not in result
     assert result.endswith(".stl")
-
 
 def test_content_disposition_disallowed_extension_not_smuggled(tmp_path):
     """A Content-Disposition header must not be able to smuggle a disallowed

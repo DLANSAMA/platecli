@@ -17,27 +17,17 @@ import argparse
 import json
 import sys
 import zipfile
-from unittest.mock import MagicMock
 
 import pytest
 
-# paho-mqtt is an optional/heavy dep; stub it the same way other tests do so
-# importing the package never fails on environments without it installed.
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
-
-from bambu_cli import bambu  # noqa: E402
-from bambu_cli import utils  # noqa: E402
-from bambu_cli.cli import build_parser, main  # noqa: E402
-
+from bambu_cli import bambu
+from bambu_cli import utils
+from bambu_cli.cli import build_parser, main
 
 # ---------------------------------------------------------------------------
 # assert_shape: a small, self-contained schema-shape checker (no jsonschema
 # dependency available/allowed).
 # ---------------------------------------------------------------------------
-
 
 def assert_shape(payload, spec, path="$"):
     """Validate `payload` against a small hand-rolled spec.
@@ -73,7 +63,6 @@ def assert_shape(payload, spec, path="$"):
         for idx, item in enumerate(payload):
             assert_shape(item, spec["items"], path=f"{path}[{idx}]")
 
-
 ANY = {}
 STR = {"type": str}
 BOOL = {"type": bool}
@@ -83,7 +72,6 @@ DICT = {"type": dict}
 LIST = {"type": list}
 
 BASE_OK = {"type": dict, "required": {"status": {"enum": ["ok"]}, "command": STR}}
-
 
 def base_error_spec(command=None, require_failed_step=True):
     required = {
@@ -96,11 +84,9 @@ def base_error_spec(command=None, require_failed_step=True):
         required["failed_step"] = STR
     return {"type": dict, "required": required}
 
-
 # ---------------------------------------------------------------------------
 # Harness
 # ---------------------------------------------------------------------------
-
 
 @pytest.fixture(autouse=True)
 def _reset_json_state():
@@ -111,7 +97,6 @@ def _reset_json_state():
     utils._JSON_EMITTED = False
     utils._LAST_ERROR_PAYLOAD = None
     utils._LAST_DOWNLOAD_PAYLOAD = None
-
 
 def run_main(monkeypatch, tmp_path, argv, config_path=None):
     """Drive bambu_cli.cli.main() with a scratch config path so no real
@@ -129,11 +114,9 @@ def run_main(monkeypatch, tmp_path, argv, config_path=None):
         exc = e
     return exc
 
-
 def read_json(capsys):
     out = capsys.readouterr().out
     return json.loads(out)
-
 
 def make_ready_file(tmp_path, name="ready.3mf", content="simulated 3mf content"):
     path = tmp_path / name

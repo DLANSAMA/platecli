@@ -10,16 +10,9 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 import zipfile
-from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 pytest.importorskip("textual")
 
@@ -38,7 +31,6 @@ from tests.tui_text import renderable_text, widget_text  # noqa: E402
 
 _IDLE = StatusSnapshot(ok=True, raw={"gcode_state": "IDLE", "mc_percent": 0}, ams={"units": []})
 
-
 class FakeStatusProvider:
     def __init__(self, snapshots=None):
         self._snapshots = list(snapshots) if snapshots else [_IDLE]
@@ -47,7 +39,6 @@ class FakeStatusProvider:
     def fetch(self, args):
         self.calls += 1
         return self._snapshots[min(self.calls - 1, len(self._snapshots) - 1)]
-
 
 class Recorder:
     def __init__(self, return_value=None, raises=None):
@@ -61,7 +52,6 @@ class Recorder:
             raise self.raises
         return self.return_value
 
-
 @pytest.fixture(autouse=True)
 def _isolated_cwd(tmp_path, monkeypatch):
     """Never let a declined print drop its preserved file in the repo.
@@ -71,13 +61,11 @@ def _isolated_cwd(tmp_path, monkeypatch):
     """
     monkeypatch.chdir(tmp_path)
 
-
 @pytest.fixture(autouse=True)
 def _reset_context():
     saved = _context.get_current()
     yield
     _context.set_current(saved)
-
 
 def _install_ready_settings(tmp_path, **overrides):
     from dataclasses import replace
@@ -100,18 +88,15 @@ def _install_ready_settings(tmp_path, **overrides):
     _context.set_current(RuntimeContext(settings=settings))
     return settings
 
-
 def _args(**kwargs):
     base = {"cmd": "tui", "sim": False, "json": False, "verbose": False}
     base.update(kwargs)
     return argparse.Namespace(**base)
 
-
 def _make_stl(tmp_path, name="cube.stl"):
     p = tmp_path / name
     p.write_text("solid cube\nendsolid cube\n", encoding="utf-8")
     return str(p)
-
 
 def _sliced_3mf(path, name="cube.gcode.3mf"):
     p = path / name
@@ -125,7 +110,6 @@ def _sliced_3mf(path, name="cube.gcode.3mf"):
         )
     return str(p)
 
-
 def _slicer_into_workdir(tmp_path):
     """A fake slicer that writes the .3mf inside the workdir, like the real one."""
 
@@ -133,7 +117,6 @@ def _slicer_into_workdir(tmp_path):
         return _sliced_3mf(__import__("pathlib").Path(ns.output))
 
     return _slice
-
 
 def _deps(steps, ams_detector=None, **kwargs):
     return TuiDeps(
@@ -143,16 +126,13 @@ def _deps(steps, ams_detector=None, **kwargs):
         **kwargs,
     )
 
-
 async def _settle(pilot):
     await pilot.pause()
     await pilot.app.workers.wait_for_complete()
     await pilot.pause()
 
-
 def _text(widget) -> str:
     return widget_text(widget)
-
 
 async def _prepare_to_preview(pilot, source):
     """dashboard → n → source → prepared preview; returns the prepare screen."""
@@ -167,7 +147,6 @@ async def _prepare_to_preview(pilot, source):
     assert screen.result is not None, "prepare did not reach the preview"
     return screen
 
-
 async def _open_modal(pilot, screen):
     screen.open_confirm()
     await _settle(pilot)
@@ -175,14 +154,11 @@ async def _open_modal(pilot, screen):
     assert isinstance(modal, ConfirmModal)
     return modal
 
-
 async def _press_button(pilot, modal, button_id):
     modal.query_one(button_id).press()
     await _settle(pilot)
 
-
 # ---------------------------------------------------------------------------
-
 
 async def test_start_print_passes_confirm_true_exactly_once(tmp_path):
     _install_ready_settings(tmp_path)
@@ -202,7 +178,6 @@ async def test_start_print_passes_confirm_true_exactly_once(tmp_path):
     assert len(job.calls) == 1
     assert [ns.confirm for ns in job.calls] == [True]
     assert job.calls[0].source.endswith(".gcode.3mf")
-
 
 async def test_upload_only_passes_confirm_false(tmp_path):
     _install_ready_settings(tmp_path)
@@ -224,7 +199,6 @@ async def test_upload_only_passes_confirm_false(tmp_path):
     assert "Uploaded" in message
     # Upload-only must not open the monitor (nothing is printing).
     assert not any(isinstance(s, MonitorScreen) for s in app.screen_stack)
-
 
 async def test_no_other_path_reaches_the_job_runner(tmp_path):
     """Preparing, backing out and declining never call the job pipeline."""
@@ -248,7 +222,6 @@ async def test_no_other_path_reaches_the_job_runner(tmp_path):
 
     assert job.calls == []
 
-
 async def test_backing_out_of_the_modal_keeps_the_prepared_file(tmp_path):
     """Esc in the modal returns ownership: the file and preview survive."""
     _install_ready_settings(tmp_path)
@@ -267,7 +240,6 @@ async def test_backing_out_of_the_modal_keeps_the_prepared_file(tmp_path):
         assert screen.result is not None, "ownership was not handed back"
         assert os.path.exists(printable)
         assert screen.query_one("#print-button").disabled is False
-
 
 async def test_decline_preserves_the_sliced_file_and_names_it(tmp_path, monkeypatch):
     """Cancel keeps the sliced file (wizard's decline path) and says where."""
@@ -294,7 +266,6 @@ async def test_decline_preserves_the_sliced_file_and_names_it(tmp_path, monkeypa
     assert os.path.dirname(os.path.abspath(kept)) == str(cwd)
     assert not os.path.exists(workdir)
 
-
 async def test_ams_mapping_only_when_detected_material_is_kept(tmp_path):
     """use_ams rides on the detected-material rule, through the real screens."""
     _install_ready_settings(tmp_path)
@@ -316,7 +287,6 @@ async def test_ams_mapping_only_when_detected_material_is_kept(tmp_path):
 
     assert job.calls[0].use_ams is True
     assert job.calls[0].ams_mapping == "2"
-
 
 async def test_ams_mapping_absent_when_user_changes_material(tmp_path):
     _install_ready_settings(tmp_path)
@@ -347,7 +317,6 @@ async def test_ams_mapping_absent_when_user_changes_material(tmp_path):
     assert job.calls[0].confirm is True
     assert not getattr(job.calls[0], "use_ams", False)
 
-
 async def test_failed_job_keeps_the_modal_open_and_the_file(tmp_path):
     _install_ready_settings(tmp_path)
     stl = _make_stl(tmp_path)
@@ -367,7 +336,6 @@ async def test_failed_job_keeps_the_modal_open_and_the_file(tmp_path):
         assert app.job_in_flight is False
         assert modal.query_one("#confirm-print").disabled is False
         await _press_button(pilot, modal, "#confirm-cancel")
-
 
 async def test_quit_is_refused_while_a_job_worker_is_in_flight(tmp_path):
     import threading
@@ -406,7 +374,6 @@ async def test_quit_is_refused_while_a_job_worker_is_in_flight(tmp_path):
     finally:
         gate.set()
 
-
 async def test_start_print_opens_the_monitor(tmp_path):
     _install_ready_settings(tmp_path)
     stl = _make_stl(tmp_path)
@@ -420,9 +387,7 @@ async def test_start_print_opens_the_monitor(tmp_path):
         await _press_button(pilot, modal, "#confirm-print")
         assert isinstance(pilot.app.screen, MonitorScreen)
 
-
 # --- the summary grid renders filenames as data, not Rich markup -----------
-
 
 async def test_confirm_summary_shows_a_bracketed_filename_verbatim(tmp_path):
     """The one screen that names the file must not let Rich eat part of it.
@@ -444,7 +409,6 @@ async def test_confirm_summary_shows_a_bracketed_filename_verbatim(tmp_path):
         await _press_button(pilot, modal, "#confirm-cancel")
 
     assert "model [remix].stl" in summary
-
 
 def test_confirm_summary_survives_a_markup_shaped_value():
     """A closing-tag shape must render, not raise MarkupError mid-modal."""

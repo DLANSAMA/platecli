@@ -11,16 +11,9 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 import zipfile
-from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 pytest.importorskip("textual")
 
@@ -37,11 +30,9 @@ from tests.tui_text import widget_text  # noqa: E402
 
 _IDLE = StatusSnapshot(ok=True, raw={"gcode_state": "IDLE", "mc_percent": 0}, ams={"units": []})
 
-
 class FakeStatusProvider:
     def fetch(self, args):
         return _IDLE
-
 
 class Recorder:
     def __init__(self, return_value=None, raises=None):
@@ -55,7 +46,6 @@ class Recorder:
             raise self.raises
         return self.return_value
 
-
 @pytest.fixture(autouse=True)
 def _isolated_cwd(tmp_path, monkeypatch):
     """Never let a declined print drop its preserved file in the repo.
@@ -65,13 +55,11 @@ def _isolated_cwd(tmp_path, monkeypatch):
     """
     monkeypatch.chdir(tmp_path)
 
-
 @pytest.fixture(autouse=True)
 def _reset_context():
     saved = _context.get_current()
     yield
     _context.set_current(saved)
-
 
 def _install_ready_settings(tmp_path, **overrides):
     from dataclasses import replace
@@ -94,18 +82,15 @@ def _install_ready_settings(tmp_path, **overrides):
     _context.set_current(RuntimeContext(settings=settings))
     return settings
 
-
 def _args(**kwargs):
     base = {"cmd": "tui", "sim": False, "json": False, "verbose": False}
     base.update(kwargs)
     return argparse.Namespace(**base)
 
-
 def _make_stl(tmp_path, name="cube.stl"):
     p = tmp_path / name
     p.write_text("solid cube\nendsolid cube\n", encoding="utf-8")
     return str(p)
-
 
 def _sliced_3mf(tmp_path, name="cube.gcode.3mf"):
     p = tmp_path / name
@@ -119,7 +104,6 @@ def _sliced_3mf(tmp_path, name="cube.gcode.3mf"):
         )
     return str(p)
 
-
 def _deps(steps=None, ams_detector=None):
     return TuiDeps(
         status_provider=FakeStatusProvider(),
@@ -127,13 +111,11 @@ def _deps(steps=None, ams_detector=None):
         ams_detector=ams_detector if ams_detector is not None else (lambda args: None),
     )
 
-
 async def _settle(pilot):
     """Let queued messages AND thread workers finish before asserting."""
     await pilot.pause()
     await pilot.app.workers.wait_for_complete()
     await pilot.pause()
-
 
 async def _open_prepare(pilot):
     await pilot.press("n")
@@ -142,20 +124,16 @@ async def _open_prepare(pilot):
     assert isinstance(screen, PrepareScreen)
     return screen
 
-
 async def _submit_source(pilot, screen, source):
     screen.query_one("#source-input", Input).value = source
     screen.query_one("#source-input", Input).focus()
     await pilot.press("enter")
     await _settle(pilot)
 
-
 def _text(widget) -> str:
     return widget_text(widget)
 
-
 # ---------------------------------------------------------------------------
-
 
 async def test_n_opens_prepare_screen(tmp_path):
     _install_ready_settings(tmp_path)
@@ -167,7 +145,6 @@ async def test_n_opens_prepare_screen(tmp_path):
         await pilot.press("n")
         await _settle(pilot)
         assert sum(isinstance(s, PrepareScreen) for s in app.screen_stack) == 1
-
 
 async def test_invalid_source_shows_inline_error(tmp_path):
     _install_ready_settings(tmp_path)
@@ -186,7 +163,6 @@ async def test_invalid_source_shows_inline_error(tmp_path):
         screen.query_one("#source-input", Input).value = "x"
         await pilot.pause()
         assert _text(screen.query_one("#source-error", Static)) == ""
-
 
 async def test_valid_local_stl_reaches_preview(tmp_path):
     _install_ready_settings(tmp_path)
@@ -214,7 +190,6 @@ async def test_valid_local_stl_reaches_preview(tmp_path):
     # Leaving the screen took the temp workdir with it.
     assert not os.path.exists(workdir)
 
-
 async def test_presliced_3mf_shows_material_not_applied_caveat(tmp_path):
     _install_ready_settings(tmp_path)
     presliced = _sliced_3mf(tmp_path, name="ready.gcode.3mf")
@@ -237,7 +212,6 @@ async def test_presliced_3mf_shows_material_not_applied_caveat(tmp_path):
     assert "PETG" not in preview
     assert slicer.calls == []
 
-
 async def test_ams_detected_material_is_preselected(tmp_path):
     _install_ready_settings(tmp_path)
     app = PlateApp(_args(), _deps(ams_detector=lambda args: "PETG"))
@@ -252,7 +226,6 @@ async def test_ams_detected_material_is_preselected(tmp_path):
         assert petg.value is True
         assert pla.value is False
 
-
 async def test_no_ams_detection_keeps_pla_default(tmp_path):
     _install_ready_settings(tmp_path)
     # A detector that fails entirely (the real one returns None on any error).
@@ -265,7 +238,6 @@ async def test_no_ams_detection_keeps_pla_default(tmp_path):
         assert screen.selected_supports() is False
         for name in ("pla", "petg", "abs", "tpu"):
             assert "(detected in AMS)" not in str(screen.query_one(f"#material-{name}", RadioButton).label)
-
 
 async def test_pipeline_failure_renders_inline_and_app_survives(tmp_path):
     _install_ready_settings(tmp_path)
@@ -281,7 +253,6 @@ async def test_pipeline_failure_renders_inline_and_app_survives(tmp_path):
         assert "slicer exploded" in status
         assert screen.result is None
         assert app.is_running is True
-
 
 async def test_supports_checkbox_and_quality_reach_the_slicer(tmp_path):
     _install_ready_settings(tmp_path)
@@ -304,7 +275,6 @@ async def test_supports_checkbox_and_quality_reach_the_slicer(tmp_path):
     assert slicer.calls[0].supports is True
     assert slicer.calls[0].quality == "draft"
 
-
 async def test_preflight_failure_points_at_plate_setup(tmp_path):
     settings = _install_ready_settings(tmp_path)
     import shutil
@@ -326,7 +296,6 @@ async def test_preflight_failure_points_at_plate_setup(tmp_path):
         await _settle(pilot)
         assert not isinstance(app.screen, PreflightErrorScreen)
 
-
 async def test_unconfigured_printer_blocks_prepare(tmp_path):
     _install_ready_settings(tmp_path, printer_ip="0.0.0.0")
     app = PlateApp(_args(), _deps())
@@ -337,7 +306,6 @@ async def test_unconfigured_printer_blocks_prepare(tmp_path):
         assert isinstance(app.screen, PreflightErrorScreen)
         assert "plate setup" in _text(app.screen.query_one("#preflight-problem", Static))
 
-
 async def test_escape_returns_to_dashboard_from_prepare(tmp_path):
     _install_ready_settings(tmp_path)
     app = PlateApp(_args(), _deps())
@@ -347,7 +315,6 @@ async def test_escape_returns_to_dashboard_from_prepare(tmp_path):
         await pilot.press("escape")
         await _settle(pilot)
         assert not isinstance(app.screen, PrepareScreen)
-
 
 async def test_unexpected_pipeline_error_is_reported_not_raised(tmp_path):
     """A non-BambuError from a collaborator still renders inline (thread worker)."""
@@ -363,7 +330,6 @@ async def test_unexpected_pipeline_error_is_reported_not_raised(tmp_path):
         assert "disk on fire" in _text(screen.query_one("#prepare-status", Static))
         assert screen.result is None
         assert app.is_running is True
-
 
 async def test_second_prepare_cleans_up_the_first_workdir(tmp_path):
     """Re-preparing must not leak the previous run's temp workdir."""
@@ -383,7 +349,6 @@ async def test_second_prepare_cleans_up_the_first_workdir(tmp_path):
         assert first_workdir != second_workdir
         assert not os.path.exists(first_workdir)
 
-
 async def _open_prepare_nowait(pilot):
     """Open the prepare screen WITHOUT waiting for its workers to finish.
 
@@ -397,7 +362,6 @@ async def _open_prepare_nowait(pilot):
     assert isinstance(screen, PrepareScreen)
     return screen
 
-
 async def _wait_for(condition, pilot, timeout=5.0):
     """Pump the UI until ``condition()`` is true (never sleeps blindly)."""
     import asyncio
@@ -407,7 +371,6 @@ async def _wait_for(condition, pilot, timeout=5.0):
         assert asyncio.get_event_loop().time() < deadline, "condition never became true"
         await pilot.pause()
         await asyncio.sleep(0.02)
-
 
 async def test_escaping_mid_prepare_does_not_leak_the_workdir(tmp_path):
     """Leaving the screen while the pipeline is still running still cleans up.
@@ -451,7 +414,6 @@ async def test_escaping_mid_prepare_does_not_leak_the_workdir(tmp_path):
 
     assert not os.path.exists(seen["workdir"]), f"leaked temp workdir {seen['workdir']}"
 
-
 async def test_manual_material_choice_survives_late_ams_detection(tmp_path):
     """A slow AMS read must never overwrite a choice the user already made.
 
@@ -489,7 +451,6 @@ async def test_manual_material_choice_survives_late_ams_detection(tmp_path):
     finally:
         gate.set()
 
-
 def test_message_less_prepare_failure_is_not_diagnosed_as_unreachable(tmp_path):
     """A blank OSError from the slicer is a prepare failure, not a dead printer."""
     from bambu_cli.tui.services import PipelineService
@@ -504,7 +465,6 @@ def test_message_less_prepare_failure_is_not_diagnosed_as_unreachable(tmp_path):
     assert result.error == "Preparing the model failed (OSError)."
     assert not os.path.exists(result.state.workdir)
 
-
 # ---------------------------------------------------------------------------
 # Layout: the form on the left, what the run produced on the right
 #
@@ -517,14 +477,12 @@ def test_message_less_prepare_failure_is_not_diagnosed_as_unreachable(tmp_path):
 _WIDE = (100, 30)
 _NARROW = (80, 24)
 
-
 def _column_of(screen, selector):
     """Which prepare column owns a widget ('prepare-inputs'/'prepare-output')."""
     for ancestor in screen.query_one(selector).ancestors:
         if ancestor.id in ("prepare-inputs", "prepare-output"):
             return ancestor.id
     return None
-
 
 async def test_wide_terminal_puts_the_form_beside_the_results(tmp_path):
     _install_ready_settings(tmp_path)
@@ -557,7 +515,6 @@ async def test_wide_terminal_puts_the_form_beside_the_results(tmp_path):
         assert output.region.y == inputs.region.y
         assert not screen.query_one("#prepare-columns").has_class("narrow")
 
-
 async def test_wide_terminal_shows_the_estimate_without_scrolling(tmp_path):
     """The point of the restructure: preview + Start print visible with the form."""
     _install_ready_settings(tmp_path)
@@ -578,7 +535,6 @@ async def test_wide_terminal_shows_the_estimate_without_scrolling(tmp_path):
         # …and nothing had to scroll to get there.
         assert screen.query_one("#prepare-body").scroll_offset.y == 0
 
-
 async def test_narrow_terminal_stacks_the_columns(tmp_path):
     """Two 40-column halves cannot hold a material label, so 80x24 stacks."""
     _install_ready_settings(tmp_path)
@@ -598,7 +554,6 @@ async def test_narrow_terminal_stacks_the_columns(tmp_path):
         assert "(detected in AMS)" in str(screen.query_one("#material-abs", RadioButton).label)
         assert material.outer_size.width <= 80
         assert material.outer_size.height == len(("PLA", "PETG", "ABS", "TPU")) + 2  # + border
-
 
 async def test_detected_material_label_survives_the_form_scrollbar(tmp_path):
     """A short terminal must not truncate WHICH material was detected.
@@ -625,7 +580,6 @@ async def test_detected_material_label_survives_the_form_scrollbar(tmp_path):
         needed = Text.from_markup(str(button.label)).cell_len + 4
         assert screen.query_one("#material-set").content_size.width >= needed
 
-
 async def test_narrow_terminal_scrolls_the_finished_run_into_view(tmp_path):
     """Stacked, the results start below the fold; the finished run must come up."""
     _install_ready_settings(tmp_path)
@@ -648,12 +602,10 @@ async def test_narrow_terminal_scrolls_the_finished_run_into_view(tmp_path):
         assert app.screen.region.contains_region(button.region)
         assert preview.outer_size.width <= 80
 
-
 # ---------------------------------------------------------------------------
 # The results column: a titled box that says what will land in it, and a
 # label/value grid whose wrapped values stay out of the label column.
 # ---------------------------------------------------------------------------
-
 
 def _render_at(renderable, width):
     """Plain text of a Rich renderable at an exact console width.
@@ -668,7 +620,6 @@ def _render_at(renderable, width):
     with console.capture() as capture:
         console.print(renderable)
     return capture.get()
-
 
 def test_summary_grid_wraps_a_value_under_the_value_column():
     """The defect: f"{label:<11}{value}" continued a wrap in the label column.
@@ -690,7 +641,6 @@ def test_summary_grid_wraps_a_value_under_the_value_column():
         assert line.index("nozzle") == value_column, line
         assert line[:value_column].strip() == "", line
 
-
 def test_summary_grid_renders_a_bracketed_filename_verbatim():
     """A "[" in a filename is not Rich markup: str cells would eat it."""
     from bambu_cli.tui.widgets.summary import summary_grid
@@ -702,13 +652,11 @@ def test_summary_grid_renders_a_bracketed_filename_verbatim():
     closing = _render_at(summary_grid([("Model", "a[/b]c.gcode")]), 60)
     assert "a[/b]c.gcode" in closing
 
-
 def test_summary_grid_tolerates_no_rows():
     from bambu_cli.tui.widgets.summary import summary_grid
 
     assert _render_at(summary_grid(None), 40).strip() == ""
     assert _render_at(summary_grid([]), 40).strip() == ""
-
 
 async def test_results_column_is_a_titled_box_with_a_placeholder(tmp_path):
     """Before any run the column must not read as a half-rendered widget."""
@@ -730,7 +678,6 @@ async def test_results_column_is_a_titled_box_with_a_placeholder(tmp_path):
         assert "Estimate" not in placeholder
         assert _text(screen.query_one("#preview", Static)) == ""
 
-
 async def test_placeholder_is_replaced_by_the_real_status(tmp_path):
     _install_ready_settings(tmp_path)
     stl = _make_stl(tmp_path)
@@ -745,7 +692,6 @@ async def test_placeholder_is_replaced_by_the_real_status(tmp_path):
         status = _text(screen.query_one("#prepare-status", Static))
         assert "Nothing prepared yet" not in status
         assert "Start print" in status
-
 
 async def test_preview_never_starts_a_line_in_the_label_column(tmp_path):
     """The screen, not just the helper: a wrap must not invent a field name."""
@@ -769,7 +715,6 @@ async def test_preview_never_starts_a_line_in_the_label_column(tmp_path):
             if line and not line.startswith(" "):
                 assert line.split()[0] in labels, line
 
-
 async def test_preview_shows_a_bracketed_filename_verbatim(tmp_path):
     """End to end: the preview Static must not markup-parse a filename."""
     _install_ready_settings(tmp_path)
@@ -785,7 +730,6 @@ async def test_preview_shows_a_bracketed_filename_verbatim(tmp_path):
 
         assert "benchy [remix] v2.stl" in _text(screen.query_one("#preview", Static))
 
-
 async def test_form_groups_are_one_width_that_fills_the_column(tmp_path):
     """One form, not four boxes of unrelated size with a ragged right edge."""
     _install_ready_settings(tmp_path)
@@ -800,7 +744,6 @@ async def test_form_groups_are_one_width_that_fills_the_column(tmp_path):
             for selector in ("#material-set", "#quality-set", "#supports-check", "#prepare-actions")
         }
         assert set(widths.values()) == {column}, widths
-
 
 async def test_narrow_terminal_scrolls_a_failure_into_view(tmp_path):
     """Stacked, a failure lands below the fold too — and looks like nothing ran."""

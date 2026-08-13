@@ -10,17 +10,10 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 import zipfile
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 pytest.importorskip("textual")
 
@@ -38,7 +31,6 @@ from bambu_cli.tui.services import MonitorService, StatusSnapshot  # noqa: E402
 from bambu_cli.tui.widgets.job_progress import JobProgress  # noqa: E402
 from tests.tui_text import widget_text  # noqa: E402
 
-
 def _snap(state, percent, layer=0, total=100, remaining=0):
     return StatusSnapshot(
         ok=True,
@@ -54,7 +46,6 @@ def _snap(state, percent, layer=0, total=100, remaining=0):
         ams={"units": []},
     )
 
-
 class ScriptedStatus:
     """Replays scripted snapshots and counts every fetch."""
 
@@ -65,7 +56,6 @@ class ScriptedStatus:
     def fetch(self, args):
         self.calls += 1
         return self._snapshots[min(self.calls - 1, len(self._snapshots) - 1)]
-
 
 class Recorder:
     def __init__(self, return_value=None, raises=None):
@@ -79,7 +69,6 @@ class Recorder:
             raise self.raises
         return self.return_value
 
-
 @pytest.fixture(autouse=True)
 def _isolated_cwd(tmp_path, monkeypatch):
     """Never let a declined print drop its preserved file in the repo.
@@ -89,13 +78,11 @@ def _isolated_cwd(tmp_path, monkeypatch):
     """
     monkeypatch.chdir(tmp_path)
 
-
 @pytest.fixture(autouse=True)
 def _reset_context():
     saved = _context.get_current()
     yield
     _context.set_current(saved)
-
 
 def _install_ready_settings(tmp_path, **overrides):
     from dataclasses import replace
@@ -118,12 +105,10 @@ def _install_ready_settings(tmp_path, **overrides):
     _context.set_current(RuntimeContext(settings=settings, simulation=bool(overrides.get("_sim"))))
     return settings
 
-
 def _args(**kwargs):
     base = {"cmd": "tui", "sim": False, "json": False, "verbose": False}
     base.update(kwargs)
     return argparse.Namespace(**base)
-
 
 def _sliced_3mf(path, name="cube.gcode.3mf"):
     p = Path(path) / name
@@ -137,16 +122,13 @@ def _sliced_3mf(path, name="cube.gcode.3mf"):
         )
     return str(p)
 
-
 def _slicer_into_workdir(ns=None, **kwargs):
     return _sliced_3mf(ns.output)
-
 
 async def _settle(pilot):
     await pilot.pause()
     await pilot.app.workers.wait_for_complete()
     await pilot.pause()
-
 
 async def _pump(pilot, times=10, delay=0.02):
     """Give the poll worker real (short) wall time without waiting on workers."""
@@ -155,7 +137,6 @@ async def _pump(pilot, times=10, delay=0.02):
     for _ in range(times):
         await pilot.pause()
         await asyncio.sleep(delay)
-
 
 async def _wait_until(condition, pilot, timeout=5.0):
     import asyncio
@@ -166,13 +147,10 @@ async def _wait_until(condition, pilot, timeout=5.0):
         await pilot.pause()
         await asyncio.sleep(0.01)
 
-
 def _text(widget) -> str:
     return widget_text(widget)
 
-
 # --- MonitorService unit level (no pilot) ----------------------------------
-
 
 def test_monitor_terminal_states_match_the_cli_monitor():
     from bambu_cli.protocols.mqtt import TERMINAL_GCODE_STATES
@@ -180,7 +158,6 @@ def test_monitor_terminal_states_match_the_cli_monitor():
 
     assert terminal_gcode_states() is TERMINAL_GCODE_STATES
     assert set(TERMINAL_GCODE_STATES) == {"FINISH", "FAILED", "STOP", "IDLE"}
-
 
 def test_monitor_service_is_terminal():
     service = MonitorService(ScriptedStatus([_snap("RUNNING", 10)]))
@@ -190,7 +167,6 @@ def test_monitor_service_is_terminal():
     # An unreadable status is never terminal: we keep watching instead of
     # declaring a print finished because MQTT hiccuped.
     assert service.is_terminal(StatusSnapshot(ok=False, error="timeout")) is False
-
 
 def test_job_progress_lines_and_formatting():
     from bambu_cli.tui.services import format_remaining, job_progress_lines, progress_percent
@@ -207,9 +183,7 @@ def test_job_progress_lines_and_formatting():
     assert progress_percent(StatusSnapshot(ok=False, error="x")) == 0
     assert dict(job_progress_lines(StatusSnapshot(ok=False, error="boom")))["Status"] == "boom"
 
-
 # --- pilot -----------------------------------------------------------------
-
 
 def _deps(monitor_provider, **kwargs):
     """Deps whose MONITOR polls ``monitor_provider``.
@@ -223,7 +197,6 @@ def _deps(monitor_provider, **kwargs):
         poll_interval=0.01,
         **kwargs,
     )
-
 
 async def test_monitor_progresses_and_stops_on_terminal_state(tmp_path):
     _install_ready_settings(tmp_path)
@@ -250,7 +223,6 @@ async def test_monitor_progresses_and_stops_on_terminal_state(tmp_path):
         # And it really did poll three times (RUNNING, RUNNING, FINISH).
         assert settled == 3
 
-
 async def test_escape_detaches_without_stopping_anything(tmp_path):
     _install_ready_settings(tmp_path)
     provider = ScriptedStatus([_snap("RUNNING", 10)])
@@ -273,7 +245,6 @@ async def test_escape_detaches_without_stopping_anything(tmp_path):
     # ...and nothing was sent to the printer to stop the print.
     assert stop.calls == []
 
-
 async def test_monitor_survives_an_unreadable_status(tmp_path):
     _install_ready_settings(tmp_path)
     provider = ScriptedStatus([StatusSnapshot(ok=False, error="Printer unreachable (timeout)."), _snap("FINISH", 100)])
@@ -288,7 +259,6 @@ async def test_monitor_survives_an_unreadable_status(tmp_path):
         await _wait_until(lambda: screen.finished, pilot)
         assert provider.calls == 2
 
-
 async def test_m_does_not_stack_monitor_screens(tmp_path):
     _install_ready_settings(tmp_path)
     provider = ScriptedStatus([_snap("FINISH", 100)])
@@ -300,7 +270,6 @@ async def test_m_does_not_stack_monitor_screens(tmp_path):
         await pilot.press("m")
         await _settle(pilot)
         assert sum(isinstance(s, MonitorScreen) for s in app.screen_stack) == 1
-
 
 async def test_full_sim_end_to_end_dashboard_to_finish(tmp_path):
     """Plan §7 acceptance: dashboard → n → presets → prepare → confirm → FINISH."""

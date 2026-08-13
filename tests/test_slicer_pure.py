@@ -3,23 +3,19 @@
 from __future__ import annotations
 
 import json
-import sys
 from argparse import Namespace
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-
-from bambu_cli import slicer as S  # noqa: E402
+from bambu_cli import slicer as S
 from bambu_cli.errors import BambuError  # noqa: E402
 
 
 def test_normalize_wall_type_aliases():
     assert S._normalize_wall_type(None) in (None, "")
-    assert S._normalize_wall_type("archaic") in ("classic", "archaic") or True
+    assert S._normalize_wall_type("archaic") in ("classic", "archaic")
     assert S._normalize_wall_type("inner/outer") is not None
 
 

@@ -12,14 +12,8 @@ import os
 import sys
 import zipfile
 from dataclasses import replace
-from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli import context as _context  # noqa: E402
 from bambu_cli import utils  # noqa: E402
@@ -31,7 +25,6 @@ from bambu_cli.interactive.session import GoDeps, GoSteps, cmd_go  # noqa: E402
 # ---------------------------------------------------------------------------
 # Test doubles
 # ---------------------------------------------------------------------------
-
 
 class ScriptedPrompts:
     """A prompt layer that replays a scripted list of answers.
@@ -64,7 +57,6 @@ class ScriptedPrompts:
     def print(self, message=""):
         self.printed.append(message)
 
-
 class Recorder:
     """A callable that records the namespace it was called with and returns a value."""
 
@@ -79,13 +71,11 @@ class Recorder:
             raise self.raises
         return self.return_value
 
-
 @pytest.fixture(autouse=True)
 def _tty(monkeypatch):
     """cmd_go requires a TTY; pretend stdin is one for the state-machine tests."""
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
     yield
-
 
 @pytest.fixture(autouse=True)
 def _reset_context():
@@ -96,7 +86,6 @@ def _reset_context():
     utils._JSON_EMITTED = False
     utils._LAST_ERROR_PAYLOAD = None
     utils._LAST_DOWNLOAD_PAYLOAD = None
-
 
 def _install_ready_settings(tmp_path, **overrides):
     """Install a RuntimeContext whose preflight passes: real orca exe + profiles dir."""
@@ -116,12 +105,10 @@ def _install_ready_settings(tmp_path, **overrides):
     _context.set_current(RuntimeContext(settings=settings))
     return settings
 
-
 def _make_stl(tmp_path, name="cube.stl"):
     p = tmp_path / name
     p.write_text("solid cube\nendsolid cube\n", encoding="utf-8")
     return str(p)
-
 
 def _sliced_3mf(tmp_path, name="cube.gcode.3mf"):
     """A minimal sliced .3mf carrying a parseable slice_info.config estimate."""
@@ -136,7 +123,6 @@ def _sliced_3mf(tmp_path, name="cube.gcode.3mf"):
         )
     return str(p)
 
-
 def _make_zip(tmp_path, member="model.stl", name="bundle.zip"):
     """A local .zip carrying one sliceable model member."""
     p = tmp_path / name
@@ -144,18 +130,15 @@ def _make_zip(tmp_path, member="model.stl", name="bundle.zip"):
         zf.writestr(member, "solid cube\nendsolid cube\n")
     return str(p)
 
-
 def _args(**overrides):
     ns = argparse.Namespace(cmd="go", source=None, json=False, sim=False)
     for k, v in overrides.items():
         setattr(ns, k, v)
     return ns
 
-
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
-
 
 def test_happy_path_calls_download_slice_job_in_order(tmp_path, monkeypatch):
     _install_ready_settings(tmp_path)
@@ -191,7 +174,6 @@ def test_happy_path_calls_download_slice_job_in_order(tmp_path, monkeypatch):
     assert job.calls[0].confirm is True
     assert any("Printing" in m for m in prompts.printed)
 
-
 def test_local_file_source_skips_download(tmp_path):
     _install_ready_settings(tmp_path)
     stl = _make_stl(tmp_path)
@@ -208,7 +190,6 @@ def test_local_file_source_skips_download(tmp_path):
     assert len(slicer.calls) == 1
     assert len(job.calls) == 1
 
-
 def test_positional_source_skips_first_prompt(tmp_path):
     _install_ready_settings(tmp_path)
     stl = _make_stl(tmp_path)
@@ -219,11 +200,9 @@ def test_positional_source_skips_first_prompt(tmp_path):
     # No 'text:' prompt was issued because the positional was used.
     assert not any(a.startswith("text:") for a in prompts.asked)
 
-
 # ---------------------------------------------------------------------------
 # Confirm gate (SABOTAGE-VERIFIED)
 # ---------------------------------------------------------------------------
-
 
 def test_decline_at_confirm_offers_upload_only(tmp_path):
     _install_ready_settings(tmp_path)
@@ -249,7 +228,6 @@ def test_decline_at_confirm_offers_upload_only(tmp_path):
     assert len(job.calls) == 1
     assert job.calls[0].confirm is False
 
-
 def test_decline_both_calls_nothing_and_keeps_file(tmp_path):
     _install_ready_settings(tmp_path)
     stl = _make_stl(tmp_path)
@@ -270,11 +248,9 @@ def test_decline_both_calls_nothing_and_keeps_file(tmp_path):
     assert job.calls == []  # nothing sent
     assert any("Nothing sent" in m for m in prompts.printed)
 
-
 # ---------------------------------------------------------------------------
 # Cancellation (Ctrl-C / EOF) at each prompt -> exit 5
 # ---------------------------------------------------------------------------
-
 
 @pytest.mark.parametrize(
     "script",
@@ -302,11 +278,9 @@ def test_cancel_at_each_step_exits_5(tmp_path, script, capsys):
     assert ei.value.exit_code == 5
     assert "cancelled" in capsys.readouterr().err.lower()
 
-
 # ---------------------------------------------------------------------------
 # Preflight: unconfigured printer -> setup offer
 # ---------------------------------------------------------------------------
-
 
 def test_unconfigured_printer_offers_setup(tmp_path):
     # Start unconfigured (printer_ip == sentinel); setup "fixes" it.
@@ -347,7 +321,6 @@ def test_unconfigured_printer_offers_setup(tmp_path):
 
     assert len(setup.calls) == 1
 
-
 def test_decline_setup_exits_config_error(tmp_path):
     configured = _install_ready_settings(tmp_path)
     _context.set_current(RuntimeContext(settings=replace(configured, printer_ip="0.0.0.0")))
@@ -357,11 +330,9 @@ def test_decline_setup_exits_config_error(tmp_path):
         cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
     assert ei.value.exit_code == 1
 
-
 # ---------------------------------------------------------------------------
 # Preflight: missing slicer -> exit 1 BEFORE any prompt
 # ---------------------------------------------------------------------------
-
 
 def test_missing_slicer_exits_1_before_any_prompt(tmp_path):
     configured = _install_ready_settings(tmp_path)
@@ -373,11 +344,9 @@ def test_missing_slicer_exits_1_before_any_prompt(tmp_path):
     assert ei.value.exit_code == 1
     assert prompts.asked == []  # no prompt was issued
 
-
 # ---------------------------------------------------------------------------
 # Bad URL re-prompt x3 -> exit 3
 # ---------------------------------------------------------------------------
-
 
 def test_bad_url_reprompt_three_times_exits_3(tmp_path):
     _install_ready_settings(tmp_path)
@@ -395,11 +364,9 @@ def test_bad_url_reprompt_three_times_exits_3(tmp_path):
     # exactly 3 source prompts were issued
     assert sum(1 for a in prompts.asked if a.startswith("text:")) == 3
 
-
 # ---------------------------------------------------------------------------
 # --sim end-to-end reaching "printed" through the injected prompt layer
 # ---------------------------------------------------------------------------
-
 
 def test_sim_flag_propagates_to_job_namespace(tmp_path):
     """Under --sim the fake job step must receive sim=True and confirm=True."""
@@ -423,7 +390,6 @@ def test_sim_flag_propagates_to_job_namespace(tmp_path):
     prompts = ScriptedPrompts([stl, True, "PLA", "standard", False, True])
     cmd_go(_args(sim=True), GoDeps(prompts=prompts, steps=steps))
     assert printed["value"] is True
-
 
 def test_pipeline_runs_download_then_slice_then_job_in_order(tmp_path):
     """A shared sequence log proves download -> slice -> job happen in that order."""
@@ -449,7 +415,6 @@ def test_pipeline_runs_download_then_slice_then_job_in_order(tmp_path):
     cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
     assert sequence == ["download", "slice", "job"]
 
-
 def test_happy_path_carries_temps_into_slice_namespace(tmp_path):
     """The PLA preset temps (220/60->55) reach the slice namespace, not just filament/quality."""
     _install_ready_settings(tmp_path)
@@ -462,7 +427,6 @@ def test_happy_path_carries_temps_into_slice_namespace(tmp_path):
     slice_ns = slicer.calls[0]
     assert slice_ns.nozzle_temp == 220
     assert slice_ns.bed_temp == 55
-
 
 def test_true_sim_e2e_reaches_printed_through_real_cmd_job(tmp_path):
     """TRUE end-to-end: real cmd_job under ctx.simulation, only the slicer faked.
@@ -498,11 +462,9 @@ def test_true_sim_e2e_reaches_printed_through_real_cmd_job(tmp_path):
     cmd_go(_args(sim=True), GoDeps(prompts=prompts, steps=steps))
     assert any("Printing" in m for m in prompts.printed)
 
-
 # ---------------------------------------------------------------------------
 # --json + non-TTY behavior
 # ---------------------------------------------------------------------------
-
 
 def test_json_mode_emits_error_envelope_and_exits_5(tmp_path, capsys):
     _install_ready_settings(tmp_path)
@@ -517,7 +479,6 @@ def test_json_mode_emits_error_envelope_and_exits_5(tmp_path, capsys):
     assert payload["exit_code"] == 5
     assert payload["failed_step"] == "parse"
 
-
 def test_non_tty_stdin_aborts_exit_5(tmp_path, monkeypatch):
     _install_ready_settings(tmp_path)
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
@@ -526,12 +487,10 @@ def test_non_tty_stdin_aborts_exit_5(tmp_path, monkeypatch):
     assert ei.value.exit_code == 5
     assert "interactive" in str(ei.value)
 
-
 # ---------------------------------------------------------------------------
 # CLI-level routing: `plate go` reaches the handler past the DNS/network gate,
 # and `plate go --json` errors out (exit 5) even with an unconfigured printer.
 # ---------------------------------------------------------------------------
-
 
 def test_cli_go_json_exits_5_even_unconfigured(monkeypatch, tmp_path, capsys):
     from bambu_cli.cli import main
@@ -548,7 +507,6 @@ def test_cli_go_json_exits_5_even_unconfigured(monkeypatch, tmp_path, capsys):
     assert payload["command"] == "go"
     assert payload["failed_step"] == "parse"
 
-
 def test_cli_go_non_tty_exits_5(monkeypatch, tmp_path):
     from bambu_cli.cli import main
 
@@ -560,12 +518,10 @@ def test_cli_go_non_tty_exits_5(monkeypatch, tmp_path):
         main()
     assert ei.value.code == 5
 
-
 # ---------------------------------------------------------------------------
 # BLOCKER regression: a local .zip must be extracted and sliced with the user's
 # preset, NOT fall to the printer-ready branch and print at PLA defaults.
 # ---------------------------------------------------------------------------
-
 
 def test_local_zip_extracts_and_slices_with_chosen_material(tmp_path):
     """User picks PETG + a local .zip: the SLICE namespace must carry PETG/255/70.
@@ -596,7 +552,6 @@ def test_local_zip_extracts_and_slices_with_chosen_material(tmp_path):
     # The job runs on the SLICED .3mf, never the raw zip.
     assert job.calls[0].source == sliced
 
-
 def test_local_zip_without_model_member_aborts(tmp_path):
     """A .zip with no supported member fails cleanly before any print."""
     _install_ready_settings(tmp_path)
@@ -611,12 +566,10 @@ def test_local_zip_without_model_member_aborts(tmp_path):
     assert ei.value.exit_code == 3
     assert job.calls == []
 
-
 # ---------------------------------------------------------------------------
 # MAJOR regression: decline-both must not relocate / overwrite a user's own
 # pre-sliced file. Only files inside our temp workdir get moved into cwd.
 # ---------------------------------------------------------------------------
-
 
 def test_decline_both_leaves_user_presliced_file_in_place(tmp_path):
     """A user-supplied local .3mf (never in the workdir) stays exactly where it is."""
@@ -642,7 +595,6 @@ def test_decline_both_leaves_user_presliced_file_in_place(tmp_path):
     assert os.path.exists(user_file)
     assert not os.path.exists(cwd / "mine.gcode.3mf")
     assert any(user_file in m for m in prompts.printed)
-
 
 def test_decline_both_relocates_workdir_file_without_clobbering(tmp_path):
     """A file inside the temp workdir is moved to cwd, never overwriting a same-named file."""
@@ -681,11 +633,9 @@ def test_decline_both_relocates_workdir_file_without_clobbering(tmp_path):
     assert "cube.gcode-1.3mf" in kept_line
     assert os.path.exists(cwd / "cube.gcode-1.3mf")
 
-
 # ---------------------------------------------------------------------------
 # MINOR regression: pre-sliced source flags "material settings not applied".
 # ---------------------------------------------------------------------------
-
 
 def test_presliced_source_preview_notes_material_not_applied(tmp_path):
     _install_ready_settings(tmp_path)
@@ -697,7 +647,6 @@ def test_presliced_source_preview_notes_material_not_applied(tmp_path):
     # And it does NOT claim the chosen PETG applied.
     assert not any("Material   PETG" in m for m in prompts.printed)
 
-
 def test_leading_dash_source_rejected_without_argparse_exit(tmp_path):
     """A local file named '-foo.stl' is rejected as a source, not detonated in argparse."""
     _install_ready_settings(tmp_path)
@@ -708,10 +657,8 @@ def test_leading_dash_source_rejected_without_argparse_exit(tmp_path):
         cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
     assert ei.value.exit_code == 3
 
-
 # Phase 3: AMS-aware material default (through the injected ams_material seam)
 # ---------------------------------------------------------------------------
-
 
 def test_ams_detected_material_becomes_default(tmp_path):
     """A loaded AMS material matching a preset key is offered as the prompt default."""
@@ -740,7 +687,6 @@ def test_ams_detected_material_becomes_default(tmp_path):
     assert any("PETG —" in m and "detected in AMS" in m for m in prompts.printed)
     assert not any("PLA —" in m and "detected in AMS" in m for m in prompts.printed)
 
-
 def test_ams_detection_failure_falls_back_to_pla(tmp_path):
     """When the reader returns None (any failure), the step falls back to PLA."""
     _install_ready_settings(tmp_path)
@@ -766,7 +712,6 @@ def test_ams_detection_failure_falls_back_to_pla(tmp_path):
     assert seen_defaults["Material"] == "PLA"
     assert not any("detected in AMS" in m for m in prompts.printed)
 
-
 def test_ams_unknown_material_falls_back_to_pla(tmp_path):
     """A loaded material with no matching preset key falls back to PLA."""
     _install_ready_settings(tmp_path)
@@ -790,7 +735,6 @@ def test_ams_unknown_material_falls_back_to_pla(tmp_path):
     cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
     assert seen_defaults["Material"] == "PLA"
 
-
 def test_read_loaded_ams_material_matches_sim_active_slot(tmp_path, monkeypatch):
     """The real reader resolves the sim printer's active tray (slot 0 = PLA)."""
     from bambu_cli.interactive.session import _read_loaded_ams_material
@@ -801,7 +745,6 @@ def test_read_loaded_ams_material_matches_sim_active_slot(tmp_path, monkeypatch)
     # tray_now "0" -> PLA in slot 0.
     _context.set_current(RuntimeContext(settings=settings, simulation=True))
     assert _read_loaded_ams_material(_args(sim=True)) == "PLA"
-
 
 def test_read_loaded_ams_material_swallows_errors(tmp_path, monkeypatch):
     """The reader NEVER raises: a failing printer.status() yields None."""
@@ -816,7 +759,6 @@ def test_read_loaded_ams_material_swallows_errors(tmp_path, monkeypatch):
     monkeypatch.setattr("bambu_cli.context.RuntimeContext.printer", lambda self: BoomPrinter())
     assert _read_loaded_ams_material(_args()) is None
 
-
 def test_match_material_preset_maps_known_and_unknown():
     from bambu_cli.interactive.session import _match_material_preset
 
@@ -827,17 +769,14 @@ def test_match_material_preset_maps_known_and_unknown():
     assert _match_material_preset(None) is None
     assert _match_material_preset("") is None
 
-
 # ---------------------------------------------------------------------------
 # Phase 3: bare `plate` -> wizard on a TTY, help + exit 5 otherwise
 # ---------------------------------------------------------------------------
-
 
 def _bare_plate_setup(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["plate"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)
-
 
 def test_bare_plate_tty_launches_wizard(monkeypatch, tmp_path):
     from bambu_cli import commands as commands_mod
@@ -856,7 +795,6 @@ def test_bare_plate_tty_launches_wizard(monkeypatch, tmp_path):
     main()  # returns cleanly; the wizard handler ran instead of help
     assert called["cmd"] == "go"
 
-
 def test_bare_plate_non_tty_prints_help_and_exits_5(monkeypatch, tmp_path):
     from bambu_cli import commands as commands_mod
     from bambu_cli.cli import main
@@ -873,7 +811,6 @@ def test_bare_plate_non_tty_prints_help_and_exits_5(monkeypatch, tmp_path):
         main()
     assert ei.value.code == 5
 
-
 def test_bare_plate_tty_stdin_but_redirected_stdout_prints_help(monkeypatch, tmp_path):
     """A TTY stdin with a redirected stdout is a script pattern -> keep help path."""
     from bambu_cli import commands as commands_mod
@@ -887,7 +824,6 @@ def test_bare_plate_tty_stdin_but_redirected_stdout_prints_help(monkeypatch, tmp
     with pytest.raises(SystemExit) as ei:
         main()
     assert ei.value.code == 5
-
 
 def test_bare_plate_json_forces_help_path(monkeypatch, tmp_path):
     """Bare `plate --json` must NOT launch the wizard (machine-use flag)."""
@@ -904,7 +840,6 @@ def test_bare_plate_json_forces_help_path(monkeypatch, tmp_path):
     with pytest.raises(SystemExit) as ei:
         main()
     assert ei.value.code == 5  # the existing bare `plate --json` error envelope path
-
 
 def test_bare_plate_wizard_bambu_error_exits_with_its_code(monkeypatch, tmp_path):
     """A BambuError from the bare-plate wizard is handled -> exit with its code."""
@@ -923,7 +858,6 @@ def test_bare_plate_wizard_bambu_error_exits_with_its_code(monkeypatch, tmp_path
         main()
     assert ei.value.code == 3
 
-
 def test_bare_plate_wizard_ctrl_c_exits_5(monkeypatch, tmp_path):
     """Ctrl-C bubbling from the bare-plate wizard exits 5 with a cancel message."""
     from bambu_cli import commands as commands_mod
@@ -940,7 +874,6 @@ def test_bare_plate_wizard_ctrl_c_exits_5(monkeypatch, tmp_path):
     with pytest.raises(SystemExit) as ei:
         main()
     assert ei.value.code == 5
-
 
 def test_help_epilog_advertises_go(capsys):
     from bambu_cli.cli import build_parser

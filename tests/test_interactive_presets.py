@@ -2,15 +2,8 @@
 
 from __future__ import annotations
 
-import sys
-from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli.cli import build_parser  # noqa: E402
 from bambu_cli.constants import (  # noqa: E402
@@ -21,18 +14,15 @@ from bambu_cli.constants import (  # noqa: E402
 )
 from bambu_cli.interactive.presets import MATERIAL_PRESETS, QUALITY_PRESETS, preset_to_job_args  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # MATERIAL_PRESETS schema
 # ---------------------------------------------------------------------------
-
 
 def test_every_material_has_nozzle_and_bed_temp():
     for name, preset in MATERIAL_PRESETS.items():
         assert "nozzle_temp" in preset, f"{name} missing nozzle_temp"
         assert "bed_temp" in preset, f"{name} missing bed_temp"
         assert "filament" in preset, f"{name} missing filament"
-
 
 @pytest.mark.parametrize("name,preset", MATERIAL_PRESETS.items())
 def test_nozzle_temp_in_range(name, preset):
@@ -41,13 +31,11 @@ def test_nozzle_temp_in_range(name, preset):
         f"[{MIN_NOZZLE_TEMP_C}, {MAX_NOZZLE_TEMP_C}]"
     )
 
-
 @pytest.mark.parametrize("name,preset", MATERIAL_PRESETS.items())
 def test_bed_temp_in_range(name, preset):
     assert MIN_BED_TEMP_C <= preset["bed_temp"] <= MAX_BED_TEMP_C, (
         f"{name}: bed_temp {preset['bed_temp']} outside [{MIN_BED_TEMP_C}, {MAX_BED_TEMP_C}]"
     )
-
 
 # ---------------------------------------------------------------------------
 # Filament substring resolution (regression: see MATERIAL_PRESETS comment)
@@ -82,7 +70,6 @@ _EXPECTED_RESOLUTION = {
     "TPU": "Bambu TPU 95A @base.json",
 }
 
-
 @pytest.mark.parametrize("material", sorted(MATERIAL_PRESETS))
 def test_material_filament_substrings_are_unambiguous(material):
     """Each preset substring must match exactly ONE real @base profile.
@@ -99,28 +86,23 @@ def test_material_filament_substrings_are_unambiguous(material):
     assert len(hits) == 1, f"{material}: substring {requested!r} matched {len(hits)} profiles: {hits}"
     assert hits[0] == _EXPECTED_RESOLUTION[material]
 
-
 # ---------------------------------------------------------------------------
 # QUALITY_PRESETS schema
 # ---------------------------------------------------------------------------
 
 VALID_QUALITY_VALUES = {"draft", "standard", "high"}
 
-
 def test_quality_presets_valid_values():
     for name, preset in QUALITY_PRESETS.items():
         assert preset["quality"] in VALID_QUALITY_VALUES, f"{name}: unexpected quality value '{preset['quality']}'"
-
 
 # ---------------------------------------------------------------------------
 # preset_to_job_args
 # ---------------------------------------------------------------------------
 
-
 def test_preset_to_job_args_source_set():
     ns = preset_to_job_args("PLA", "standard", False, "model.stl")
     assert ns.source == "model.stl"
-
 
 def test_preset_to_job_args_has_all_job_keys():
     """Pin test: result must have at least all attributes from build_parser job defaults."""
@@ -133,7 +115,6 @@ def test_preset_to_job_args_has_all_job_keys():
     missing = ref_keys - result_keys
     assert not missing, f"preset_to_job_args result missing keys: {missing}"
 
-
 def test_preset_pla_standard():
     ns = preset_to_job_args("PLA", "standard", False, "file.stl")
     assert ns.nozzle_temp == 220
@@ -141,19 +122,16 @@ def test_preset_pla_standard():
     assert ns.quality == "standard"
     assert ns.filament == "Bambu PLA Basic @base"
 
-
 def test_preset_petg_fine():
     ns = preset_to_job_args("PETG", "fine", False, "file.stl")
     assert ns.quality == "high"
     assert ns.nozzle_temp == 255
     assert ns.bed_temp == 70
 
-
 def test_supports_enabled():
     ns = preset_to_job_args("PLA", "standard", True, "f.stl")
     assert ns.supports is True
     assert ns.support_type == "tree"
-
 
 def test_supports_disabled():
     ns = preset_to_job_args("PLA", "standard", False, "f.stl")

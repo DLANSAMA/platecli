@@ -13,19 +13,13 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import socket
-import sys
 import urllib.error
 import zipfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from hypothesis import HealthCheck, assume, given, settings, strategies as st
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli.constants import (  # noqa: E402
     MAX_AMS_SLOT_INDEX,
@@ -53,11 +47,9 @@ _PROP = settings(
 # Characters that must never appear in a sanitized local download filename.
 _FORBIDDEN_IN_SANITIZED = set('/\\:\0\r\n\x00<>"|?*') | {chr(c) for c in range(32)}
 
-
 # ---------------------------------------------------------------------------
 # download/naming.py
 # ---------------------------------------------------------------------------
-
 
 @given(st.text(min_size=0, max_size=400))
 @_PROP
@@ -74,7 +66,6 @@ def test_prop_sanitize_never_contains_path_or_control_chars(raw: str) -> None:
     for ch in out:
         assert ord(ch) >= 32 or ch not in ("\x00", "\r", "\n")
         assert ch not in '<>:"/\\|?*'
-
 
 @given(st.text(min_size=0, max_size=500))
 @_PROP
@@ -96,7 +87,6 @@ def test_prop_sanitize_length_bounded(raw: str) -> None:
         # Residual path: cannot stem-trim an extension-dominated name.
         assert len(out) >= len(ext)
 
-
 @given(st.text(min_size=0, max_size=300))
 @_PROP
 def test_prop_sanitize_idempotent(raw: str) -> None:
@@ -104,7 +94,6 @@ def test_prop_sanitize_idempotent(raw: str) -> None:
     once = N._sanitize_download_filename(raw)
     twice = N._sanitize_download_filename(once)
     assert twice == once
-
 
 @given(st.text(min_size=0, max_size=200), st.sampled_from(["\r", "\n", "\0"]))
 @_PROP
@@ -114,13 +103,11 @@ def test_prop_injection_chars_always_detected(prefix: str, inj: str) -> None:
     value = prefix[:80] + inj + prefix[80:100]
     assert N._has_command_injection_chars(value) is True
 
-
 @given(st.text(alphabet=st.characters(blacklist_characters="\r\n\0"), min_size=0, max_size=120))
 @_PROP
 def test_prop_no_injection_chars_when_absent(value: str) -> None:
     """Strings without CR/LF/NUL never report command-injection characters."""
     assert N._has_command_injection_chars(value) is False
-
 
 @given(st.text(min_size=0, max_size=250))
 @_PROP
@@ -138,7 +125,6 @@ def test_prop_safe_remote_name_reject_or_portable(raw: str) -> None:
     assert not any(c in out for c in '<>:"/\\|?*')
     assert out == N._portable_basename(out)
 
-
 @given(
     st.text(min_size=1, max_size=100).map(lambda s: s.replace("\0", "x")),
     st.sampled_from(["\r", "\n", "\0", "/", "\\", ":", "*", "?", '"', "<", ">", "|"]),
@@ -150,7 +136,6 @@ def test_prop_safe_remote_name_rejects_dangerous_chars(stem: str, bad: str) -> N
     name = f"m{stem[:40]}{bad}x.3mf"
     assert N._safe_remote_name(name) is None
 
-
 @given(st.integers(min_value=MAX_DOWNLOAD_FILENAME_LENGTH + 1, max_value=MAX_DOWNLOAD_FILENAME_LENGTH + 80))
 @_PROP
 def test_prop_safe_remote_name_rejects_overlong(n: int) -> None:
@@ -159,11 +144,9 @@ def test_prop_safe_remote_name_rejects_overlong(n: int) -> None:
     assert len(name) > MAX_DOWNLOAD_FILENAME_LENGTH
     assert N._safe_remote_name(name) is None
 
-
 # ---------------------------------------------------------------------------
 # download/validation.py + URL scheme invariants
 # ---------------------------------------------------------------------------
-
 
 @given(st.sampled_from(["file", "ftp", "ftps", "data", "javascript", "gopher", "ssh", ""]))
 @_PROP
@@ -176,14 +159,12 @@ def test_prop_validate_http_url_rejects_non_http_schemes(scheme: str) -> None:
     with pytest.raises((BambuError, SystemExit)):
         V._validate_http_url_or_exit(url)
 
-
 @given(st.sampled_from(["http", "https"]))
 @_PROP
 def test_prop_validate_http_url_rejects_missing_host(scheme: str) -> None:
     """http(s) URLs without a host are rejected."""
     with pytest.raises((BambuError, SystemExit)):
         V._validate_http_url_or_exit(f"{scheme}:///path/only.stl")
-
 
 @given(
     st.sampled_from(["http", "https"]),
@@ -196,7 +177,6 @@ def test_prop_validate_http_url_rejects_embedded_credentials(scheme: str, user: 
     url = f"{scheme}://{user}:{password}@example.com/model.stl"
     with pytest.raises((BambuError, SystemExit)):
         V._validate_http_url_or_exit(url)
-
 
 @given(
     st.one_of(
@@ -217,7 +197,6 @@ def test_prop_max_download_mb_rejects_non_positive(value) -> None:
     assert err is not None
     assert "positive" in err.lower() or "integer" in err.lower() or "max-download" in err.lower()
 
-
 @given(st.integers(min_value=1, max_value=4096))
 @_PROP
 def test_prop_max_download_mb_accepts_positive(value: int) -> None:
@@ -225,22 +204,18 @@ def test_prop_max_download_mb_accepts_positive(value: int) -> None:
     args = argparse.Namespace(max_download_mb=value)
     assert V._max_download_mb_error(args) is None
 
-
 @given(st.sampled_from(["http://example.com/a.stl", "https://cdn.example.org/x.3mf"]))
 @_PROP
 def test_prop_is_http_url_true_for_valid(url: str) -> None:
     assert V._is_http_url(url) is True
 
-
 # ---------------------------------------------------------------------------
 # netsafety.py — is_global gating
 # ---------------------------------------------------------------------------
 
-
 def _addrinfo(ip: str, port: int = 443):
     family = socket.AF_INET6 if ":" in ip else socket.AF_INET
     return [(family, socket.SOCK_STREAM, 6, "", (ip, port))]
-
 
 @given(st.ip_addresses(v=4).filter(lambda a: not a.is_global))
 @_PROP
@@ -255,7 +230,6 @@ def test_prop_non_global_ipv4_never_connected(ip: ipaddress.IPv4Address) -> None
         netsafety._get_safe_connection("evil.example", 443, 5, None)
     conn.assert_not_called()
 
-
 @given(st.ip_addresses(v=6).filter(lambda a: not a.is_global and not a.ipv4_mapped))
 @_PROP
 def test_prop_non_global_ipv6_never_connected(ip: ipaddress.IPv6Address) -> None:
@@ -268,7 +242,6 @@ def test_prop_non_global_ipv6_never_connected(ip: ipaddress.IPv6Address) -> None
     ):
         netsafety._get_safe_connection("evil6.example", 443, 5, None)
     conn.assert_not_called()
-
 
 # Cloud metadata and classic private ranges — explicit samples beyond pure generation.
 @pytest.mark.parametrize(
@@ -300,11 +273,9 @@ def test_explicit_non_global_and_metadata_refused(ip: str) -> None:
         netsafety._get_safe_connection("meta.internal", 80, 5, None)
     conn.assert_not_called()
 
-
 # ---------------------------------------------------------------------------
 # slicer options + AMS mapping + 3mf validation
 # ---------------------------------------------------------------------------
-
 
 @given(st.integers().filter(lambda t: t < MIN_NOZZLE_TEMP_C or t > MAX_NOZZLE_TEMP_C))
 @_PROP
@@ -316,7 +287,6 @@ def test_prop_out_of_range_nozzle_temp_rejected(temp: int) -> None:
     assert err is not None
     assert "nozzle" in err.lower()
 
-
 @given(st.integers().filter(lambda t: t < MIN_BED_TEMP_C or t > MAX_BED_TEMP_C))
 @_PROP
 def test_prop_out_of_range_bed_temp_rejected(temp: int) -> None:
@@ -326,14 +296,12 @@ def test_prop_out_of_range_bed_temp_rejected(temp: int) -> None:
     assert err is not None
     assert "bed" in err.lower()
 
-
 @given(st.integers(min_value=MIN_NOZZLE_TEMP_C, max_value=MAX_NOZZLE_TEMP_C))
 @_PROP
 def test_prop_in_range_nozzle_temp_ok(temp: int) -> None:
     args = argparse.Namespace(copies=1, infill=15, nozzle_temp=temp, bed_temp=60, wall_type=None)
     err = slicer_options._validate_slice_options(args)
     assert err is None
-
 
 @given(st.integers().filter(lambda v: v < 0 or v > 100))
 @_PROP
@@ -343,7 +311,6 @@ def test_prop_out_of_range_infill_rejected(infill: int) -> None:
     assert err is not None
     assert "infill" in err.lower()
 
-
 @given(st.integers(max_value=0))
 @_PROP
 def test_prop_non_positive_copies_rejected(copies: int) -> None:
@@ -351,7 +318,6 @@ def test_prop_non_positive_copies_rejected(copies: int) -> None:
     err = slicer_options._validate_slice_options(args)
     assert err is not None
     assert "copies" in err.lower()
-
 
 @given(st.lists(st.integers().filter(lambda s: s < 0 or s > MAX_AMS_SLOT_INDEX), min_size=1, max_size=6))
 @_PROP
@@ -364,7 +330,6 @@ def test_prop_out_of_range_ams_slots_rejected(slots: list[int]) -> None:
     assert err is not None
     assert "ams" in err.lower() or "slot" in err.lower() or "mapping" in err.lower()
 
-
 @given(st.lists(st.integers(min_value=0, max_value=MAX_AMS_SLOT_INDEX), min_size=1, max_size=8))
 @_PROP
 def test_prop_valid_ams_slots_accepted(slots: list[int]) -> None:
@@ -373,7 +338,6 @@ def test_prop_valid_ams_slots_accepted(slots: list[int]) -> None:
     mapping, err = job_payload._parse_print_options(args)
     assert err is None
     assert mapping == slots
-
 
 @settings(
     max_examples=40,
@@ -402,7 +366,6 @@ def test_prop_random_bytes_never_valid_3mf(tmp_path: Path, data: bytes) -> None:
     if not (has_ct and (has_model or has_plate)):
         assert slicer_output._is_valid_sliced_3mf(str(path)) is False
 
-
 def test_incomplete_zip_structures_never_valid_3mf(tmp_path: Path) -> None:
     """Zips missing Content_Types or model/plate members are never valid."""
     cases = [
@@ -419,7 +382,6 @@ def test_incomplete_zip_structures_never_valid_3mf(tmp_path: Path) -> None:
                 zf.writestr(name, body)
         assert slicer_output._is_valid_sliced_3mf(str(path)) is False
 
-
 def test_minimal_valid_3mf_shapes_accepted(tmp_path: Path) -> None:
     """Documented acceptance: Content_Types + model, or Content_Types + plate gcode."""
     a = tmp_path / "model_only.3mf"
@@ -434,11 +396,9 @@ def test_minimal_valid_3mf_shapes_accepted(tmp_path: Path) -> None:
         zf.writestr("Metadata/plate_2.gcode", "G28\n")
     assert slicer_output._is_valid_sliced_3mf(str(b)) is True
 
-
 # ---------------------------------------------------------------------------
 # print payload invariants (job pure logic)
 # ---------------------------------------------------------------------------
-
 
 @given(
     st.text(

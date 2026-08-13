@@ -7,15 +7,9 @@ import sys
 from argparse import Namespace
 from unittest.mock import MagicMock, patch
 
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
-
 from bambu_cli.errors import BambuError  # noqa: E402
 from bambu_cli.setup_cmd import common as common_mod  # noqa: E402
 from bambu_cli.setup_cmd import wizard as wizard_mod  # noqa: E402
-
 
 def test_cmd_setup_routes_noninteractive(tmp_path):
     cfg = tmp_path / "config.json"
@@ -49,7 +43,6 @@ def test_cmd_setup_routes_noninteractive(tmp_path):
     assert data["printer_ip"] == "10.0.0.8"
     assert data["serial"] == "SN1234567890ABC"
 
-
 def test_build_setup_config_helper():
     cfg = common_mod._build_setup_config(
         ip="10.0.0.1",
@@ -66,11 +59,9 @@ def test_build_setup_config_helper():
     assert cfg["printer_ip"] == "10.0.0.1"
     assert cfg["serial"] == "SN1"
 
-
 def test_normalize_model_nozzle():
     assert common_mod._normalize_model("p1s", "P1P") == "P1S"
     assert common_mod._normalize_nozzle("0.4") == "0.4"
-
 
 def test_write_setup_config(tmp_path):
     cfg_path = tmp_path / "config.json"
@@ -87,7 +78,6 @@ def test_write_setup_config(tmp_path):
     assert cfg_path.is_file()
     assert code_path.is_file()
     assert code_path.read_text(encoding="utf-8").strip() == "SECRET"
-
 
 def test_guided_setup_manual_path(tmp_path, monkeypatch):
     """When zeroconf is unavailable, guided setup falls back to manual prompts."""
@@ -158,14 +148,12 @@ def test_guided_setup_manual_path(tmp_path, monkeypatch):
     else:
         assert raised is not None, "guided setup neither wrote config nor raised"
 
-
 class MockServiceInfo:
     def __init__(self, ip):
         self.ip = ip
 
     def parsed_addresses(self):
         return [self.ip]
-
 
 class MockZeroconf:
     def __init__(self, services):
@@ -181,10 +169,8 @@ class MockZeroconf:
     def close(self):
         self.closed = True
 
-
 def create_mock_zeroconf(services):
     return lambda: MockZeroconf(services)
-
 
 def mock_service_browser(services):
     def init(zc, type_, listener):
@@ -193,7 +179,6 @@ def mock_service_browser(services):
         return MagicMock()
 
     return init
-
 
 def test_guided_setup_mdns_one_printer(tmp_path, monkeypatch):
     cfg = tmp_path / "config.json"
@@ -262,7 +247,6 @@ def test_guided_setup_mdns_one_printer(tmp_path, monkeypatch):
     assert data["printer_ip"] == "10.0.0.50"
     assert data["serial"] == "01P00A123"
     assert data["model"] == "P1P"
-
 
 def test_guided_setup_mdns_multiple_printers(tmp_path, monkeypatch):
     cfg = tmp_path / "config.json"
@@ -336,7 +320,6 @@ def test_guided_setup_mdns_multiple_printers(tmp_path, monkeypatch):
     assert data["serial"] == "03000A111"
     assert data["model"] == "A1"
 
-
 def test_guided_setup_mdns_no_printers(tmp_path, monkeypatch):
     cfg = tmp_path / "config.json"
 
@@ -387,7 +370,6 @@ def test_guided_setup_mdns_no_printers(tmp_path, monkeypatch):
 
     assert raised is not None
     assert raised.exit_code == 2  # EXIT_NETWORK_ERROR
-
 
 def test_guided_setup_mdns_discovery_error(tmp_path, monkeypatch):
     cfg = tmp_path / "config.json"

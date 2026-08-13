@@ -1,9 +1,4 @@
-"""Integration-level regression tests for the deep-audit findings that ride real
-command paths (doctor capability table, camera error paths, upload dry-run
-diagnosis, wizard use_ams wiring, CLI --json envelope on bad global flags and on
-interrupt). Sabotage-verified alongside the unit tests in
-test_audit_fixes_pr4.py.
-"""
+"""CLI --json envelopes on doctor, snapshot, upload dry-run, wizard, and interrupt."""
 
 from tests.bambu_test_base import *  # noqa: F401,F403
 

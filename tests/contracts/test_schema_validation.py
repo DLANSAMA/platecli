@@ -8,14 +8,8 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
-
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt.client", _mock_mqtt)
 
 from bambu_cli import bambu  # noqa: E402
 from bambu_cli.cli import main  # noqa: E402
@@ -27,12 +21,10 @@ pytestmark = pytest.mark.contract
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = ROOT / "docs" / "schemas"
 
-
 def _load_schema(name: str) -> dict:
     path = SCHEMA_DIR / name
     assert path.is_file(), f"missing schema {path}"
     return json.loads(path.read_text(encoding="utf-8"))
-
 
 def _validate(instance, schema, path="$"):
     """Minimal subset of JSON Schema (type/const/enum/required/properties)."""
@@ -70,7 +62,6 @@ def _validate(instance, schema, path="$"):
             extra = set(instance) - set(props)
             assert not extra, f"{path}: unexpected keys {extra}"
 
-
 @pytest.fixture(autouse=True)
 def _reset():
     utils._JSON_EMITTED = False
@@ -78,7 +69,6 @@ def _reset():
     yield
     utils._JSON_EMITTED = False
     utils._LAST_ERROR_PAYLOAD = None
-
 
 # Which published schema(s) back each `--json`-emitting subcommand. README.md
 # advertises "every command speaks --json with published schemas", so this map is
@@ -118,7 +108,6 @@ _COMMAND_SCHEMAS = {
 # `--version`, which is a global flag rather than a subcommand.
 _SHARED_SCHEMAS = {"error_envelope.json", "ok_envelope.json", "version.json"}
 
-
 def _parser_subcommands():
     """Same derivation idiom as scripts/cli_help_smoke.py, deliberately."""
     from bambu_cli.cli import build_parser
@@ -128,7 +117,6 @@ def _parser_subcommands():
         if getattr(action, "dest", None) == "command" or action.__class__.__name__ == "_SubParsersAction":
             return set(getattr(action, "choices", None) or {})
     raise AssertionError("could not derive subcommands from build_parser()")
-
 
 def test_every_subcommand_has_a_published_schema():
     """Derived from the parser, so a new subcommand cannot ship schema-less.
@@ -145,7 +133,6 @@ def test_every_subcommand_has_a_published_schema():
         for name in names:
             assert (SCHEMA_DIR / name).is_file(), f"{command}: missing schema {name}"
 
-
 def test_every_schema_file_is_wellformed_and_self_identifying():
     """Each schema parses, declares the required metadata, and its $id matches its
     filename -- a copy-paste $id is otherwise invisible."""
@@ -159,14 +146,12 @@ def test_every_schema_file_is_wellformed_and_self_identifying():
             f"{name}: $id {schema['$id']!r} does not match filename"
         )
 
-
 def test_no_orphan_schema_files():
     """Every published schema is reachable from a subcommand or is a shared
     envelope -- catches a schema left behind after a command is renamed."""
     mapped = {name for names in _COMMAND_SCHEMAS.values() for name in names} | _SHARED_SCHEMAS
     found = {p.name for p in SCHEMA_DIR.glob("*.json")}
     assert not (found - mapped), f"unreferenced schema files: {sorted(found - mapped)}"
-
 
 def test_api_doc_lists_every_schema():
     """docs/api.md carries a hand-written schema table that has drifted before.
@@ -178,7 +163,6 @@ def test_api_doc_lists_every_schema():
     missing = [p.name for p in sorted(SCHEMA_DIR.glob("*.json")) if f"schemas/{p.name}" not in api]
     assert not missing, f"schemas absent from docs/api.md: {missing}"
 
-
 def test_version_payload_matches_schema(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(sys, "argv", ["plate", "--json", "--version"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
@@ -187,7 +171,6 @@ def test_version_payload_matches_schema(monkeypatch, tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     _validate(payload, _load_schema("version.json"))
     assert payload["version"] == VERSION
-
 
 def test_status_ok_matches_ok_envelope(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(sys, "argv", ["plate", "--sim", "status", "--json"])
@@ -198,7 +181,6 @@ def test_status_ok_matches_ok_envelope(monkeypatch, tmp_path, capsys):
     _validate(payload, _load_schema("ok_envelope.json"))
     assert payload["command"] == "status"
 
-
 def test_status_ok_matches_status_schema(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(sys, "argv", ["plate", "--sim", "status", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
@@ -206,7 +188,6 @@ def test_status_ok_matches_status_schema(monkeypatch, tmp_path, capsys):
     main()
     payload = json.loads(capsys.readouterr().out)
     _validate(payload, _load_schema("status.json"))
-
 
 def test_setup_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(sys, "argv", ["plate", "setup", "--json"])
@@ -220,13 +201,11 @@ def test_setup_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
     assert payload["command"] == "setup"
     assert payload["failed_step"] == "validate"
 
-
 def test_status_event_schema_against_builder():
     from bambu_cli.protocols.mqtt import _status_event
 
     event = _status_event({"gcode_state": "RUNNING", "mc_percent": 10}, "update")
     _validate(event, _load_schema("status_event.json"))
-
 
 def _write_valid_config(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -243,7 +222,6 @@ def _write_valid_config(path: Path) -> None:
         encoding="utf-8",
     )
 
-
 def test_preflight_matches_schema(monkeypatch, tmp_path, capsys):
     """Missing config still emits a preflight envelope with checks[] (error path)."""
     monkeypatch.setattr(sys, "argv", ["plate", "preflight", "--json"])
@@ -256,7 +234,6 @@ def test_preflight_matches_schema(monkeypatch, tmp_path, capsys):
     assert payload["command"] == "preflight"
     assert isinstance(payload.get("checks"), list)
 
-
 def test_doctor_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "config.json"
     _write_valid_config(config_path)
@@ -266,7 +243,6 @@ def test_doctor_matches_schema(monkeypatch, tmp_path, capsys):
     main()
     payload = json.loads(capsys.readouterr().out)
     _validate(payload, _load_schema("doctor.json"))
-
 
 def test_job_dry_run_matches_schema(monkeypatch, tmp_path, capsys):
     model = tmp_path / "cube.gcode"
@@ -284,7 +260,6 @@ def test_job_dry_run_matches_schema(monkeypatch, tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     _validate(payload, _load_schema("job_ok.json"))
 
-
 def test_gcode_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
     _write_valid_config(config_path)
@@ -298,11 +273,9 @@ def test_gcode_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     assert payload["status"] == "confirmation_required"
     assert payload["sent"] is False
 
-
 def test_gcode_sent_fixture_matches_schema():
     payload = {"status": "sent", "command": "gcode", "gcode": "G28", "sent": True}
     _validate(payload, _load_schema("gcode.json"))
-
 
 def test_print_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
@@ -323,7 +296,6 @@ def test_print_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     assert payload["status"] == "confirmation_required"
     assert payload["printed"] is False
 
-
 def test_print_started_fixture_matches_schema():
     payload = {
         "status": "print_started",
@@ -333,7 +305,6 @@ def test_print_started_fixture_matches_schema():
         "dry_run": False,
     }
     _validate(payload, _load_schema("print.json"))
-
 
 def test_delete_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
@@ -348,7 +319,6 @@ def test_delete_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     assert payload["status"] == "confirmation_required"
     assert payload["deleted"] is False
 
-
 def test_stop_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
     _write_valid_config(config_path)
@@ -362,11 +332,9 @@ def test_stop_confirmation_matches_schema(monkeypatch, tmp_path, capsys):
     assert payload["status"] == "confirmation_required"
     assert payload["stopped"] is False
 
-
 def test_stop_success_fixture_matches_schema():
     payload = {"status": "stopped", "command": "stop", "stopped": True}
     _validate(payload, _load_schema("stop.json"))
-
 
 def test_files_listing_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
@@ -379,11 +347,9 @@ def test_files_listing_matches_schema(monkeypatch, tmp_path, capsys):
     _validate(payload, _load_schema("files.json"))
     assert payload["count"] == len(payload["files"])
 
-
 def test_files_empty_listing_matches_schema():
     """count/files must still validate when the printer holds nothing."""
     _validate({"status": "ok", "command": "files", "count": 0, "files": []}, _load_schema("files.json"))
-
 
 def test_upload_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
@@ -399,7 +365,6 @@ def test_upload_matches_schema(monkeypatch, tmp_path, capsys):
     assert payload["uploaded"] is True
     assert payload["remote_name"] == "probe.gcode.3mf"
 
-
 def test_upload_dry_run_fixture_matches_schema():
     payload = {
         "status": "dry_run_ok",
@@ -410,7 +375,6 @@ def test_upload_dry_run_fixture_matches_schema():
         "uploaded": False,
     }
     _validate(payload, _load_schema("upload.json"))
-
 
 def test_setup_summary_matches_schema():
     """Built by the real _setup_summary, not a hand-written fixture, so the schema
@@ -445,7 +409,6 @@ def test_setup_summary_matches_schema():
         assert "access_code" not in payload
         assert "CODE" not in json.dumps(payload)
 
-
 def test_delete_success_fixture_matches_schema():
     payload = {
         "status": "deleted",
@@ -455,21 +418,17 @@ def test_delete_success_fixture_matches_schema():
     }
     _validate(payload, _load_schema("delete.json"))
 
-
 def test_light_success_fixture_matches_schema():
     payload = {"status": "light_changed", "command": "light", "action": "on", "changed": True}
     _validate(payload, _load_schema("light.json"))
-
 
 def test_pause_success_fixture_matches_schema():
     payload = {"status": "paused", "command": "pause", "paused": True}
     _validate(payload, _load_schema("pause.json"))
 
-
 def test_resume_success_fixture_matches_schema():
     payload = {"status": "resumed", "command": "resume", "resumed": True}
     _validate(payload, _load_schema("resume.json"))
-
 
 def test_pause_confirmation_fixture_matches_schema():
     payload = {
@@ -480,7 +439,6 @@ def test_pause_confirmation_fixture_matches_schema():
     }
     _validate(payload, _load_schema("pause.json"))
 
-
 def test_resume_confirmation_fixture_matches_schema():
     payload = {
         "status": "confirmation_required",
@@ -489,7 +447,6 @@ def test_resume_confirmation_fixture_matches_schema():
         "next_command": ["resume", "--confirm", "--json"],
     }
     _validate(payload, _load_schema("resume.json"))
-
 
 def test_snapshot_success_fixture_matches_schema():
     """Hand-written fixture: snapshot requires injecting a real grab_frame + camera
@@ -508,7 +465,6 @@ def test_snapshot_success_fixture_matches_schema():
     }
     _validate(payload, _load_schema("snapshot.json"))
 
-
 def test_device_command_errors_match_error_envelope(monkeypatch, tmp_path, capsys):
     """Invalid gcode still uses the shared error envelope."""
     config_path = tmp_path / "config" / "cfg.json"
@@ -521,7 +477,6 @@ def test_device_command_errors_match_error_envelope(monkeypatch, tmp_path, capsy
     payload = json.loads(capsys.readouterr().out)
     _validate(payload, _load_schema("error_envelope.json"))
     assert payload["command"] == "gcode"
-
 
 def test_job_error_matches_job_error_and_error_envelope(monkeypatch, tmp_path, capsys):
     """Missing source emits the job summary error shape (error_envelope + job fields)."""
@@ -544,7 +499,6 @@ def test_job_error_matches_job_error_and_error_envelope(monkeypatch, tmp_path, c
     assert payload["failed_step"] == "validate"
     assert payload["status"] == "error"
 
-
 def test_config_show_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
     _write_valid_config(config_path)
@@ -561,7 +515,6 @@ def test_config_show_matches_schema(monkeypatch, tmp_path, capsys):
     assert isinstance(payload.get("config"), dict)
     # Secrets must never appear in cleartext.
     assert payload["config"].get("access_code") in (None, "<redacted>")
-
 
 def test_config_validate_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
@@ -581,7 +534,6 @@ def test_config_validate_matches_schema(monkeypatch, tmp_path, capsys):
     assert payload["command"] == "config"
     assert isinstance(payload.get("checks"), list)
 
-
 def test_download_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(sys, "argv", ["plate", "download", "not-a-url", "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(tmp_path / "no" / "config.json"))
@@ -592,7 +544,6 @@ def test_download_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
     _validate(payload, _load_schema("error_envelope.json"))
     assert payload["command"] == "download"
     assert payload["failed_step"] == "validate"
-
 
 def test_download_success_fixture_matches_schema():
     """Success shape from download/downloader._record_download_success.
@@ -615,7 +566,6 @@ def test_download_success_fixture_matches_schema():
     }
     _validate(payload, _load_schema("download.json"))
 
-
 def test_download_archive_success_fixture_matches_schema():
     payload = {
         "status": "downloaded",
@@ -629,7 +579,6 @@ def test_download_archive_success_fixture_matches_schema():
         "bytes": 2048,
     }
     _validate(payload, _load_schema("download.json"))
-
 
 def test_slice_success_real_output_matches_schema(tmp_path, monkeypatch, capsys):
     """Slice success envelope captured from real slicer/output.py emit_json via orca stub.
@@ -695,7 +644,6 @@ def test_slice_success_real_output_matches_schema(tmp_path, monkeypatch, capsys)
     )
     _validate(payload, _load_schema("slice.json"))
 
-
 def test_slice_list_settings_matches_schema(monkeypatch, tmp_path, capsys):
     """`slice --list-settings --json` discovery envelope (agent override vocabulary)."""
     profiles = tmp_path / "profiles"
@@ -732,7 +680,6 @@ def test_slice_list_settings_matches_schema(monkeypatch, tmp_path, capsys):
     assert "flow_ratio" in payload["filament"]["settings"]
     # bookkeeping keys must not leak into the settable surface
     assert "name" not in payload["process"]["settings"]
-
 
 def test_slice_error_matches_error_envelope(monkeypatch, tmp_path, capsys):
     missing = tmp_path / "nope.stl"

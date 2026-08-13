@@ -16,10 +16,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-_mock_mqtt = MagicMock()
-sys.modules.setdefault("paho", _mock_mqtt)
-sys.modules.setdefault("paho.mqtt", _mock_mqtt)
-
 from bambu_cli import netsafety  # noqa: E402
 from bambu_cli.netsafety import (  # noqa: E402
     MAX_DOWNLOAD_REDIRECT_HOPS,
@@ -31,17 +27,14 @@ from bambu_cli.netsafety import (  # noqa: E402
 )
 from tests.bambu_test_base import settings_ctx  # noqa: E402
 
-
 @pytest.fixture(autouse=True)
 def _clear_dns_cache():
     netsafety._dns_cache.clear()
     yield
     netsafety._dns_cache.clear()
 
-
 def _addrinfo(ip, port=443):
     return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
-
 
 # ---------------------------------------------------------------------------
 # Public IPs connect; the connection targets the *resolved IP*, not the host
@@ -57,7 +50,6 @@ def test_public_ip_connects_to_resolved_ip_not_hostname():
     assert result is sentinel
     conn.assert_called_once_with(("8.8.8.8", 443), 5, None)
 
-
 # ---------------------------------------------------------------------------
 # Private / non-global IPs are refused unless explicitly allowed.
 # ---------------------------------------------------------------------------
@@ -70,7 +62,6 @@ def test_private_ip_refused_and_never_connects():
         _get_safe_connection("internal.example.com", 443, 5, None)
     conn.assert_not_called()
 
-
 def test_allow_private_ips_permits_private_connection():
     sentinel = object()
     with (
@@ -81,7 +72,6 @@ def test_allow_private_ips_permits_private_connection():
         result = _get_safe_connection("internal", 443, 5, None)
     assert result is sentinel
     conn.assert_called_once_with(("10.0.0.5", 443), 5, None)
-
 
 # ---------------------------------------------------------------------------
 # CLI wiring: --allow-private-ips must reach RuntimeContext via main()
@@ -104,7 +94,6 @@ def test_main_allow_private_ips_flag_enables_settings(monkeypatch, tmp_path):
     main()
     assert seen.get("allow") is True
 
-
 def test_main_default_denies_private_ips(monkeypatch, tmp_path):
     import bambu_cli.bambu as bambu
     from bambu_cli.cli import main
@@ -121,7 +110,6 @@ def test_main_default_denies_private_ips(monkeypatch, tmp_path):
     monkeypatch.setattr("bambu_cli.commands.cmd_status", capture)
     main()
     assert seen.get("allow") is False
-
 
 def test_main_allow_private_ips_reaches_get_safe_connection(monkeypatch, tmp_path):
     """End-to-end: flag → Settings → netsafety permits a private resolved IP."""
@@ -147,7 +135,6 @@ def test_main_allow_private_ips_reaches_get_safe_connection(monkeypatch, tmp_pat
     assert outcomes.get("result") is sentinel
     assert outcomes.get("connected") is True
 
-
 def test_ipv4_mapped_ipv6_private_address_refused():
     # ::ffff:192.168.0.1 must be unwrapped and evaluated as the private v4 addr.
     with (
@@ -158,7 +145,6 @@ def test_ipv4_mapped_ipv6_private_address_refused():
         _get_safe_connection("rebind.example.com", 443, 5, None)
     conn.assert_not_called()
 
-
 # ---------------------------------------------------------------------------
 # Resolution / candidate-iteration edge cases
 # ---------------------------------------------------------------------------
@@ -168,7 +154,6 @@ def test_dns_failure_becomes_urlerror():
         pytest.raises(urllib.error.URLError, match="DNS resolution failed"),
     ):
         _get_safe_connection("nx.example.com", 443, 5, None)
-
 
 def test_unparseable_ip_skipped_then_valid_ip_used():
     sentinel = object()
@@ -183,7 +168,6 @@ def test_unparseable_ip_skipped_then_valid_ip_used():
         result = _get_safe_connection("mixed.example.com", 443, 5, None)
     assert result is sentinel
     conn.assert_called_once_with(("8.8.4.4", 443), 5, None)
-
 
 def test_all_ips_fail_connection_invalidates_cache():
     # A valid public IP that refuses TCP must raise and drop the cache entry so
@@ -200,7 +184,6 @@ def test_all_ips_fail_connection_invalidates_cache():
             _get_safe_connection("dead.example.com", 443, 5, None)
     assert ga.call_count == 2
 
-
 # ---------------------------------------------------------------------------
 # DNS cache behavior
 # ---------------------------------------------------------------------------
@@ -213,7 +196,6 @@ def test_dns_cache_hit_skips_second_resolution():
         _get_safe_connection("cached.example.com", 443, 5, None)
         _get_safe_connection("cached.example.com", 443, 5, None)
     assert ga.call_count == 1
-
 
 def test_dns_cache_expiry_triggers_reresolution():
     from bambu_cli.constants import DNS_CACHE_TTL
@@ -231,7 +213,6 @@ def test_dns_cache_expiry_triggers_reresolution():
         _get_safe_connection("ttl.example.com", 443, 5, None)
     assert ga.call_count == 2
 
-
 def test_dns_cache_evicted_when_oversized():
     # >1000 entries triggers a full clear before inserting the new one.
     for i in range(1001):
@@ -245,7 +226,6 @@ def test_dns_cache_evicted_when_oversized():
     # Cache was cleared, leaving only the freshly resolved host.
     assert list(netsafety._dns_cache) == [("fresh.example.com", 443)]
 
-
 # ---------------------------------------------------------------------------
 # build_safe_opener composition
 # ---------------------------------------------------------------------------
@@ -256,14 +236,12 @@ def test_build_safe_opener_disables_proxies():
     opener = build_safe_opener()
     assert not any(getattr(h, "proxies", None) for h in opener.handlers)
 
-
 def test_build_safe_opener_registers_safe_handlers():
     opener = build_safe_opener()
     types_present = {type(h) for h in opener.handlers}
     assert SafeHTTPHandler in types_present
     assert SafeHTTPSHandler in types_present
     assert SafeHTTPRedirectHandler in types_present
-
 
 # ---------------------------------------------------------------------------
 # Redirect hop cap
@@ -274,7 +252,6 @@ def test_redirect_hop_cap_rejects_over_limit():
     req._bambu_redirect_hops = MAX_DOWNLOAD_REDIRECT_HOPS
     with pytest.raises(urllib.error.URLError, match="Too many redirects"):
         handler.redirect_request(req, None, 302, "Found", {}, "https://example.com/next")
-
 
 def test_safe_https_connect_wraps_socket():
     conn = netsafety.SafeHTTPSConnection("example.com", 443)
@@ -290,7 +267,6 @@ def test_safe_https_connect_wraps_socket():
     assert conn.sock is wrapped
     ctx.wrap_socket.assert_called_once()
 
-
 def test_safe_http_connect():
     conn = netsafety.SafeHTTPConnection("example.com", 80)
     conn.timeout = 5
@@ -299,7 +275,6 @@ def test_safe_http_connect():
     with patch.object(netsafety, "_get_safe_connection", return_value=sock):
         conn.connect()
     assert conn.sock is sock
-
 
 def test_safe_https_connect_closes_on_wrap_failure():
     conn = netsafety.SafeHTTPSConnection("example.com", 443)
@@ -313,9 +288,7 @@ def test_safe_https_connect_closes_on_wrap_failure():
         conn.connect()
     sock.close.assert_called()
 
-
 # --- polite client (per-host throttle + Retry-After) -------------------------
-
 
 def _http_error(code, retry_after=None):
     import email.message
@@ -325,12 +298,10 @@ def _http_error(code, retry_after=None):
         hdrs["Retry-After"] = retry_after
     return urllib.error.HTTPError("https://api.printables.com/graphql/", code, "rate limited", hdrs, None)
 
-
 def _fake_req(url="https://api.printables.com/graphql/"):
     req = MagicMock()
     req.full_url = url
     return req
-
 
 def test_polite_open_retries_on_429_and_honors_retry_after(monkeypatch):
     monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 1.0)
@@ -377,7 +348,6 @@ def test_polite_open_retries_on_429_and_honors_retry_after(monkeypatch):
         netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=slept.append)
     assert opener.open.call_count == 1
 
-
 def test_throttle_host_enforces_min_interval_per_host(monkeypatch):
     monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 1.0)
     netsafety._last_request_at.clear()
@@ -408,7 +378,6 @@ def test_throttle_host_enforces_min_interval_per_host(monkeypatch):
     netsafety._throttle_host("api.printables.com", sleep=slept.append)
     netsafety._throttle_host("api.printables.com", sleep=slept.append)
     assert slept == []
-
 
 def test_polite_open_tolerates_non_string_full_url():
     sentinel = object()
