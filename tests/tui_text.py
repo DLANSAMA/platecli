@@ -7,7 +7,15 @@ a Console the same way they did under 1.x.
 
 from __future__ import annotations
 
+import re
+
 from rich.console import Console
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(text: str) -> str:
+    return _ANSI_RE.sub("", text)
 
 
 def renderable_text(payload, *, width: int = 200) -> str:
@@ -15,11 +23,11 @@ def renderable_text(payload, *, width: int = 200) -> str:
     if payload is None:
         return ""
     if isinstance(payload, str):
-        return payload
-    console = Console(width=width)
+        return _plain(payload)
+    console = Console(width=width, no_color=True, highlight=False, force_terminal=False)
     with console.capture() as capture:
         console.print(payload)
-    return capture.get()
+    return _plain(capture.get())
 
 
 def widget_text(widget, *, width: int = 200) -> str:
