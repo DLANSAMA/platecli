@@ -140,7 +140,9 @@ ignore = ["SIM105"]
 [tool.ruff.lint.per-file-ignores]
 # MQTT callbacks close over per-iteration loop variables deliberately; each
 # callback's lifetime ends with its iteration.
-"bambu_cli/protocols/mqtt.py" = ["B023"]
+"bambu_cli/protocols/mqtt_cmd.py" = ["B023"]
+"bambu_cli/protocols/mqtt_print.py" = ["B023"]
+"bambu_cli/protocols/mqtt_monitor.py" = ["B023"]
 
 [tool.mypy]
 # Rot-proof gate: check the whole bambu_cli package by default (`uvx mypy -p bambu_cli`).

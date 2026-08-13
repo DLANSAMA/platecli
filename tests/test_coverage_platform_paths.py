@@ -110,13 +110,15 @@ def test_ftps_connection_error_path_cleanup():
 
 
 def test_mqtt_require_missing_dependency():
-    prev = mqtt_mod.mqtt
+    from bambu_cli.protocols import mqtt_tls
+
+    prev = mqtt_tls.mqtt
     try:
-        mqtt_mod.mqtt = None
+        mqtt_tls.mqtt = None
         with patch.dict("sys.modules", {"paho.mqtt.client": None}), pytest.raises(BambuError):
-            mqtt_mod._require_mqtt()
+            mqtt_tls._require_mqtt()
     finally:
-        mqtt_mod.mqtt = prev
+        mqtt_tls.mqtt = prev
 
 
 def test_cmd_gcode_success():

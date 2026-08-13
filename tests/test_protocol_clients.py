@@ -120,7 +120,7 @@ class TestSendCommand(unittest.TestCase):
 
         mock_client.connect.side_effect = side_effect_connect
 
-        with patch("bambu_cli.protocols.mqtt.logger", mock_logger):
+        with patch("bambu_cli.protocols.mqtt_cmd.logger", mock_logger):
             result = send_command(
                 _test_printer(ip="192.168.1.1"),
                 '{"test": "payload"}',
@@ -180,7 +180,7 @@ class TestCreateMqttClient(unittest.TestCase):
 
         self.assertIsInstance(client, _SimMqttClient)
 
-    @patch("bambu_cli.protocols.mqtt.mqtt.Client")
+    @patch("bambu_cli.protocols.mqtt_tls.mqtt.Client")
     def test_create_mqtt_client_secure(self, mock_mqtt_client):
         mock_client_instance = MagicMock()
         mock_mqtt_client.return_value = mock_client_instance
@@ -195,7 +195,7 @@ class TestCreateMqttClient(unittest.TestCase):
         mock_client_instance.tls_insecure_set.assert_not_called()
         self.assertEqual(client, mock_client_instance)
 
-    @patch("bambu_cli.protocols.mqtt.mqtt.Client")
+    @patch("bambu_cli.protocols.mqtt_tls.mqtt.Client")
     def test_create_mqtt_client_insecure(self, mock_mqtt_client):
         mock_client_instance = MagicMock()
         mock_mqtt_client.return_value = mock_client_instance
@@ -214,7 +214,7 @@ class TestMqttConnectTimeout(unittest.TestCase):
     def test_mqtt_connect_honors_configured_timeout_and_restores_socket_default(self):
         import socket as socket_mod
 
-        from bambu_cli.protocols import mqtt
+        from bambu_cli.protocols import mqtt_tls
 
         client = MagicMock()
         client._connect_timeout = 5.0
@@ -223,8 +223,8 @@ class TestMqttConnectTimeout(unittest.TestCase):
         printer.mqtt_timeout = 30.0
 
         before = socket_mod.getdefaulttimeout()
-        with patch.object(mqtt, "_resolve_ip", return_value="192.168.1.5"):
-            mqtt._mqtt_connect(printer, client)
+        with patch.object(mqtt_tls, "_resolve_ip", return_value="192.168.1.5"):
+            mqtt_tls._mqtt_connect(printer, client)
 
         # paho's own connect cap is raised to the configured timeout...
         self.assertEqual(client._connect_timeout, 30.0)
