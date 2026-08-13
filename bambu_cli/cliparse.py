@@ -404,6 +404,16 @@ def build_parser():
             "With --output: inserts the timestamp before the file extension."
         ),
     )
+    p_snap.add_argument(
+        "--allow-camera-streamer",
+        action="store_true",
+        dest="allow_camera_streamer",
+        help=(
+            "Allow the unpinned Docker/RTSP camera streamer when the direct grab fails. "
+            "Required for X1-series. Also settable as camera_allow_streamer in config.json. "
+            "Ignored when camera_direct_only is set."
+        ),
+    )
 
     p_doc = sub.add_parser(
         "doctor", parents=[get_global_parser()], help="Run health check and discover printer capabilities"

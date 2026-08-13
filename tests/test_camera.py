@@ -3,7 +3,7 @@ import os
 import tempfile
 from unittest.mock import MagicMock, patch
 
-from bambu_cli.protocols.camera import _require_localhost_streamer_url, _write_snapshot_atomic
+from bambu_cli.commands.snapshot import _require_localhost_streamer_url, _write_snapshot_atomic
 
 
 class TestCameraBase(unittest.TestCase):
@@ -15,7 +15,7 @@ class TestCameraBase(unittest.TestCase):
         _require_localhost_streamer_url(args, "http://[::1]:8080/stream", "out.jpg")
         # Should not raise any error
 
-    @patch("bambu_cli.protocols.camera.abort")
+    @patch("bambu_cli.commands.snapshot.abort")
     def test_require_localhost_streamer_url_invalid(self, mock_abort):
         mock_abort.side_effect = SystemExit(3)
         args = MagicMock()

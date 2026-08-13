@@ -19,7 +19,7 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
     def test_unique_flag_no_output_uses_timestamp(self):
         """With --unique and no --output, filename is printer_snapshot_<stamp>.jpg."""
         import datetime
-        from bambu_cli.protocols.camera import _utc_stamp
+        from bambu_cli.commands.snapshot import _utc_stamp
 
         fixed_dt = datetime.datetime(2026, 7, 24, 19, 15, 30, tzinfo=datetime.timezone.utc)
         stamp = _utc_stamp(fixed_dt)
@@ -35,10 +35,10 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
         args = self._snap_args(output=None, unique=True)
 
         with (
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic", side_effect=_fake_write),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic", side_effect=_fake_write),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=1024),
-            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
+            patch("bambu_cli.commands.snapshot._ensure_parent_dir"),
         ):
             cmd_snapshot(
                 args,
@@ -65,10 +65,10 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
         args = self._snap_args(output="cam.jpg", unique=True)
 
         with (
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic", side_effect=_fake_write),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic", side_effect=_fake_write),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=1024),
-            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
+            patch("bambu_cli.commands.snapshot._ensure_parent_dir"),
         ):
             cmd_snapshot(
                 args,
@@ -92,10 +92,10 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
         args = self._snap_args(output="myshot.jpg", unique=False)
 
         with (
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic", side_effect=_fake_write),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic", side_effect=_fake_write),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=1024),
-            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
+            patch("bambu_cli.commands.snapshot._ensure_parent_dir"),
         ):
             cmd_snapshot(
                 args,
@@ -105,6 +105,7 @@ class TestSnapshotUniqueNaming(unittest.TestCase):
         self.assertEqual(len(saved_paths), 1)
         self.assertTrue(saved_paths[0].endswith("myshot.jpg"))
         self.assertNotIn("Z.jpg", saved_paths[0])
+
 
 class TestSnapshotJsonMetadata(unittest.TestCase):
     """captured_at and sha256 appear in --json output on every successful capture."""
@@ -129,11 +130,11 @@ class TestSnapshotJsonMetadata(unittest.TestCase):
 
         buf = io.StringIO()
         with (
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic"),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=len(frame_data)),
-            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
-            patch("bambu_cli.protocols.camera.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
+            patch("bambu_cli.commands.snapshot._ensure_parent_dir"),
+            patch("bambu_cli.commands.snapshot.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
         ):
             cmd_snapshot(
                 args,
@@ -165,11 +166,12 @@ class TestSnapshotJsonMetadata(unittest.TestCase):
 
         buf = io.StringIO()
         with (
-            patch("bambu_cli.protocols.camera._write_snapshot_atomic"),
+            patch("bambu_cli.commands.snapshot._write_snapshot_atomic"),
             patch("bambu_cli.logging_utils._BACKEND", MagicMock()),
             patch("os.path.getsize", return_value=len(frame_data)),
-            patch("bambu_cli.protocols.camera._ensure_parent_dir"),
-            patch("bambu_cli.protocols.camera.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
+            patch("bambu_cli.commands.snapshot._ensure_parent_dir"),
+            patch("bambu_cli.commands.snapshot.emit_json", side_effect=lambda d: buf.write(json.dumps(d))),
+            settings_ctx(camera_allow_streamer=True),
         ):
             cmd_snapshot(
                 args,

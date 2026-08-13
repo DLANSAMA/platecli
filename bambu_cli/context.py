@@ -100,6 +100,7 @@ class Settings:
     camera_port: str = "127.0.0.1:1985:1984"  # mirrors config.DEFAULT_CAMERA_PORT
     camera_stream_url: str = ""
     camera_direct_only: bool = False
+    camera_allow_streamer: bool = False
     allow_private_ips: bool = False
 
     @classmethod
@@ -153,6 +154,9 @@ class Settings:
             # security opt-in, so it must survive across invocations. bool() so a JSON
             # string cannot sneak through truthy.
             camera_direct_only=bool(cfg.get("camera_direct_only", False)),
+            # Sticky opt-in for the unpinned Docker streamer. Default false: snapshot
+            # no longer falls through to Docker unless the user asked.
+            camera_allow_streamer=bool(cfg.get("camera_allow_streamer", False)),
             # Always false from config: private-IP downloads are a per-invocation
             # CLI override only (``--allow-private-ips``), never a sticky config key.
             allow_private_ips=False,

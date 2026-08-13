@@ -203,13 +203,20 @@ def cmd_doctor(args, ctx=None):
             "chamber_light": True,
             "camera_snapshot": ctx.settings.printer_model in _DIRECT_CAMERA_MODELS,
             "camera_snapshot_note": (
-                "P1P/P1S/A1/A1M capture directly from the printer camera and need no Docker; "
-                "X1-series fall back to the optional BambuP1Streamer container"
-                if not ctx.settings.camera_direct_only
+                "camera_direct_only is set: only the direct printer-camera grab is used "
+                "(P1P/P1S/A1/A1M). The BambuP1Streamer is refused, so X1-series "
+                "snapshots are unavailable until the option is unset and "
+                "camera_allow_streamer is set"
+                if ctx.settings.camera_direct_only
                 else (
-                    "camera_direct_only is set: only the direct printer-camera grab is used "
-                    "(P1P/P1S/A1/A1M). The BambuP1Streamer fallback is refused, so X1-series "
-                    "snapshots are unavailable until the option is unset"
+                    "P1P/P1S/A1/A1M capture directly from the printer camera and need no Docker; "
+                    "X1-series need camera_allow_streamer (or --allow-camera-streamer) to use "
+                    "the optional BambuP1Streamer container"
+                    if not ctx.settings.camera_allow_streamer
+                    else (
+                        "P1P/P1S/A1/A1M capture directly; camera_allow_streamer is set so "
+                        "X1-series can use the unpinned BambuP1Streamer if the direct grab fails"
+                    )
                 )
             ),
         },

@@ -116,6 +116,7 @@ def test_setup_rerun_preserves_unmanaged_keys(tmp_path, monkeypatch):
                 "serial": "OLDSERIAL",
                 "access_code": "99998888",
                 "camera_direct_only": True,
+                "camera_allow_streamer": True,
                 "camera_port": "0.0.0.0:1985:1984",
                 "network_timeout": 42,
             }
@@ -126,6 +127,7 @@ def test_setup_rerun_preserves_unmanaged_keys(tmp_path, monkeypatch):
 
     # Unmanaged keys survive, values intact.
     assert data["camera_direct_only"] is True
+    assert data["camera_allow_streamer"] is True
     assert data["camera_port"] == "0.0.0.0:1985:1984"
     assert data["network_timeout"] == 42
     # Wizard-owned keys are still updated to the new answers.

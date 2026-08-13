@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Changed
+
+- **`plate snapshot` no longer falls back to the Docker streamer by default.**
+  The streamer does not honour `cert_fingerprint`, so a failed direct grab now
+  aborts unless you set `camera_allow_streamer` in config or pass
+  `--allow-camera-streamer`. X1-series printers need that opt-in.
+  `camera_direct_only` still forbids the streamer even when the opt-in is set.
+  The snapshot command moved out of `protocols/camera.py` into
+  `bambu_cli.commands.snapshot`.
+
 ## [0.5.0] - 2026-08-05
 
 ### Added

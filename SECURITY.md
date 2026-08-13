@@ -56,10 +56,10 @@ and (b) explicit model downloads you request. Key properties:
   exists only as a last resort — it is never the default and the CLI warns when
   it is used.
   - **Camera (port 6000):** the *direct* grab refuses to proceed if neither pin nor
-    `insecure_tls` is set. Note that `snapshot` then falls back to the Docker streamer,
-    which does not honour the pin, so the command as a whole is not fail-closed by
-    default — set `camera_direct_only: true` to refuse that fallback (see
-    [Known limitations](#known-limitations)).
+    `insecure_tls` is set. The Docker streamer is **opt-in** (`camera_allow_streamer`
+    or `--allow-camera-streamer`) because it does not honour the pin. The default
+    is fail-closed: a failed direct grab aborts. `camera_direct_only: true` still
+    forbids the streamer even if the opt-in is also set.
   - **MQTT / FTPS without a pin:** use system CA verification (`CERT_REQUIRED`),
     which fails for typical Bambu self-signed certs (effective fail-closed). Prefer
     an explicit pin for clear errors and uniform policy.
@@ -103,7 +103,7 @@ Tracked for hardening; not all are “bugs” in the sense of broken claims.
 | Topic | Detail | Status |
 |-------|--------|--------|
 | **Camera Docker port bind** | Default `camera_port` is now `127.0.0.1:1985:1984`, so the streamer publishes the (unauthenticated) camera feed on **loopback only**. Set `camera_port` to `0.0.0.0:1985:1984` to deliberately expose it on the LAN. Host-qualified specs now parse correctly, `camera_port` is validated, and the CLI warns if a *pre-existing* container is still bound to a non-loopback interface (recreate with `docker rm -f bambu_camera`). | Fixed |
-| **Camera pin fallback** | A pinned-fingerprint **mismatch**, and any `ssl.SSLError` from the direct grab — handshake or post-handshake — hard-abort the snapshot when a pin is configured. The `camera_direct_only` config key (default `false`) closes the remaining fallback routes: when set, any failure of the direct port-6000 grab — including no-pin SSLError, non-TLS connection failures (refused/reset/timeout), or a silent no-frame return — refuses to fall back to the Docker streamer and aborts with `EXIT_NETWORK_ERROR`. **What it does not cover:** (a) `camera_direct_only=true` with `insecure_tls=true` is direct-only but **completely unverified** — direct-only ≠ verified; verification requires a `cert_fingerprint`. (b) It stops platecli from using or starting the streamer, but an **already-running `bambu_camera` container keeps serving the unauthenticated feed** — run `docker rm -f bambu_camera` to stop it. (Re-running `plate setup` used to drop this hand-added key, silently disabling the control; setup now preserves every key it does not manage, and reports which ones it kept.) | Fixed |
+| **Camera pin fallback** | Default is fail-closed: a failed direct grab does **not** start or use the Docker streamer. X1-series users must set `camera_allow_streamer: true` or pass `--allow-camera-streamer`. A pinned-fingerprint **mismatch**, and any `ssl.SSLError` from the direct grab when a pin is configured, still hard-abort (no streamer even if opted in). `camera_direct_only` remains a forbid switch that wins over the opt-in. **Residuals:** (a) `insecure_tls=true` is unverified whether or not the streamer is used. (b) An already-running `bambu_camera` container keeps serving the unauthenticated feed — run `docker rm -f bambu_camera` to stop it. Setup still preserves unmanaged keys. | Fixed |
 | **HTTP downloads** | `http://` and `https://` are both accepted. SSRF controls apply; **content integrity** over cleartext HTTP does not (a network attacker can substitute a model). Prefer HTTPS sources. | Residual |
 | **pause / resume** | Required `--confirm` as of 0.3.0, matching stop/print/delete/gcode. | Fixed |
 | **Windows secret ACLs** | POSIX `0600` enforcement does not apply on Windows; protect the config directory with NTFS ACLs on shared machines. | Platform residual |
