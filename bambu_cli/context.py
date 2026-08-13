@@ -72,13 +72,10 @@ def _coerce_insecure_tls(value: Any) -> bool:
 
 
 def _normalize_fingerprint(fp: str | None) -> str | None:
-    """Normalize a pinned SHA-256 fingerprint (lowercase, separator-free).
+    """Normalize a pinned SHA-256 fingerprint (lowercase, separator-free)."""
+    from bambu_cli.tlspin import normalize_fingerprint
 
-    Mirrors ``bambu_cli.config._expected_fingerprint``.
-    """
-    if not fp:
-        return None
-    return fp.lower().replace(":", "").replace(" ", "")
+    return normalize_fingerprint(fp)
 
 
 @dataclass
@@ -190,6 +187,7 @@ class RuntimeContext:
 
         from bambu_cli.config import load_access_code
         from bambu_cli.printer import BambuPrinter
+        from bambu_cli.tlspin import normalize_fingerprint
 
         access_code = "" if self.simulation else load_access_code()
         self._printer = BambuPrinter(
@@ -197,7 +195,7 @@ class RuntimeContext:
             serial=self.settings.serial,
             access_code=access_code,
             insecure_tls=self.settings.insecure_tls,
-            cert_fingerprint=_normalize_fingerprint(self.settings.cert_fingerprint),
+            cert_fingerprint=normalize_fingerprint(self.settings.cert_fingerprint),
             simulation_mode=self.simulation,
         )
         return self._printer

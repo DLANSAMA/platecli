@@ -2,6 +2,7 @@
 
 from tests.bambu_test_base import *  # noqa: F401,F403
 
+
 class TestBambuCmdFiles(unittest.TestCase):
     def _printer_with_ftp(self, mock_get_printer, mock_get_ftp):
         printer = _test_printer()
@@ -93,8 +94,9 @@ class TestBambuCmdFiles(unittest.TestCase):
         mock_get_ftp.assert_called_once()
         mock_logger.error.assert_called_with("Error listing files: Failed to list files via printer API")
 
+
 class TestBambuCmdDelete(unittest.TestCase):
-    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     @patch("sys.exit")
     def test_cmd_delete_no_confirm(self, mock_exit, mock_logger, mock_get_ftp):

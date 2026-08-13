@@ -1,24 +1,12 @@
-import atexit
 import ftplib
 import os
 import socket
 import ssl
-import threading
 from typing import Any
 
 from bambu_cli.utils import _resolve_ip
 
 _SIM_FTP_FILES = {"simulated_file.3mf": 1000}
-
-# Module-level so mypy accepts these in `except` clauses (star-unpack of
-# ftplib.all_errors inline is rejected as non-exception-type).
-_FTP_ERRORS: tuple[type[BaseException], ...] = ftplib.all_errors
-_FTP_SSL_ERRORS: tuple[type[BaseException], ...] = ftplib.all_errors + (ssl.SSLError,)
-_FTP_POOL_ERRORS: tuple[type[BaseException], ...] = ftplib.all_errors + (
-    ssl.SSLError,
-    OSError,
-    AttributeError,
-)
 
 
 class _SimFtp:
@@ -56,7 +44,6 @@ class _SimFtp:
         _SIM_FTP_FILES.pop(os.path.basename(path), None)
 
     def voidcmd(self, cmd):
-        """Pool health-check (NOOP) used by ConnectionManager.get_ftp."""
         return "200 OK"
 
     def quit(self):
@@ -159,86 +146,6 @@ class ImplicitFTPS(ftplib.FTP_TLS):
         return conn, size
 
 
-class PooledFTPWrapper:
-    def __init__(self, ftp, manager):
-        self._ftp = ftp
-        self._manager = manager
-
-    def __getattr__(self, name):
-        return getattr(self._ftp, name)
-
-    def __enter__(self):
-        self._manager._ftp_usage_lock.acquire()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            if exc_type is not None:
-                with self._manager._lock:
-                    if self._manager._ftp_client is self._ftp:
-                        self._manager._ftp_client = None
-                try:
-                    self._ftp.close()
-                except Exception:
-                    pass
-        finally:
-            self._manager._ftp_usage_lock.release()
-
-
-class ConnectionManager:
-    """Manages reusable MQTT and FTPS connections to reduce socket churn."""
-
-    def __init__(self):
-        self._mqtt_client = None
-        self._ftp_client = None
-        self._lock = threading.Lock()
-        self._ftp_usage_lock = threading.Lock()
-
-    def get_ftp(self, printer, timeout=60):
-        with self._lock:
-            client = self._ftp_client
-        if client is not None:
-            try:
-                with self._ftp_usage_lock:
-                    client.voidcmd("NOOP")
-                return PooledFTPWrapper(client, self)
-            except _FTP_POOL_ERRORS:
-                with self._lock:
-                    if self._ftp_client is client and client is not None:
-                        try:
-                            client.close()
-                        except Exception:
-                            pass
-                        self._ftp_client = None
-
-        ftp = _create_raw_ftp(printer, timeout=timeout)
-        with self._lock:
-            self._ftp_client = ftp
-            return PooledFTPWrapper(ftp, self)
-
-    def close_all(self):
-        self.clear()
-
-    def clear(self):
-        with self._lock:
-            if self._mqtt_client is not None:
-                try:
-                    self._mqtt_client.disconnect()
-                except Exception:
-                    pass
-                self._mqtt_client = None
-            if self._ftp_client is not None:
-                try:
-                    self._ftp_client.close()
-                except Exception:
-                    pass
-                self._ftp_client = None
-
-
-connection_manager = ConnectionManager()
-atexit.register(connection_manager.close_all)
-
-
 def _create_raw_ftp(printer, timeout=60):
     """Connect to printer's FTPS server."""
     if printer.simulation_mode:
@@ -255,13 +162,3 @@ def _create_raw_ftp(printer, timeout=60):
     ftp.login("bblp", printer.access_code)
     ftp.prot_p()
     return ftp
-
-
-def get_ftp(printer, timeout=60):
-    """Borrow a pooled FTPS client for *printer*.
-
-    ``printer`` is required: this module must not reach up to
-    ``bambu_cli.printer`` for an ambient one (see scripts/check_layers.py).
-    Callers own the lookup.
-    """
-    return connection_manager.get_ftp(printer, timeout=timeout)

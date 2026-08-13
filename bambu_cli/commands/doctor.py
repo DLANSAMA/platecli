@@ -66,7 +66,6 @@ def _offer_pin_fingerprint(
 
 def cmd_doctor(args, ctx=None):
     """Health-check: auto-discover printer capabilities and verify configuration."""
-    from bambu_cli.protocols.ftps import get_ftp
     from bambu_cli.protocols.mqtt import probe_cert_fingerprint
     from bambu_cli.utils import emit_json
 
@@ -161,7 +160,7 @@ def cmd_doctor(args, ctx=None):
 
     logger.info(f"   [3/3] Verifying FTPS connectivity to {shown_ip()}:990...")
     try:
-        with get_ftp(printer, timeout=net_timeout):
+        with printer.get_ftp_client(timeout=net_timeout):
             logger.info("   ✅ FTPS connection established.")
     except Exception as e:
         message = f"FTPS connection failed: {e}"

@@ -450,26 +450,6 @@ def test_setup_placeholder_ip():
         wizard_mod._cmd_setup_noninteractive(args)
 
 
-def test_get_and_verify_cert_pem_mismatch():
-    der = b"\x01\x02"
-    raw = MagicMock()
-    tls = MagicMock()
-    tls.getpeercert.return_value = der
-    tls.__enter__ = lambda s: tls
-    tls.__exit__ = lambda *a: False
-    raw_cm = MagicMock()
-    raw_cm.__enter__ = lambda s: raw
-    raw_cm.__exit__ = lambda *a: False
-    ctx = MagicMock()
-    ctx.wrap_socket.return_value = tls
-    with (
-        patch("bambu_cli.protocols.mqtt.socket.create_connection", return_value=raw_cm),
-        patch("ssl.SSLContext", return_value=ctx),
-        pytest.raises(ssl.SSLError),
-    ):
-        mqtt_mod._get_and_verify_cert_pem("h", 990, "00" * 32, timeout=1)
-
-
 def test_send_command_on_connect_fail_rc():
     printer = _test_printer(simulation_mode=False)
     client = MagicMock()
@@ -513,6 +493,7 @@ def test_execute_print_real_accept():
     # message goes nowhere and command_accepted.wait() times out — a real breakage.
     client.loop_start.assert_called()
     from unittest.mock import MagicMock as _MagicMock
+
     assert not isinstance(client.on_message, _MagicMock), (
         "execute_print_command must assign a real handler to client.on_message; "
         "a MagicMock default means the MQTT accept path is unwired"
@@ -765,15 +746,11 @@ def test_execute_print_on_connect_publishes_once_but_resubscribes():
     ):
         mqtt_mod.execute_print_command(printer, "{}", "x.3mf", dry_run=False, command_timeout=1)
     # The print-start payload must be published exactly once despite two connects.
-    request_publishes = [
-        c for c in client.publish.call_args_list if c.args and str(c.args[0]).endswith("/request")
-    ]
+    request_publishes = [c for c in client.publish.call_args_list if c.args and str(c.args[0]).endswith("/request")]
     assert len(request_publishes) == 1
     # But the report subscription must be (re)established on BOTH connects, or an
     # ack after a mid-window reconnect would be invisible and time the print out.
-    report_subscribes = [
-        c for c in client.subscribe.call_args_list if c.args and str(c.args[0]).endswith("/report")
-    ]
+    report_subscribes = [c for c in client.subscribe.call_args_list if c.args and str(c.args[0]).endswith("/report")]
     assert len(report_subscribes) == 2
 
 
@@ -793,9 +770,7 @@ def test_send_command_on_connect_publishes_once():
         patch.object(mqtt_mod, "_mqtt_connect"),
     ):
         assert mqtt_mod.send_command(printer, "{}", timeout=1, retries=0) is True
-    request_publishes = [
-        c for c in client.publish.call_args_list if c.args and str(c.args[0]).endswith("/request")
-    ]
+    request_publishes = [c for c in client.publish.call_args_list if c.args and str(c.args[0]).endswith("/request")]
     assert len(request_publishes) == 1
     # And publishes at QoS 1 so on_publish reflects a broker PUBACK, not a bare
     # local socket write.

@@ -96,7 +96,6 @@ def probe_cert_fingerprint(host, port=990, timeout=5):
 
 
 def create_mqtt_client(printer, client_id=""):
-    global _TRUSTED_CERT_FILE
     if printer.simulation_mode:
         return _SimMqttClient()
 
@@ -639,31 +638,6 @@ def monitor_status(args, printer):
             client.disconnect()
         except Exception:
             pass
-
-
-import base64
-
-_TRUSTED_CERT_FILE = None
-
-# probe_cert_fingerprint is defined above
-
-
-def _get_and_verify_cert_pem(host, port, expected_fingerprint, timeout=5):
-    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    with socket.create_connection((host, port), timeout) as raw, ctx.wrap_socket(raw, server_hostname=host) as tls:
-        der = tls.getpeercert(binary_form=True)
-        from bambu_cli.tlspin import verify_cert_fingerprint
-
-        verify_cert_fingerprint(der, expected_fingerprint)
-        assert der is not None  # verify_cert_fingerprint raises on a missing cert
-        pem = "-----BEGIN CERTIFICATE-----\n"
-        b64 = base64.b64encode(der).decode("ascii")
-        for i in range(0, len(b64), 64):
-            pem += b64[i : i + 64] + "\n"
-        pem += "-----END CERTIFICATE-----\n"
-        return pem
 
 
 def _printer_error_hex(code: object) -> Optional[str]:

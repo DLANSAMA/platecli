@@ -5,10 +5,9 @@ whether machine-readable output was requested, and scrub credentials from URLs
 before they reach a log line or a JSON envelope, without importing from the CLI
 entrypoint. These helpers never terminate the process.
 
-Note: ``bambu_cli.utils`` carries its own credential-redaction pass applied
-uniformly across every emitted JSON payload; the ``redact_url_credentials``
-here is the eager, single-value variant callers use when building the strings
-that go into those payloads and log messages.
+This is the single redactor: command code calls it when building log lines
+and payload fields, and ``bambu_cli.utils.emit_json`` runs the same function
+over every emitted string.
 """
 
 from urllib.parse import urlparse, urlunparse

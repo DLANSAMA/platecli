@@ -480,11 +480,9 @@ def load_username():
 def _expected_fingerprint():
     """Return the normalized (lowercase, separator-free) pinned SHA-256, or None."""
     from bambu_cli.context import current_config
+    from bambu_cli.tlspin import normalize_fingerprint
 
-    fp = current_config().get("cert_fingerprint")
-    if not fp:
-        return None
-    return fp.lower().replace(":", "").replace(" ", "")
+    return normalize_fingerprint(current_config().get("cert_fingerprint"))
 
 
 def fingerprint_sha256(der_cert):

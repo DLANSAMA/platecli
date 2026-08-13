@@ -1,13 +1,10 @@
 """Behavior tests salvaged from former coverage-padding modules.
 
-These assert observable outcomes for netsafety handlers, MQTT cert PEM,
-and preflight edge cases.
+These assert observable outcomes for netsafety handlers and preflight edge cases.
 """
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import urllib.request
 from unittest.mock import MagicMock, patch
 
@@ -90,28 +87,6 @@ def test_require_mqtt_import_error_aborts():
             assert ei.value.exit_code != 0
     finally:
         mqtt_mod.mqtt = prev
-
-
-def test_get_and_verify_cert_pem_success():
-    der = b"cert-bytes-for-pin"
-    expected = hashlib.sha256(der).hexdigest()
-    raw = MagicMock()
-    tls = MagicMock()
-    tls.getpeercert.return_value = der
-    tls.__enter__ = lambda s: tls
-    tls.__exit__ = lambda *a: False
-    raw_cm = MagicMock()
-    raw_cm.__enter__ = lambda s: raw
-    raw_cm.__exit__ = lambda *a: False
-    ctx = MagicMock()
-    ctx.wrap_socket.return_value = tls
-    with (
-        patch("bambu_cli.protocols.mqtt.socket.create_connection", return_value=raw_cm),
-        patch("ssl.SSLContext", return_value=ctx),
-    ):
-        pem = mqtt_mod._get_and_verify_cert_pem("host", 990, expected, timeout=1)
-    assert "BEGIN CERTIFICATE" in pem
-    assert base64.b64encode(der).decode("ascii")[:20] in pem.replace("\n", "")
 
 
 def test_preflight_permission_win32_skips(monkeypatch):

@@ -60,26 +60,10 @@ _LAST_DOWNLOAD_PAYLOAD = None
 
 
 def _redact_url_credentials(url):
-    # Performance optimization: Fast-path for non-strings and strings that clearly
-    # cannot contain credentials (missing '@'). This avoids the overhead of
-    # lazy importing urllib and running the relatively expensive urlparse
-    # on every string value in large JSON responses.
-    if not isinstance(url, str) or "@" not in url:
-        return url
+    """Strip URL userinfo. Delegates to ``jsonio.redact_url_credentials``."""
+    from bambu_cli.jsonio import redact_url_credentials
 
-    from urllib.parse import urlparse, urlunparse
-
-    try:
-        parsed = urlparse(url)
-        if parsed.username or parsed.password:
-            netloc = f"***@{parsed.hostname}"
-            if parsed.port:
-                netloc += f":{parsed.port}"
-            parsed = parsed._replace(netloc=netloc)
-            return urlunparse(parsed)
-    except Exception:
-        pass
-    return url
+    return redact_url_credentials(url)
 
 
 _HOME_DIR = os.path.expanduser("~")

@@ -40,7 +40,7 @@ class TestBambuDoctor(unittest.TestCase):
 
     @patch("bambu_cli.commands.doctor.load_config")
     @patch("bambu_cli.protocols.mqtt.get_status")
-    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("sys.exit")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_ftps_fail(self, mock_logger, mock_exit, mock_get_ftp, mock_get_status, mock_load):
@@ -59,7 +59,7 @@ class TestBambuDoctor(unittest.TestCase):
         mock_logger.error.assert_any_call("   ❌ FTPS connection failed: FTPS Fail")
 
     @patch("bambu_cli.protocols.mqtt.get_status")
-    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     @patch("builtins.open")
     def test_cmd_doctor_success(self, mock_file_open, mock_logger, mock_get_ftp, mock_get_status):
@@ -93,14 +93,16 @@ class TestBambuDoctor(unittest.TestCase):
             and call[0][1] == "w"
             for call in mock_file_open.call_args_list
         )
-        self.assertTrue(any_caps_open, "Expected a randomly generated printer_capabilities_*.json to be opened for writing")
+        self.assertTrue(
+            any_caps_open, "Expected a randomly generated printer_capabilities_*.json to be opened for writing"
+        )
 
     @patch("bambu_cli.protocols.mqtt.get_status")
-    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     @patch("builtins.open")
     def test_cmd_doctor_honours_network_timeout(self, mock_file_open, mock_logger, mock_get_ftp, mock_get_status):
-        """--network-timeout is forwarded to printer.status() and get_ftp()."""
+        """--network-timeout is forwarded to printer.status() and get_ftp_client()."""
         from bambu_cli.commands import cmd_doctor
         import io
 
@@ -126,6 +128,8 @@ class TestBambuDoctor(unittest.TestCase):
         call_kwargs = mock_get_status.call_args
         self.assertEqual(call_kwargs.kwargs.get("timeout") or call_kwargs[1].get("timeout"), 3.0)
         self.assertEqual(call_kwargs.kwargs.get("retries", call_kwargs[1].get("retries")), 0)
+        ftp_kwargs = mock_get_ftp.call_args
+        self.assertEqual(ftp_kwargs.kwargs.get("timeout") or ftp_kwargs[1].get("timeout"), 3.0)
 
 
 class TestOfferPinFingerprint(unittest.TestCase):
@@ -253,37 +257,26 @@ class TestBambuSimulation(unittest.TestCase):
         args.dry_run = False
         args.sim = True
 
-        from bambu_cli.protocols.ftps import connection_manager
-
-        connection_manager.clear()
-
         with settings_ctx(simulation=True):
+            # Use a real file (not mock_open) so _SimFtp's fp.tell()/seek()-based
+            # size bookkeeping — and upload_file's post-transfer size
+            # verification against it — reflect actual byte counts.
+            local_path = os.path.join(os.getcwd(), "test.3mf")
+            with open(local_path, "wb") as f:
+                f.write(b"x" * 1024)
             try:
-                # Use a real file (not mock_open) so _SimFtp's fp.tell()/seek()-based
-                # size bookkeeping — and upload_file's post-transfer size
-                # verification against it — reflect actual byte counts.
-                local_path = os.path.join(os.getcwd(), "test.3mf")
-                with open(local_path, "wb") as f:
-                    f.write(b"x" * 1024)
-                try:
-                    cmd_upload(args)
-                finally:
-                    os.unlink(local_path)
-
-                self.assertTrue(
-                    any(
-                        "Connecting to simulated FTPS server" in call[0][0]
-                        for call in mock_ftps_logger.info.call_args_list
-                    )
-                )
-                self.assertTrue(
-                    any(
-                        "Uploaded test.3mf to printer" in call[0][0]
-                        for call in mock_commands_logger.info.call_args_list
-                    )
-                )
+                cmd_upload(args)
             finally:
-                connection_manager.clear()
+                os.unlink(local_path)
+
+            self.assertTrue(
+                any(
+                    "Connecting to simulated FTPS server" in call[0][0] for call in mock_ftps_logger.info.call_args_list
+                )
+            )
+            self.assertTrue(
+                any("Uploaded test.3mf to printer" in call[0][0] for call in mock_commands_logger.info.call_args_list)
+            )
 
 
 class TestBambuSecurity(unittest.TestCase):
@@ -371,7 +364,7 @@ class TestDoctorRedaction(unittest.TestCase):
 
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)
     @patch("bambu_cli.protocols.mqtt.get_status")
-    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_human_output_redacts_printer_ip_by_default(
         self, mock_logger, mock_get_ftp, mock_get_status, mock_probe
@@ -399,7 +392,7 @@ class TestDoctorRedaction(unittest.TestCase):
 
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)
     @patch("bambu_cli.protocols.mqtt.get_status")
-    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_human_output_shows_printer_ip_with_verbose(
         self, mock_logger, mock_get_ftp, mock_get_status, mock_probe
@@ -431,7 +424,7 @@ class TestDoctorRedaction(unittest.TestCase):
     @patch("bambu_cli.commands.doctor._expected_fingerprint", return_value="ab" * 32)
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="ab" * 32)
     @patch("bambu_cli.protocols.mqtt.get_status")
-    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_hides_fingerprint_when_already_pinned(
         self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_expected
@@ -460,7 +453,7 @@ class TestDoctorRedaction(unittest.TestCase):
     @patch("bambu_cli.commands.doctor._expected_fingerprint", return_value=None)
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="cd" * 32)
     @patch("bambu_cli.protocols.mqtt.get_status")
-    @patch("bambu_cli.protocols.ftps.get_ftp")
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_shows_fingerprint_when_not_pinned(
         self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_expected, mock_offer

@@ -56,6 +56,19 @@ def test_redact_preserves_existing_schemeless_and_full_url_behavior():
     assert redact_url_credentials("no-at-sign") == "no-at-sign"
 
 
+def test_emit_json_uses_jsonio_redactor(capsys):
+    """emit_json must strip userinfo, not the weaker ***@ placeholder."""
+    from bambu_cli import utils
+
+    at = "@"
+    utils._JSON_EMITTED = False
+    utils.emit_json({"source": "https://user:pass" + at + "host.com/x.stl"})
+    payload = capsys.readouterr().out
+    assert "user:pass" not in payload
+    assert "***@" not in payload
+    assert "https://host.com/x.stl" in payload
+
+
 # ---------------------------------------------------------------------------
 # utils._display_path — home-prefix separator boundary
 # ---------------------------------------------------------------------------

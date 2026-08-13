@@ -122,7 +122,6 @@ try:
     from bambu_cli.cli import setup_logging
     from bambu_cli.commands import cmd_stop, cmd_light
     from bambu_cli.config import load_config
-    from bambu_cli.protocols.ftps import get_ftp
     from bambu_cli.protocols.mqtt import create_mqtt_client, execute_print_command
     import ssl
     import urllib.error
@@ -179,7 +178,6 @@ __all__ = [
         "mock_config_path",
         "bambu",
         "cmd_stop",
-        "get_ftp",
         "load_config",
         "create_mqtt_client",
         "cmd_light",
