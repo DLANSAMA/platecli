@@ -88,13 +88,6 @@ class PlateApp(App):
     def job_in_flight(self) -> bool:
         return self._job_in_flight
 
-    def action_quit(self) -> None:
-        """Quit, unless a job worker is mid-flight (then say so and stay)."""
-        if self._job_in_flight:
-            self.notify("Upload in progress — wait for it to finish.", severity="warning")
-            return
-        self.exit()
-
     def action_help(self) -> None:
         """Open the key reference (never stacks a second copy).
 
@@ -127,6 +120,24 @@ class PlateApp(App):
         if callable(refresh):
             refresh()
 
+    def on_unmount(self) -> None:
+        self.release_mqtt()
+
+    def release_mqtt(self) -> None:
+        """Tear down the dashboard MQTT session. Idempotent."""
+        provider = getattr(self._deps, "status_provider", None)
+        closer = getattr(provider, "close", None)
+        if callable(closer):
+            closer()
+
+    def action_quit(self) -> None:
+        """Quit, unless a job worker is mid-flight (then say so and stay)."""
+        if self._job_in_flight:
+            self.notify("Upload in progress — wait for it to finish.", severity="warning")
+            return
+        self.release_mqtt()
+        self.exit()
+
 
 def run_app(args: argparse.Namespace, deps: TuiDeps | None = None) -> None:
     """Construct and run the Textual app (blocks until the user quits).
@@ -135,4 +146,8 @@ def run_app(args: argparse.Namespace, deps: TuiDeps | None = None) -> None:
     actually launches the UI, and so tests can drive ``PlateApp`` directly via
     ``run_test()`` without going through this blocking call.
     """
-    PlateApp(args, deps).run()
+    app = PlateApp(args, deps)
+    try:
+        app.run()
+    finally:
+        app.release_mqtt()

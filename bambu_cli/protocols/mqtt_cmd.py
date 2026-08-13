@@ -59,6 +59,10 @@ def send_command(
         logger.info(f"🤖 [SIM] Sending command: {payload}")
         return True
 
+    session = getattr(printer, "_mqtt_session", None)
+    if session is not None:
+        return session.send_command(payload, timeout, retries)
+
     for attempt in range(retries + 1):
         client = _factory(printer)
         client.user_data_set({})
@@ -164,6 +168,10 @@ def get_status(printer, timeout=None, retries=2, *, require_complete=True):
             },
         }
 
+    session = getattr(printer, "_mqtt_session", None)
+    if session is not None:
+        return session.get_status(timeout, retries, require_complete=require_complete)
+
     merged: dict = {}
     merged_lock = threading.Lock()
     _factory = _client_factory(None)
@@ -264,6 +272,10 @@ def get_version(printer, timeout=5, retries=1):
     """Fetch printer module versions via the MQTT get_version command."""
     if printer.simulation_mode:
         return [{"name": "ota", "sw_ver": "01.00.00.00", "hw_ver": "P1P-SIM"}]
+
+    session = getattr(printer, "_mqtt_session", None)
+    if session is not None:
+        return session.get_version(timeout, retries)
 
     _factory = _client_factory(None)
     _sleep_fn = _sleep(None)

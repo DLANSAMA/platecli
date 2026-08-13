@@ -38,25 +38,43 @@ class StatusSnapshot:
 class StatusService:
     """Fetch a normalized status snapshot from the configured/simulated printer.
 
-    Wraps ``RuntimeContext.for_request(args).printer().status()`` and
-    ``parse_ams``. NEVER raises: any failure (MQTT error, timeout, missing
-    config) is captured into ``StatusSnapshot(ok=False, error=...)`` so the
-    dashboard renders an inline "printer unreachable" state instead of crashing.
+    Holds one ``RuntimeContext`` / printer for the TUI lifetime and calls
+    ``hold_mqtt()`` so dashboard and monitor refreshes reuse a single TLS
+    session. ``close()`` releases it.
+
+    NEVER raises: any failure (MQTT error, timeout, missing config) is
+    captured into ``StatusSnapshot(ok=False, error=...)`` so the dashboard
+    renders an inline "printer unreachable" state instead of crashing.
     """
+
+    def __init__(self, ctx: Any = None) -> None:
+        self._ctx = ctx
+        self._printer: Any = None
 
     def fetch(self, args: argparse.Namespace) -> StatusSnapshot:
         try:
             from bambu_cli.ams import parse_ams
             from bambu_cli.context import RuntimeContext
 
-            ctx = RuntimeContext.for_request(args)
-            data = ctx.printer().status()
+            if self._printer is None:
+                if self._ctx is None:
+                    self._ctx = RuntimeContext.for_request(args)
+                self._printer = self._ctx.printer()
+                self._printer.hold_mqtt()
+            data = self._printer.status()
             if not isinstance(data, dict) or not data:
                 return StatusSnapshot(ok=False, error="Printer returned no status.")
             ams = parse_ams(data)
             return StatusSnapshot(ok=True, raw=data, ams=ams)
         except Exception as exc:  # noqa: BLE001 -- see class docstring: never crash the UI
             return StatusSnapshot(ok=False, error=_short_error(exc))
+
+    def close(self) -> None:
+        """Drop the held MQTT session. Safe to call twice or before any fetch."""
+        printer = self._printer
+        self._printer = None
+        if printer is not None:
+            printer.release_mqtt()
 
 
 def _short_error(exc: Exception) -> str:
