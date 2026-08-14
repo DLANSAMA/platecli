@@ -2,9 +2,18 @@
 
 **Audience:** coding agents (Claude / Grok / etc.) executing work in this repo.  
 **Source:** 2026-07-31 deep read-only audit (parent session + 3× explore agents on Grok 4.5).  
-**Branch at audit:** `feat/tui` @ `0d63378` (12 commits ahead of `main`).  
-**Measured suite (Linux, that session):** `1314 passed`, `1 deselected` (live), **88.6%** branch coverage.  
-**Version:** `0.5.0.dev0` — pre-1.0 Beta.
+**Branch at audit:** `feat/tui` @ `0d63378` (12 commits ahead of `main`) — **since merged** (#97, #104).  
+**Measured suite at audit (Linux, that session):** `1314 passed`, `1 deselected` (live), **88.6%** branch coverage.  
+**Version at audit:** `0.5.0.dev0`.
+
+> **Every number and file path above is a 2026-07-31 snapshot, not current state.**
+> Current: **1499** non-live tests, **90.99%** Linux / **90.68%** Windows over **8368**
+> statements, CI floor **86**, version **0.5.0** (Beta), Python **3.10/3.12/3.14**
+> (3.9 dropped in #115). `protocols/mqtt.py` is no longer an ~885 LOC hotspot — it
+> was split into `mqtt_tls` / `mqtt_cmd` / `mqtt_print` / `mqtt_monitor` /
+> `mqtt_session` in #119. Camera code lives under `protocols/`, not
+> `bambu_cli/camera.py`. **See the re-verified status block below the residual
+> table before acting on any row.**
 
 > **Revision 2026-07-31 (cross-check pass).** A second independent audit re-verified this plan's premises and found the plan **missing a confirmed merge blocker** plus eight other findings; the new items are folded into the residual table and into **WS-B** below. S1/S2/S3 were re-verified in code and hold — **S2 is a genuine catch this plan surfaced that the other audit missed**. **Q2's diagnosis was wrong and is corrected below.** Post-fix suite is `1321 passed`, **88.58%**.
 
@@ -85,6 +94,40 @@ A green pytest alone is **not** evidence ruff/mypy/bandit passed.
 | A4 | `mqtt_port` is a dead setting that `doctor` **lies about**: 3 references (`context.py:94,141`, `doctor.py:142`), never in a connect — `mqtt.py:167` hard-codes 8883. Doctor prints the configured port while connecting elsewhere | Medium |
 | R2 | `privacy_smoke` is a crying-wolf gate: exit 1 locally on correctly-gitignored files (it walks the filesystem without consulting git), and on CI runners the account-name patterns resolve to the filtered generic `runner`, so its two best checks never build. Red locally, disarmed remotely | Medium |
 | R3 | `CLAUDE.md:16` prints `--cov-fail-under=81`; CI is **83** (`ci.yml:77`, `CONTRIBUTING.md:25`, `AGENTS.md:104`). An agent following CLAUDE.md runs a weaker gate than CI | Medium |
+
+### Status re-verified 2026-08-14 — read this before working any row above
+
+The table is the **2026-07-31 audit snapshot**, kept as the record. Each row below
+was re-checked against current `main` (`85c831e`); cited paths and line numbers are
+from that check, not from the audit.
+
+**Closed — do not re-open:**
+
+| ID | Evidence |
+|----|----------|
+| S1 | Camera is fail-closed/opt-in: a failed direct grab does not start the streamer without `camera_allow_streamer` / `--allow-camera-streamer`; pin mismatch or `ssl.SSLError` with a pin hard-aborts; `camera_direct_only` forbids it entirely |
+| S5 | `utils.py:63-67` is now a 4-line shim delegating to `jsonio.redact_url_credentials`. There is no longer a weaker second implementation — both spellings return `https://192.168.1.5/a.stl` for the audit's own `bob:secret123@…` repro |
+| A3 | `protocols/mqtt.py` split into five siblings (#119) |
+| A4 | `mqtt_port` is live, not dead: `context.py:89,137` → `printer.py:339` → `mqtt_tls.py:143` `_mqtt_port()` → `mqtt_tls.py:162` `client.connect(resolved_ip, _mqtt_port(printer), …)`. Doctor no longer lies |
+| Q1 | CI floor is **86** (#119) against ~91% measured |
+| T1 | Textual pin is `>=8.0,<9.0` (#115) — the `<2.0` cap is gone and the 8.x break is fixed |
+| B1 | Rich markup injection fixed before the TUI merged (#97) |
+| R1 / R3 | Media hygiene handled; `CLAUDE.md` cites floor 86 |
+
+**Still open — re-verified as real:**
+
+| ID | Evidence |
+|----|----------|
+| P1 | **Confirmed printer-safety bug.** `_numeric_values("400abc")` returns `[]` while `_numeric_values("400")` returns `[400.0]` (`slicer/options.py:162-175`), so a non-numeric nozzle/bed override contributes no values and temp validation passes vacuously where plain `400` correctly errors |
+| Q4 | **Partly closed, and less closed than #116's message implies.** The 81 `sys.modules.setdefault("paho…")` calls are gone (0 remain), but `tests/bambu_test_base.py:26-29` still *unconditionally* assigns `sys.modules["paho"|"paho.mqtt"|"paho.mqtt.client"] = MagicMock()` at import time and never restores them. Real paho is installed and importable. This is also an order-dependence hazard of exactly the kind `AGENTS.md` forbids |
+| Q5 | Both halves hold. `test_cmd_print_dry_run_success` (`tests/test_doctor_and_safety.py:198`) asserts `nlst` and `get_status` but never that the print publish did **not** happen; `test_cmd_stop_with_confirm` (`tests/test_cmd_device.py:107`) ends at `mock_send_command.assert_called_once()` with no payload check |
+| Q6 | `tests/contracts/test_schema_validation.py:~299` still hand-builds `{"status": "print_started", …}` and validates it against the schema — no `bambu_cli` code runs, so emitter and schema can still drift together |
+| A1 | Open, but the path moved: `interactive/core.py:558` and `interactive/presets.py:81` now import `build_parser` from `bambu_cli.cliparse` (not `bambu_cli.cli`). Domain→parser coupling remains |
+| A2 | `utils.py:58` `_JSON_EMITTED` (with `_LAST_ERROR_PAYLOAD` / `_LAST_DOWNLOAD_PAYLOAD`) are still process globals mutated via `global` at `utils.py:133-134` |
+| S3 | `commands/snapshot.py:399` is still an unbounded `resp.read()`. Severity is lower than the audit's Medium: the streamer path now requires explicit opt-in, so it is reachable only after the user enables it |
+| R2 | Still crying wolf — `uv run python tests/privacy_smoke.py` exits **1** on a clean checkout |
+| T2 / WS4 | Confirm-modal ergonomics and quit-during-prepare — unchanged |
+| W3.4 | Never implemented: `ci.yml` contains no grep asserting `confirm=True` under `bambu_cli/tui` is confined to `screens/confirm.py` |
 
 ---
 

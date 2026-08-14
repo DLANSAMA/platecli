@@ -7,11 +7,12 @@ built, documented in [the manual](../manual.md#full-screen-mode-plate-tui), and
 covered by pilot tests. What the plan describes as future work has either shipped
 or is recorded as an accepted quirk in the PR — read the manual and
 [quality-roadmap](../quality-roadmap.md) for current behaviour, not this file.
-**Branch:** all implementation work goes on **`feat/tui`** (branched from `main`).
-Each phase below is sized for one ~1–2 h autonomous session and MUST leave the
-repo green (every gate in §8 passing) so the session can commit safely.
-**Prerequisite reading:** `AGENTS.md`, `docs/plans/interactive-mode-plan.md`
-(house conventions, printer-safety rules), `docs/quality-roadmap.md`.
+*(Historical, as written:)* **Branch:** all implementation work goes on
+**`feat/tui`** (branched from `main`) — that branch merged via #97/#104 and no
+longer exists. Each phase below was sized for one ~1–2 h autonomous session and
+had to leave the repo green (every gate in §8 passing). **Prerequisite reading
+at the time:** `AGENTS.md`, `docs/plans/interactive-mode-plan.md` (house
+conventions, printer-safety rules), `docs/quality-roadmap.md`.
 
 ## 1. Goal
 
