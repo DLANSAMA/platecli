@@ -1,9 +1,11 @@
 # Gameplan: A+ across the board
 
 **Date:** 2026-08-13  
-**Baseline (this checkout, dirty tree, Linux py3.12):** 1459 passed / 1 live deselected, **89.4%** branch over 8413 statements. Current scoreboard: overall **A**, none below A−. Product **A−**. A+ is not earned.
+**Current measured (2026-08-14, post-#119/#120):** **1499** passed / 1 live deselected, **90.99%** branch on Linux (**90.68%** Windows — the binding leg, macOS passing) over **8368** statements, CI floor **86**. Scoreboard: overall **A**, none below A−. Product **A−**. **A+ is not earned.**
 
-**Progress 2026-08-13:** W1 moved coverage **89.4 → 91.0%** (1499 passed, 8368 stmts) via transport/session/camera/ftps tests + dead `abort` tails after `emit_json_error`. W2/W3 landed (residual acceptance, facade freeze, scoreboard refresh). **Did not raise the CI floor** (91.0 < 92.5 margin). **Not A+ across the board.** Remaining: 91.0→92, floor 92, `mypy --strict`, `v1.0.0` tag.
+*Historical baseline (2026-08-13, dirty tree, Linux py3.12): 1459 passed, 89.4% over 8413 statements — superseded by the line above; kept because the W1 sizing below was computed from it.*
+
+**Progress 2026-08-13:** W1 moved coverage **89.4 → 90.99%** (1499 passed, 8368 stmts) via transport/session/camera/ftps tests + dead `abort` tails after `emit_json_error`. W2/W3 landed (residual acceptance, facade freeze, scoreboard refresh). **Did not raise the CI floor** (90.99 < the 92.5 margin W4 requires). **Not A+ across the board.** Remaining: 90.99→92.5, floor 86→92, `mypy --strict`, `v1.0.0` tag.
 
 This is an execution plan, not another audit. Truth sources stay [quality-roadmap.md](../quality-roadmap.md) §2 / §3.1 / §5 and [test-backlog.md](../test-backlog.md).
 
@@ -29,7 +31,7 @@ A+ across the board means **all three** of:
 | Error model | A | **A+** | Already entry-only `sys.exit`. |
 | Tests | A | **A+** | **92%** total on Linux. Per-module A+ floors only for §5's four. |
 | CI / release | A | **A+** | Raise `--cov-fail-under` to **92** only if Linux ≥ **92.5%** (Windows last trailed ~0.3 pt). |
-| Docs | A | **A+** | Refresh 1448/88.9%/8419; fix stale camera-TCP sentence; accept residuals. |
+| Docs | A | **A+** | Number refresh **done** (#120: 1499/90.99%/8368) and camera/`--confirm`/doctor accuracy **done** (#121/#122). Remaining: field-level `api.md` sync. |
 | Product | A− | **A−** until tag | Classifier + changelog can be prepared. **Do not tag `v1.0.0` without an explicit user “tag it”.** |
 
 **Consequence:** this session can make every *unblocked* row A+ and leave Typing A + Product A−. That is **not** “A+ across the board.” Do not write that phrase into the scoreboard until the tag exists and Typing is either strict or the A+ definition is deliberately changed in a separate, reviewed docs PR.
@@ -38,7 +40,7 @@ A+ across the board means **all three** of:
 
 ### W1 — Coverage to ≥92.5% Linux (Tests A+)
 
-Need ~280 extra statement/branch hits vs 89.4%. Hit the fattest *decision* holes first; do not pragma I/O loops just to move the number.
+Sized when coverage was 89.4%; **as of 2026-08-14 Linux is 90.99%**, so the remaining gap to 92.5% is roughly **~125** statement/branch hits, not the ~280 originally scoped. The per-module misses below are pre-W1 and were not re-measured — re-run `--cov-report=term-missing` before picking targets. Hit the fattest *decision* holes first; do not pragma I/O loops just to move the number.
 
 | Priority | Module | Last miss | Approach |
 |----------|--------|-----------|----------|
@@ -54,8 +56,8 @@ After W1: remeasure with `pytest -m "not live" --cov=bambu_cli`. Do not raise th
 
 ### W2 — Docs truth + residual acceptance (Docs A+, Security A+)
 
-- Scoreboard / backlog: **1459** passing, **89.4%→measured**, **8413** stmts, **27** schemas, floor still 86 until W4.
-- Delete the stale “TCP failure on 6000 still falls back to the streamer” sentence.
+- Scoreboard / backlog: **done** in #120 — **1499** passing, **90.99%** Linux / **90.68%** Windows, **8368** stmts, floor still 86 until W4. (Schema count **27** was never re-verified; confirm before quoting.)
+- Delete the stale “TCP failure on 6000 still falls back to the streamer” sentence. **Done** in #121/#122.
 - SECURITY.md: mark camera streamer / `insecure_tls` / leftover container / HTTP integrity / TOFU / Windows ACLs as **accepted 1.0 residuals** (not open P0s). That is what “close or explicitly accept” means.
 
 ### W3 — Architecture cheap A+

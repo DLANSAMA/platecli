@@ -72,8 +72,14 @@ Focused tests (also listed in `[tool.mutmut].pytest_add_cli_args_test_selection`
 | Timeout | 3 |
 | **Score** | **1061 / 2091 = 50.7%** |
 
-Per-module, derived from the mutant sources and survivor list (these reconcile
-to the 50.7% total, so they are measured rather than estimated):
+Per-module, derived from the mutant sources and survivor list. **These rows do
+not reconcile to the headline totals and should not be read as if they do:** the
+seven rows below are the whole `only_mutate` scope, yet they sum to **2010**
+mutants (990 survived + 1020 killed) against a headline of **2091** (1027 + 1061
++ 3 timeouts). **81 mutants — 37 survived, 41 killed, 3 timeout — are
+unattributed.** Per-module scores are therefore measured but incomplete; the
+headline 50.7% is the number to quote. Re-derive the split before using any row
+as a target.
 
 | Module | Total | Survived | Killed | Score | vs 2026-07-09 |
 |--------|------:|---------:|-------:|------:|--------------:|
@@ -125,7 +131,7 @@ Enforced by `./scripts/run_mutation_baseline.sh` after `mutmut export-cicd-stats
 Categories (not an exhaustive dump of the 1027 survivors):
 
 1. **Equivalent / cosmetic** — error-message string literals, log format, `getattr` default when tests always set the attribute, `ZipFile(..., "r")` vs default mode.
-2. **`_finalize_slice` (output.py)** — subprocess exit interpretation, JSON emit, path display. **Addressed (C.4):** `tests/fakes/orca_stub` + `tests/test_slice_stub_integration.py` now run these branches against a real fake-slicer subprocess. Residual survivors here should be cosmetic (log strings / path display); re-measure before treating any as "accepted".
+2. **`_finalize_slice` (output.py)** — subprocess exit interpretation, JSON emit, path display. **Addressed (C.4), but the prediction failed:** `tests/fakes/orca_stub` + `tests/test_slice_stub_integration.py` run these branches against a real fake-slicer subprocess, and the re-run still scored **21.8%** — **269 survivors, the single largest pocket (26% of all survivors)**. They are *not* cosmetic: the bulk are unconstrained `_finalize_slice` exit-code interpretation, JSON emit, and path display (see the C.4 correction above). Extract those decisions into assertable units or stop counting the module — do not treat these as accepted.
 3. **DNS cache / hop bookkeeping (netsafety)** — TTL, cache size clear, attribute names on redirect requests. Core `is_global` refuse path is well killed.
 4. **URL normalize / Content-Disposition edges (validation/naming)** — ambiguous scheme-less inputs and RFC2231 header tuples; behavior partially covered; full combinatorial matrix deferred.
 5. **Dry-run prediction (predict.py)** — Printables/archive/extension branches that return `None` early; many mutants are observationally equivalent under the focused suite.
@@ -154,4 +160,4 @@ Artifacts (`mutants/`, `.mutmut-cache`, `.hypothesis/`) are gitignored.
 
 - mutmut 3.x needs Python ≥ 3.10 (CI mutation job uses 3.12).
 - Hypothesis property tests live in `tests/test_properties_safety.py` and are part of the focused mutmut suite.
-- Raising the score further: the hermetic `_finalize_slice` tests now exist (C.4, `tests/test_slice_stub_integration.py`); re-run `mutmut` on `slicer/output.py` and update the per-module row. Optionally still move pure 3mf validation to a tiny module so mutmut does not spend budget on I/O.
+- Raising the score further: the `slicer/output.py` re-run is **done** (2026-08-04, 21.8% — the row above is current); adding hermetic tests moved line coverage but not the mutation score, so the next lever is extracting `_finalize_slice`'s decisions into assertable units, or dropping the module from `only_mutate` rather than carrying a 21.8% row. Separately, attribute the 81 unaccounted mutants (see §Measured 2026-08-04) before trusting per-module targets. Optionally still move pure 3mf validation to a tiny module so mutmut does not spend budget on I/O.
