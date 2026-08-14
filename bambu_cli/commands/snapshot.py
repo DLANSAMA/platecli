@@ -223,8 +223,6 @@ def cmd_snapshot(
     if outpath.startswith("-"):
         message = f"Invalid output path: {_path_for_message(outpath)}"
         emit_json_error(args, "snapshot", EXIT_FILE_ERROR, message, failed_step="validate", output=outpath)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_FILE_ERROR)
     try:
         _ensure_parent_dir(outpath)
     except BambuError as e:
@@ -246,8 +244,6 @@ def cmd_snapshot(
     except _CameraPinMismatch as _exc:
         message = f"Camera TLS certificate does not match pinned fingerprint: {_exc}"
         emit_json_error(args, "snapshot", EXIT_NETWORK_ERROR, message, failed_step="grab", output=outpath)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_NETWORK_ERROR)
     except ssl.SSLError as _exc:
         if not printer.insecure_tls and printer.cert_fingerprint:
             message = (
@@ -255,8 +251,6 @@ def cmd_snapshot(
                 f"(refusing to fall back to the unverified Docker streamer): {_exc}"
             )
             emit_json_error(args, "snapshot", EXIT_NETWORK_ERROR, message, failed_step="grab", output=outpath)
-            safe_log_error(message)
-            abort("", exit_code=EXIT_NETWORK_ERROR)
         _frame = None
         _fallback_reason = str(_exc)
         logger.debug(f"Direct camera grab unavailable ({_exc}).")
@@ -273,8 +267,6 @@ def cmd_snapshot(
         except OSError as _exc:
             message = f"Could not write snapshot: {_path_for_message(outpath)}: {_exception_for_message(_exc)}"
             emit_json_error(args, "snapshot", EXIT_FILE_ERROR, message, failed_step="capture", output=outpath)
-            safe_log_error(message)
-            abort("", exit_code=EXIT_FILE_ERROR)
         captured_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         sha256 = hashlib.sha256(_frame).hexdigest()
         logger.info(f"\U0001f4f8 Snapshot saved: {_path_for_message(outpath)} ({size // 1024}KB)")
@@ -297,8 +289,6 @@ def cmd_snapshot(
     if not streamer_is_allowed(ctx.settings, args):
         message = _streamer_refused_message(ctx.settings, _fallback_reason)
         emit_json_error(args, "snapshot", EXIT_NETWORK_ERROR, message, failed_step="grab", output=outpath)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_NETWORK_ERROR)
 
     streamer_url = ctx.settings.camera_stream_url
     camera_image = ctx.settings.camera_image
@@ -308,8 +298,6 @@ def cmd_snapshot(
     if not _which("docker"):
         message = "Docker not found in PATH. Install Docker Desktop (Windows/macOS) or docker-ce (Linux) and retry."
         emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="docker", output=outpath)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_CONFIG_ERROR)
 
     camera_port = ctx.settings.camera_port
     if not _camera_port_is_valid(camera_port):
@@ -318,8 +306,6 @@ def cmd_snapshot(
             "[HOST:]HOSTPORT:CONTAINERPORT (e.g. 127.0.0.1:1985:1984)."
         )
         emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="docker", output=outpath)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_CONFIG_ERROR)
     config_exposed = not _bind_is_loopback(_camera_bind_host(camera_port))
     if config_exposed:
         logger.warning(
@@ -338,8 +324,6 @@ def cmd_snapshot(
     except (FileNotFoundError, subprocess.SubprocessError) as e:
         message = f"Docker not reachable (is the daemon running?): {e}"
         emit_json_error(args, "snapshot", EXIT_CONFIG_ERROR, message, failed_step="docker", output=outpath)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_CONFIG_ERROR)
     if check.returncode != 0 or "true" not in check.stdout:
         logger.info("🔄 Starting camera streamer...")
         access_code = _load_code()
@@ -376,8 +360,6 @@ def cmd_snapshot(
                 output=outpath,
                 camera_image=camera_image,
             )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_CONFIG_ERROR)
         if run.returncode != 0:
             detail = run.stderr or run.stdout or "unknown Docker error"
             if isinstance(detail, bytes):
@@ -387,6 +369,7 @@ def cmd_snapshot(
             if ctx.settings.printer_ip:
                 detail = detail.replace(ctx.settings.printer_ip, "<redacted>")
             message = f"Could not start camera streamer Docker container using image {camera_image}: {detail.strip()}"
+            logger.info("   Build the BambuP1Streamer image locally or set `camera_image` in config.json.")
             emit_json_error(
                 args,
                 "snapshot",
@@ -396,9 +379,6 @@ def cmd_snapshot(
                 output=outpath,
                 camera_image=camera_image,
             )
-            safe_log_error(message)
-            logger.info("   Build the BambuP1Streamer image locally or set `camera_image` in config.json.")
-            abort("", exit_code=EXIT_CONFIG_ERROR)
 
         req = urllib.request.Request(streamer_url, headers={"User-Agent": "Mozilla/5.0"})
         for _ in range(30):
@@ -439,6 +419,7 @@ def cmd_snapshot(
             )
     except urllib.error.URLError as e:
         message = f"Snapshot network error: {e}"
+        logger.info(f"   Make sure the {camera_image} Docker container is running and reachable.")
         emit_json_error(
             args,
             "snapshot",
@@ -448,16 +429,11 @@ def cmd_snapshot(
             output=outpath,
             camera_image=camera_image,
         )
-        safe_log_error(message)
-        logger.info(f"   Make sure the {camera_image} Docker container is running and reachable.")
-        abort("", exit_code=EXIT_NETWORK_ERROR)
     except OSError as e:
         message = f"Snapshot file error: {_exception_for_message(e)}"
         emit_json_error(
             args, "snapshot", EXIT_FILE_ERROR, message, failed_step="capture", output=outpath, camera_image=camera_image
         )
-        safe_log_error(message)
-        abort("", exit_code=EXIT_FILE_ERROR)
     except BambuError:
         raise
     except Exception as e:
@@ -471,5 +447,3 @@ def cmd_snapshot(
             output=outpath,
             camera_image=camera_image,
         )
-        safe_log_error(message)
-        abort("", exit_code=EXIT_COMMAND_ERROR)

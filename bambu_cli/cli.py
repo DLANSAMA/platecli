@@ -2,6 +2,7 @@ import logging
 import socket
 import sys
 
+import bambu_cli.printer as _printer  # noqa: F401 — registers the RuntimeContext printer factory
 import bambu_cli.utils as utils
 from bambu_cli.errors import BambuError
 

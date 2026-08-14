@@ -1,5 +1,6 @@
 import json
 import os
+from typing import NoReturn
 
 from bambu_cli.errors import abort
 
@@ -175,7 +176,7 @@ def write_error_envelope(args, command, exit_code, error, failed_step=None, **ex
     emit_json(payload)
 
 
-def emit_json_error(args, command, exit_code, error, failed_step=None, **extra):
+def emit_json_error(args, command, exit_code, error, failed_step=None, **extra) -> NoReturn:
     """Domain failure: log, record extras, then raise. ``cli.main`` emits JSON.
 
     Kept as a thin wrapper so remaining call sites become a single raise

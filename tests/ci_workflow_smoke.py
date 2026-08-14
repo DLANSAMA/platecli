@@ -25,7 +25,7 @@ REQUIRED_SNIPPETS = {
     "windows runner": "windows-latest",
     "oldest supported python": '"3.10"',
     "current smoke python": '"3.14"',
-    "unit tests": 'python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=83',
+    "unit tests": 'python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=86',
     "syntax smoke auto-discovery": "python scripts/syntax_smoke.py",
     "cli help smoke auto-discovery": "python scripts/cli_help_smoke.py",
     "release readiness smoke": "python tests/release_readiness_smoke.py",

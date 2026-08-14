@@ -158,7 +158,14 @@ def _create_raw_ftp(printer, timeout=60):
     resolved_ip = _resolve_ip(printer.ip)  # pragma: no cover -- live FTPS connect
     ftp = ImplicitFTPS()
     ftp.printer = printer
-    ftp.connect(resolved_ip, 990, timeout=timeout)
-    ftp.login("bblp", printer.access_code)
-    ftp.prot_p()
+    try:
+        ftp.connect(resolved_ip, 990, timeout=timeout)
+        ftp.login("bblp", printer.access_code)
+        ftp.prot_p()
+    except Exception:
+        try:
+            ftp.close()
+        except Exception:
+            pass
+        raise
     return ftp

@@ -173,14 +173,18 @@ class MqttSession:
         self._publish_event.set()
 
     def _issue_pending(self) -> None:
-        if not self._live or self._pending_payload is None or self._command_issued:
-            return
-        if self._client is None:
-            return
-        self._command_issued = True
-        self._client.publish(
+        """Publish a queued command once. Called from the paho network thread."""
+        with self._state_lock:
+            if not self._live or self._pending_payload is None or self._command_issued:
+                return
+            client = self._client
+            payload = self._pending_payload
+            if client is None:
+                return
+            self._command_issued = True
+        client.publish(
             f"device/{self._printer.serial}/request",
-            self._pending_payload,
+            payload,
             qos=1,
         )
 
@@ -200,6 +204,15 @@ class MqttSession:
     def _snapshot(self) -> dict[str, Any]:
         with self._state_lock:
             return dict(self._print_state)
+
+    def _ready_snapshot(self, require_complete: bool) -> dict[str, Any] | None:
+        """Return merged state when it already satisfies the caller's contract."""
+        snapshot = self._snapshot()
+        if not snapshot:
+            return None
+        if require_complete and not status_is_complete(snapshot):
+            return None
+        return snapshot
 
     def ensure_connected(self, timeout: float) -> bool:
         """Connect (or reconnect after a drop). Returns False on broker rc != 0."""
@@ -236,12 +249,19 @@ class MqttSession:
                 try:
                     if not self.ensure_connected(timeout):
                         return None
+                    # Background reports may already have assembled a usable
+                    # snapshot. Request a refresh, but do not block or raise
+                    # if the printer stays silent on this pushall.
+                    ready = self._ready_snapshot(require_complete)
+                    if ready is not None:
+                        self._publish_pushall()
+                        return ready
                     event = self._arm_status_wait(require_complete)
                     self._publish_pushall()
                     if event.wait(timeout):
-                        snapshot = self._snapshot()
-                        if snapshot and (not require_complete or status_is_complete(snapshot)):
-                            return snapshot
+                        ready = self._ready_snapshot(require_complete)
+                        if ready is not None:
+                            return ready
                     if attempt < retries:
                         with self._state_lock:
                             saw_partial = bool(self._print_state)
@@ -261,6 +281,8 @@ class MqttSession:
                     else:
                         logger.error(f"MQTT status error: {exc}")
             partial = self._snapshot()
+            if status_is_complete(partial):
+                return partial
             if partial and require_complete:
                 missing = [key for key in _REQUIRED_STATUS_KEYS if key not in partial]
                 raise PrinterStatusIncomplete(
@@ -268,25 +290,29 @@ class MqttSession:
                     f"(missing {', '.join(missing)}). It may be busy mid-print; retry the command.",
                     detail={"missing_keys": missing, "received_keys": sorted(partial)},
                     next_command="plate status",
+                    failed_step="status",
                 )
-            return None
+            return self._ready_snapshot(require_complete)
 
     def send_command(self, payload: str, timeout: float, retries: int = 2) -> bool:
         sleeper = _sleep_fn(self._sleep)
         with self._op_lock:
             for attempt in range(retries + 1):
                 try:
-                    self._pending_payload = payload
-                    self._command_issued = False
+                    with self._state_lock:
+                        self._pending_payload = payload
+                        self._command_issued = False
                     self._publish_ok = False
                     self._publish_event = threading.Event()
                     if not self.ensure_connected(timeout):
-                        self._pending_payload = None
+                        with self._state_lock:
+                            self._pending_payload = None
                         return False
                     self._issue_pending()
                     if self._publish_event.wait(timeout):
                         ok = self._publish_ok
-                        self._pending_payload = None
+                        with self._state_lock:
+                            self._pending_payload = None
                         return ok
                     if attempt < retries:
                         logger.warning(f"MQTT command timeout on attempt {attempt + 1}. Retrying...")
@@ -298,7 +324,8 @@ class MqttSession:
                         sleeper(2**attempt)
                     else:
                         logger.error(f"MQTT command error: {exc}")
-            self._pending_payload = None
+            with self._state_lock:
+                self._pending_payload = None
             return False
 
     def get_version(self, timeout: float, retries: int = 1) -> Any:

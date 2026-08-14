@@ -36,6 +36,18 @@ def _sleep(sleep):
     return mqtt_mod.time.sleep
 
 
+def _teardown_mqtt_client(client):
+    """Stop the paho loop and drop the socket. Safe if connect/loop never started."""
+    try:
+        client.loop_stop()
+    except Exception:
+        pass
+    try:
+        client.disconnect()
+    except Exception:
+        pass
+
+
 def send_command(
     printer,
     payload,
@@ -89,19 +101,8 @@ def send_command(
         try:
             _connect(printer, client)
             client.loop_start()
-            try:
-                if publish_done.wait(timeout):
-                    return success[0]
-            finally:
-                try:
-                    client.loop_stop()
-                except Exception:
-                    pass
-                try:
-                    client.disconnect()
-                except Exception:
-                    pass
-
+            if publish_done.wait(timeout):
+                return success[0]
             if attempt < retries:
                 logger.warning(f"MQTT command timeout on attempt {attempt + 1}. Retrying...")
                 _sleep_fn(2**attempt)
@@ -111,6 +112,8 @@ def send_command(
                 _sleep_fn(2**attempt)
             else:
                 logger.error(f"MQTT command error: {e}")
+        finally:
+            _teardown_mqtt_client(client)
 
     return False
 
@@ -221,23 +224,13 @@ def get_status(printer, timeout=None, retries=2, *, require_complete=True):
         try:
             _connect(printer, client)
             client.loop_start()
-            try:
-                if status_received.wait(timeout):
-                    if connect_failed[0]:
-                        return None
-                    with merged_lock:
-                        snapshot = dict(merged)
-                    if snapshot:
-                        return snapshot
-            finally:
-                try:
-                    client.loop_stop()
-                except Exception:
-                    pass
-                try:
-                    client.disconnect()
-                except Exception:
-                    pass
+            if status_received.wait(timeout):
+                if connect_failed[0]:
+                    return None
+                with merged_lock:
+                    snapshot = dict(merged)
+                if snapshot:
+                    return snapshot
             if attempt < retries:
                 with merged_lock:
                     saw_partial = bool(merged)
@@ -254,10 +247,12 @@ def get_status(printer, timeout=None, retries=2, *, require_complete=True):
                 _sleep_fn(2**attempt)
             else:
                 logger.error(f"MQTT status error: {e}")
+        finally:
+            _teardown_mqtt_client(client)
 
     with merged_lock:
         partial = dict(merged)
-    if partial and require_complete:
+    if partial and require_complete and not status_is_complete(partial):
         missing = [key for key in _REQUIRED_STATUS_KEYS if key not in partial]
         raise PrinterStatusIncomplete(
             "Printer returned only partial status updates, never a full snapshot "
@@ -265,6 +260,8 @@ def get_status(printer, timeout=None, retries=2, *, require_complete=True):
             detail={"missing_keys": missing, "received_keys": sorted(partial)},
             next_command="plate status",
         )
+    if partial and (not require_complete or status_is_complete(partial)):
+        return partial
     return None
 
 
@@ -313,22 +310,14 @@ def get_version(printer, timeout=5, retries=1):
         try:
             _connect(printer, client)
             client.loop_start()
-            try:
-                if received.wait(timeout):
-                    return result["modules"]
-            finally:
-                try:
-                    client.loop_stop()
-                except Exception:
-                    pass
-                try:
-                    client.disconnect()
-                except Exception:
-                    pass
+            if received.wait(timeout):
+                return result["modules"]
             if attempt < retries:
                 _sleep_fn(2**attempt)
         except (OSError, ssl.SSLError):
             if attempt < retries:
                 _sleep_fn(2**attempt)
+        finally:
+            _teardown_mqtt_client(client)
 
     return None

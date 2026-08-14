@@ -11,8 +11,8 @@ from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.config import MODEL_MAPPING, get_slicer_timeout
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_TIMEOUT
 from bambu_cli.context import current_settings
-from bambu_cli.errors import BambuError, abort
-from bambu_cli.logging_utils import logger, safe_log_error
+from bambu_cli.errors import BambuError
+from bambu_cli.logging_utils import logger
 from bambu_cli.paths import display_path as _display_path
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
@@ -97,31 +97,21 @@ def cmd_slice(
         # agent contract identical to argparse's own missing-required-arg error.
         message = "the following arguments are required: file"
         emit_json_error(args, "slice", EXIT_COMMAND_ERROR, message, failed_step="parse")
-        safe_log_error(message)
-        abort("", exit_code=EXIT_COMMAND_ERROR)
     filepath = _expand_path(args.file)
     source_filepath = filepath
     if filepath.startswith("-"):
         message = f"Invalid filepath: {_path_for_message(filepath)}"
         emit_json_error(args, "slice", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_FILE_ERROR)
     if not os.path.exists(filepath):
         message = f"File not found: {_path_for_message(filepath)}"
         emit_json_error(args, "slice", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_FILE_ERROR)
     if _is_directory_input(filepath):
         message = _directory_input_message(filepath)
         emit_json_error(args, "slice", EXIT_FILE_ERROR, message, failed_step="validate", file=filepath)
-        safe_log_error(message)
-        abort("", exit_code=EXIT_FILE_ERROR)
 
     slice_option_error = _validate_slice_options(args)
     if slice_option_error:
         emit_json_error(args, "slice", EXIT_COMMAND_ERROR, slice_option_error, failed_step="validate", file=filepath)
-        safe_log_error(slice_option_error)
-        abort("", exit_code=EXIT_COMMAND_ERROR)
     copies = getattr(args, "copies", 1)
 
     step_converted = False
@@ -143,7 +133,6 @@ def cmd_slice(
                     failed_step="convert",
                     file=filepath,
                 )
-                abort("", exit_code=EXIT_COMMAND_ERROR)
             filepath = new_filepath
             step_converted = True
 
@@ -181,8 +170,6 @@ def cmd_slice(
             emit_json_error(
                 args, "slice", EXIT_COMMAND_ERROR, message, failed_step="validate", file=filepath, output=outdir
             )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_COMMAND_ERROR)
         try:
             _ensure_output_dir(outdir)
         except BambuError as exc:
@@ -288,8 +275,7 @@ def cmd_slice(
                     profiles_dir=settings.profiles_dir,
                     detected_profiles_dir=detected_profiles,
                 )
-                abort("", exit_code=EXIT_CONFIG_ERROR)
-            assert discovered_process is not None  # for type checkers; abort is NoReturn above
+            assert discovered_process is not None  # for type checkers; emit_json_error is NoReturn above
             process = discovered_process
 
         for path, name in [(machine, "machine"), (filament, "filament")]:
@@ -325,8 +311,6 @@ def cmd_slice(
                 failed_step="profiles",
                 file=filepath,
             )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_CONFIG_ERROR)
 
         cmd = _build_orcaslicer_cmd(
             settings,
@@ -388,8 +372,6 @@ def cmd_slice(
                 file=filepath,
                 output=outpath,
             )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_TIMEOUT)
         except OSError as exc:
             message = f"Failed to run OrcaSlicer: {_exception_for_message(exc)}"
             emit_json_error(
@@ -402,8 +384,6 @@ def cmd_slice(
                 orca_slicer=settings.orca_slicer,
                 output=outpath,
             )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_CONFIG_ERROR)
     finally:
         for tmp_file in (tmp_process, tmp_filament, tmp_machine):
             if tmp_file is not None and hasattr(tmp_file, "name"):
