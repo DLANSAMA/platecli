@@ -231,6 +231,36 @@ def test_session_incomplete_raises():
     printer.release_mqtt()
 
 
+def test_session_returns_cached_complete_when_pushall_silent():
+    """Background reports already filled state; a silent pushall must not raise."""
+
+    def factory(_printer):
+        return FakeBrokerClient(status_replies=[None])
+
+    printer = _printer()
+    session = _held(printer, factory)
+    assert session.ensure_connected(1)
+    session._print_state.update(_FULL)
+    result = get_status(printer, timeout=0.01, retries=0)
+    assert result is not None
+    assert result["gcode_state"] == "IDLE"
+    assert result["mc_percent"] == 0
+    printer.release_mqtt()
+
+
+def test_session_second_status_uses_cache_if_pushall_times_out():
+    def factory(_printer):
+        return FakeBrokerClient(status_replies=[{"print": dict(_FULL)}, None, None])
+
+    printer = _printer()
+    _held(printer, factory)
+    first = get_status(printer, timeout=0.01, retries=0)
+    second = get_status(printer, timeout=0.01, retries=0)
+    assert first is not None and first["gcode_state"] == "IDLE"
+    assert second is not None and second["gcode_state"] == "IDLE"
+    printer.release_mqtt()
+
+
 def test_session_liveness_accepts_partial():
     def factory(_printer):
         return FakeBrokerClient(status_replies=[{"print": {"wifi_signal": "-40dBm"}}])
@@ -251,6 +281,27 @@ def test_session_get_version():
     printer = _printer()
     _held(printer, factory)
     assert get_version(printer, timeout=1) == [{"name": "ota", "sw_ver": "1.0"}]
+    printer.release_mqtt()
+
+
+def test_session_get_version_timeout_returns_none():
+    def factory(_printer):
+        return FakeBrokerClient(version_reply=None)
+
+    printer = _printer()
+    _held(printer, factory)
+    assert get_version(printer, timeout=0.01, retries=0) is None
+    printer.release_mqtt()
+
+
+def test_ready_snapshot_rejects_empty_and_incomplete():
+    printer = _printer()
+    session = _held(printer, lambda _p: FakeBrokerClient(status_replies=[None]))
+    assert session.ensure_connected(1)
+    assert session._ready_snapshot(require_complete=True) is None
+    session._print_state.update({"wifi_signal": "-40dBm"})
+    assert session._ready_snapshot(require_complete=True) is None
+    assert session._ready_snapshot(require_complete=False) == {"wifi_signal": "-40dBm"}
     printer.release_mqtt()
 
 

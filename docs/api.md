@@ -408,6 +408,21 @@ sending the image to a user.
 - **Simulation**:
   - `--sim`: no real printer traffic for supported paths.
 
+## Support matrix
+
+What CI and the maintainer actually run. Anything not in the "tested" column is
+best-effort — same LAN protocols, not claimed hardware-verified.
+
+| Axis | Tested | Best-effort / notes |
+|------|--------|---------------------|
+| OS | Linux (CI), macOS (CI), Windows (CI) | All three are first-class; Windows is the binding coverage leg |
+| Python | 3.10, 3.12, 3.14 (CI) | Requires Python ≥ 3.10; 3.11/3.13 expected to work, not in the matrix |
+| Printers | P1 series (P1P / P1S) on real hardware | X1 / X1C / X1E / A1 / A1 mini speak the same MQTT/FTPS LAN API; treat as unverified. `plate snapshot` is direct on P1/A1; X1 cameras need the opt-in Docker streamer |
+| Firmware | whatever the maintainer's P1 is running | A Bambu firmware update can break MQTT/FTPS without warning — run `plate doctor` after upgrades |
+| OrcaSlicer | hermetic stub in CI; real Orca on the maintainer's machine | Install via the platform command `plate` prints when it is missing |
+
+Status is **Beta, pre-1.0**. Do not treat this matrix as a 1.0 support promise.
+
 ## Stability policy (1.0 intent)
 
 JSON fields documented here and validated under `docs/schemas/` are part of the

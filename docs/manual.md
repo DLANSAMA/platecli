@@ -20,6 +20,7 @@ The complete reference for `plate` — setup, configuration, slicing, monitoring
 - [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md)
 - [Project layout](#project-layout)
 - [Documentation map](#documentation-map)
+- [Support matrix](#support-matrix)
 
 ## Installing from source
 
@@ -390,6 +391,10 @@ or manually.
 
 `allow_private_ips` is **not** a config key — use the CLI flag `--allow-private-ips` per invocation.
 
+## Support matrix
+
+OS × Python is what CI runs. Printer models are honest: P1 series on real hardware, everything else best-effort. The full table (including camera caveats and firmware) lives in [docs/api.md](api.md#support-matrix).
+
 ## Project layout
 
 - `bambu_cli/` — Runtime package used by the installed command (`plate`).
@@ -404,7 +409,7 @@ or manually.
 | Doc | Audience |
 |-----|----------|
 | [AGENTS.md](https://github.com/DLANSAMA/platecli/blob/main/AGENTS.md) | Agents and automation (architecture, safety) |
-| [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) | JSON contracts + stability policy |
+| [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) | JSON contracts, support matrix, and stability policy |
 | [docs/troubleshooting.md](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) | Symptom-keyed fixes for connection, slicing, and camera errors |
 | [docs/schemas/](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) | Machine-checkable JSON Schema files |
 | [SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md) | Threat model, reporting, known limitations |

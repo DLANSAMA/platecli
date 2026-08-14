@@ -8,6 +8,7 @@ import threading
 import time
 from typing import Any
 
+from bambu_cli.context import set_printer_factory
 from bambu_cli.protocols import ftps as ftps_protocol
 from bambu_cli.protocols import mqtt as mqtt_protocol
 
@@ -36,6 +37,7 @@ class BambuPrinter:
         insecure_tls: bool = False,
         cert_fingerprint: str | None = None,
         simulation_mode: bool = False,
+        mqtt_port: int = 8883,
     ):
         self.ip = ip
         self.serial = serial
@@ -43,6 +45,7 @@ class BambuPrinter:
         self.insecure_tls = insecure_tls
         self.cert_fingerprint = cert_fingerprint
         self.simulation_mode = simulation_mode
+        self.mqtt_port = mqtt_port
 
         # Network timeouts
         self.mqtt_timeout = 5.0
@@ -318,26 +321,49 @@ class BambuPrinter:
         return mqtt_protocol.get_version(self, timeout=timeout, retries=retries)
 
 
-def get_printer(*, access_code_loader=None) -> BambuPrinter:
-    """Factory: build a BambuPrinter from the active run's settings.
-
-    ``access_code_loader`` defaults to ``config.load_access_code``; tests may
-    inject a fake instead of patching module globals.
-    """
+def _build_printer_from_context(ctx: Any, *, access_code_loader=None) -> BambuPrinter:
+    """Construct a ``BambuPrinter`` from a ``RuntimeContext`` (no process lookup)."""
     from bambu_cli.config import load_access_code
-    from bambu_cli.context import current_settings, current_simulation
     from bambu_cli.tlspin import normalize_fingerprint
 
     _load = access_code_loader if access_code_loader is not None else load_access_code
-    settings = current_settings()
-    simulation_mode = current_simulation()
+    settings = ctx.settings
+    simulation_mode = bool(ctx.simulation)
     return BambuPrinter(
         ip=settings.printer_ip,
         serial=settings.serial,
-        # Simulation mode never talks to a real printer, so it must not
-        # require credentials (load_access_code exits when unconfigured).
         access_code="" if simulation_mode else _load(),
         insecure_tls=settings.insecure_tls,
         cert_fingerprint=normalize_fingerprint(settings.cert_fingerprint),
         simulation_mode=simulation_mode,
+        mqtt_port=settings.mqtt_port,
     )
+
+
+def _default_printer_factory(ctx: Any) -> BambuPrinter:
+    """Default factory installed on ``RuntimeContext``.
+
+    The process-current context goes through ``get_printer()`` so tests that
+    patch that name keep working. A detached context is built from *ctx*
+    itself so library callers do not pick up a different process-wide context.
+    """
+    from bambu_cli.context import get_current
+
+    if get_current() is ctx:
+        return get_printer()
+    return _build_printer_from_context(ctx)
+
+
+def get_printer(*, access_code_loader=None) -> BambuPrinter:
+    """Factory: build a BambuPrinter from the active run's settings.
+
+    ``access_code_loader`` defaults to ``config.load_access_code``; tests may
+    inject a fake instead of patching module globals. Simulation mode never
+    talks to a real printer, so it must not require credentials.
+    """
+    from bambu_cli.context import get_current
+
+    return _build_printer_from_context(get_current(), access_code_loader=access_code_loader)
+
+
+set_printer_factory(_default_printer_factory)

@@ -135,22 +135,12 @@ def execute_print_command(
     try:
         _connect(printer, client)
         client.loop_start()
-        try:
-            accepted = command_accepted.wait(print_ack_timeout)
-            if not accepted:
-                message = f"Timed out waiting for printer to acknowledge print start for {basename}"
-                logger.error(message)
-                record_error_detail("print", EXIT_TIMEOUT, message, failed_step="print", file=basename, printed=False)
-                abort("", exit_code=EXIT_TIMEOUT)
-        finally:
-            try:
-                client.loop_stop()
-            except Exception:
-                pass
-            try:
-                client.disconnect()
-            except Exception:
-                pass
+        accepted = command_accepted.wait(print_ack_timeout)
+        if not accepted:
+            message = f"Timed out waiting for printer to acknowledge print start for {basename}"
+            logger.error(message)
+            record_error_detail("print", EXIT_TIMEOUT, message, failed_step="print", file=basename, printed=False)
+            abort("", exit_code=EXIT_TIMEOUT)
     except BambuError:
         raise
     except Exception as e:
@@ -158,6 +148,15 @@ def execute_print_command(
         logger.error(message)
         record_error_detail("print", EXIT_NETWORK_ERROR, message, failed_step="print", file=basename, printed=False)
         abort("", exit_code=EXIT_NETWORK_ERROR)
+    finally:
+        try:
+            client.loop_stop()
+        except Exception:
+            pass
+        try:
+            client.disconnect()
+        except Exception:
+            pass
 
     if connect_failed[0]:
         message = f"Failed to connect to printer to start print for {basename} (check LAN access code)"

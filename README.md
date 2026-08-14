@@ -171,7 +171,7 @@ Every command emits machine-readable `--json` output backed by published [JSON S
 - **[User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md)** — full setup, config reference, slicing & AMS mapping, print monitoring, and every flag
 - **[Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md)** — keyed by the error message you actually saw: access codes, LAN mode, cert pins, FTPS, OrcaSlicer, camera
 - [AGENTS.md](https://github.com/DLANSAMA/platecli/blob/main/AGENTS.md) — architecture and safety notes for agents and automation
-- [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) — JSON contracts + stability policy
+- [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) — JSON contracts, support matrix, and stability policy
 - [docs/schemas/](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) — machine-checkable JSON Schema files
 - [SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md) — threat model, reporting, known limitations
 - [CHANGELOG.md](https://github.com/DLANSAMA/platecli/blob/main/CHANGELOG.md) — release notes

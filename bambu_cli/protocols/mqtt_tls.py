@@ -140,13 +140,23 @@ def create_mqtt_client(printer, client_id=""):
     return client
 
 
+def _mqtt_port(printer):
+    """Configured MQTTS port, or 8883 when unset / unusable."""
+    raw = getattr(printer, "mqtt_port", 8883)
+    if isinstance(raw, bool) or not isinstance(raw, (int, str)):
+        return 8883
+    try:
+        port = int(raw)
+    except (TypeError, ValueError):
+        return 8883
+    if port < 1 or port > 65535:
+        return 8883
+    return port
+
+
 def _mqtt_connect(printer, client):
     resolved_ip = _resolve_ip(printer.ip)
-    old_timeout = socket.getdefaulttimeout()
-    try:
-        socket.setdefaulttimeout(printer.mqtt_timeout)
-        if hasattr(client, "_connect_timeout"):
-            client._connect_timeout = printer.mqtt_timeout
-        client.connect(resolved_ip, 8883, keepalive=10)
-    finally:
-        socket.setdefaulttimeout(old_timeout)
+    timeout = printer.mqtt_timeout
+    if hasattr(client, "_connect_timeout"):
+        client._connect_timeout = timeout
+    client.connect(resolved_ip, _mqtt_port(printer), keepalive=10)

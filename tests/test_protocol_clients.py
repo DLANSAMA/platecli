@@ -131,6 +131,23 @@ class TestSendCommand(unittest.TestCase):
         self.assertFalse(result)
         mock_logger.error.assert_called_with("Connection failed: rc=5")
 
+    def test_send_command_tears_down_if_loop_start_raises(self):
+        from bambu_cli.protocols.mqtt import send_command
+
+        mock_client = MagicMock()
+        mock_client.connect.side_effect = lambda *a, **k: None
+        mock_client.loop_start.side_effect = OSError("loop failed")
+
+        result = send_command(
+            _test_printer(),
+            '{"test": "payload"}',
+            retries=0,
+            client_factory=lambda p, *a, **k: mock_client,
+        )
+        self.assertFalse(result)
+        mock_client.loop_stop.assert_called()
+        mock_client.disconnect.assert_called()
+
 
 import socket
 
@@ -168,6 +185,24 @@ class TestGetFtp(unittest.TestCase):
         mock_implicit_ftps.assert_called_once()
         mock_ftp_instance.connect.assert_called_once_with("192.168.1.100", 990, timeout=60)
         mock_ftp_instance.login.assert_not_called()
+        mock_ftp_instance.prot_p.assert_not_called()
+        mock_ftp_instance.close.assert_called_once()
+
+    @patch("bambu_cli.protocols.ftps.ImplicitFTPS")
+    def test_create_raw_ftp_login_failure_closes_socket(self, mock_implicit_ftps):
+        from bambu_cli.protocols.ftps import _create_raw_ftp
+
+        mock_ftp_instance = MagicMock()
+        mock_implicit_ftps.return_value = mock_ftp_instance
+        mock_ftp_instance.login.side_effect = OSError("530 Login incorrect")
+        printer = _test_printer(ip="192.168.1.100", access_code="bad")
+
+        with self.assertRaises(OSError) as context:
+            _create_raw_ftp(printer)
+
+        self.assertEqual(str(context.exception), "530 Login incorrect")
+        mock_ftp_instance.connect.assert_called_once()
+        mock_ftp_instance.close.assert_called_once()
         mock_ftp_instance.prot_p.assert_not_called()
 
 
@@ -211,7 +246,7 @@ class TestCreateMqttClient(unittest.TestCase):
 
 
 class TestMqttConnectTimeout(unittest.TestCase):
-    def test_mqtt_connect_honors_configured_timeout_and_restores_socket_default(self):
+    def test_mqtt_connect_sets_client_timeout_without_mutating_socket_default(self):
         import socket as socket_mod
 
         from bambu_cli.protocols import mqtt_tls
@@ -223,14 +258,75 @@ class TestMqttConnectTimeout(unittest.TestCase):
         printer.mqtt_timeout = 30.0
 
         before = socket_mod.getdefaulttimeout()
+        with (
+            patch.object(mqtt_tls, "_resolve_ip", return_value="192.168.1.5"),
+            patch.object(mqtt_tls.socket, "setdefaulttimeout") as set_default,
+        ):
+            mqtt_tls._mqtt_connect(printer, client)
+
+        self.assertEqual(client._connect_timeout, 30.0)
+        client.connect.assert_called_once_with("192.168.1.5", 8883, keepalive=10)
+        set_default.assert_not_called()
+        self.assertEqual(socket_mod.getdefaulttimeout(), before)
+
+    def test_mqtt_port_rejects_unusable_values(self):
+        from bambu_cli.protocols.mqtt_tls import _mqtt_port
+
+        class _P:
+            def __init__(self, mqtt_port):
+                self.mqtt_port = mqtt_port
+
+        self.assertEqual(_mqtt_port(_P(1883)), 1883)
+        self.assertEqual(_mqtt_port(_P("1883")), 1883)
+        self.assertEqual(_mqtt_port(_P(0)), 8883)
+        self.assertEqual(_mqtt_port(_P(-1)), 8883)
+        self.assertEqual(_mqtt_port(_P(70000)), 8883)
+        self.assertEqual(_mqtt_port(_P("nope")), 8883)
+        self.assertEqual(_mqtt_port(_P(True)), 8883)
+        self.assertEqual(_mqtt_port(_P(None)), 8883)
+        self.assertEqual(_mqtt_port(object()), 8883)
+
+    def test_mqtt_connect_uses_configured_mqtt_port(self):
+        from bambu_cli.protocols import mqtt_tls
+
+        client = MagicMock()
+        client._connect_timeout = 5.0
+        printer = MagicMock()
+        printer.ip = "192.168.1.5"
+        printer.mqtt_timeout = 10.0
+        printer.mqtt_port = 1883
+        with patch.object(mqtt_tls, "_resolve_ip", return_value="192.168.1.5"):
+            mqtt_tls._mqtt_connect(printer, client)
+        client.connect.assert_called_once_with("192.168.1.5", 1883, keepalive=10)
+
+    def test_mqtt_connect_uses_paho_public_connect_timeout(self):
+        from bambu_cli.protocols import mqtt_tls
+
+        class _PahoLike:
+            def __init__(self):
+                self._connect_timeout = 5.0
+                self.connected = None
+
+            @property
+            def connect_timeout(self):
+                return self._connect_timeout
+
+            @connect_timeout.setter
+            def connect_timeout(self, value):
+                self._connect_timeout = value
+
+            def connect(self, host, port, keepalive=10):
+                self.connected = (host, port, keepalive)
+
+        client = _PahoLike()
+        printer = MagicMock()
+        printer.ip = "192.168.1.5"
+        printer.mqtt_timeout = 30.0
         with patch.object(mqtt_tls, "_resolve_ip", return_value="192.168.1.5"):
             mqtt_tls._mqtt_connect(printer, client)
 
-        # paho's own connect cap is raised to the configured timeout...
-        self.assertEqual(client._connect_timeout, 30.0)
-        client.connect.assert_called_once_with("192.168.1.5", 8883, keepalive=10)
-        # ...and the process-wide socket default is left untouched afterwards.
-        self.assertEqual(socket_mod.getdefaulttimeout(), before)
+        self.assertEqual(client.connect_timeout, 30.0)
+        self.assertEqual(client.connected, ("192.168.1.5", 8883, 10))
 
 
 if __name__ == "__main__":

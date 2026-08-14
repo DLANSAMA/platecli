@@ -82,16 +82,11 @@ COHESIVE_RANKS = {10, 20, 50}
 
 # ---------------------------------------------------------------------------
 # Accepted debt. Every entry is a real violation that predates this checker and
-# is scheduled, not excused. Shrink this list; do not grow it.
+# is scheduled, not excused. Shrink this list; do not grow it. Empty: the last
+# allowlisted edge (context -> printer) was replaced by a printer factory
+# registered downward from bambu_cli.printer.
 # ---------------------------------------------------------------------------
-ALLOWED: dict[tuple[str, str], str] = {
-    ("context", "printer"): (
-        "RuntimeContext lazily constructs a BambuPrinter (context.py). Fixing this "
-        "properly means a composition root that installs a printer factory onto the "
-        "context, which is its own PR — folding it in here would make the boundary "
-        "diff unreviewable."
-    ),
-}
+ALLOWED: dict[tuple[str, str], str] = {}
 
 
 # ---------------------------------------------------------------------------

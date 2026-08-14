@@ -79,7 +79,7 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 
 The rule exists because directories alone never held it: `protocols/`, `slicer/` and `download/` were already separate packages and still drifted — `slicer/output.py` imported a **private FTPS helper** to delete a partial file, so a change to Bambu transport code silently changed slicer behavior. If you need a helper in two adapters, push it down to rank 10 (that is what `fsutil.py` is for); do not import sideways.
 
-Accepted debt lives in `ALLOWED` in that script, each entry with a reason. Shrink it; do not grow it. One edge is currently allowlisted: `context -> printer` (`RuntimeContext` lazily constructs a `BambuPrinter`; the real fix is a composition root that installs a printer factory).
+Accepted debt lives in `ALLOWED` in that script, each entry with a reason. Shrink it; do not grow it. There are currently no allowlisted edges: `RuntimeContext.printer()` uses an injectable factory registered downward from `bambu_cli.printer`.
 
 The same script also enforces `SEALED` — package internals no outside module may import. `bambu_cli.printables.client` is sealed because an adapter is only a sandbox if callers cannot reach past it. **Third-party integrations go behind an adapter that cannot raise:** `PrintablesAdapter.resolve()` returns a `PrintablesResolution` for every outcome, converting a renamed field or a redesigned error envelope into a typed `printables_contract_changed` result instead of a traceback in the middle of `plate job`. `KeyboardInterrupt`/`SystemExit` are deliberately the only things that still propagate.
 
@@ -104,8 +104,7 @@ When adding tests, follow [docs/test-backlog.md](docs/test-backlog.md) and the q
 
 ### Known architecture debt (honest)
 
-- **`context.py` -> `printer.py`** (allowlisted in `scripts/check_layers.py`): `RuntimeContext.printer()` lazily constructs a `BambuPrinter`, so a core-services module depends on a transport facade. The fix is a composition root that installs a printer factory onto the context; deferred so the boundary work stayed reviewable.
-- **`protocols/mqtt.py` is ~880 LOC** — the largest module in the package and still mixed-concern. Not split during the boundary pass on purpose: doing both at once makes the diff unreadable.
+- **`protocols/mqtt.py` is a facade** over `mqtt_tls` / `mqtt_cmd` / `mqtt_print` / `mqtt_monitor` / `mqtt_session`. The old ~880 LOC hotspot was split; keep new MQTT logic in those siblings, not the facade.
 - B.4 (cli extraction → paths/jsonio/argutils) and B.5 (single `verify_cert_fingerprint` in tlspin.py) both landed; see [docs/quality-roadmap.md](docs/quality-roadmap.md) for the current gap list.
 
 ## Camera snapshots for agents
@@ -136,7 +135,7 @@ Published on PyPI as `platecli`; the installed command is `plate`.
 | Gate | Command / note |
 |------|----------------|
 | Default tests | `uv run python -m pytest tests/ -q -m "not live"` — never contacts a printer |
-| Coverage (CI) | `--cov-fail-under=83` (CI run `31044588411` on `5b08720`, 2026-08-05: Windows 88.8% / Linux 3.9 89.3%, 3.12 89.2%, 3.14 89.2% / macOS 89.1%; A+ target **92%** — see roadmap) |
+| Coverage (CI) | `--cov-fail-under=86` (CI run `31044588411` on `5b08720`, 2026-08-05: Windows 88.8% / Linux 3.9 89.3%, 3.12 89.2%, 3.14 89.2% / macOS 89.1%; A+ target **92%** — see roadmap) |
 | Lint | `uvx ruff check bambu_cli` + `uvx ruff format --check bambu_cli` |
 | Types | `uvx mypy -p bambu_cli` |
 | Security lint | `uvx bandit -c pyproject.toml -r bambu_cli -ll` |

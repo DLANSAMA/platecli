@@ -158,6 +158,9 @@ def monitor_status(args, printer):
                 pass
         try:
             client.loop_stop()
+        except Exception:
+            pass
+        try:
             client.disconnect()
         except Exception:
             pass

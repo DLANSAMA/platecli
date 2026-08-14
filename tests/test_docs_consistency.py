@@ -145,6 +145,15 @@ def _collect_test_count() -> int:
     )
 
 
+def _parse_doc_cov_percent(text: str) -> float | None:
+    """Return the first bold measured coverage percentage like **88.9%**."""
+    for m in re.finditer(r"\*\*(\d{2}\.\d)%\*\*", text):
+        val = float(m.group(1))
+        if 80.0 <= val <= 99.9:
+            return val
+    return None
+
+
 def test_coverage_floor_matches_ci():
     """The coverage floor cited in docs must exactly match --cov-fail-under in ci.yml.
 
@@ -161,6 +170,23 @@ def test_coverage_floor_matches_ci():
         assert floor is not None, f"{doc}: could not find 'floor NN' coverage floor citation"
         assert floor == ci_floor, (
             f"{doc} cites coverage floor {floor} but ci.yml has --cov-fail-under={ci_floor}. Update the doc to match."
+        )
+
+
+def test_documented_coverage_percent_at_or_above_floor():
+    """Docs must cite a measured coverage % that is not below the CI floor.
+
+    Prevents the scoreboard from silently rotting to a number CI would reject.
+    """
+    ci_floor = float(_parse_ci_cov_floor())
+    roadmap = (ROOT / "docs" / "quality-roadmap.md").read_text(encoding="utf-8")
+    backlog = (ROOT / "docs" / "test-backlog.md").read_text(encoding="utf-8")
+    for doc, text in [("quality-roadmap.md", roadmap), ("test-backlog.md", backlog)]:
+        percent = _parse_doc_cov_percent(text)
+        assert percent is not None, f"{doc}: could not find a bold coverage percent like **88.9%**"
+        assert percent >= ci_floor, (
+            f"{doc} cites measured coverage {percent}% but ci.yml floor is {ci_floor:g}. "
+            "Update the snapshot or the floor."
         )
 
 

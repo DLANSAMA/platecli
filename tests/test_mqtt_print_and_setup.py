@@ -226,6 +226,34 @@ def test_monitor_non_sim_reaches_terminal(capsys):
         mqtt_mod.monitor_status(args, printer)
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.strip()]
     assert any("terminal" in ln or "FINISH" in ln for ln in lines)
+    client.loop_stop.assert_called_once()
+    client.disconnect.assert_called_once()
+
+
+def test_monitor_disconnects_even_if_loop_stop_raises():
+    printer = _test_printer(simulation_mode=False)
+    client = MagicMock()
+
+    def connect(*a, **k):
+        if client.on_connect:
+            client.on_connect(client, None, None, 0)
+
+    def loop_start():
+        if client.on_message:
+            msg = MagicMock()
+            msg.payload = json.dumps({"print": {"gcode_state": "FINISH", "mc_percent": 100}}).encode()
+            client.on_message(client, {}, msg)
+
+    client.connect.side_effect = connect
+    client.loop_start.side_effect = loop_start
+    client.loop_stop.side_effect = RuntimeError("loop already stopped")
+    args = Namespace(json=True)
+    with (
+        patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
+        patch.object(mqtt_mod, "_mqtt_connect"),
+    ):
+        mqtt_mod.monitor_status(args, printer)
+    client.disconnect.assert_called_once()
 
 def test_monitor_merges_deltas_into_streamed_state(capsys):
     """A delta must not stream as gcode_state=UNKNOWN at 0% — it updates the merged state."""

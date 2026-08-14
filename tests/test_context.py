@@ -113,6 +113,7 @@ def test_runtime_context_printer_simulation_mode():
     assert printer.serial == "SN1"
     assert printer.access_code == ""
     assert printer.simulation_mode is True
+    assert printer.mqtt_port == 8883
     # cached
     assert ctx.printer() is printer
 
@@ -125,6 +126,49 @@ def test_runtime_context_printer_non_simulation_uses_load_access_code():
     mock_load.assert_called_once()
     assert printer.access_code == "secretcode"
     assert printer.cert_fingerprint == "aabb"
+    assert printer.mqtt_port == 8883
+
+
+def test_runtime_context_printer_honors_configured_mqtt_port():
+    settings = context.Settings(printer_ip="1.2.3.4", serial="SN1", mqtt_port=1883)
+    ctx = context.RuntimeContext(settings=settings, simulation=True)
+    assert ctx.printer().mqtt_port == 1883
+
+
+def test_runtime_context_printer_uses_installed_factory():
+    """RuntimeContext.printer() must go through set_printer_factory, not import printer."""
+    import bambu_cli.printer  # noqa: F401 — register the default factory
+
+    previous = context.get_printer_factory()
+    sentinel = object()
+    seen: list[object] = []
+
+    def factory(ctx):
+        seen.append(ctx)
+        return sentinel
+
+    try:
+        context.set_printer_factory(factory)
+        ctx = context.RuntimeContext()
+        assert ctx.printer() is sentinel
+        assert ctx.printer() is sentinel  # cached
+        assert seen == [ctx]
+    finally:
+        context.set_printer_factory(previous)
+
+
+def test_runtime_context_printer_requires_factory():
+    previous = context.get_printer_factory()
+    try:
+        context.set_printer_factory(None)
+        ctx = context.RuntimeContext()
+        try:
+            ctx.printer()
+            raise AssertionError("expected RuntimeError")
+        except RuntimeError as exc:
+            assert "factory" in str(exc).lower()
+    finally:
+        context.set_printer_factory(previous)
 
 
 def test_get_current_lazy_builds_and_set_current_overrides():

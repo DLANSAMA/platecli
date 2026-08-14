@@ -10,12 +10,10 @@ module globals anymore — add fields to ``Settings`` here instead.
 """
 
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from bambu_cli.printer import BambuPrinter
+from typing import Any
 
 
 def _stream_host_port(camera_port: str, default: str = "1985") -> str:
@@ -180,38 +178,18 @@ class RuntimeContext:
     last_error: dict | None = None
     _printer: Any = field(default=None, repr=False, compare=False)
 
-    def printer(self) -> BambuPrinter:
-        """Return a cached ``BambuPrinter`` built from ``self.settings``.
+    def printer(self) -> Any:
+        """Return a cached printer built by the installed printer factory.
 
-        When this context is the installed process current (the ``cmd_*``
-        path via ``for_request``), construction goes through
-        ``bambu_cli.printer.get_printer()`` so there is one factory — tests
-        that patch ``get_printer`` keep working. A detached context still
-        builds from ``self.settings`` so library callers do not pick up a
-        different process-wide context.
+        ``bambu_cli.printer`` registers the default factory on import (rank 35
+        downward into this rank-20 module). Tests inject a fake via
+        ``set_printer_factory``.
         """
         if self._printer is not None:
             return self._printer
-
-        if _current is self:
-            from bambu_cli.printer import get_printer
-
-            self._printer = get_printer()
-            return self._printer
-
-        from bambu_cli.config import load_access_code
-        from bambu_cli.printer import BambuPrinter
-        from bambu_cli.tlspin import normalize_fingerprint
-
-        access_code = "" if self.simulation else load_access_code()
-        self._printer = BambuPrinter(
-            ip=self.settings.printer_ip,
-            serial=self.settings.serial,
-            access_code=access_code,
-            insecure_tls=self.settings.insecure_tls,
-            cert_fingerprint=normalize_fingerprint(self.settings.cert_fingerprint),
-            simulation_mode=self.simulation,
-        )
+        if _printer_factory is None:
+            raise RuntimeError("No printer factory installed on RuntimeContext.")
+        self._printer = _printer_factory(self)
         return self._printer
 
     @classmethod
@@ -228,6 +206,20 @@ class RuntimeContext:
 
             ctx.json_mode = _json_mode_requested(args)
         return ctx
+
+
+_printer_factory: Callable[[RuntimeContext], Any] | None = None
+
+
+def set_printer_factory(factory: Callable[[RuntimeContext], Any] | None) -> None:
+    """Install (or, with ``None``, clear) the process printer factory."""
+    global _printer_factory
+    _printer_factory = factory
+
+
+def get_printer_factory() -> Callable[[RuntimeContext], Any] | None:
+    """Return the installed printer factory, or ``None`` if none is registered."""
+    return _printer_factory
 
 
 _current: RuntimeContext | None = None

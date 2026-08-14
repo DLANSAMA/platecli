@@ -1,7 +1,6 @@
 """jsonio redaction, home-path display, AMS sentinels, and ZIP extract edges."""
 
 import argparse
-import os
 import zipfile
 from unittest.mock import MagicMock
 
@@ -10,6 +9,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # jsonio.redact_url_credentials — scheme-relative URLs
 # ---------------------------------------------------------------------------
+
 
 def test_redact_scheme_relative_url_strips_userinfo():
     from bambu_cli.jsonio import redact_url_credentials
@@ -20,12 +20,14 @@ def test_redact_scheme_relative_url_strips_userinfo():
     assert redact_url_credentials("//user:pass" + at + "host.com/x") == "//host.com/x"
     assert redact_url_credentials("//u:p" + at + "host.com:8443/a?b=c") == "//host.com:8443/a?b=c"
 
+
 def test_redact_scheme_relative_url_ipv6_userinfo():
     from bambu_cli.jsonio import redact_url_credentials
 
     at = "@"
     # netloc-only IPv6 with userinfo: host must stay bracketed, creds gone.
     assert redact_url_credentials("//user:pass" + at + "[::1]:990/x") == "//[::1]:990/x"
+
 
 def test_redact_preserves_existing_schemeless_and_full_url_behavior():
     from bambu_cli.jsonio import redact_url_credentials
@@ -39,6 +41,26 @@ def test_redact_preserves_existing_schemeless_and_full_url_behavior():
     assert redact_url_credentials("/home/x" + at + "y") == "/home/x" + at + "y"
     assert redact_url_credentials("no-at-sign") == "no-at-sign"
 
+
+def test_looks_like_schemeless_rejects_spaces_and_backslashes():
+    from bambu_cli.jsonio import looks_like_schemeless_credential_url
+
+    at = "@"
+    assert looks_like_schemeless_credential_url("user:pass" + at + "host.com") is True
+    assert looks_like_schemeless_credential_url("user:pass " + at + "host.com") is False
+    assert looks_like_schemeless_credential_url("user:pass" + at + "host\\name.com") is False
+    assert looks_like_schemeless_credential_url("") is False
+
+
+def test_redact_invalid_port_does_not_raise():
+    from bambu_cli.jsonio import redact_url_credentials
+
+    at = "@"
+    # urllib raises ValueError on .port when the port token is not an int.
+    assert redact_url_credentials("https://user:pass" + at + "host.com:notaport/x") == ("https://host.com/x")
+    assert redact_url_credentials("//user:pass" + at + "host.com:notaport/x") == "//host.com/x"
+
+
 def test_emit_json_uses_jsonio_redactor(capsys):
     """emit_json must strip userinfo, not the weaker ***@ placeholder."""
     from bambu_cli import utils
@@ -51,9 +73,11 @@ def test_emit_json_uses_jsonio_redactor(capsys):
     assert "***@" not in payload
     assert "https://host.com/x.stl" in payload
 
+
 # ---------------------------------------------------------------------------
 # utils._display_path — home-prefix separator boundary
 # ---------------------------------------------------------------------------
+
 
 def test_display_path_requires_separator_boundary(monkeypatch):
     import bambu_cli.utils as utils
@@ -66,9 +90,11 @@ def test_display_path_requires_separator_boundary(monkeypatch):
     assert utils._display_path("/home/alice/model.stl") == "~/model.stl"
     assert utils._display_path("/home/alice") == "~"
 
+
 # ---------------------------------------------------------------------------
 # utils._resolve_ip — do not cache failures
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_ip_does_not_cache_failure(monkeypatch):
     import bambu_cli.utils as utils
@@ -96,12 +122,15 @@ def test_resolve_ip_does_not_cache_failure(monkeypatch):
     assert utils._RESOLVE_IP_CACHE.get("printer.local") == "10.0.0.5"
     utils._RESOLVE_IP_CACHE.clear()
 
+
 # ---------------------------------------------------------------------------
 # ams.parse_ams — external-spool sentinel + wizard active-tray selection
 # ---------------------------------------------------------------------------
 
+
 def _ams_status(tray_now, units):
     return {"ams": {"tray_now": str(tray_now), "ams": units}}
+
 
 def test_parse_ams_external_spool_sentinel_not_active():
     from bambu_cli.ams import parse_ams
@@ -112,6 +141,7 @@ def test_parse_ams_external_spool_sentinel_not_active():
         assert parsed["active_tray"] is None
         assert all(not t["active"] for u in parsed["units"] for t in u["trays"])
 
+
 def _patch_ams_status(monkeypatch, status):
     """Make _read_loaded_ams_material see ``status`` from the printer."""
     from bambu_cli.context import RuntimeContext
@@ -121,6 +151,7 @@ def _patch_ams_status(monkeypatch, status):
     fake_ctx = MagicMock()
     fake_ctx.printer.return_value = fake_printer
     monkeypatch.setattr(RuntimeContext, "for_request", classmethod(lambda cls, args: fake_ctx))
+
 
 def test_wizard_ams_material_multi_unit_picks_active_not_earlier_unit(monkeypatch):
     from bambu_cli.interactive.session import _read_loaded_ams_material
@@ -138,6 +169,7 @@ def test_wizard_ams_material_multi_unit_picks_active_not_earlier_unit(monkeypatc
     # Before the fix, the earlier-unit fallback returned PETG.
     assert _read_loaded_ams_material(argparse.Namespace()) == "PLA"
 
+
 def test_wizard_ams_material_external_spool_sentinel_no_false_active(monkeypatch):
     from bambu_cli.interactive.session import _read_loaded_ams_material
 
@@ -150,9 +182,11 @@ def test_wizard_ams_material_external_spool_sentinel_no_false_active(monkeypatch
     _patch_ams_status(monkeypatch, status)
     assert _read_loaded_ams_material(argparse.Namespace()) == "PLA"
 
+
 # ---------------------------------------------------------------------------
 # download.extract._extract_zip_model — encrypted / Deflate64 -> ValueError
 # ---------------------------------------------------------------------------
+
 
 def test_extract_encrypted_zip_raises_valueerror(tmp_path):
     from bambu_cli.download.extract import _extract_zip_model
@@ -200,6 +234,7 @@ def test_extract_encrypted_zip_raises_valueerror(tmp_path):
         assert "encrypted" in str(ei.value).lower()
     finally:
         extract.zipfile.ZipFile = real_zipfile
+
 
 def test_extract_deflate64_raises_valueerror(tmp_path):
     from bambu_cli.download.extract import _extract_zip_model

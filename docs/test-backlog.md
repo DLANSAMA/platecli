@@ -10,17 +10,17 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **1420** collected / **1419** passing (measured 2026-08-05 on Linux; the Textual TUI phases 1-5 plus the structural refactor wave: layer-boundary enforcement, Printables-adapter containment, and generated-schema contract tests) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | CI run `31044588411`, 2026-08-05: **88.8%** Windows (the binding leg), 89.1% macOS, 89.2–89.3% Linux; **89.1%** measured the same day on local Linux; **floor 83** | **≥92%** total; optional module floors |
+| Non-live tests collected | **1499** passing (measured 2026-08-13 on Linux; 1 live test deselected) | ≥550 with zero known flakes ✅ size |
+| Line/branch coverage (CI) | **91.0%** branch coverage over 8368 statements (local Linux, 2026-08-13); prior CI matrix on `5b08720` was 88.8–89.3%; **floor 86** | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
-| JSON schemas | **26** files under `docs/schemas/`, **generated** from `bambu_cli/contracts/` (`tui.json` added with the TUI); coverage is derived from `build_parser()`, so a new subcommand cannot ship schema-less | monitor goldens; field-level api.md ↔ schema sync |
+| JSON schemas | **27** files under `docs/schemas/`, **generated** from `bambu_cli/contracts/`; coverage is derived from `build_parser()`, so a new subcommand cannot ship schema-less | monitor goldens; field-level api.md ↔ schema sync |
 | Mutation baseline | Pure safety modules; score **50.7%** measured 2026-08-04, CI floor raised 40 → **48** | the C.4 re-run happened and **disproved** the prediction: `slicer/output.py` stayed at 21.8% while its line coverage went 79.8% → 92.7%. See [mutation-baseline.md](mutation-baseline.md); raising that row needs a production refactor, not more tests |
 | Live printer | Documented opt-in harness | manual pre-release (optional scheduled lab) |
 | Product version | pre-1.0 Beta (single-sourced from `pyproject.toml`) | **v1.0.0** when roadmap §5 is complete |
 
-CI evidence: `.github/workflows/ci.yml` (`--cov-fail-under=83`, blocking ruff/mypy/bandit/pip-audit/purity greps).
+CI evidence: `.github/workflows/ci.yml` (`--cov-fail-under=86`, blocking ruff/mypy/bandit/pip-audit/purity greps).
 
 ## Ground rules for new tests
 
@@ -48,7 +48,7 @@ Tracked in [SECURITY.md](../SECURITY.md) known limitations:
 
 | Gap | Notes |
 |-----|-------|
-| Raise CI floor 83 → 85 → 88 → **92** | Residual: mqtt/ftps pin paths, pool recovery, wizard TTY, Orca process |
+| Raise CI floor 86 → 88 → **92** | Residual: mqtt/ftps pin paths, pool recovery, wizard TTY, Orca process |
 | Per-module floors (optional) | mqtt / ftps / netsafety / download / camera |
 | ~~Hermetic fake Orca binary~~ | **Done (C.4).** `tests/fakes/orca_stub` + `tests/test_slice_stub_integration.py` run `cmd_slice` end-to-end through the real slicer subprocess (`_run_orcaslicer`/`_finalize_slice`); `slicer/output.py` line coverage 79.8%→92.7%. The mutation re-run is **done** (2026-08-04): the module's score did not move (21.8%), so the remaining work there is extracting the pure decision logic out of `_finalize_slice`, not more end-to-end tests. |
 
