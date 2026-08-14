@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Fixed
+
+- User-facing docs now match shipped behaviour for `--confirm` on `job` /
+  `send` (upload still runs; exit `0` `uploaded_not_printed`), the fail-closed
+  camera streamer (opt-in, not auto-fallback), `doctor` fingerprint/`-v`
+  output, STEP/STP slice precedence, and sdist-relative links to repo-only
+  quality docs.
+
 ### Removed
 
 - Python 3.9 support. The floor is 3.10 so every install resolves patched

@@ -35,7 +35,7 @@ pip install .
 
 `--sim` (simulation mode) replaces the real printer with a **canned** local stub — fixed status, files, and camera bytes. It is not a protocol test of MQTT/FTPS. Use it to develop agents and scripts without hardware.
 
-Destructive and physical actions — starting a print, pausing or resuming a print, stopping a job, deleting a file, or sending raw G-code — are gated behind an explicit `--confirm` flag. An agent that omits `--confirm` gets a refusal (exit code `5`, `"status": "confirmation_required"`) instead of a physical action, so accidental physical operations never happen. Note this is a gate against accidents, not an authorization boundary: anything that can run `plate` can also pass `--confirm`.
+Destructive and physical actions — starting a print, pausing or resuming a print, stopping a job, deleting a file, or sending raw G-code — are gated behind an explicit `--confirm` flag. `print`, `stop`, `pause`, `resume`, `delete`, and `gcode` refuse without it (exit code `5`, `"status": "confirmation_required"`) and the printer is untouched. `job` / `send` without `--confirm` still download, slice, and upload, then exit `0` with `"status": "uploaded_not_printed"` — only the print step is withheld. Note this is a gate against accidents, not an authorization boundary: anything that can run `plate` can also pass `--confirm`.
 
 ```bash
 # Inspect printer state without hardware
@@ -51,7 +51,7 @@ plate job <url> --json --confirm
 - **Printables downloads** — platecli fetches files from Printables *on your behalf*, from your own machine and network — the same file you would get by clicking Download. It identifies itself honestly as `platecli/<version>`, keeps at least one second between requests to the same host, and honors `Retry-After`. Your use is subject to [Printables' terms of service](https://www.printables.com/legal/terms-of-use) and to the individual model's own licence (often a Creative Commons variant with attribution, non-commercial, or no-derivatives conditions). platecli grants you no rights to any downloaded model — check the licence on the model page before printing, remixing, redistributing, or selling. The Printables API used for resolution is undocumented and may change or stop working without notice.
 - **Safe extraction** — ZIP archives containing model files are fully supported. Existing files are kept safe by creating a numbered sibling such as `model-1.stl`. URL downloads and ZIP extraction have a 2048 MB safety limit, adjustable via `--max-download-mb`.
 - **Modularity** — Run steps individually using `download`, `slice`, `upload`, or `print`.
-- **Safety first** — One-shot and print flows will not start a physical print unless `--confirm` is present. Pause, resume, stop, delete, and raw gcode also require `--confirm`, and refuse with exit code `5` without it.
+- **Safety first** — `print`, `pause`, `resume`, `stop`, `delete`, and raw `gcode` refuse without `--confirm` (exit code `5`). `job` / `send` without `--confirm` still upload and exit `0` with `"status": "uploaded_not_printed"`; only the print step is withheld.
 - **TLS pinning** — Pin the printer’s self-signed cert with `cert_fingerprint` (setup/doctor can capture it). Prefer this over `insecure_tls`.
 - **SSRF-hardened downloads** — Private/loopback targets are refused unless you pass `--allow-private-ips` for that invocation.
 - **Diagnostics** — Network, FTPS, and MQTT health checking with `doctor` and `preflight`.
@@ -324,6 +324,8 @@ plate snapshot --json                   # machine-readable result
 
 Every `--json` response includes `captured_at` (ISO-8601 UTC timestamp) and `sha256` (hex digest of the JPEG bytes). Agents should compare these fields across captures to confirm a fresh frame was received before sending the image to a user. Use `--unique` when taking repeated snapshots — it inserts a UTC timestamp into the filename so successive captures never silently overwrite each other.
 
+P1/A1-class printers are captured directly over TLS port 6000 — no extra software. X1-series cameras are RTSP and need the Docker streamer, which is **opt-in** (`camera_allow_streamer` or `--allow-camera-streamer`) because it does not honour `cert_fingerprint`. A failed direct grab aborts unless you opt in. `camera_port` defaults to loopback-only (`127.0.0.1:1985:1984`); set it to `0.0.0.0:1985:1984` only if you deliberately want the unauthenticated feed on the LAN.
+
 ## Global flags
 
 | Flag | Description |
@@ -336,7 +338,7 @@ Every `--json` response includes `captured_at` (ISO-8601 UTC timestamp) and `sha
 
 ## Slicing & AMS
 
-`slice` accepts common mesh formats in the precedence order STL > STEP > OBJ > 3MF > G-code. When mapping filaments to AMS slots, mapping arguments take zero-or-positive slot indexes.
+`slice` accepts common mesh formats in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. When mapping filaments to AMS slots, mapping arguments take zero-or-positive slot indexes.
 
 To decide that mapping, read what is actually loaded first: `plate status`
 shows each AMS unit's trays (filament type, colour, and remaining %), and
