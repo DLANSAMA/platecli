@@ -135,7 +135,7 @@ Published on PyPI as `platecli`; the installed command is `plate`.
 | Gate | Command / note |
 |------|----------------|
 | Default tests | `uv run python -m pytest tests/ -q -m "not live"` — never contacts a printer |
-| Coverage (CI) | `--cov-fail-under=86` (CI run `31044588411` on `5b08720`, 2026-08-05: Windows 88.8% / Linux 3.9 89.3%, 3.12 89.2%, 3.14 89.2% / macOS 89.1%; A+ target **92%** — see roadmap) |
+| Coverage (CI) | `--cov-fail-under=86` (2026-08-13, PR #119: Linux 90.99% / Windows 90.68% / macOS passing; matrix 3.10/3.12/3.14; A+ target **92%** — see roadmap) |
 | Lint | `uvx ruff check bambu_cli` + `uvx ruff format --check bambu_cli` |
 | Types | `uvx mypy -p bambu_cli` |
 | Security lint | `uvx bandit -c pyproject.toml -r bambu_cli -ll` |

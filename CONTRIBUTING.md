@@ -120,7 +120,7 @@ architecture/contract gaps have since closed — the domain→`cli` helper extra
 (B.4), the single-sourced TLS pin verification (B.5), the remaining JSON schemas
 (now *generated* from `bambu_cli/contracts/`, one per `--json` subcommand), and the
 camera bind/pin-fallback hardenings. Main gaps to A+ / 1.0 are now coverage
-(89.2% measured on CI's Linux legs, CI floor **86**, target 92) and the camera
+(90.99% Linux / 90.68% Windows measured on CI, CI floor **86**, target 92) and the camera
 residuals still listed in SECURITY.md. Do not read "A−/A" as "A+" — see the
 scoreboard for what is actually ticked.
 
