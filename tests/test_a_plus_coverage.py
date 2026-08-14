@@ -10,6 +10,7 @@ import json
 import os
 import socket
 import ssl
+import sys
 from argparse import Namespace
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -864,6 +865,11 @@ def test_preflight_module_and_perms(tmp_path, monkeypatch):
     secret = tmp_path / "code"
     secret.write_text("x", encoding="utf-8")
     secret.chmod(0o644)
+    if sys.platform == "win32":
+        # POSIX mode bits do not apply on Windows; the check is a no-op there
+        # (see the "Windows secret ACLs" residual in SECURITY.md).
+        assert pf._file_permission_check(str(secret), "access_code_file") is None
+        return
     check = pf._file_permission_check(str(secret), "access_code_file")
     assert check is not None
     assert check["status"] == "warning"
