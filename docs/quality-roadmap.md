@@ -15,13 +15,13 @@ Historical baseline (do not read as current), from the audit + full
 `pytest --cov=bambu_cli` on 2026-07-08: **368 tests**, **78%** line coverage
 (1105 / 4973 stmts missed), **130** `sys.exit` sites in `bambu_cli/`, **7**
 `@mockable` sites (def + 6 uses), **1** `BambuError` raise in production.
-The "Baseline" column below is that snapshot. **Current measured (2026-08-05, the
-released `0.5.0` commit `5b08720` on `main`): 1419 passed / 1 deselected, 89.1%
-branch coverage over 8120 statements (local Linux, py3.12).** The full CI matrix
-for that same commit (run `31044588411`; CI runs a clean checkout, so its numbers
-differ slightly from a local run — do not reconcile one to the other):
-Windows 3.14 **88.8%** (still the binding leg), macOS 3.14 89.1%, Linux 3.9
-89.3% / 3.12 89.2% / 3.14 89.2%.
+The "Baseline" column below is that snapshot. **Current measured (2026-08-13,
+PR #119): 1499 passed / 1 live deselected, 90.99% branch coverage over 8368
+statements (local Linux).** Full CI matrix: Linux 90.99% / Windows 90.68% (still
+the binding leg) / macOS passing, on the 3.10 / 3.12 / 3.14 matrix (Python 3.9
+was dropped in #115). The prior `5b08720` matrix (run `31044588411`, 2026-08-05)
+measured 88.8–89.3%; CI runs a clean checkout, so its numbers differ slightly
+from a local run — do not reconcile one to the other.
 
 | Area | Baseline | Gate to A | Gate to A+ | Primary evidence |
 |------|----------|-----------|------------|------------------|
@@ -67,16 +67,17 @@ items are **accepted 1.0 residuals** in [SECURITY.md](../SECURITY.md), not open 
 
 **Overall:** **A** — none below A−. **Not A+ across the board.** Remaining: coverage 91.0→92, CI floor 92, Typing strict, Product `v1.0.0` tag.
 
-**Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26) → **86** (2026-08-13; Windows 88.8% still the binding leg, ~2.8pt margin).
-Measured branch total is **89.1%** on local Linux (2026-08-05, py3.12), 89.2% on CI's Linux legs; the floor is set
+**Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26) → **86** (2026-08-13; Windows 90.68% the binding leg, ~4.7pt margin).
+Measured branch total is **90.99%** on local Linux, 90.68% on CI's Windows leg; the floor is set
 at the multi-OS minimum so the matrix does not flake while still denying points
 of silent rot vs the old 79 gate.
 
-**Ratchet headroom (measured 2026-08-05, run `31044588411` on `5b08720`):** every
-leg now sits above 88 — Windows 88.8%, macOS 89.1%, Linux 3.9/3.12/3.14
-89.3/89.2/89.2% — against a gate of 86, so roughly three points of drift can pass
+**Ratchet headroom (measured 2026-08-13, PR #119):** every
+leg now sits above 90 — Windows 90.68%, Linux 90.99%, macOS passing — against a
+gate of 86, so roughly four points of drift can pass
 unnoticed. Windows remains the binding leg, as it has at every ratchet. Raising
-the gate to **88** now clears Windows by only 0.8pt, which is a thin margin for a
+the gate to **88** now clears Windows by ~2.7pt; a **90** gate clears it by only
+~0.7pt, which is a thin margin for a
 matrix that has to stay green on every PR. Ratcheting means moving `ci.yml`,
 the citations in this file, and `docs/test-backlog.md` together — `tests/test_docs_consistency.py`
 and `tests/ci_workflow_smoke.py` both enforce that.
@@ -571,7 +572,7 @@ bandit + pip-audit blocking
 # Conceptual — implement incrementally across phases
 jobs:
   test:
-    matrix: [py39, py312, py314] x [ubuntu] + [macos/windows @ newest]
+    matrix: [py310, py312, py314] x [ubuntu] + [macos/windows @ newest]
     steps:
       - pytest -W error::ResourceWarning
           --cov=bambu_cli --cov-fail-under=92
@@ -633,7 +634,7 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 | 0 Trust & truth | **done** | local | 2026-07-08 | allow-private-ips, bare except, version single-source |
 | A Testing foundation | **done** | local | 2026-07-08 | TLS suite, markers, transport tests, cov~80% |
 | B Error model & seams | **done** | #11 | 2026-07-08 | abort/BambuError; sys.exit entry-only; mockable removed. **B.4** paths/jsonio/argutils extract done (domain no longer imports private cli helpers); **B.5** single pin helper done (PR #89) |
-| C Coverage & typing | **in progress** | #18 | — | full-package mypy + `check_untyped_defs` done (#18, 2026-07-09); **C.4** hermetic fake OrcaSlicer done; cov 89.2% on CI's Linux legs with CI floor **86** (target 92); per-module floors not enforced, so C.5 is the open item |
+| C Coverage & typing | **in progress** | #18 | — | full-package mypy + `check_untyped_defs` done (#18, 2026-07-09); **C.4** hermetic fake OrcaSlicer done; cov 90.99% Linux / 90.68% Windows with CI floor **86** (target 92); per-module floors not enforced, so C.5 is the open item |
 | D Contracts & 1.0 | **in progress** | #101 | — | schemas + contract harness + stability policy done; **schemas are now generated** from `bambu_cli/contracts/` and every `--json` subcommand has one (#101). **D.3 support matrix** published in `docs/api.md`. Open: optional structured logging (D.5) and the 1.0 prep itself (D.6) |
 | E Stretch | not started | | | fuzz job, SBOM, dependabot, scheduled live-printer |
 | Doc truth pass | **done** | local | 2026-07-24 | versions de-literalized, prerequisites stated, camera guidance corrected, test/coverage numbers re-measured |
@@ -670,6 +671,14 @@ If **full A+** is the goal, follow phases 0→A→B→C→D in order; skip ahead
 > and CONTRIBUTING's "coverage ~82% / helper extraction / TLS pin / remaining
 > schemas" gap list, all four of which had closed. Still **not** A+: coverage is
 > 89, not 92; no per-module floors; camera residuals stand.
+>
+> **Re-verified 2026-08-13** (PR #119): 1499 non-live tests passing (1 live
+> deselected); 90.99% branch coverage over 8368 statements on local Linux,
+> 90.68% on Windows (the binding CI leg); floor raised to **86**. Closed in this
+> pass: the last `check_layers` `ALLOWED` edge (`context → printer`, replaced by
+> an injectable printer factory) and the `protocols/mqtt.py` monolith (split into
+> `mqtt_tls` / `mqtt_cmd` / `mqtt_print` / `mqtt_monitor` / `mqtt_session`). Still
+> **not** A+: coverage is 91, not 92; no per-module floors; camera residuals stand.
 
 ### mockable count (burn-down)
 
