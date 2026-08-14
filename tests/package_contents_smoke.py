@@ -145,7 +145,7 @@ REQUIRED_DOC_SNIPPETS = {
     "docs/manual.md": {
         "`--json` | Emit JSON for commands that support it; may appear before or after the subcommand",
         "`plate --json --version` emits",
-        "STL > STEP > OBJ > 3MF > G-code",
+        "STL > STEP/STP > OBJ > 3MF > G-code",
         "--max-download-mb",
         "zero-or-positive slot indexes",
         "Runtime package used by the installed command",

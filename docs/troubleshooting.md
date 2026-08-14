@@ -45,7 +45,7 @@ the `plate doctor` output — but check first that no access code is visible.
 
 ```bash
 plate preflight   # local only: config, OrcaSlicer, profiles, gmsh, xvfb-run, docker, zeroconf
-plate doctor      # talks to the printer: config -> MQTT -> FTPS, and prints the TLS fingerprint
+plate doctor      # talks to the printer: config -> MQTT -> FTPS; reports cert-pin status (add -v for LAN IP and full fingerprint)
 plate config show # the effective config, with secrets redacted
 plate config validate --strict
 ```
@@ -130,15 +130,17 @@ control that makes LAN traffic trustworthy.
 is expected and benign. Re-pin it:
 
 ```bash
-plate doctor
+plate doctor --json   # always includes certificate_fingerprint
 ```
 
-`doctor` prints the printer's certificate SHA-256 and warns when it does not
-match the `cert_fingerprint` in your config. Copy the printed value into
-`cert_fingerprint` in `config.json`, or re-run
-`plate setup --cert-fingerprint <hex>`. Both the bare-hex and colon-separated
-forms are accepted — the value is normalised (lowercased, colons and spaces
-stripped) before comparison.
+Once a pin is already set, human `plate doctor` is hex-free on a match unless
+you pass `-v` (which then prints the live SHA-256; the LAN IP is also
+`-v`-only). On a mismatch it warns and shows the first eight hex characters of
+the live cert. `plate doctor --json` always includes `certificate_fingerprint`
+— use that value (or `plate setup --cert-fingerprint <hex>`) to re-pin after a
+firmware update. Both the bare-hex and colon-separated forms are accepted —
+the value is normalised (lowercased, colons and spaces stripped) before
+comparison.
 
 **If you did NOT just update firmware**, do not blindly re-pin — a mismatch is
 also what an on-path attacker looks like. Confirm you are on the network you
@@ -313,19 +315,25 @@ Setup falls back to manual configuration, which works fine.
 
 The full message tells you to install Docker Desktop (Windows/macOS) or
 `docker-ce` (Linux) and retry. But check whether you actually need Docker at
-all:
+all — the streamer is **opt-in**, not an automatic fallback:
 
 - **P1 and A1 series:** a direct TLS grab from the printer on **port 6000** —
   **no Docker involved**. The `--json` output reports `"method": "direct"`.
 - **X1 series:** the camera is an RTSP stream, which `plate` cannot decode
-  itself. It falls back to a small streamer container, so **Docker is required
-  on X1 only**.
+  itself. Set `camera_allow_streamer: true` or pass `--allow-camera-streamer`
+  (the streamer does not honour `cert_fingerprint`). **Docker is then
+  required on X1 only**.
 
-So if you are on a P1/A1 and you are *seeing* this message, the direct grab
-failed first and fell through. Check that port 6000 is reachable
-(`nc -vz <printer-ip> 6000`), that LAN mode is on, and re-run with `-v` /
-`--verbose` — the direct-path failure is logged at debug level as
-"Direct camera grab unavailable ...; trying Docker streamer."
+A failed direct grab **aborts by default**. A pin mismatch, and any
+`ssl.SSLError` during the handshake when a pin is configured, hard-abort —
+they never start the streamer, even if you opted in. `camera_direct_only`
+forbids the streamer entirely.
+
+You only see "Docker not found" after the streamer has been allowed. On a
+P1/A1 that usually means the direct grab failed *and* you opted in. Check
+that port 6000 is reachable (`nc -vz <printer-ip> 6000`), that LAN mode is
+on, and re-run with `-v` / `--verbose` — the direct-path failure is logged
+at debug level as "Direct camera grab unavailable ...".
 
 The streamer container is published to `127.0.0.1` only by default
 (`camera_port` defaults to `127.0.0.1:1985:1984`). Do not point
@@ -341,9 +349,10 @@ and a mismatch **fails closed** rather than silently falling back to the
 unpinned Docker path. After a firmware update, re-pin with `plate doctor` as in
 [Certificate fingerprint mismatch](#certificate-fingerprint-mismatch).
 
-If you have no pin at all, `plate` warns that no `cert_fingerprint` is pinned
-for the camera connection and tells you to run `plate setup` to pin one. Pin it
-— don't set `insecure_tls`.
+If you have no pin at all and `insecure_tls` is unset, the direct grab
+**refuses** rather than sending the access code over an unverified TLS
+connection. The error names the missing pin and points at `plate setup`. Pin
+it — don't set `insecure_tls`.
 
 ## Snapshot fails and mentions `camera_allow_streamer`
 
@@ -582,10 +591,14 @@ Overrides still work in the meantime; unknown keys are warn-but-pass.
 
 ## Nothing happens when I run a print command
 
-Working as designed. Anything that physically moves the printer — starting a
-print, pausing or resuming one, stopping one, deleting a file, sending raw
-G-code — requires an explicit `--confirm`. Without it the command refuses with
-exit code `5` and the printer is untouched. Add `--confirm` once you're sure.
+Working as designed. `print`, `stop`, `pause`, `resume`, `delete`, and
+`gcode` require an explicit `--confirm`. Without it they refuse with exit
+code `5` (`"status": "confirmation_required"`) and the printer is untouched.
+
+`job` / `send` are different: omitting `--confirm` still runs download →
+slice → upload and exits `0` with `"status": "uploaded_not_printed"`. Only
+the print step is withheld — a file is on the printer. Add `--confirm` once
+you're sure you want it to print.
 
 If you want to rehearse the whole pipeline with no hardware at all, use
 `--sim`:

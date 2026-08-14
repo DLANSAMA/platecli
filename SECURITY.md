@@ -127,5 +127,5 @@ already-compromised local machine or a malicious printer on your own LAN
 ## Related docs
 
 - [AGENTS.md](AGENTS.md) — agent safety checklist  
-- [docs/quality-roadmap.md](docs/quality-roadmap.md) — security scoreboard  
+- [docs/quality-roadmap.md](https://github.com/DLANSAMA/platecli/blob/main/docs/quality-roadmap.md) — security scoreboard (GitHub/repo only; not in the sdist)
 - [docs/api.md](docs/api.md) — agent JSON contracts  

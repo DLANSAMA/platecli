@@ -305,7 +305,7 @@ Validate includes `checks[]`, `ok`, `errors`, `warnings`, `exit_code`, and `stri
 Success / dry-run: [`job_ok.json`](schemas/job_ok.json).  
 Failure: [`job_error.json`](schemas/job_error.json).
 
-Print start requires `--confirm`; without it the job may upload but will not print.
+Print start requires `--confirm`. Without it, download → slice → upload still runs and the command exits `0` with `"status": "uploaded_not_printed"`; only the print step is withheld.
 
 ### `go`
 
@@ -441,5 +441,5 @@ Machine-checkable schemas live in `docs/schemas/`. Contract tests under
 
 - [AGENTS.md](../AGENTS.md) — agent architecture and safety
 - [SECURITY.md](../SECURITY.md) — threat model
-- [quality-roadmap.md](quality-roadmap.md) — quality scoreboard
-- [test-backlog.md](test-backlog.md) — remaining schema/coverage gaps
+- [quality-roadmap.md](https://github.com/DLANSAMA/platecli/blob/main/docs/quality-roadmap.md) — quality scoreboard (GitHub/repo only; not in the sdist)
+- [test-backlog.md](https://github.com/DLANSAMA/platecli/blob/main/docs/test-backlog.md) — remaining schema/coverage gaps (GitHub/repo only; not in the sdist)
