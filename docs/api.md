@@ -53,6 +53,8 @@ Job failures may use the superset [`schemas/job_error.json`](schemas/job_error.j
 `next_command`, `recovery_hint`).
 
 Path fields under the current home directory are compacted to `~` in agent JSON.
+Local path fields always use `/` separators, on Windows too, so one envelope
+never mixes separator styles; expand `~` to get an openable path.
 
 ## Exit codes
 

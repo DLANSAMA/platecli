@@ -92,6 +92,63 @@ def test_display_path_requires_separator_boundary(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# paths.json_path / _json_display_paths — one separator style in JSON
+# ---------------------------------------------------------------------------
+
+
+def test_json_path_normalizes_windows_separators(monkeypatch):
+    """Local path fields emit "/" on Windows, matching path_for_message."""
+    import bambu_cli.paths as paths
+
+    monkeypatch.setattr(paths.os, "sep", "\\")
+    assert paths.json_path("~\\models\\cube.3mf") == "~/models/cube.3mf"
+    assert paths.json_path("D:\\out\\cube.3mf") == "D:/out/cube.3mf"
+    # Already-normalized input and None are pass-through.
+    assert paths.json_path("~/models/cube.3mf") == "~/models/cube.3mf"
+    assert paths.json_path(None) is None
+
+
+def test_json_envelope_uses_one_separator_style(monkeypatch):
+    """A Windows envelope must not mix "\\" path fields with "/" everywhere else."""
+    import bambu_cli.paths as paths
+    import bambu_cli.utils as utils
+
+    monkeypatch.setattr(paths.os, "sep", "\\")
+    monkeypatch.setattr(utils, "_HOME_DIR", "C:\\Users\\alice")
+    monkeypatch.setattr(utils.os, "sep", "\\")
+    monkeypatch.setattr(utils.os, "altsep", "/")
+
+    payload = utils._json_display_paths(
+        {
+            "file": "C:\\Users\\alice\\models\\cube.stl",
+            "path": "D:\\out\\cube_sliced.3mf",
+            "local_path": "C:\\Users\\alice\\w\\cube.3mf",
+            "remote_path": "/cube.3mf",
+            "filename": "cube_sliced.3mf",
+        }
+    )
+
+    assert payload["file"] == "~/models/cube.stl"
+    assert payload["path"] == "D:/out/cube_sliced.3mf"
+    # local_path is a declared local-path field, so it is normalized too.
+    assert payload["local_path"] == "~/w/cube.3mf"
+    # Remote printer paths are already "/" and must be left alone.
+    assert payload["remote_path"] == "/cube.3mf"
+    assert "\\" not in "".join(v for v in payload.values() if isinstance(v, str))
+
+
+def test_json_path_field_keeps_url_separators(monkeypatch):
+    """A URL in a path-keyed field keeps its own separators and stays redacted."""
+    import bambu_cli.paths as paths
+    import bambu_cli.utils as utils
+
+    monkeypatch.setattr(paths.os, "sep", "\\")
+    at = "@"
+    payload = utils._json_display_paths({"source": "https://user:pass" + at + "host.com/x.stl"})
+    assert payload["source"] == "https://host.com/x.stl"
+
+
+# ---------------------------------------------------------------------------
 # utils._resolve_ip — do not cache failures
 # ---------------------------------------------------------------------------
 

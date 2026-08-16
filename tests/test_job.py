@@ -38,10 +38,17 @@ from bambu_cli import job  # noqa: E402
 from bambu_cli import utils  # noqa: E402
 from bambu_cli.cli import build_parser  # noqa: E402
 from bambu_cli.paths import display_path as _display_path  # noqa: E402
+from bambu_cli.paths import json_path as _json_path  # noqa: E402
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR  # noqa: E402
 from bambu_cli.context import RuntimeContext  # noqa: E402
 from bambu_cli.job import JobSteps, _run_job  # noqa: E402
 from bambu_cli.errors import BambuError
+
+
+def _json_path_field(path):
+    """The expected value of a JSON path field: ``~`` compaction, then ``/`` separators."""
+    return _json_path(_display_path(str(path)))
+
 
 def default_steps(**overrides):
     """``JobSteps`` wired to the real command handlers, with optional fakes.
@@ -460,7 +467,7 @@ def test_dry_run_local_printer_ready_file(tmp_path, capsys):
     assert payload["status"] == "dry_run_local_skipped"
     assert payload["would_upload"] is True
     assert payload["would_slice"] is False
-    assert payload["printable_path"] == _display_path(str(ready))
+    assert payload["printable_path"] == _json_path_field(ready)
 
 def test_dry_run_local_gcode_3mf_is_print_ready_not_sliced(tmp_path, capsys):
     """A local .gcode.3mf is print-ready: dry-run must report would_slice=False."""
@@ -598,7 +605,7 @@ def test_output_created_when_needed(tmp_path, capsys):
     _run_job(_ctx(), args, steps)
     assert out_dir.is_dir()
     payload = _read_json(capsys)
-    assert payload["workdir"] == _display_path(str(out_dir))
+    assert payload["workdir"] == _json_path_field(out_dir)
     assert payload["uploaded"] is True
 
 def test_output_ignored_for_printer_ready_local_file(tmp_path, capsys, caplog):
@@ -888,7 +895,7 @@ def test_url_download_success_flows_into_slice_and_upload(tmp_path, capsys):
     _run_job(_ctx(), args, steps)
     payload = _read_json(capsys)
     assert payload["would_download"] is True
-    assert payload["downloaded_path"] == _display_path(str(downloaded))
+    assert payload["downloaded_path"] == _json_path_field(downloaded)
     assert payload["uploaded"] is True
     assert payload["remote_name"] == "model.3mf"
 
@@ -916,7 +923,7 @@ def test_url_download_reports_extracted_archive_member(tmp_path, capsys):
     payload = _read_json(capsys)
     assert payload["would_extract"] is True
     assert payload["archive_entry"] == "part.stl"
-    assert payload["extracted_path"] == _display_path(str(extracted))
+    assert payload["extracted_path"] == _json_path_field(extracted)
     assert payload["uploaded"] is True
 
 def test_url_invalid_max_download_mb_fails(capsys):
