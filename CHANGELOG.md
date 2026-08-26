@@ -5,28 +5,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
-### Fixed
+## [0.5.0] - 2026-08-26
 
-- Windows `--json`: local path fields (`file`, `path`, `output`, `local_path`,
-  `workdir`, `config_path`, the `job` step paths, …) are emitted with `/`
-  separators instead of `\`. A single envelope previously mixed `\` in its
-  typed path fields with the `/` used by human-facing messages, remote printer
-  paths, and archive entries, so a consumer could not compare or join two path
-  fields without knowing which produced which. `~` home compaction is
-  unchanged. No effect on macOS/Linux.
+### Added
 
-- User-facing docs now match shipped behaviour for `--confirm` on `job` /
-  `send` (upload still runs; exit `0` `uploaded_not_printed`), the fail-closed
-  camera streamer (opt-in, not auto-fallback), `doctor` fingerprint/`-v`
-  output, STEP/STP slice precedence, and sdist-relative links to repo-only
-  quality docs.
-
+- **`plate tui` — a full-screen terminal UI** (optional extra:
+  `pip install 'platecli[tui]'`). A live dashboard (printer state, temperatures,
+  progress, AMS trays), a guided prepare screen (source validation, material and
+  quality presets with the AMS-loaded filament pre-selected, supports, slice +
+  time/filament preview), an explicit print-confirmation dialog (start / upload
+  only / cancel), and a live job monitor that follows a print to its terminal
+  state. It is a front-end over the existing pipeline — source validation, AMS
+  detection, download/slice, and the `job` request are the very same shared code
+  `plate go` runs, so the two cannot drift. Safety is unchanged: a print starts
+  only from the confirm dialog, upload-only leaves the file unstarted,
+  cancelling preserves the sliced file and says where it is, leaving the monitor
+  never stops a print, and quitting is refused while an upload is in flight.
+  `plate go` is unaffected and remains the no-extra-dependency path for SSH,
+  dumb terminals, and screen readers. Like `go`, `tui` is interactive-only:
+  `--json` and a non-TTY stdin exit `5` with the standard error envelope.
+  The prepare screen also offers **advanced slice settings** (`s`): a grouped
+  form over the named `slice` flags, plus an *Add an override* editor (a key, a
+  process/filament bucket, and a value) for everything the named flags do not
+  cover, recorded as `--set` / `--set-filament`. Blank fields keep profile
+  defaults, unsafe values are refused by the same validation the CLI applies,
+  and touching nothing leaves the slice byte identical to before. Use
+  `plate slice --list-settings` to see which keys your profiles accept.
 ### Removed
 
 - Python 3.9 support. The floor is 3.10 so every install resolves patched
   `zeroconf` (no 3.9-only advisory residual).
-
 ### Changed
+
+- 3MF estimate parsing walks the zip namelist in one pass and stops reading a
+  gcode header once both time and filament weight are known.
 
 - `upload` / `job` `--json` include `size_verified` (`false` when the printer
   omitted FTPS `SIZE` after the transfer). Mismatch is still a failure.
@@ -65,35 +77,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   `camera_direct_only` still forbids the streamer even when the opt-in is set.
   The snapshot command moved out of `protocols/camera.py` into
   `bambu_cli.commands.snapshot`.
-
-## [0.5.0] - 2026-08-05
-
-### Added
-
-- **`plate tui` — a full-screen terminal UI** (optional extra:
-  `pip install 'platecli[tui]'`). A live dashboard (printer state, temperatures,
-  progress, AMS trays), a guided prepare screen (source validation, material and
-  quality presets with the AMS-loaded filament pre-selected, supports, slice +
-  time/filament preview), an explicit print-confirmation dialog (start / upload
-  only / cancel), and a live job monitor that follows a print to its terminal
-  state. It is a front-end over the existing pipeline — source validation, AMS
-  detection, download/slice, and the `job` request are the very same shared code
-  `plate go` runs, so the two cannot drift. Safety is unchanged: a print starts
-  only from the confirm dialog, upload-only leaves the file unstarted,
-  cancelling preserves the sliced file and says where it is, leaving the monitor
-  never stops a print, and quitting is refused while an upload is in flight.
-  `plate go` is unaffected and remains the no-extra-dependency path for SSH,
-  dumb terminals, and screen readers. Like `go`, `tui` is interactive-only:
-  `--json` and a non-TTY stdin exit `5` with the standard error envelope.
-  The prepare screen also offers **advanced slice settings** (`s`): a grouped
-  form over the named `slice` flags, plus an *Add an override* editor (a key, a
-  process/filament bucket, and a value) for everything the named flags do not
-  cover, recorded as `--set` / `--set-filament`. Blank fields keep profile
-  defaults, unsafe values are refused by the same validation the CLI applies,
-  and touching nothing leaves the slice byte identical to before. Use
-  `plate slice --list-settings` to see which keys your profiles accept.
-
-### Changed
 
 - **`plate tui` prepare screen is now two columns.** The form (source, material,
   quality, supports, the Prepare/Settings buttons) sits on the left and what the
@@ -138,8 +121,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   `_underscore` helpers from the CLI entrypoint (roadmap B.4). Behaviour,
   output, JSON envelopes, and exit codes are unchanged; `cli.py` re-imports the
   same helpers from their new homes.
-
 ### Fixed
+
+- Windows `--json`: local path fields (`file`, `path`, `output`, `local_path`,
+  `workdir`, `config_path`, the `job` step paths, …) are emitted with `/`
+  separators instead of `\`. A single envelope previously mixed `\` in its
+  typed path fields with the `/` used by human-facing messages, remote printer
+  paths, and archive entries, so a consumer could not compare or join two path
+  fields without knowing which produced which. `~` home compaction is
+  unchanged. No effect on macOS/Linux.
+
+- User-facing docs now match shipped behaviour for `--confirm` on `job` /
+  `send` (upload still runs; exit `0` `uploaded_not_printed`), the fail-closed
+  camera streamer (opt-in, not auto-fallback), `doctor` fingerprint/`-v`
+  output, STEP/STP slice precedence, and sdist-relative links to repo-only
+  quality docs.
 
 - MQTT print-path integrity: `plate print` no longer reports a false
   `Print started` (exit 0) when the printer connection is refused. A refused
@@ -297,7 +293,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   (`failed_step: "extract"`) instead of escaping as an unstructured error.
 - `plate job/send <model> --dry-run`: a 0-byte/unreadable sliceable model now fails
   the dry-run, matching the existing printer-ready empty-file check (dry-run parity).
-
 ### Documentation
 
 - Troubleshooting gained the three `plate tui` symptoms, keyed to the exact strings
@@ -321,8 +316,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - Measured coverage/test numbers refreshed across the quality roadmap and test
   backlog from the current matrix (Linux 88.4%, Windows 88.09%, macOS 88.33%),
   replacing figures dating from before the TUI work.
-
 ### Security
+
+- `read_3mf_estimate` now refuses `Metadata/slice_info.config` members larger
+  than 10 MB and falls back to the gcode header, so a zip-bomb / oversized XML
+  in a downloaded `.3mf` cannot exhaust memory.
 
 - `insecure_tls` is now coerced strictly and fails **closed**. A hand-edited
   JSON string such as `"insecure_tls": "false"` (or `"no"`/`"0"`) is a truthy
