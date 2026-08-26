@@ -11,6 +11,7 @@ _MAX_SECONDS = 2592000  # 30 days
 _MAX_GRAMS = 10000.0
 
 GCODE_READ_BYTES = 65536  # 64 KB
+SLICE_INFO_READ_BYTES = 10 * 1024 * 1024  # 10 MB safety limit for XML config (Zip Bomb protection)
 
 
 @dataclass(frozen=True)
@@ -22,8 +23,7 @@ class Estimate:
 def _parse_slice_info(xml_text: str) -> tuple[int | None, float | None]:
     """Parse prediction (seconds) and weight (grams) from slice_info.config XML.
 
-    Uses xml.etree.ElementTree which is safe for local files we produced;
-    this is not parsing untrusted network XML.
+    Uses xml.etree.ElementTree to parse bounded metadata XML from .3mf packages.
     """
     try:
         root = ET.fromstring(xml_text)  # nosec B314 — local file produced by OrcaSlicer, not network input
@@ -114,10 +114,15 @@ def read_3mf_estimate(path: str) -> Estimate:
                     break
 
             if slice_info_name is not None:
-                xml_text = zf.read(slice_info_name).decode("utf-8", errors="replace")
-                seconds, grams = _parse_slice_info(xml_text)
-                if seconds is not None or grams is not None:
-                    return Estimate(seconds, grams)
+                info = zf.getinfo(slice_info_name)
+                # Security: Enforce size limit to prevent memory exhaustion / Zip Bomb DoS on untrusted .3mf files
+                if info.file_size <= SLICE_INFO_READ_BYTES:
+                    with zf.open(slice_info_name) as fh:
+                        xml_bytes = fh.read(SLICE_INFO_READ_BYTES)
+                    xml_text = xml_bytes.decode("utf-8", errors="replace")
+                    seconds, grams = _parse_slice_info(xml_text)
+                    if seconds is not None or grams is not None:
+                        return Estimate(seconds, grams)
                 # slice_info.config was present but yielded nothing usable
                 # (malformed XML, or only implausible values).  Fall through to
                 # the gcode header rather than reporting "unknown" -- a truncated
