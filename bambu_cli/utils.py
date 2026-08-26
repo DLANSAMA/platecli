@@ -43,6 +43,7 @@ _JSON_PATH_KEYS = {
     "downloaded_path",
     "extracted_path",
     "file",
+    "local_path",
     "output",
     "path",
     "printable_path",
@@ -68,6 +69,13 @@ def _redact_url_credentials(url):
 
 
 _HOME_DIR = os.path.expanduser("~")
+
+
+def _json_path(path):
+    """Normalize separators for JSON path fields. Delegates to ``paths.json_path``."""
+    from bambu_cli.paths import json_path
+
+    return json_path(path)
 
 
 def _display_path(path):
@@ -104,7 +112,8 @@ def _json_display_paths(value):
                 result[key] = _compact_all_strings(item)
             elif key in _JSON_PATH_KEYS and (isinstance(item, str) or item is None):
                 redacted = _redact_url_credentials(item)
-                result[key] = redacted if redacted != item else _display_path(item)
+                # A URL keeps its own separators; only local paths are normalized.
+                result[key] = redacted if redacted != item else _json_path(_display_path(item))
             else:
                 result[key] = _json_display_paths(item)
         return result

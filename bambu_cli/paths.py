@@ -11,6 +11,7 @@ import os
 __all__ = [
     "expand_path",
     "display_path",
+    "json_path",
     "path_for_message",
     "exception_for_message",
 ]
@@ -60,6 +61,25 @@ def display_path(path):
     if norm_expanded.startswith(prefix):
         return "~" + os.sep + os.path.relpath(expanded, _HOME_DIR)
     return text
+
+
+def json_path(path):
+    """Return a local path with separators normalized to ``/`` for JSON output.
+
+    Agent-facing JSON path fields are emitted with forward slashes on every
+    platform, matching the convention ``path_for_message`` already uses for
+    human-facing text. Without this, a single Windows envelope mixes ``\\`` in
+    the typed path fields with the ``/`` that messages, remote printer paths,
+    and archive entries use — so a consumer cannot compare or join the two
+    without knowing which field came from where.
+
+    Home-directory compaction is NOT applied here; callers pass a value that
+    has already been through the JSON ``~`` compaction, which is a documented
+    privacy guarantee (see AGENTS.md). ``expand_path`` reverses it.
+    """
+    if path is None or os.sep == "/":
+        return path
+    return str(path).replace(os.sep, "/")
 
 
 def path_for_message(path):

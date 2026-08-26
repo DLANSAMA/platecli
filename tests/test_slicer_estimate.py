@@ -71,6 +71,19 @@ def test_unparseable_slice_info_falls_back_to_gcode(tmp_path):
     assert read_3mf_estimate(path).seconds == 2700
 
 
+def test_oversized_slice_info_falls_back_to_gcode(tmp_path):
+    """An oversized slice_info.config (>10MB limit) must be skipped and fall back to gcode header."""
+    oversized_data = b"a" * (10 * 1024 * 1024 + 1)
+    path = _write_zip(
+        tmp_path / "oversized.3mf",
+        {
+            "Metadata/slice_info.config": oversized_data,
+            "Metadata/plate_1.gcode": b"; model printing time: 20m 0s\n",
+        },
+    )
+    assert read_3mf_estimate(path).seconds == 1200
+
+
 def test_slice_info_with_only_implausible_values_falls_back_to_gcode(tmp_path):
     """A well-formed config carrying junk must not shadow a good gcode header."""
     bad_config = (

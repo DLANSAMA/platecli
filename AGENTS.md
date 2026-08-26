@@ -18,7 +18,7 @@ Prefer `job`/`send` for agent work. Always ask the user before running any comma
 
 ZIP files are opened safely. URL downloads and ZIP extraction have a 2048 MB safety limit via `--max-download-mb`. Conflicting files use a numbered sibling such as `model-1.stl`.
 
-Agent-facing JSON path fields compact paths under the current home directory to `~`. Path-bearing JSON error messages use the same `~` compaction.
+Agent-facing JSON path fields compact paths under the current home directory to `~`, and always use `/` separators (on Windows too). Path-bearing JSON error messages use the same `~` compaction.
 
 ## Agent workflows and client architecture
 

@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Fixed
 
+- Windows `--json`: local path fields (`file`, `path`, `output`, `local_path`,
+  `workdir`, `config_path`, the `job` step paths, …) are emitted with `/`
+  separators instead of `\`. A single envelope previously mixed `\` in its
+  typed path fields with the `/` used by human-facing messages, remote printer
+  paths, and archive entries, so a consumer could not compare or join two path
+  fields without knowing which produced which. `~` home compaction is
+  unchanged. No effect on macOS/Linux.
+
 - User-facing docs now match shipped behaviour for `--confirm` on `job` /
   `send` (upload still runs; exit `0` `uploaded_not_printed`), the fail-closed
   camera streamer (opt-in, not auto-fallback), `doctor` fingerprint/`-v`
