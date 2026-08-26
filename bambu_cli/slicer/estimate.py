@@ -11,6 +11,7 @@ _MAX_SECONDS = 2592000  # 30 days
 _MAX_GRAMS = 10000.0
 
 GCODE_READ_BYTES = 65536  # 64 KB
+SLICE_INFO_READ_BYTES = 10 * 1024 * 1024  # 10 MB safety limit for XML config (Zip Bomb protection)
 
 
 @dataclass(frozen=True)
@@ -22,8 +23,7 @@ class Estimate:
 def _parse_slice_info(xml_text: str) -> tuple[int | None, float | None]:
     """Parse prediction (seconds) and weight (grams) from slice_info.config XML.
 
-    Uses xml.etree.ElementTree which is safe for local files we produced;
-    this is not parsing untrusted network XML.
+    Uses xml.etree.ElementTree to parse bounded metadata XML from .3mf packages.
     """
     try:
         root = ET.fromstring(xml_text)  # nosec B314 — local file produced by OrcaSlicer, not network input
@@ -89,6 +89,8 @@ def _parse_gcode_header(gcode_bytes: bytes) -> tuple[int | None, float | None]:
                     grams = v
             except (ValueError, TypeError):
                 pass
+        if seconds is not None and grams is not None:
+            break
 
     return seconds, grams
 
@@ -106,18 +108,25 @@ def read_3mf_estimate(path: str) -> Estimate:
 
             # Primary: Metadata/slice_info.config
             slice_info_name: str | None = None
+            gcode_members: list[str] = []
+
             for n in names:
-                normalised = n.replace("\\", "/")
-                parts = normalised.split("/")
-                if len(parts) == 2 and parts[0] == "Metadata" and parts[1] == "slice_info.config":
+                norm = n.replace("\\", "/")
+                if norm == "Metadata/slice_info.config":
                     slice_info_name = n
-                    break
+                elif norm.startswith("Metadata/") and norm.endswith(".gcode") and norm.count("/") == 1:
+                    gcode_members.append(n)
 
             if slice_info_name is not None:
-                xml_text = zf.read(slice_info_name).decode("utf-8", errors="replace")
-                seconds, grams = _parse_slice_info(xml_text)
-                if seconds is not None or grams is not None:
-                    return Estimate(seconds, grams)
+                info = zf.getinfo(slice_info_name)
+                # Security: Enforce size limit to prevent memory exhaustion / Zip Bomb DoS on untrusted .3mf files
+                if info.file_size <= SLICE_INFO_READ_BYTES:
+                    with zf.open(slice_info_name) as fh:
+                        xml_bytes = fh.read(SLICE_INFO_READ_BYTES)
+                    xml_text = xml_bytes.decode("utf-8", errors="replace")
+                    seconds, grams = _parse_slice_info(xml_text)
+                    if seconds is not None or grams is not None:
+                        return Estimate(seconds, grams)
                 # slice_info.config was present but yielded nothing usable
                 # (malformed XML, or only implausible values).  Fall through to
                 # the gcode header rather than reporting "unknown" -- a truncated
@@ -126,20 +135,15 @@ def read_3mf_estimate(path: str) -> Estimate:
 
             # Fallback: gcode members under Metadata/, in plate order.  Keep
             # trying later plates if an earlier one carries no usable header.
-            gcode_members = sorted(
-                n
-                for n in names
-                if len(n.replace("\\", "/").split("/")) == 2
-                and n.replace("\\", "/").split("/")[0] == "Metadata"
-                and n.replace("\\", "/").split("/")[1].endswith(".gcode")
-            )
-            for n in gcode_members:
-                # Read only the header window; a real plate gcode can be tens of MB.
-                with zf.open(n) as fh:
-                    gcode_bytes = fh.read(GCODE_READ_BYTES)
-                seconds, grams = _parse_gcode_header(gcode_bytes)
-                if seconds is not None or grams is not None:
-                    return Estimate(seconds, grams)
+            if gcode_members:
+                gcode_members.sort()
+                for n in gcode_members:
+                    # Read only the header window; a real plate gcode can be tens of MB.
+                    with zf.open(n) as fh:
+                        gcode_bytes = fh.read(GCODE_READ_BYTES)
+                    seconds, grams = _parse_gcode_header(gcode_bytes)
+                    if seconds is not None or grams is not None:
+                        return Estimate(seconds, grams)
 
     except Exception:  # noqa: BLE001 — never raise, degrade gracefully
         pass
