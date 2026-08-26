@@ -114,11 +114,7 @@ def read_3mf_estimate(path: str) -> Estimate:
                 norm = n.replace("\\", "/")
                 if norm == "Metadata/slice_info.config":
                     slice_info_name = n
-                elif (
-                    norm.startswith("Metadata/")
-                    and norm.endswith(".gcode")
-                    and norm.count("/") == 1
-                ):
+                elif norm.startswith("Metadata/") and norm.endswith(".gcode") and norm.count("/") == 1:
                     gcode_members.append(n)
 
             if slice_info_name is not None:
