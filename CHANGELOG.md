@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-28
+
 ### Fixed
 
 - **First-run honesty for people, not agents.** Bare `plate` outside a terminal
@@ -871,7 +873,8 @@ Initial development version: LAN-mode printer control (MQTT/FTPS), one-shot `job
 ### Removed
 - `requirements.txt`, which duplicated the `dependencies` already declared in `pyproject.toml`. Install with `uv pip install -e .` (or `pip install platecli`) instead.
 
-[Unreleased]: https://github.com/DLANSAMA/platecli/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/DLANSAMA/platecli/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/DLANSAMA/platecli/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/DLANSAMA/platecli/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/DLANSAMA/platecli/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/DLANSAMA/platecli/compare/v0.2.2...v0.3.0
