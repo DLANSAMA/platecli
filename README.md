@@ -21,18 +21,18 @@
   <img alt="platecli demo: live printer status and slicing from the terminal" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/demo-dark.gif">
 </picture>
 
-Paste a Printables link, get a physical print. `plate` downloads the model, slices it with OrcaSlicer, and sends it to your Bambu Lab printer — one command, entirely on your local network. No cloud account, no telemetry. Runs on **Linux, macOS, and Windows**, driven by hand or by AI agents.
+Paste a Printables link, get a physical print. `plate` downloads the model, slices it with OrcaSlicer, and sends it to your Bambu Lab printer — one guided command, entirely on your local network. No cloud account, no telemetry. Runs on **Linux, macOS, and Windows**, driven by hand or by AI agents.
 
 ```text
 model URL or file  →  download  →  slice (OrcaSlicer)  →  upload  →  print
-                        one command:  plate job <url> --confirm
+                        one command:  plate go
 ```
 
 **Supports:** any Bambu Lab printer with LAN mode — P1P, P1S, X1C, X1E, A1, A1 Mini. **Hardware-tested on the P1 series (P1P/P1S) only.** The rest speak the same LAN protocols and are expected to work, but are unverified on real hardware — treat them as best-effort and please [open an issue](https://github.com/DLANSAMA/platecli/issues) with what you hit. One caveat: `plate snapshot` grabs the camera directly (no extra software) on P1/A1-class printers. X1-series cameras need a locally-running Docker streamer, and that path is opt-in (`camera_allow_streamer` or `--allow-camera-streamer`) because the streamer does not honour `cert_fingerprint`.
 
 ## Install
 
-**Requirements:** Python 3.10+, and [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/releases) installed locally if you want to slice. `plate slice` and `plate job` shell out to the OrcaSlicer binary; `download`, `status`, `upload`, and `print` do not need it. `plate setup` auto-detects the usual install locations (macOS app bundle, Windows Program Files, and on Linux a `$PATH` binary, Flatpak export, or AppImage), and `plate preflight` (or `plate config validate`) tells you if it can't find one.
+**Requirements:** Python 3.10+, and [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/releases) installed locally to slice — it is a **second slicer app, not Bambu Studio**, and `plate` cannot slice without it. `plate go`, `plate job`, and `plate slice` shell out to the OrcaSlicer binary; `download`, `status`, `upload`, and `print` do not need it. `plate setup` auto-detects the usual install locations (macOS app bundle, Windows Program Files, and on Linux a `$PATH` binary, Flatpak export, or AppImage), and `plate preflight` (or `plate config validate`) tells you if it can't find one.
 
 Fastest way to get OrcaSlicer, if you don't have it:
 
@@ -78,11 +78,17 @@ plate --sim status
 
 ## Print something
 
-Enable LAN mode on your printer, grab the IP, serial, and access code from its touchscreen, then let the interactive setup walk you through the rest:
+Four steps, no flags to learn:
+
+1. **Install OrcaSlicer** (see [Install](#install)). `plate` runs it to slice; it is a second slicer app, not Bambu Studio.
+2. **Turn on LAN mode** on the printer's touchscreen and note the **IP address**, **serial number**, and **LAN access code** shown next to it. The access code is *not* your Bambu account password, and it changes every time LAN mode is toggled or the printer is factory-reset — re-run `plate setup` if it stops connecting.
+3. **`plate setup`** asks for those three values and finds OrcaSlicer for you. `plate doctor` then checks the connection end to end (optional).
+4. **`plate go`** — paste a model link (or a local file), pick a material and quality, look at the time and filament estimate, and say yes. Plain `plate` in a terminal opens the same wizard.
 
 ```bash
 plate setup
 plate doctor    # optional: verify the connection end to end
+plate go        # or: plate go "https://www.printables.com/model/3161-3d-benchy"
 ```
 
 <picture>
@@ -91,24 +97,17 @@ plate doctor    # optional: verify the connection end to end
   <img alt="plate doctor: config, MQTT, and FTPS health checks with TLS-pin verification against a real printer" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/doctor-dark.gif">
 </picture>
 
-Now go from a link on the internet to plastic on the bed:
+The wizard walks you from a model URL (or local file) to a running print: paste a source, confirm the printer, pick a material and quality preset, answer one supports question, then see a time and filament preview before a final confirm. OrcaSlicer still does the slicing underneath — you just never touch its settings. If your printer has an AMS, the material step defaults to whatever filament is loaded. Declining the final question offers upload-only, and cancelling keeps the sliced file.
+
+### Scripts and agents: `plate job`
+
+`plate go` needs an interactive terminal. Everything it asks maps to a flag on `plate job`, which runs the same `download` → `slice` → `upload` → `print` pipeline in one shot, so the result is identical:
 
 ```bash
 plate job "https://www.printables.com/model/3161-3d-benchy" --confirm
 ```
 
-`--confirm` is required for anything that moves the printer or destroys data on it: `print`, `stop`, `pause`, `resume`, `gcode`, and `delete`. Leave it off and the command refuses with exit code `5` — nothing on the printer moves. For `job` / `send`, omitting `--confirm` still runs the download → slice → upload pipeline and exits `0` with `"status": "uploaded_not_printed"`; only the print step is withheld. (`light` is exempt; an LED is not a physical action.)
-
-### Prefer a guided walk-through?
-
-If you'd rather not think about flags, run the wizard — or just type `plate` on its own:
-
-```bash
-plate go     # or: plate go "https://www.printables.com/model/3161-3d-benchy"
-plate        # bare `plate` on a terminal launches the same wizard
-```
-
-It walks you from a model URL (or local file) to a running print without touching a slicer: paste a source, confirm the printer, pick a material and quality preset, answer one supports question, then see a time and filament preview before a final confirm. If your printer has an AMS, the material step defaults to whatever filament is loaded. It drives the same `download` → `slice` → `job` pipeline as `plate job`, so the result is identical — it just asks the questions for you. `plate go` needs an interactive terminal; for scripts and agents, use `plate job <url> --confirm`.
+`--confirm` is what starts the print. **Without it, `job` / `send` still download, slice, and upload the file to the printer** — they exit `0` with `"status": "uploaded_not_printed"`, and the file sits on the printer unstarted. The commands that act on the printer directly are stricter: `print`, `stop`, `pause`, `resume`, `gcode`, and `delete` refuse without `--confirm` (exit code `5`) and do nothing. (`light` is exempt; an LED is not a physical action.)
 
 ### Watch the printer while it works
 
@@ -132,7 +131,7 @@ It is a front-end, not new machinery: it slices and builds the `job` request thr
 
 ## Why platecli
 
-- **One command, whole pipeline** — `plate job <url>` downloads, slices, uploads, and prints in one shot; or run `download` / `slice` / `upload` / `print` individually.
+- **One command, whole pipeline** — `plate go` asks the questions; `plate job <url> --confirm` takes flags. Both download, slice, upload, and print in one shot; or run `download` / `slice` / `upload` / `print` individually.
 - **Fully local & private** — talks straight to the printer over your LAN; no Bambu cloud account, ever.
 - **Deliberate-action gate** — physical commands refuse without `--confirm` (exit `5`), so a typo, a truncated argument list, or a replayed read-only command can't start a print. It is a gate against *accidents*, not an authorization boundary: `plate` cannot tell your `--confirm` from an agent's, so anything you let run `plate` can pass the flag. Sandbox agents accordingly.
 - **AI-agent ready** — every command speaks `--json` with published schemas, plus a `--sim` mode for hardware-free automation.
@@ -164,7 +163,7 @@ you can put in a shell script or hand to an agent, use this.
 
 ## Built for AI agents
 
-Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a canned printer (not a protocol test) for development without hardware, and the `--confirm` gate means physical actions never happen by accident. Two commands are deliberately human-only — the `go` wizard and the `tui` full-screen UI refuse `--json` and a non-TTY stdin with exit `5`; `plate job <url> --confirm` is the machine path that does the same work. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
+Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a canned printer (not a protocol test) for development without hardware, and the `--confirm` gate means a print never starts by accident — note that `job` / `send` without `--confirm` still upload (`uploaded_not_printed`); only the six direct printer commands refuse outright. Two commands are deliberately human-only — the `go` wizard and the `tui` full-screen UI refuse `--json` and a non-TTY stdin with exit `5`; `plate job <url> --confirm` is the machine path that does the same work. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
 
 ## Documentation
 

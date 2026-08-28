@@ -42,6 +42,8 @@ class BambuError(Exception):
         next_command: An optional suggested follow-up command for the user.
         exit_code: Process exit code to use when this error escapes ``main()``.
         failed_step: Which pipeline stage failed (e.g. "config", "connect").
+        logged: True when the raising site already wrote the human-readable
+            ERROR line, so ``cli.main`` must not print the same message again.
     """
 
     exit_code: int = EXIT_COMMAND_ERROR
@@ -56,11 +58,13 @@ class BambuError(Exception):
         exit_code=None,
         failed_step=None,
         extra=None,
+        logged=False,
     ):
         super().__init__(message)
         self.detail = detail or {}
         self.next_command = next_command
         self.extra = extra or {}
+        self.logged = bool(logged)
         if exit_code is not None:
             self.exit_code = exit_code
         if failed_step is not None:
@@ -180,12 +184,14 @@ def abort(
     next_command=None,
     extra=None,
     command: str | None = None,
+    logged: bool = False,
 ) -> NoReturn:
     """Raise the appropriate structured error for ``exit_code`` (domain code never calls ``sys.exit``).
 
     ``command`` is accepted so leftover ``emit_json_error`` call sites can pass
     it through; the exception does not store it — callers that need a payload
-    use ``BambuError.to_error_payload(command)``.
+    use ``BambuError.to_error_payload(command)``. Pass ``logged=True`` when the
+    caller has already written the ERROR line so it is not printed twice.
     """
     extra = dict(extra or {})
     resolved = message or f"Command failed (exit {exit_code})"
@@ -197,4 +203,5 @@ def abort(
         detail=detail,
         next_command=next_command,
         extra=extra,
+        logged=logged,
     )

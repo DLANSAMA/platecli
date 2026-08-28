@@ -164,7 +164,14 @@ def _add_slice_override_args(parser):
 
 def _add_job_arguments(parser):
     parser.add_argument("source", help="URL or local path to .stl/.step/.stp/.obj/.3mf/.gcode/.zip")
-    parser.add_argument("--confirm", action="store_true", help="Confirm print start after upload")
+    parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help=(
+            "Start the print after upload. Without it the model is still downloaded, sliced, and "
+            "uploaded to the printer (status uploaded_not_printed); only the print start is withheld"
+        ),
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="No-side-effect validation; skip download/slice/upload/print"
     )
@@ -217,12 +224,54 @@ def _add_job_arguments(parser):
     _add_slice_override_args(parser)
 
 
+def first_run_text() -> str:
+    """The short guide bare ``plate`` prints when it cannot open the wizard.
+
+    Written for a Bambu owner who has never used a CLI: the four steps from a
+    fresh install to a first print, in order, with the two things that trip
+    people up said out loud (OrcaSlicer is a second slicer, not Bambu Studio;
+    the LAN access code is not the account password and it rotates).
+    Deliberately not the argparse dump — that is one ``plate --help`` away.
+    """
+    # Local import: config probes the filesystem for defaults at import time,
+    # and parser construction should stay side-effect free.
+    from bambu_cli.config import orca_install_command
+
+    return (
+        "plate — print to a Bambu Lab printer from your terminal, no cloud account.\n"
+        "\n"
+        "First time? Four steps, in order:\n"
+        "\n"
+        "  1. Install OrcaSlicer. plate uses it to slice. It is a separate slicer app,\n"
+        "     not Bambu Studio:\n"
+        f"       {orca_install_command()}\n"
+        "  2. On the printer's touchscreen turn on LAN mode, then note the IP address,\n"
+        "     serial number, and LAN access code shown there. That code is not your\n"
+        "     Bambu account password, and it changes whenever LAN mode is toggled or\n"
+        "     the printer is factory-reset.\n"
+        "  3. Run:  plate setup\n"
+        "  4. Run:  plate go      (paste a model link; in a terminal, plain `plate` does the same)\n"
+        "\n"
+        "Every command:       plate --help\n"
+        "No printer yet:      plate --sim status      (a fake printer, no hardware needed)\n"
+        "Scripts and agents:  plate job <url> --json  (add --confirm only to start the print)\n"
+    )
+
+
 def get_global_parser():
     global_parser = argparse.ArgumentParser(add_help=False)
     global_parser.add_argument(
         "-v", "--verbose", action="store_true", default=argparse.SUPPRESS, help="Enable debug logging"
     )
-    global_parser.add_argument("--sim", action="store_true", default=argparse.SUPPRESS, help="Enable simulation mode")
+    global_parser.add_argument(
+        "--sim",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help=(
+            "Use a fake printer with canned responses: no hardware and no printer config needed. "
+            "It is not a protocol test of MQTT/FTPS"
+        ),
+    )
     global_parser.add_argument(
         "--json",
         action="store_true",
@@ -332,7 +381,10 @@ def build_parser():
     p_go = sub.add_parser(
         "go",
         parents=[get_global_parser()],
-        help="Interactive guided print: URL in, plastic out — no slicer knowledge needed",
+        help=(
+            "Guided print: paste a model URL or file, answer a few questions, print. "
+            "OrcaSlicer still does the slicing; you just never learn its flags"
+        ),
     )
     p_go.add_argument("source", nargs="?", help="Model URL or local file (skips the first prompt)")
 

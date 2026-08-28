@@ -200,7 +200,8 @@ def emit_json_error(args, command, exit_code, error, failed_step=None, **extra) 
     )
     if error:
         safe_log_error(error)
-    abort(error, exit_code=exit_code, failed_step=failed_step, extra=extra, command=command)
+    # The ERROR line was just written; tell cli.main so it does not print it again.
+    abort(error, exit_code=exit_code, failed_step=failed_step, extra=extra, command=command, logged=bool(error))
 
 
 def record_error_detail(command, exit_code, error, failed_step=None, **extra):

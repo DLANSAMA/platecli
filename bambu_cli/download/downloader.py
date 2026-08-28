@@ -43,6 +43,13 @@ from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.printables import is_printables_url, resolve_printables_url
 from bambu_cli.utils import _ensure_output_dir, _record_download_success, emit_json_error
 
+# Appended to the two "this HTML page is not a model" errors so the next step is
+# in the ERROR line itself (one concrete example of a source that works).
+_HTML_SOURCE_HINT = (
+    "Use a direct model URL such as https://example.com/model.stl (.stl/.step/.stp/.obj/.3mf/.gcode/.zip), "
+    "a Printables model page, or a local file."
+)
+
 
 def _response_header(resp, name):
     value = resp.getheader(name)
@@ -278,7 +285,9 @@ def _cmd_download(
                             args, source_url, normalized_source, url, urlparse(url).path, failed_step="resolve"
                         )
                         continue
-                    message = "HTML page did not contain a direct model file link."
+                    # emit_json_error logs once and raises, so the next step has to
+                    # live in the message itself.
+                    message = f"HTML page did not contain a direct model file link. {_HTML_SOURCE_HINT}"
                     emit_json_error(
                         args,
                         "download",
@@ -289,11 +298,6 @@ def _cmd_download(
                         normalized_source=normalized_source_report,
                         download_url=_redact_url_credentials(url),
                     )
-                    safe_log_error(message)
-                    logger.info(
-                        "   Use a Printables model page, a direct .stl/.step/.stp/.obj/.3mf/.gcode/.zip download URL, or a page with a direct model-file link."
-                    )
-                    abort("", exit_code=EXIT_FILE_ERROR)
                 if not archive_download:
                     _reject_unsupported_content_type(args, source_url, normalized_source, url, content_type)
 
@@ -554,7 +558,7 @@ def _cmd_download(
             )
             return outpath
 
-        message = "Could not resolve HTML page to a direct model file."
+        message = f"Could not resolve HTML page to a direct model file. {_HTML_SOURCE_HINT}"
         emit_json_error(
             args,
             "download",
@@ -565,8 +569,6 @@ def _cmd_download(
             normalized_source=normalized_source_report,
             download_url=_redact_url_credentials(url),
         )
-        safe_log_error(message)
-        abort("", exit_code=EXIT_FILE_ERROR)
     except urllib.error.HTTPError as e:
         _remove_partial_file(partial_path)
         _cleanup_reserved()

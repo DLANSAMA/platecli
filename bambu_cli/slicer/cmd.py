@@ -239,8 +239,8 @@ def cmd_slice(
                 logger.info(
                     f'Detected OrcaSlicer at {_display_path(detected_orca)} — set "orca_slicer" to this in config.json.'
                 )
-            else:
-                logger.info("Please update 'orca_slicer' in your config.json or place it in the tools/ directory.")
+            # With no install anywhere, `message` already says to install it and run
+            # `plate setup`; a "update config.json / tools/" hint would contradict that.
             emit_json_error(
                 args,
                 "slice",

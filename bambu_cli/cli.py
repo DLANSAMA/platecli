@@ -23,6 +23,7 @@ from .cliparse import (  # noqa: F401
     _SilentArgumentParser,
     _SilentParseError,
     build_parser,
+    first_run_text,
     get_global_parser,
 )
 from .constants import (
@@ -205,7 +206,9 @@ def main():
                 failed_step=exc.failed_step,
                 **extra,
             )
-        if msg and not msg.startswith("Command failed (exit "):
+        # Sites that raise through emit_json_error have already logged the line
+        # (exc.logged); printing it here again was the "every error twice" bug.
+        if msg and not msg.startswith("Command failed (exit ") and not getattr(exc, "logged", False):
             _safe_log_error(msg)
         sys.exit(exc.exit_code)
 
@@ -237,6 +240,13 @@ def main():
         printer_ip = _context.current_settings().printer_ip
         if printer_ip == "0.0.0.0":
             message = "Printer IP is not configured. Please run `plate setup` first."
+            if args.cmd == "doctor":
+                # doctor is the "is my setup OK?" command; without a printer the
+                # useful checks are the local ones, so name them.
+                message += (
+                    " No printer yet? `plate preflight` checks the local setup (Python, OrcaSlicer, profiles)"
+                    " without one, and `plate --sim status` fakes a printer."
+                )
             write_error_envelope(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
             logger.error(message)
             sys.exit(EXIT_CONFIG_ERROR)
@@ -282,11 +292,12 @@ def main():
         # and without --json launches the guided wizard — the highest-leverage
         # ease-of-use win for someone who just installed `plate` and typed it to
         # see what happens (plan §11 Q1). Any machine-use flag (--json) or a
-        # non-TTY stream (CI, pipes, subprocess, `plate | less`) keeps today's
-        # exact behavior below: help to stderr, EXIT_COMMAND_ERROR.
+        # non-TTY stream (CI, pipes, subprocess, `plate | less`) gets the short
+        # first-run text below on stderr and EXIT_COMMAND_ERROR — never the
+        # wizard or the TUI.
         _go = _resolve_command("go")
         if _go is None:  # pragma: no cover -- go is always registered
-            parser.print_help(sys.stderr)
+            print(first_run_text(), file=sys.stderr)
             sys.exit(EXIT_COMMAND_ERROR)
         args.cmd = "go"
         try:
@@ -296,7 +307,10 @@ def main():
         except BambuError as exc:
             _handle_bambu_error(exc, "go")
     else:
-        parser.print_help(sys.stderr)
+        # Bare `plate` without a terminal: a person reading this has probably
+        # just installed it, so say what to do next instead of dumping every
+        # subcommand. Still a usage error for scripts (exit 5, stdout untouched).
+        print(first_run_text(), file=sys.stderr)
         sys.exit(EXIT_COMMAND_ERROR)
 
 

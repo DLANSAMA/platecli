@@ -486,6 +486,26 @@ class TestDownloadLoopBranches(unittest.TestCase):
         )
 
     @patch("bambu_cli.logging_utils._BACKEND")
+    def test_html_page_without_model_link_prints_once_with_a_next_step(self, mock_logger):
+        """One ERROR line (marked logged so cli.main does not repeat it) that names a good source."""
+        self._respond(
+            _FakeResp(
+                [b"<html><body>no model links here</body></html>", b""],
+                headers={"Content-Type": "text/html"},
+            )
+        )
+        with self.assertRaises(BambuError) as cm:
+            self._run_download(self._args(url="https://example.com/page"))
+        message = str(cm.exception)
+        self.assertIn("did not contain a direct model file link", message)
+        self.assertIn("https://example.com/model.stl", message)
+        self.assertIn("Printables model page", message)
+        self.assertIn("local file", message)
+        self.assertTrue(cm.exception.logged)
+        errors = [c[0][0] for c in mock_logger.error.call_args_list if "direct model file link" in c[0][0]]
+        self.assertEqual(errors, [message])
+
+    @patch("bambu_cli.logging_utils._BACKEND")
     def test_redirect_url_is_revalidated_and_used(self, mock_logger):
         from bambu_cli.commands import cmd_download
 

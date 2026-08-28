@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Fixed
+
+- **First-run honesty for people, not agents.** Bare `plate` outside a terminal
+  (a pipe, CI, `plate | less`) now prints a short four-step first-run guide —
+  install OrcaSlicer (a second slicer, not Bambu Studio), turn on LAN mode and
+  read the IP / serial / LAN access code off the touchscreen (not the account
+  password; it rotates), `plate setup`, `plate go` — instead of the full
+  argparse dump. It still exits `5`, keeps stdout empty, and never launches the
+  wizard or the TUI. The README and user guide lead with that same path;
+  `plate job <url> --confirm` moves to the scripts-and-agents section.
+- `--confirm` copy now says what happens without it, per command: `job` /
+  `send` still download, slice, and **upload** (exit `0`,
+  `"uploaded_not_printed"`); only `print` / `stop` / `pause` / `resume` /
+  `gcode` / `delete` refuse. `plate go` help no longer claims "no slicer" — it
+  still runs OrcaSlicer, you just never learn its flags. `--sim` help says it
+  is a fake printer (no hardware, no config, not a protocol test). The `go` /
+  `tui` non-TTY refusal points scripts at `plate job <url> --json` and says
+  that `--confirm` is what starts a print.
+- Expected failures were logged twice — once by the failing step and again by
+  the CLI's error handler. They now print once. The missing-OrcaSlicer error no
+  longer adds a contradictory "update config.json / tools/" hint when nothing
+  is installed, and the "HTML page did not contain a direct model file link"
+  error names what to use instead (a direct `.stl` / `.3mf` URL, a Printables
+  model page, or a local file) — previously that hint was unreachable code.
+  `plate doctor` with no printer configured now points at `plate preflight`
+  and `plate --sim status`.
+
 ## [0.5.0] - 2026-08-26
 
 ### Added

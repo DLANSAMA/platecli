@@ -4,9 +4,7 @@ The complete reference for `plate` — setup, configuration, slicing, monitoring
 
 **Contents**
 
-- [Installing from source](#installing-from-source)
-- [Use with AI agents](#use-with-ai-agents)
-- [Features in depth](#features-in-depth)
+- [Your first print](#your-first-print)
 - [Setup](#setup)
 - [OrcaSlicer](#orcaslicer)
 - [Usage](#usage)
@@ -17,53 +15,53 @@ The complete reference for `plate` — setup, configuration, slicing, monitoring
 - [Global flags](#global-flags)
 - [Slicing & AMS](#slicing--ams)
 - [Config reference](#config-reference)
+- [Use with AI agents](#use-with-ai-agents)
+- [Features in depth](#features-in-depth)
+- [Installing from source](#installing-from-source)
 - [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md)
+- [Support matrix](#support-matrix)
 - [Project layout](#project-layout)
 - [Documentation map](#documentation-map)
-- [Support matrix](#support-matrix)
 
-## Installing from source
+## Your first print
 
-```bash
-pip install .
-# or: uv sync
-```
+Four steps, in order. None of them needs a slicer setting or a flag.
 
-## Use with AI agents
+1. **Install OrcaSlicer.** `plate` slices with it, and cannot slice without it.
+   It is a *second* slicer app, separate from Bambu Studio — see
+   [OrcaSlicer](#orcaslicer) for the one-line install on each platform.
+2. **Turn on LAN mode** on the printer's touchscreen and note the three values
+   shown next to it: the **IP address**, the **serial number**, and the
+   **LAN access code**. The access code is *not* your Bambu account password,
+   and it changes whenever LAN mode is toggled or the printer is factory-reset.
+3. **Run `plate setup`.** It asks for those three values and auto-detects
+   OrcaSlicer. `plate doctor` afterwards checks the connection end to end
+   (see [Setup](#setup)).
+4. **Run `plate go`** and paste a model link or a local file. It asks for a
+   material and a quality, shows the time and filament estimate, and starts
+   the print only after you say yes. Plain `plate` in a terminal opens the same
+   wizard (see [Guided mode](#guided-mode-plate-go)).
 
-`--json` is a global flag accepted by every command that produces structured output. Responses follow published JSON Schema files under [`docs/schemas/`](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) — agents can validate against them or use them to understand the exact shape of each response.
+No printer within reach yet? `plate --sim status` fakes one so you can look
+around, and `plate preflight` checks the local pieces (Python, OrcaSlicer,
+profiles) without touching a printer.
 
-`--sim` (simulation mode) replaces the real printer with a **canned** local stub — fixed status, files, and camera bytes. It is not a protocol test of MQTT/FTPS. Use it to develop agents and scripts without hardware.
-
-Destructive and physical actions — starting a print, pausing or resuming a print, stopping a job, deleting a file, or sending raw G-code — are gated behind an explicit `--confirm` flag. `print`, `stop`, `pause`, `resume`, `delete`, and `gcode` refuse without it (exit code `5`, `"status": "confirmation_required"`) and the printer is untouched. `job` / `send` without `--confirm` still download, slice, and upload, then exit `0` with `"status": "uploaded_not_printed"` — only the print step is withheld. Note this is a gate against accidents, not an authorization boundary: anything that can run `plate` can also pass `--confirm`.
-
-```bash
-# Inspect printer state without hardware
-plate --sim status --json
-
-# Start a full print workflow — requires --confirm to actually begin printing
-plate job <url> --json --confirm
-```
-
-## Features in depth
-
-- **Jobs & URL support** — Use `job` when an agent or user gives either a website URL or a local file path. It handles everything in one shot.
-- **Printables downloads** — platecli fetches files from Printables *on your behalf*, from your own machine and network — the same file you would get by clicking Download. It identifies itself honestly as `platecli/<version>`, keeps at least one second between requests to the same host, and honors `Retry-After`. Your use is subject to [Printables' terms of service](https://www.printables.com/legal/terms-of-use) and to the individual model's own licence (often a Creative Commons variant with attribution, non-commercial, or no-derivatives conditions). platecli grants you no rights to any downloaded model — check the licence on the model page before printing, remixing, redistributing, or selling. The Printables API used for resolution is undocumented and may change or stop working without notice.
-- **Safe extraction** — ZIP archives containing model files are fully supported. Existing files are kept safe by creating a numbered sibling such as `model-1.stl`. URL downloads and ZIP extraction have a 2048 MB safety limit, adjustable via `--max-download-mb`.
-- **Modularity** — Run steps individually using `download`, `slice`, `upload`, or `print`.
-- **Safety first** — `print`, `pause`, `resume`, `stop`, `delete`, and raw `gcode` refuse without `--confirm` (exit code `5`). `job` / `send` without `--confirm` still upload and exit `0` with `"status": "uploaded_not_printed"`; only the print step is withheld.
-- **TLS pinning** — Pin the printer’s self-signed cert with `cert_fingerprint` (setup/doctor can capture it). Prefer this over `insecure_tls`.
-- **SSRF-hardened downloads** — Private/loopback targets are refused unless you pass `--allow-private-ips` for that invocation.
-- **Diagnostics** — Network, FTPS, and MQTT health checking with `doctor` and `preflight`.
-- **Agent JSON** — Structured `--json` output with published schemas under `docs/schemas/`.
+Writing a script or driving `plate` from an agent instead? Use `plate job`
+— see [Use with AI agents](#use-with-ai-agents) for the flags and for what
+`--confirm` does and does not gate.
 
 ## Setup
 
-Before running `setup`, gather your printer's LAN IP address, serial number, and
-LAN-only access code (all shown on the printer's touchscreen under network/LAN
-settings), and make sure LAN mode is enabled on the printer.
+Before running `setup`, turn on LAN mode on the printer and gather the three
+values its touchscreen shows under network/LAN settings: the LAN IP address,
+the serial number, and the LAN access code. The access code is **not** your
+Bambu account password, and it is regenerated whenever LAN mode is toggled or
+the printer is factory-reset — if `plate` suddenly cannot connect, read it off
+the screen again and re-run `setup`.
 
-Use the interactive `setup` command to create your config securely:
+Use the interactive `setup` command to create your config securely (it also
+auto-detects [OrcaSlicer](#orcaslicer), which must be installed first if you
+want to slice):
 
 ```bash
 plate setup
@@ -196,6 +194,10 @@ If slicing still fails, see
 ## Usage
 
 ```bash
+# Guided: paste a link, answer a few questions, print (asks before starting)
+plate go
+plate go "https://www.printables.com/model/3161-3d-benchy"
+
 # Read-only: check connectivity and printer state (safe, no printer state changes)
 plate status
 plate doctor
@@ -204,14 +206,15 @@ plate doctor
 For programmatic checks, `plate --json --version` emits JSON version details.
 
 ```bash
-# Full workflow (download, slice, upload, and START A PHYSICAL PRINT)
-# --confirm is required for any command that begins printing.
+# Scripted full workflow: download, slice, upload, and START A PHYSICAL PRINT.
+# --confirm is what starts the print; without it job/send still download,
+# slice, and upload, then exit 0 with "status": "uploaded_not_printed".
 plate job "https://www.printables.com/model/3161-3d-benchy" --confirm --json
 ```
 
 ## Guided mode (plate go)
 
-`plate go` is an interactive wizard for printing from a URL without touching a slicer. It is a front-end over the same pipeline as `plate job` — it collects your answers, builds the same request `job` would, and drives `download` → `slice` → `job` — so the result is identical; it just asks the questions instead of taking flags.
+`plate go` is an interactive wizard for printing from a URL without learning any slicer settings — OrcaSlicer still does the slicing underneath, so it must be installed. It is a front-end over the same pipeline as `plate job` — it collects your answers, builds the same request `job` would, and drives `download` → `slice` → `job` — so the result is identical; it just asks the questions instead of taking flags.
 
 ```bash
 plate go                                                   # prompts for everything
@@ -392,6 +395,42 @@ or manually.
 \* Either `access_code_file` or `access_code` is required. Inline `access_code` is deprecated and will be removed in a future release.
 
 `allow_private_ips` is **not** a config key — use the CLI flag `--allow-private-ips` per invocation.
+
+## Use with AI agents
+
+`--json` is a global flag accepted by every command that produces structured output. Responses follow published JSON Schema files under [`docs/schemas/`](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) — agents can validate against them or use them to understand the exact shape of each response.
+
+`--sim` (simulation mode) replaces the real printer with a **canned** local stub — fixed status, files, and camera bytes. It is not a protocol test of MQTT/FTPS. Use it to develop agents and scripts without hardware.
+
+Destructive and physical actions — starting a print, pausing or resuming a print, stopping a job, deleting a file, or sending raw G-code — are gated behind an explicit `--confirm` flag. `print`, `stop`, `pause`, `resume`, `delete`, and `gcode` refuse without it (exit code `5`, `"status": "confirmation_required"`) and the printer is untouched. `job` / `send` without `--confirm` still download, slice, and upload, then exit `0` with `"status": "uploaded_not_printed"` — only the print step is withheld. Note this is a gate against accidents, not an authorization boundary: anything that can run `plate` can also pass `--confirm`.
+
+```bash
+# Inspect printer state without hardware
+plate --sim status --json
+
+# Full pipeline. Without --confirm this still downloads, slices, and UPLOADS
+# (exit 0, "uploaded_not_printed"); with it, the print starts.
+plate job <url> --json --confirm
+```
+
+## Features in depth
+
+- **Jobs & URL support** — Use `job` when an agent or user gives either a website URL or a local file path. It handles everything in one shot.
+- **Printables downloads** — platecli fetches files from Printables *on your behalf*, from your own machine and network — the same file you would get by clicking Download. It identifies itself honestly as `platecli/<version>`, keeps at least one second between requests to the same host, and honors `Retry-After`. Your use is subject to [Printables' terms of service](https://www.printables.com/legal/terms-of-use) and to the individual model's own licence (often a Creative Commons variant with attribution, non-commercial, or no-derivatives conditions). platecli grants you no rights to any downloaded model — check the licence on the model page before printing, remixing, redistributing, or selling. The Printables API used for resolution is undocumented and may change or stop working without notice.
+- **Safe extraction** — ZIP archives containing model files are fully supported. Existing files are kept safe by creating a numbered sibling such as `model-1.stl`. URL downloads and ZIP extraction have a 2048 MB safety limit, adjustable via `--max-download-mb`.
+- **Modularity** — Run steps individually using `download`, `slice`, `upload`, or `print`.
+- **Safety first** — `print`, `pause`, `resume`, `stop`, `delete`, and raw `gcode` refuse without `--confirm` (exit code `5`). `job` / `send` without `--confirm` still upload and exit `0` with `"status": "uploaded_not_printed"`; only the print step is withheld.
+- **TLS pinning** — Pin the printer’s self-signed cert with `cert_fingerprint` (setup/doctor can capture it). Prefer this over `insecure_tls`.
+- **SSRF-hardened downloads** — Private/loopback targets are refused unless you pass `--allow-private-ips` for that invocation.
+- **Diagnostics** — Network, FTPS, and MQTT health checking with `doctor` and `preflight`.
+- **Agent JSON** — Structured `--json` output with published schemas under `docs/schemas/`.
+
+## Installing from source
+
+```bash
+pip install .
+# or: uv sync
+```
 
 ## Support matrix
 

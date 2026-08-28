@@ -11,7 +11,7 @@ import argparse
 
 
 def cmd_go(args: argparse.Namespace) -> None:
-    """Interactive guided print: URL in, plastic out — no slicer knowledge needed."""
+    """Guided print: URL or file in, plastic out — OrcaSlicer runs underneath, no flags to learn."""
     from bambu_cli.interactive.session import cmd_go as _cmd_go
 
     _cmd_go(args)

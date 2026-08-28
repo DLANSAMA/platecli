@@ -193,8 +193,13 @@ def smoke_help_surface(root):
     if version_json != {"status": "ok", "command": "version", "version": project_version()}:
         assert False, f"--json --version payload was unexpected: {version_json}"
     no_command = run_cli([], env, expected_returncode=5)
-    if "usage:" not in no_command.stderr.lower() or no_command.stdout.strip():
-        assert False, "missing subcommand should print usage to stderr and keep stdout empty"
+    # Bare `plate` off a TTY is the human first-run text (install OrcaSlicer, LAN
+    # mode, `plate setup`, `plate go`) on stderr — not the argparse dump, and never
+    # the wizard/TUI. stdout stays empty so it is still a clean usage error.
+    if "plate setup" not in no_command.stderr or "OrcaSlicer" not in no_command.stderr:
+        assert False, "missing subcommand should print the first-run guide to stderr"
+    if "positional arguments" in no_command.stderr or no_command.stdout.strip():
+        assert False, "missing subcommand must not dump argparse help or write to stdout"
     unknown_command = run_cli(["definitely-not-a-command"], env, expected_returncode=5)
     if "invalid choice" not in unknown_command.stderr or unknown_command.stdout.strip():
         assert False, "unknown subcommand should be a command error on stderr with empty stdout"

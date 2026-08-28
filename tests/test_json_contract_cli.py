@@ -63,12 +63,15 @@ def test_missing_subcommand_json_shape(monkeypatch, tmp_path, capsys):
     )
 
 
-def test_missing_subcommand_without_json_prints_usage_not_json(monkeypatch, tmp_path, capsys):
+def test_missing_subcommand_without_json_prints_first_run_text_not_json(monkeypatch, tmp_path, capsys):
     exc = run_main(monkeypatch, tmp_path, [])
     assert exc is not None and exc.code == 5
     out, err = capsys.readouterr()
     assert out.strip() == ""
-    assert "usage:" in err.lower()
+    # Off a TTY, bare `plate` is the short human first-run guide on stderr (not the
+    # argparse dump, and never JSON on stdout).
+    assert "plate setup" in err and "plate --help" in err
+    assert "{" not in out
 
 
 # ---------------------------------------------------------------------------

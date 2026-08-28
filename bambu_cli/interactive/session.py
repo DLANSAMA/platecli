@@ -65,7 +65,11 @@ __all__ = [
     "cmd_go",
 ]
 
-_NON_TTY_MESSAGE = "plate go is interactive; use 'plate job <url> --confirm' for scripts."
+_NON_TTY_MESSAGE = (
+    "plate go is interactive and needs a terminal. Scripts and agents: use 'plate job <url> --json'"
+    " (it downloads, slices, and uploads; add --confirm only to start the print),"
+    " or 'plate --sim status' to try things with a fake printer."
+)
 _MAX_URL_ATTEMPTS = 3
 
 
@@ -332,7 +336,7 @@ def _run_go(args: argparse.Namespace, deps: GoDeps) -> None:
 
 
 def cmd_go(args: argparse.Namespace, deps: GoDeps | None = None) -> None:
-    """Interactive guided print: URL in, plastic out — no slicer knowledge needed.
+    """Guided print: URL or file in, plastic out — OrcaSlicer runs underneath, no flags to learn.
 
     ``deps`` is injectable for tests; production callers pass nothing and get the
     real prompt layer + pipeline collaborators.
