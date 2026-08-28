@@ -21,7 +21,11 @@ import sys
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR
 from bambu_cli.errors import abort
 
-_NON_TTY_MESSAGE = "plate tui is interactive; use 'plate job <url> --confirm' for scripts."
+_NON_TTY_MESSAGE = (
+    "plate tui is interactive and needs a terminal. Scripts and agents: use 'plate job <url> --json'"
+    " (it downloads, slices, and uploads; add --confirm only to start the print),"
+    " or 'plate --sim status' to try things with a fake printer."
+)
 _MISSING_EXTRA_MESSAGE = "plate tui requires the TUI extra: pip install 'platecli[tui]'"
 
 

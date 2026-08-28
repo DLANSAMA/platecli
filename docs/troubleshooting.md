@@ -545,19 +545,21 @@ the extra, and every non-interactive command works exactly as before.
 ## "plate tui is interactive" — exit 5 in a script, pipe, or with --json
 
 ```
-plate tui is interactive; use 'plate job <url> --confirm' for scripts.
+plate tui is interactive and needs a terminal. Scripts and agents: use 'plate job <url> --json' (it downloads, slices, and uploads; add --confirm only to start the print), or 'plate --sim status' to try things with a fake printer.
 ```
 
-Exit code `5`. Working as designed, and it fires in three situations: you passed
-`--json`, stdin is not a terminal (a pipe, a cron job, a CI step, some editor
-terminals), or both. The TUI has no machine contract — there is no stable
-document to parse out of a full-screen app — so instead of emitting half a
-contract it refuses and points at the command that *does* have one.
+Exit code `5` (`plate go` says the same thing about itself). Working as
+designed, and it fires in three situations: you passed `--json`, stdin is not a
+terminal (a pipe, a cron job, a CI step, some editor terminals), or both. The
+TUI has no machine contract — there is no stable document to parse out of a
+full-screen app — so instead of emitting half a contract it refuses and points
+at the command that *does* have one.
 
 For automation use the one-shot pipeline:
 
 ```bash
-plate job <url-or-file> --json --confirm
+plate job <url-or-file> --json            # download + slice + upload, nothing printed
+plate job <url-or-file> --json --confirm  # ...and start the print
 ```
 
 If you meant to run it interactively and still got this, your stdin is not a TTY.

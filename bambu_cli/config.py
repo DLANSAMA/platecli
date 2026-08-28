@@ -294,6 +294,11 @@ _ORCA_INSTALL_COMMANDS = {
 }
 
 
+def orca_install_command():
+    """Return the fastest one-line OrcaSlicer install command for this platform."""
+    return _ORCA_INSTALL_COMMANDS.get(sys.platform, _ORCA_INSTALL_COMMANDS["linux"])
+
+
 def orca_install_hint():
     """Return a one-line, platform-appropriate 'how to install OrcaSlicer' hint.
 
@@ -301,8 +306,7 @@ def orca_install_hint():
     on the machine — at that point suggesting a config edit is useless, because
     there is nothing to point the config at.
     """
-    command = _ORCA_INSTALL_COMMANDS.get(sys.platform, _ORCA_INSTALL_COMMANDS["linux"])
-    return f"Install it with `{command}` (or download from {ORCA_RELEASES_URL}), then run `plate setup`."
+    return f"Install it with `{orca_install_command()}` (or download from {ORCA_RELEASES_URL}), then run `plate setup`."
 
 
 _DEFAULT_ORCA = _default_orca_path()

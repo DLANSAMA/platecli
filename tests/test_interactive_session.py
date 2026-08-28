@@ -795,7 +795,7 @@ def test_bare_plate_tty_launches_wizard(monkeypatch, tmp_path):
     main()  # returns cleanly; the wizard handler ran instead of help
     assert called["cmd"] == "go"
 
-def test_bare_plate_non_tty_prints_help_and_exits_5(monkeypatch, tmp_path):
+def test_bare_plate_non_tty_prints_first_run_text_and_exits_5(monkeypatch, tmp_path, capsys):
     from bambu_cli import commands as commands_mod
     from bambu_cli.cli import main
 
@@ -810,6 +810,11 @@ def test_bare_plate_non_tty_prints_help_and_exits_5(monkeypatch, tmp_path):
     with pytest.raises(SystemExit) as ei:
         main()
     assert ei.value.code == 5
+    captured = capsys.readouterr()
+    assert captured.out == ""  # still a usage error for scripts: stdout untouched
+    # The short person path, not the argparse dump.
+    assert "plate setup" in captured.err and "plate go" in captured.err
+    assert "positional arguments" not in captured.err
 
 def test_bare_plate_tty_stdin_but_redirected_stdout_prints_help(monkeypatch, tmp_path):
     """A TTY stdin with a redirected stdout is a script pattern -> keep help path."""
