@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Changed
+
+- README: the "Print something" first-run steps (which start with installing
+  OrcaSlicer) now come before the "Try it in 30 seconds" simulation section,
+  and that section says plainly that `plate --sim status` needs neither a
+  printer nor OrcaSlicer while a real print needs both. No CLI behaviour
+  changed; the empty-`HOME` first-run contract is now pinned by tests:
+  `plate preflight` reports the missing config, OrcaSlicer binary, and BBL
+  profiles as three separate checks, `plate setup --sim` without a TTY prints
+  the non-interactive `--printer-ip`/`--serial`/`--access-code-file` hint
+  instead of a traceback, and `plate --sim status` still exits `0`.
+
 ## [0.5.1] - 2026-08-28
 
 ### Fixed
