@@ -1,6 +1,9 @@
 """Print command: the physical-action path and its --confirm gate."""
 
+import argparse
+
 from tests.bambu_test_base import *  # noqa: F401,F403
+
 
 class TestBambuCmdPrint(unittest.TestCase):
     @patch("bambu_cli.protocols.mqtt.get_status")
@@ -239,3 +242,44 @@ class TestBambuCmdPrint(unittest.TestCase):
             "test.gcode", use_ams=False, ams_mapping=None, timelapse=False, bed_leveling=False, flow_cali=False
         )
         mock_execute.assert_called_once_with(ANY, "test_payload", "test.gcode", dry_run=False)
+
+
+class TestCmdPrintLocalPathHint(unittest.TestCase):
+    """`plate print <local path>` must explain what `print` takes, not blame the name."""
+
+    def _run(self, file_arg):
+        from bambu_cli.commands.print_cmd import cmd_print
+
+        args = argparse.Namespace(file=file_arg, confirm=False, dry_run=False, json=False)
+        with self.assertRaises(BambuError) as cm:
+            cmd_print(args, ctx=MagicMock())
+        return cm.exception
+
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_model_path_points_at_job(self, _logger):
+        exc = self._run("tests/fixtures/cube.stl")
+        self.assertEqual(exc.exit_code, 3)
+        self.assertEqual(exc.failed_step, "validate")
+        self.assertIn("looks like a local path", str(exc))
+        self.assertIn("already on the printer", str(exc))
+        self.assertNotIn("unsafe name", str(exc))
+        self.assertEqual(exc.next_command, "plate job tests/fixtures/cube.stl --confirm")
+
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_sliced_path_points_at_upload(self, _logger):
+        exc = self._run("out/cube.gcode.3mf")
+        self.assertEqual(exc.exit_code, 3)
+        self.assertEqual(exc.next_command, "plate upload out/cube.gcode.3mf")
+        self.assertIn("plate print <name> --confirm", str(exc))
+
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_windows_separator_counts_as_path(self, _logger):
+        exc = self._run("models\\cube.stl")
+        self.assertIn("looks like a local path", str(exc))
+
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_plain_unsafe_name_keeps_old_message(self, _logger):
+        exc = self._run("bad:name.3mf")
+        self.assertEqual(exc.exit_code, 3)
+        self.assertIn("unsafe name", str(exc))
+        self.assertIsNone(exc.next_command)

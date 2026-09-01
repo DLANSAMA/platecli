@@ -11,7 +11,7 @@
 [![Downloads](https://static.pepy.tech/badge/platecli)](https://pepy.tech/projects/platecli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[Install](#install) · [Try it in 30 seconds](#try-it-in-30-seconds) · [Print something](#print-something) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) · [For AI agents](#built-for-ai-agents)
+[Install](#install) · [Print something](#print-something) · [Try it without a printer](#try-it-in-30-seconds) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) · [For AI agents](#built-for-ai-agents)
 
 </div>
 
@@ -51,30 +51,6 @@ pip install platecli
 ```
 
 <sub>Previously published on PyPI as `bambu-local-cli` (yanked). The project is now `platecli`; the installed command is `plate`.</sub>
-
-## Try it in 30 seconds
-
-No printer needed — simulation mode fakes one so you can kick the tires right away:
-
-```bash
-plate --sim status
-```
-
-```
-🖨️  Bambu Printer Status
-   State: IDLE
-   Bed: 25°C / 0°C
-   Nozzle: 25°C / 0°C
-   Fan: 0 | WiFi: -42dBm
-   AMS:
-     Unit 0 (humidity 5, 26.0°C)
-       ▶ Slot 0: PLA #F2F2F2 | 90%
-         Slot 1: PETG #0A0AC8 | 60%
-         Slot 2: empty
-         Slot 3: TPU #000000 | 45%
-```
-
-<sub>Timestamps and log-level prefixes trimmed for brevity.</sub>
 
 ## Print something
 
@@ -128,6 +104,30 @@ It is a front-end, not new machinery: it slices and builds the `job` request thr
 <p align="center">
   <img alt="plate tui: a live printer dashboard — state, temperatures, progress and AMS trays — and the two-column prepare screen it starts prints from" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/tui.gif">
 </p>
+
+## Try it in 30 seconds
+
+No printer yet, or OrcaSlicer not installed yet? Simulation mode fakes a printer so you can kick the tires right away — it needs neither. (A real print still needs both; see [Print something](#print-something).)
+
+```bash
+plate --sim status
+```
+
+```
+🖨️  Bambu Printer Status
+   State: IDLE
+   Bed: 25°C / 0°C
+   Nozzle: 25°C / 0°C
+   Fan: 0 | WiFi: -42dBm
+   AMS:
+     Unit 0 (humidity 5, 26.0°C)
+       ▶ Slot 0: PLA #F2F2F2 | 90%
+         Slot 1: PETG #0A0AC8 | 60%
+         Slot 2: empty
+         Slot 3: TPU #000000 | 45%
+```
+
+<sub>Timestamps and log-level prefixes trimmed for brevity.</sub>
 
 ## Why platecli
 

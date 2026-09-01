@@ -1,5 +1,12 @@
 # Quality roadmap: A+ across the board
 
+> **Frozen 2026-09-01.** The 2026-09 audit found the gates below already green
+> (91.1% coverage, mypy/bandit/pip-audit/layers/schemas all blocking) against
+> **zero external users** — no stars, forks, or issues after eight weeks and
+> 124 merged PRs. Further quality work here is deferred until real users have
+> run `plate go`; the open boxes that remain are listed honestly, not as
+> next steps. This file is repo-only and never ships.
+
 Living plan to take `platecli` from **solid 0.1.x beta (B− overall)** to
 **A+ product + A+ testing**. Derived from the 2026-07 harsh codebase audit.
 
@@ -358,16 +365,16 @@ pytest -W error::ResourceWarning --cov=bambu_cli --cov-fail-under=85
 # plus existing smokes (agent, package, privacy, help)
 ```
 
-- [ ] Remove or shrink dedicated unittest module list; pytest collects everything.
-- [ ] `bandit -ll` **blocking** (no `|| true`) or allowlist with linked issues.
-- [ ] `pip-audit` blocking for high/critical (allowlist documented).
+- [x] Remove or shrink dedicated unittest module list; pytest collects everything (ci.yml: "Single runner: pytest").
+- [x] `bandit -ll` **blocking** (no `|| true`) — ci.yml step "bandit (blocking medium+)".
+- [x] `pip-audit` blocking for high/critical — ci.yml step "pip-audit (blocking high+)".
 
 #### DoD
 
-- [ ] mqtt ≥85%, ftps ≥90%, camera ≥90%, netsafety ≥95%.
-- [ ] Total coverage ≥85% with fail-under.
-- [ ] Single primary test command documented in CONTRIBUTING + CLAUDE/AGENTS.
-- [ ] Zero flakes on 10 consecutive local full runs (or CI retries ≤0 on main for a week).
+- [ ] mqtt ≥85%, ftps ≥90%, camera ≥90%, netsafety ≥95% — 2026-09-01 local: mqtt 100%, camera 96.5%, netsafety 95.9% met; **ftps 89.8%** still short.
+- [x] Total coverage ≥85% with fail-under (floor is **86**; 91.1% measured 2026-09-01).
+- [x] Single primary test command documented in CONTRIBUTING + AGENTS.
+- [ ] Zero flakes on 10 consecutive local full runs (or CI retries ≤0 on main for a week) — never measured.
 
 #### Score impact
 
@@ -406,15 +413,15 @@ pytest -W error::ResourceWarning --cov=bambu_cli --cov-fail-under=85
 
 #### CI
 
-- [ ] Grep gate: `sys.exit` allowed only in `cli.py` (and maybe `bambu.py` entry). Adjust if scripts need exit.
-- [ ] Coverage fail-under → **88%**.
+- [x] Grep gate: `sys.exit` allowed only in `cli.py` — ci.yml step "sys.exit only at CLI entry (blocking)".
+- [ ] Coverage fail-under → **88%** (floor is 86; measured 91.1%, floor deliberately not raised — see freeze note).
 
 #### DoD
 
-- [ ] `rg 'sys\.exit' bambu_cli` only hits entrypoints.
-- [ ] `errors.py` docstring no longer says “not yet converted”.
-- [ ] Agent JSON error payloads byte-for-byte compatible (contract tests green).
-- [ ] `@mockable` usages reduced by ≥50% (track count in this file).
+- [x] `rg 'sys\.exit' bambu_cli` only hits `cli.py` (plus docstrings that mention the rule).
+- [x] `errors.py` docstring no longer says “not yet converted”.
+- [x] Agent JSON error payloads byte-for-byte compatible (contract tests green).
+- [x] `@mockable` usages reduced by ≥50% — count is **0**.
 
 #### Score impact
 
@@ -470,7 +477,7 @@ bandit + pip-audit blocking
 
 #### DoD
 
-- [ ] Scorecard **A** column green for Tests and Typing (Typing A− OK if strict not yet full-package).
+- [x] Scorecard **A** column green for Tests and Typing (full-package mypy with `check_untyped_defs`).
 - [x] Fake Orca available (`tests/fakes/orca_stub`) and used by the hermetic slice suite (`tests/test_slice_stub_integration.py`); remaining `test_slice_cmd.py` unit tests keep their mocks where they assert argv assembly / profile-resolution branches.
 - [ ] `docs/test-backlog.md` reduced to “nice-to-have” only (or empty P1–P5).
 
@@ -512,9 +519,9 @@ bandit + pip-audit blocking
 
 #### DoD
 
-- [ ] Every `--json` command has a schema + contract test.
-- [ ] No `@mockable` left (or documented single exception with removal date).
-- [ ] Scorecard A+ for Agent JSON, Docs, Product polish.
+- [x] Every `--json` command has a schema + contract test (27 generated schemas; `tests/json_contract_base.py` loads them).
+- [x] No `@mockable` left.
+- [ ] Scorecard A+ for Agent JSON, Docs, Product polish — Product polish is unmeasurable without users.
 - [ ] Tag `v1.0.0` only when §5 checklist is complete.
 
 #### Score impact
@@ -543,9 +550,9 @@ bandit + pip-audit blocking
 
 #### DoD for A+ security/correctness
 
-- [ ] Adversarial suite green in CI on every PR.
-- [ ] Pin verification is one function, three call sites, fully tested.
-- [ ] No open P0/P1 issues labeled `security` or `correctness`.
+- [x] Adversarial suite green in CI on every PR (`tests/test_properties_safety.py` runs in the default suite).
+- [x] Pin verification is one function (`tlspin.verify_cert_fingerprint`), four call sites (camera, ftps ×2, mqtt_tls).
+- [x] No open P0/P1 issues labeled `security` or `correctness` (the tracker has no open issues at all).
 
 ---
 
