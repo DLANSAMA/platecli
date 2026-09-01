@@ -81,6 +81,8 @@ The rule exists because directories alone never held it: `protocols/`, `slicer/`
 
 Accepted debt lives in `ALLOWED` in that script, each entry with a reason. Shrink it; do not grow it. There are currently no allowlisted edges: `RuntimeContext.printer()` uses an injectable factory registered downward from `bambu_cli.printer`.
 
+The same script ratchets **cross-unit imports of underscore-private names** (`PRIVATE_IMPORT_BUDGET`): a leading underscore is only a contract if something enforces it, and the rank table polices direction, not encapsulation. The budget is the measured count and may only go down — give a shared helper a public name or move it to a rank-10 module; do not raise the number.
+
 The same script also enforces `SEALED` — package internals no outside module may import. `bambu_cli.printables.client` is sealed because an adapter is only a sandbox if callers cannot reach past it. **Third-party integrations go behind an adapter that cannot raise:** `PrintablesAdapter.resolve()` returns a `PrintablesResolution` for every outcome, converting a renamed field or a redesigned error envelope into a typed `printables_contract_changed` result instead of a traceback in the middle of `plate job`. `KeyboardInterrupt`/`SystemExit` are deliberately the only things that still propagate.
 
 **JSON schemas are generated, never hand-written.** `docs/schemas/*.json` comes from the dataclasses in `bambu_cli/contracts/`:

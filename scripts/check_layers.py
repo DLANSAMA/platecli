@@ -98,10 +98,40 @@ SEALED: dict[str, str] = {
         "the raw Printables GraphQL wire format — import from bambu_cli.printables instead, "
         "so a schema change stays contained in the adapter"
     ),
-    "bambu_cli.printables.adapter": (
-        "internal; the public names are re-exported from bambu_cli.printables"
-    ),
+    "bambu_cli.printables.adapter": ("internal; the public names are re-exported from bambu_cli.printables"),
 }
+
+
+# ---------------------------------------------------------------------------
+# Cross-unit imports of underscore-private names. The rank table polices the
+# *direction* of a dependency, not encapsulation: nothing stops commands/ from
+# reaching into download/naming.py for a `_helper`. A leading underscore is
+# only a contract if something enforces it, so this is a ratchet: the count may
+# go down (lower the budget in the same PR) but never up. New shared helpers get
+# a public name, or move down to a rank-10 module (see fsutil.py).
+# ---------------------------------------------------------------------------
+PRIVATE_IMPORT_BUDGET = 104
+
+
+def private_cross_unit_imports():
+    """Yield (file, lineno, module, name) for `from bambu_cli.x import _name` across units."""
+    for file in sorted(PKG.rglob("*.py")):
+        if "__pycache__" in file.parts:
+            continue
+        src = source_unit(file)
+        tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or node.level or not node.module:
+                continue
+            if not node.module.startswith("bambu_cli"):
+                continue
+            dst = unit_of(node.module)
+            if dst is None or dst == src:
+                continue
+            for alias in node.names:
+                name = alias.name
+                if name.startswith("_") and not name.startswith("__"):
+                    yield file, node.lineno, node.module, name
 
 
 def unit_of(module: str) -> str | None:
@@ -225,7 +255,25 @@ def main() -> int:
     for src, dst in sorted(stale):
         print(f"STALE     allowance {src} -> {dst} is no longer needed; remove it from ALLOWED")
 
-    failures = len(violations) + len(unknown) + len(stale) + len(sealed)
+    private = list(private_cross_unit_imports())
+    budget_problems = 0
+    if len(private) > PRIVATE_IMPORT_BUDGET:
+        budget_problems = 1
+        print(
+            f"PRIVATE   {len(private)} cross-unit imports of underscore-private names "
+            f"exceed the budget of {PRIVATE_IMPORT_BUDGET}. Give the helper a public "
+            f"name or move it to a rank-10 module; do not raise the budget."
+        )
+        for file, lineno, module, name in private:
+            print(f"          {file.relative_to(ROOT)}:{lineno}: from {module} import {name}")
+    elif len(private) < PRIVATE_IMPORT_BUDGET:
+        budget_problems = 1
+        print(
+            f"RATCHET   only {len(private)} private cross-unit imports remain; lower "
+            f"PRIVATE_IMPORT_BUDGET from {PRIVATE_IMPORT_BUDGET} to {len(private)} so it cannot grow back."
+        )
+
+    failures = len(violations) + len(unknown) + len(stale) + len(sealed) + budget_problems
     if failures:
         print(f"\n{failures} layering problem(s). See the rank table in {Path(__file__).name}.")
         return 1

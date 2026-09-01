@@ -5,8 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Fixed
+
+- `plate print <local path>` no longer fails with "unsafe name". A path with
+  a separator can never be a printer-side file, so the error now says that
+  `print` takes the name of a file already on the printer and points at the
+  fix: `plate job <path> --confirm` for a model file, or `plate upload <path>`
+  then `plate print <name> --confirm` for an already-sliced 3MF/G-code. The
+  `--json` envelope carries that suggestion in `next_command`. Exit code (3)
+  and `failed_step` (`validate`) are unchanged; names without a separator keep
+  the "unsafe name" message.
+
 ### Changed
 
+- `scripts/check_layers.py` now also ratchets cross-unit imports of
+  underscore-private names (`from bambu_cli.x import _helper` from another
+  layer unit). The budget is the measured count (104); it may only go down.
+  New shared helpers get a public name or move to a rank-10 module.
+- Version on `main` is `0.6.0.dev0` again after the 0.5.1 release, so a source
+  build no longer reports the released version.
 - README: the "Print something" first-run steps (which start with installing
   OrcaSlicer) now come before the "Try it in 30 seconds" simulation section,
   and that section says plainly that `plate --sim status` needs neither a
