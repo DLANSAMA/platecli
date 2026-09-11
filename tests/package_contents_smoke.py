@@ -164,7 +164,7 @@ REQUIRED_DOC_SNIPPETS = {
 
 LICENSE_SNIPPETS = {
     "MIT License",
-    "platecli contributors",
+    "Dylan Reed",
     'THE SOFTWARE IS PROVIDED "AS IS"',
 }
 
