@@ -10,8 +10,15 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/platecli)](https://pypi.org/project/platecli/)
 [![Downloads](https://static.pepy.tech/badge/platecli)](https://pepy.tech/projects/platecli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<!-- Tests/coverage are hand-updated static badges (no coverage service wired up).
+     Re-measure and edit both after any release:
+     uv run python -m pytest tests/ -q -m "not live" --cov=bambu_cli --cov-report=term -->
+[![Tests](https://img.shields.io/badge/tests-1535%20passing-brightgreen)](#tested-and-hardened)
+[![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen)](#tested-and-hardened)
 
-[Install](#install) · [Print something](#print-something) · [Try it without a printer](#try-it-in-30-seconds) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) · [For AI agents](#built-for-ai-agents)
+[Install](#install) · [Print something](#print-something) · [Try it without a printer](#try-it-in-30-seconds) · [Quality](#tested-and-hardened) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) · [For AI agents](#built-for-ai-agents)
+
+<sub>Built and maintained by **[Dylan Reed](https://github.com/DLANSAMA)** · CI on Linux, macOS, and Windows across Python 3.10–3.14</sub>
 
 </div>
 
@@ -27,6 +34,13 @@ Paste a Printables link, get a physical print. `plate` downloads the model, slic
 model URL or file  →  download  →  slice (OrcaSlicer)  →  upload  →  print
                         one command:  plate go
 ```
+
+**Who it's for**
+
+- **Makers who live in a terminal** — print without opening a slicer GUI or signing into Bambu's cloud.
+- **Homelab and print-farm tinkerers** — every step is a scriptable subcommand with real exit codes.
+- **AI agents and automation** — `--json` output against [published JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), plus a `--sim` fake printer so a pipeline can be built and tested with no hardware.
+- **Anyone on a locked-down network** — nothing leaves your LAN; no account, no telemetry, no daemon.
 
 **Supports:** any Bambu Lab printer with LAN mode — P1P, P1S, X1C, X1E, A1, A1 Mini. **Hardware-tested on the P1 series (P1P/P1S) only.** The rest speak the same LAN protocols and are expected to work, but are unverified on real hardware — treat them as best-effort and please [open an issue](https://github.com/DLANSAMA/platecli/issues) with what you hit. One caveat: `plate snapshot` grabs the camera directly (no extra software) on P1/A1-class printers. X1-series cameras need a locally-running Docker streamer, and that path is opt-in (`camera_allow_streamer` or `--allow-camera-streamer`) because the streamer does not honour `cert_fingerprint`.
 
@@ -139,6 +153,28 @@ plate --sim status
 - **Fixes itself findable** — `plate doctor` checks network, FTPS, and MQTT health and tells you exactly what's wrong.
 - **Hardened where it counts** — TLS certificate pinning, SSRF-guarded downloads, and size-capped ZIP extraction.
 
+## Tested and hardened
+
+The numbers in the badges are measured on this repo, not aspirational:
+
+| | |
+|---|---|
+| **Tests** | 1,535 passing (`pytest -m "not live"`, v0.5.1) — unit, contract, property-based (Hypothesis), and Textual pilot tests |
+| **Coverage** | **91.1%** line+branch across the package; CI fails the build below **86%** |
+| **Platforms** | Linux, macOS, and Windows in CI, on Python 3.10 / 3.12 / 3.14 |
+| **Blocking gates** | `ruff`, `ruff format`, `mypy` (whole package, `check_untyped_defs`), `bandit`, `pip-audit`, plus layer-boundary and JSON-schema-drift checks |
+| **Mutation testing** | Nightly, scoped to the safety-critical modules (download validation, SSRF guards, slicer options, job payload) |
+| **Packaging** | Every CI run installs the built wheel *and* the sdist and runs the CLI from them |
+
+Coverage is deliberately honest — `except Exception` / `pass` / `continue` are **not**
+excluded from the report (see `[tool.coverage.report]` in `pyproject.toml`), so the
+number is not inflated by hiding error paths.
+
+Security posture is documented rather than implied: TLS certificate pinning for the
+printer connection, SSRF-guarded model downloads, size-capped archive extraction, and
+a written threat model with its known limitations in
+[SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md).
+
 ## How it compares
 
 The cloud-free Bambu ecosystem is in good shape, and for many people one of
@@ -183,7 +219,7 @@ Every command emits machine-readable `--json` output backed by published [JSON S
 
 ## Support & expectations
 
-platecli is maintained by one person in their spare time. Bug reports and pull requests are genuinely welcome — [open an issue](https://github.com/DLANSAMA/platecli/issues) with your `plate doctor` output attached and I'll get to it when I can. There is no response-time guarantee, and feature requests may sit or be declined to keep the tool small and local-only. If you need something faster than that, fork it — it's MIT.
+platecli is built and maintained by one person — [Dylan Reed](https://github.com/DLANSAMA) — in my spare time. Bug reports and pull requests are genuinely welcome — [open an issue](https://github.com/DLANSAMA/platecli/issues) with your `plate doctor` output attached and I'll get to it when I can. There is no response-time guarantee, and feature requests may sit or be declined to keep the tool small and local-only. If you need something faster than that, fork it — it's MIT.
 
 ## Status & disclaimer
 
@@ -191,9 +227,21 @@ platecli is maintained by one person in their spare time. Bug reports and pull r
 
 > **Disclaimer:** platecli is an unofficial, community-developed tool. It is not affiliated with, endorsed by, or supported by Bambu Lab. "Bambu Lab" and product names are trademarks of their respective owners, used here only to describe compatibility. The printer protocols (MQTT/FTPS) are reverse-engineered; a firmware update may break functionality without warning — run `plate doctor` after printer updates.
 
+## Author
+
+**Dylan Reed** — [github.com/DLANSAMA](https://github.com/DLANSAMA) · <dylanworks.sc@gmail.com>
+
+Design, implementation, test suite, and release engineering. For anything about
+the project itself, an [issue](https://github.com/DLANSAMA/platecli/issues) or a
+[discussion](https://github.com/DLANSAMA/platecli/discussions) is the fastest
+route, and security reports have their own channel in
+[SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md).
+Email is open for work enquiries. Pull requests are welcome — see
+[CONTRIBUTING.md](https://github.com/DLANSAMA/platecli/blob/main/CONTRIBUTING.md).
+
 ## License
 
-MIT — Use freely, modify as needed.
+MIT © 2026 Dylan Reed — use freely, modify as needed. See [LICENSE](https://github.com/DLANSAMA/platecli/blob/main/LICENSE).
 
 ---
 
