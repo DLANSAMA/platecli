@@ -78,6 +78,11 @@ HTML_LINK_SCAN_LIMIT = 1024 * 1024
 DEFAULT_MAX_DOWNLOAD_MB = 2048
 MAX_DOWNLOAD_FILENAME_LENGTH = 160
 DNS_CACHE_TTL = 300
+SLICE_INFO_MAX_READ_BYTES = 65536  # 64 KB limit for .3mf slice_info.config
+
+# Bambu printer firmware error codes
+BAMBU_ERROR_FILE_NOT_FOUND = 83935248  # 0x0500C010
+BAMBU_ERROR_FILE_NOT_FOUND_HEX = "0x0500C010"
 
 # Physical safety bounds for slice / print options (Bambu-class FDM printers).
 # Nozzle: ambient through high-temp engineering filaments (~300 °C); reject absurd values.

@@ -32,7 +32,13 @@ def execute_print_command(
     ``command_timeout`` and ``client_factory`` are injectable; defaults are
     get_command_timeout() / create_mqtt_client.
     """
-    from bambu_cli.constants import EXIT_FILE_ERROR, EXIT_NETWORK_ERROR, EXIT_PRINTER_ERROR, EXIT_TIMEOUT
+    from bambu_cli.constants import (
+        BAMBU_ERROR_FILE_NOT_FOUND,
+        EXIT_FILE_ERROR,
+        EXIT_NETWORK_ERROR,
+        EXIT_PRINTER_ERROR,
+        EXIT_TIMEOUT,
+    )
     from bambu_cli.utils import record_error_detail
 
     _factory = _client_factory(client_factory)
@@ -176,7 +182,7 @@ def execute_print_command(
         if error_hex:
             message += f" (hex {error_hex})"
         logger.error(message)
-        if print_error[0] == 83935248:
+        if print_error[0] == BAMBU_ERROR_FILE_NOT_FOUND:
             logger.info("   File not found on printer SD card. Check filename with 'files' command.")
             record_error_detail(
                 "print",

@@ -7,11 +7,13 @@ import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
 
+from bambu_cli.constants import SLICE_INFO_MAX_READ_BYTES
+
 _MAX_SECONDS = 2592000  # 30 days
 _MAX_GRAMS = 10000.0
 
 GCODE_READ_BYTES = 65536  # 64 KB
-SLICE_INFO_READ_BYTES = 10 * 1024 * 1024  # 10 MB safety limit for XML config (Zip Bomb protection)
+SLICE_INFO_READ_BYTES = SLICE_INFO_MAX_READ_BYTES  # 64 KB safety limit for XML config (Zip Bomb protection)
 
 
 @dataclass(frozen=True)
@@ -24,9 +26,14 @@ def _parse_slice_info(xml_text: str) -> tuple[int | None, float | None]:
     """Parse prediction (seconds) and weight (grams) from slice_info.config XML.
 
     Uses xml.etree.ElementTree to parse bounded metadata XML from .3mf packages.
+    Rejects any XML containing DTD or entity declarations (entity bomb protection).
     """
+    upper = xml_text.upper()
+    if "<!ENTITY" in upper or "<!DOCTYPE" in upper:
+        return None, None
+
     try:
-        root = ET.fromstring(xml_text)  # nosec B314 — local file produced by OrcaSlicer, not network input
+        root = ET.fromstring(xml_text)  # nosec: B314 # local file produced by OrcaSlicer, not network input
     except ET.ParseError:
         return None, None
 
