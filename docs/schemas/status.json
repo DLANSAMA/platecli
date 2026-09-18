@@ -49,52 +49,6 @@
         },
         "hw_ver": {
           "type": "string"
-        },
-        "ams": {
-          "properties": {
-            "units": {
-              "items": {
-                "properties": {
-                  "id": {
-                    "type": "number"
-                  },
-                  "humidity": {
-                    "type": "number"
-                  },
-                  "temp": {
-                    "type": "number"
-                  },
-                  "trays": {
-                    "items": {
-                      "properties": {
-                        "slot": {
-                          "type": "number"
-                        },
-                        "active": {
-                          "type": "boolean"
-                        },
-                        "empty": {
-                          "type": "boolean"
-                        }
-                      },
-                      "type": "object",
-                      "required": [],
-                      "additionalProperties": true
-                    },
-                    "type": "array"
-                  }
-                },
-                "type": "object",
-                "required": [],
-                "additionalProperties": true
-              },
-              "type": "array"
-            }
-          },
-          "type": "object",
-          "required": [],
-          "additionalProperties": true,
-          "description": "Normalised AMS state (present when AMS is attached)."
         }
       },
       "type": "object",
@@ -108,12 +62,93 @@
       "description": "Complete printer state. Merged from the MQTT report topic and guaranteed to be a full snapshot, never a partial delta; the command fails with exit code 6 rather than emitting an incomplete object. Extra firmware keys stay here, not on the envelope."
     },
     "ams": {
-      "description": "Normalised AMS trays for --ams-mapping; null when the printer has no AMS.",
-      "additionalProperties": true,
+      "properties": {
+        "active_tray": {
+          "type": "integer"
+        },
+        "units": {
+          "items": {
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "humidity": {
+                "type": "integer"
+              },
+              "temp": {
+                "type": "number"
+              },
+              "trays": {
+                "items": {
+                  "properties": {
+                    "slot": {
+                      "type": "integer"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "remain": {
+                      "type": "integer"
+                    },
+                    "empty": {
+                      "type": "boolean"
+                    },
+                    "active": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object",
+                  "required": [],
+                  "additionalProperties": true
+                },
+                "type": "array"
+              }
+            },
+            "type": "object",
+            "required": [],
+            "additionalProperties": true
+          },
+          "type": "array"
+        },
+        "external_tray": {
+          "properties": {
+            "slot": {
+              "type": "integer"
+            },
+            "type": {
+              "type": "string"
+            },
+            "color": {
+              "type": "string"
+            },
+            "remain": {
+              "type": "integer"
+            },
+            "empty": {
+              "type": "boolean"
+            },
+            "active": {
+              "type": "boolean"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [],
+          "additionalProperties": true
+        }
+      },
       "type": [
         "object",
         "null"
-      ]
+      ],
+      "required": [],
+      "additionalProperties": true,
+      "description": "Normalised AMS trays and external spool for --ams-mapping; null when the printer has no AMS."
     }
   },
   "additionalProperties": true

@@ -289,10 +289,11 @@ def read_loaded_ams_material(args: argparse.Namespace, on_active_slot=None) -> s
         if not data:
             return None
         ams = parse_ams(data)
-        if not ams or not ams.get("units"):
+        if not ams:
             return None
         active = ams.get("active_tray")
         loaded_type: str | None = None
+        ext_tray = ams.get("external_tray")
         if active is not None:
             # An active slot is reported: trust ONLY the tray marked active, and
             # scan ALL units to find it (the active tray may be in a later unit
@@ -300,7 +301,7 @@ def read_loaded_ams_material(args: argparse.Namespace, on_active_slot=None) -> s
             # unit's fallback shadow the real active tray). The active tray's
             # absolute slot index equals ``active`` (parse_ams sets it that way),
             # so record it for the ams_mapping used when feeding from the AMS.
-            for unit in ams["units"]:
+            for unit in ams.get("units") or []:
                 for tray in unit.get("trays", []):
                     if tray.get("empty"):
                         continue
@@ -311,11 +312,14 @@ def read_loaded_ams_material(args: argparse.Namespace, on_active_slot=None) -> s
                         break
                 if loaded_type is not None:
                     break
+        elif ext_tray and ext_tray.get("active") and not ext_tray.get("empty"):
+            # External spool is currently active (tray_now was 254/255)
+            loaded_type = ext_tray.get("type")
         else:
-            # Nothing is marked active (no tray_now, or an external-spool
-            # sentinel): fall back to the first non-empty tray. Do NOT record a
-            # slot — without a firm active tray we won't feed from the AMS.
-            for unit in ams["units"]:
+            # Nothing is marked active: fall back to the first non-empty tray
+            # (or external tray if present). Do NOT record a slot — without a firm
+            # active tray we won't feed from the AMS.
+            for unit in ams.get("units") or []:
                 for tray in unit.get("trays", []):
                     if tray.get("empty"):
                         continue
@@ -323,6 +327,8 @@ def read_loaded_ams_material(args: argparse.Namespace, on_active_slot=None) -> s
                     break
                 if loaded_type is not None:
                     break
+            if loaded_type is None and ext_tray and not ext_tray.get("empty"):
+                loaded_type = ext_tray.get("type")
         return match_material_preset(loaded_type)
     except Exception:
         # AMS detection is a nicety — never let it block or break the wizard.

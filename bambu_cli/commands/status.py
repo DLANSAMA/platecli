@@ -81,15 +81,22 @@ def cmd_status(args, ctx=None):
     logger.info(f"   Nozzle: {nozzle_temp}°C / {nozzle_target}°C")
     logger.info(f"   Fan: {fan} | WiFi: {wifi}dBm")
 
-    if ams and ams["units"]:
-        logger.info("   AMS:")
-        for unit in ams["units"]:
-            logger.info(f"     Unit {unit['id']} (humidity {unit['humidity']}, {unit['temp']}°C)")
-            for tray in unit["trays"]:
-                marker = "▶ " if tray["active"] else "  "
-                if tray["empty"]:
-                    logger.info(f"       {marker}Slot {tray['slot']}: empty")
-                else:
-                    color = f" #{tray['color']}" if tray["color"] else ""
-                    remain = f" | {tray['remain']}%" if tray["remain"] is not None else ""
-                    logger.info(f"       {marker}Slot {tray['slot']}: {tray['type']}{color}{remain}")
+    if ams:
+        if ams.get("units"):
+            logger.info("   AMS:")
+            for unit in ams["units"]:
+                logger.info(f"     Unit {unit['id']} (humidity {unit['humidity']}, {unit['temp']}°C)")
+                for tray in unit["trays"]:
+                    marker = "▶ " if tray["active"] else "  "
+                    if tray["empty"]:
+                        logger.info(f"       {marker}Slot {tray['slot']}: empty")
+                    else:
+                        color = f" #{tray['color']}" if tray["color"] else ""
+                        remain = f" | {tray['remain']}%" if tray["remain"] is not None else ""
+                        logger.info(f"       {marker}Slot {tray['slot']}: {tray['type']}{color}{remain}")
+        ext_tray = ams.get("external_tray")
+        if ext_tray and not ext_tray.get("empty"):
+            marker = "▶ " if ext_tray.get("active") else "  "
+            color = f" #{ext_tray['color']}" if ext_tray.get("color") else ""
+            remain = f" | {ext_tray['remain']}%" if ext_tray.get("remain") is not None else ""
+            logger.info(f"   External Spool: {marker}{ext_tray.get('type')}{color}{remain}")

@@ -71,10 +71,9 @@ def cmd_print(args, ctx=None):
         bed_leveling=not getattr(args, "skip_bed_leveling", False),
         flow_cali=not getattr(args, "skip_flow_cali", False),
     )
-    from bambu_cli.printer import get_printer
     from bambu_cli.protocols.mqtt import execute_print_command
 
-    printer = get_printer()
+    printer = ctx.printer()
     execute_print_command(printer, payload, basename, dry_run=dry_run)
     if bool(_namespace_get(args, "json", False)):
         emit_json(
