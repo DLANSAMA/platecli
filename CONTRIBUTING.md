@@ -26,7 +26,7 @@ uv run python -m pytest tests/ -q -m "not live"
 
 # Match CI hardness (ResourceWarning as error + coverage floor)
 uv run python -W error::ResourceWarning -m pytest tests/ -m "not live" \
-  --cov=bambu_cli --cov-report=term-missing --cov-fail-under=86
+  --cov=bambu_cli --cov-report=term-missing --cov-fail-under=90
 
 # Smokes used in CI — all of them (see the "lint" job in .github/workflows/ci.yml).
 # These are NOT part of pytest; a green suite says nothing about them.

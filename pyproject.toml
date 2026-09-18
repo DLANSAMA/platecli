@@ -17,8 +17,8 @@ license = "MIT"
 # in the built archives, and allowlists this one by name. Do not swap in a
 # personal address to "fix" a privacy-smoke failure; the failure is the gate
 # working.
-authors = [{ name = "Dylan Reed", email = "dylanworks.sc@gmail.com" }]
-maintainers = [{ name = "Dylan Reed", email = "dylanworks.sc@gmail.com" }]
+authors = [{ name = "Dylan Reed", email = "reedworks.sc@gmail.com" }]
+maintainers = [{ name = "Dylan Reed", email = "reedworks.sc@gmail.com" }]
 keywords = ["bambu", "3d-printing", "agent", "cli", "orcaslicer"]
 dependencies = [
     "rich>=13.0.0",

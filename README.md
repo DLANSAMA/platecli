@@ -229,7 +229,7 @@ platecli is built and maintained by one person — [Dylan Reed](https://github.c
 
 ## Author
 
-**Dylan Reed** — [github.com/DLANSAMA](https://github.com/DLANSAMA) · <dylanworks.sc@gmail.com>
+**Dylan Reed** — [github.com/DLANSAMA](https://github.com/DLANSAMA) · <reedworks.sc@gmail.com>
 
 Design, implementation, test suite, and release engineering. For anything about
 the project itself, an [issue](https://github.com/DLANSAMA/platecli/issues) or a

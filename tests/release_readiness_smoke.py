@@ -91,13 +91,20 @@ def read_relpath(relpath):
     return (ROOT / relpath).read_text(encoding="utf-8")
 
 
-def iter_generated_paths():
+def iter_generated_paths(strict_clean=False):
     import os
 
     is_ci = bool(os.environ.get("GITHUB_ACTIONS"))
+    is_release = bool(os.environ.get("RELEASE_BUILD") or os.environ.get("PLATE_RELEASE"))
+    strict = strict_clean or is_release
     for path in ROOT.rglob("*"):
         if ".git" in path.parts or ".venv" in path.parts or "venv" in path.parts or ".claude" in path.parts:
             continue
+        if not strict:
+            if "__pycache__" in path.parts or path.name.endswith(".pyc"):
+                continue
+            if ".pytest_cache" in path.parts or ".mypy_cache" in path.parts or ".ruff_cache" in path.parts:
+                continue
         relpath = path.relative_to(ROOT).as_posix()
         name = path.name
         if is_ci and (relpath == ".venv" or name == ".venv"):
@@ -114,7 +121,20 @@ def iter_generated_paths():
             yield relpath
 
 
-def main():
+def parse_args(argv=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--strict-clean",
+        action="store_true",
+        help="Enforce strict clean checks including in-tree __pycache__ and bytecode caches",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
     missing_files = sorted(relpath for relpath in REQUIRED_FILES if not (ROOT / relpath).is_file())
     if missing_files:
         print(f"Missing required files: {missing_files}")
@@ -122,7 +142,7 @@ def main():
 
         sys.exit(1)
     forbidden_files = sorted(relpath for relpath in FORBIDDEN_RELEASE_FILES if (ROOT / relpath).exists())
-    generated_paths = sorted(set(iter_generated_paths()))
+    generated_paths = sorted(set(iter_generated_paths(strict_clean=args.strict_clean)))
     missing_snippets = []
     forbidden_snippets = []
     for relpath, snippets in OBJECTIVE_SNIPPETS.items():

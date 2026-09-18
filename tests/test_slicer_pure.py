@@ -449,3 +449,188 @@ def test_validate_rejects_bad_convenience_flags():
     assert "support-threshold" in (S._validate_slice_options(_base_slice_args(support_threshold=120)) or "")
     assert "fan-speed" in (S._validate_slice_options(_base_slice_args(fan_speed=150)) or "")
     assert "flow-ratio" in (S._validate_slice_options(_base_slice_args(flow_ratio=5.0)) or "")
+
+
+# --- Slicer output classification & validation tests (Phase 3) -----------------
+
+from bambu_cli.slicer.output import SliceOutcome, _classify_slice_result, _output_snapshot, _was_written_this_run
+
+
+@pytest.mark.parametrize(
+    ("rc", "stdout", "fresh", "exists", "size", "valid_3mf", "expected"),
+    [
+        # Stale output always rejected first if file exists
+        (0, "", False, True, 1024, True, SliceOutcome.STALE_OUTPUT),
+        (1, "", False, True, 1024, True, SliceOutcome.STALE_OUTPUT),
+        (1, "glfw error", False, True, 1024, True, SliceOutcome.STALE_OUTPUT),
+        # rc == 0 branches
+        (0, "", True, False, 0, False, SliceOutcome.SLICER_ERROR),
+        (0, "", True, True, 0, True, SliceOutcome.EMPTY_OUTPUT),
+        (0, "", True, True, -1, True, SliceOutcome.EMPTY_OUTPUT),
+        (0, "", True, True, 1024, False, SliceOutcome.CORRUPT_3MF),
+        (0, "", True, True, 1024, True, SliceOutcome.SUCCESS),
+        (0, "normal output", True, True, 2048, True, SliceOutcome.SUCCESS),
+        # rc != 0 with Benign GL noise
+        (1, "glfw init failed", True, True, 1024, True, SliceOutcome.BENIGN_GL_WARNING),
+        (2, "glew error during init", True, True, 1024, True, SliceOutcome.BENIGN_GL_WARNING),
+        (1, "Init OpenGL Failed on headless display", True, True, 1024, True, SliceOutcome.BENIGN_GL_WARNING),
+        (1, "warning: skip thumbnail generation", True, True, 1024, True, SliceOutcome.BENIGN_GL_WARNING),
+        # rc != 0 GL noise but disqualified by real errors
+        (1, "glfw error: nothing to be sliced", True, True, 1024, True, SliceOutcome.SLICER_ERROR),
+        (1, "glew failed: slicing error in model", True, True, 1024, True, SliceOutcome.SLICER_ERROR),
+        # rc != 0 GL noise but disqualified by invalid/empty/missing file
+        (1, "glfw error", True, False, 0, False, SliceOutcome.SLICER_ERROR),
+        (1, "glfw error", True, True, 0, True, SliceOutcome.SLICER_ERROR),
+        (1, "glfw error", True, True, 1024, False, SliceOutcome.SLICER_ERROR),
+        # rc != 0 without GL noise
+        (1, "general failure", True, True, 1024, True, SliceOutcome.SLICER_ERROR),
+        (-1, "", True, True, 1024, True, SliceOutcome.SLICER_ERROR),
+    ],
+)
+def test_classify_slice_result_exhaustive(rc, stdout, fresh, exists, size, valid_3mf, expected):
+    outcome = _classify_slice_result(
+        returncode=rc,
+        stdout_stderr=stdout,
+        fresh=fresh,
+        file_exists=exists,
+        file_size=size,
+        is_valid_3mf=valid_3mf,
+    )
+    assert outcome == expected
+
+
+def test_is_valid_sliced_3mf_model_only(tmp_path):
+    import zipfile
+
+    path = tmp_path / "model_only.3mf"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
+        zf.writestr("3D/3dmodel.model", "<model/>")
+    assert S._is_valid_sliced_3mf(str(path)) is True
+
+
+def test_is_valid_sliced_3mf_plate_only(tmp_path):
+    import zipfile
+
+    path = tmp_path / "plate_only.3mf"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
+        zf.writestr("Metadata/plate_1.gcode", "M104 S220\n")
+    assert S._is_valid_sliced_3mf(str(path)) is True
+
+
+def test_is_valid_sliced_3mf_neither_model_nor_plate(tmp_path):
+    import zipfile
+
+    path = tmp_path / "no_model_no_plate.3mf"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
+        zf.writestr("Metadata/other.xml", "<info/>")
+    assert S._is_valid_sliced_3mf(str(path)) is False
+
+
+def test_is_valid_sliced_3mf_bad_zip(tmp_path):
+    path = tmp_path / "corrupt.3mf"
+    path.write_bytes(b"not a valid zip file at all")
+    assert S._is_valid_sliced_3mf(str(path)) is False
+
+
+def test_output_snapshot_and_freshness(tmp_path):
+    path = tmp_path / "test.3mf"
+    assert _output_snapshot(str(path)) is None
+    assert _was_written_this_run(str(path), None) is True
+
+    path.write_text("v1", encoding="utf-8")
+    snap1 = _output_snapshot(str(path))
+    assert snap1 is not None and snap1[0] is True
+    # Unchanged file: not written this run
+    assert _was_written_this_run(str(path), snap1) is False
+
+    # Deleted file: OSError in was_written_this_run
+    path.unlink()
+    assert _was_written_this_run(str(path), snap1) is False
+
+    # Rewritten file
+    path.write_text("v2 longer text", encoding="utf-8")
+    assert _was_written_this_run(str(path), snap1) is True
+
+
+def test_finalize_slice_getsize_oserror(tmp_path):
+    import subprocess
+    from bambu_cli.constants import EXIT_FILE_ERROR
+    from bambu_cli.errors import FileError
+
+    path = tmp_path / "test.3mf"
+    path.write_text("content", encoding="utf-8")
+    proc = subprocess.CompletedProcess(["orca"], 0, stdout="", stderr="")
+
+    with patch("os.path.getsize", side_effect=OSError("disk read error")):
+        with pytest.raises(FileError) as exc_info:
+            S._finalize_slice(proc, str(path), Namespace(file="m.stl"), "m.stl", False)
+        assert exc_info.value.exit_code == EXIT_FILE_ERROR
+        assert "Could not read sliced output file" in str(exc_info.value)
+
+
+def test_finalize_slice_empty_file(tmp_path):
+    import subprocess
+    from bambu_cli.constants import EXIT_FILE_ERROR
+    from bambu_cli.errors import FileError
+
+    path = tmp_path / "empty.3mf"
+    path.write_bytes(b"")
+    proc = subprocess.CompletedProcess(["orca"], 0, stdout="", stderr="")
+
+    with pytest.raises(FileError) as exc_info:
+        S._finalize_slice(proc, str(path), Namespace(file="m.stl"), "m.stl", False)
+    assert exc_info.value.exit_code == EXIT_FILE_ERROR
+    assert "Slicing produced an empty output file" in str(exc_info.value)
+    assert not path.exists()  # partial file was removed
+
+
+def test_finalize_slice_corrupt_3mf(tmp_path):
+    import subprocess
+    from bambu_cli.constants import EXIT_FILE_ERROR
+    from bambu_cli.errors import FileError
+
+    path = tmp_path / "corrupt.3mf"
+    path.write_bytes(b"not a real zip")
+    proc = subprocess.CompletedProcess(["orca"], 0, stdout="", stderr="")
+
+    with pytest.raises(FileError) as exc_info:
+        S._finalize_slice(proc, str(path), Namespace(file="m.stl"), "m.stl", False)
+    assert exc_info.value.exit_code == EXIT_FILE_ERROR
+    assert "Slicing produced a corrupt or incomplete .3mf" in str(exc_info.value)
+    assert not path.exists()
+
+
+def test_finalize_slice_stale_output(tmp_path):
+    import subprocess
+    from bambu_cli.errors import SliceError
+
+    path = tmp_path / "stale.3mf"
+    path.write_text("old content", encoding="utf-8")
+    snap = _output_snapshot(str(path))
+    proc = subprocess.CompletedProcess(["orca"], 0, stdout="", stderr="")
+
+    with pytest.raises(SliceError) as exc_info:
+        S._finalize_slice(proc, str(path), Namespace(file="m.stl"), "m.stl", False, pre_snapshot=snap)
+    assert exc_info.value.exit_code == 5
+    assert "refusing to reuse the stale" in str(exc_info.value)
+
+
+def test_finalize_slice_slicer_error_with_lines(tmp_path):
+    import subprocess
+    from bambu_cli.errors import SliceError
+
+    proc = subprocess.CompletedProcess(
+        ["orca"],
+        1,
+        stdout="[error] Could not slice geometry\nSome detail\nNothing to be sliced\nerror: fatal",
+        stderr="",
+    )
+    with pytest.raises(SliceError) as exc_info:
+        S._finalize_slice(proc, str(tmp_path / "out.3mf"), Namespace(file="m.stl"), "m.stl", False)
+    assert exc_info.value.exit_code == 5
+    assert "Slicing failed (RC=1)" in str(exc_info.value)
+    assert exc_info.value.logged is True
+

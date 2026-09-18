@@ -26,6 +26,8 @@ from bambu_cli.slicer.orca import (  # noqa: F401
     _run_orcaslicer,
 )
 from bambu_cli.slicer.output import (  # noqa: F401
+    SliceOutcome,
+    _classify_slice_result,
     _finalize_slice,
     _is_valid_sliced_3mf,
 )

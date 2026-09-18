@@ -6,12 +6,12 @@
 This file is a short **remaining-gaps** list only. Refresh after each phase or audit.
 Do not treat historical “≥98% coverage” claims as current — see the snapshot below.
 
-## Snapshot (2026-08-13, PR #119; measured on Linux)
+## Snapshot (2026-09-16, PR #123; measured on Linux)
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **1499** passing (measured 2026-08-13 on Linux; 1 live test deselected) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **91.0%** branch coverage over 8368 statements (local Linux, 2026-08-13; Windows 90.68% / macOS passing on CI); prior CI matrix on `5b08720` was 88.8–89.3%; **floor 86** | **≥92%** total; optional module floors |
+| Non-live tests collected | **1611** passing (measured 2026-09-16 on Linux; 1 live test deselected) | ≥550 with zero known flakes ✅ size |
+| Line/branch coverage (CI) | **92.8%** branch coverage over 8396 statements (local Linux, 2026-09-16; Windows / macOS passing on CI); prior CI matrix on `5b08720` was 88.8–89.3%; **floor 90** | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps) | keep |
@@ -20,7 +20,7 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 | Live printer | Documented opt-in harness | manual pre-release (optional scheduled lab) |
 | Product version | pre-1.0 Beta (single-sourced from `pyproject.toml`) | **v1.0.0** when roadmap §5 is complete |
 
-CI evidence: `.github/workflows/ci.yml` (`--cov-fail-under=86`, blocking ruff/mypy/bandit/pip-audit/purity greps).
+CI evidence: `.github/workflows/ci.yml` (`--cov-fail-under=90`, blocking ruff/mypy/bandit/pip-audit/purity greps).
 
 ## Ground rules for new tests
 

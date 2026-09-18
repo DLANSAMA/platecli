@@ -65,7 +65,7 @@ FORBIDDEN_LOCAL_ARTIFACT_SUFFIXES = {
 # and in the release archives. Add to this tuple only for an address the project
 # intends to publish, never to silence a leak.
 PUBLISHED_AUTHOR_IDENTIFIERS = (
-    "dylanworks.sc@gmail.com",
+    "reedworks.sc@gmail.com",
     "Dylan Reed",
 )
 
@@ -154,6 +154,28 @@ def iter_files(include_dist=False):
     excluded_dirs = set(BASE_EXCLUDED_DIRS)
     if include_dist:
         excluded_dirs.discard("dist")
+
+    git_dir = ROOT / ".git"
+    if git_dir.exists():
+        import subprocess
+
+        try:
+            cmd = ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"]
+            out = subprocess.check_output(cmd, cwd=ROOT)
+            for raw_rel in out.split(b"\0"):
+                if not raw_rel:
+                    continue
+                rel = raw_rel.decode("utf-8", errors="replace")
+                path = ROOT / rel
+                if any(part in excluded_dirs for part in path.parts):
+                    continue
+                if path.is_symlink() or not path.is_file():
+                    continue
+                yield path
+            return
+        except (subprocess.SubprocessError, OSError):
+            pass
+
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = [name for name in dirnames if name not in excluded_dirs]
         for filename in filenames:

@@ -532,6 +532,86 @@ class TestDownloadLoopBranches(unittest.TestCase):
         self.assertTrue(any("Found model file link" in c[0][0] for c in mock_logger.info.call_args_list))
         self.assertTrue(any("found.stl" in c[0][0] for c in mock_logger.info.call_args_list))
 
+    def test_cmd_download_empty_downloaded_file(self):
+        args = self._args(url="https://example.com/empty.stl")
+        self._respond(_FakeResp([b""]))
+        with patch("os.path.getsize", return_value=0):
+            with self.assertRaises(BambuError) as cm:
+                self._run_download(args)
+            self.assertEqual(cm.exception.exit_code, 3)
+
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_download_http_403_forbidden(self, mock_logger):
+        args = self._args(url="https://example.com/forbidden.stl")
+        import urllib.error
+        self.mock_safe_opener.open.side_effect = urllib.error.HTTPError(
+            url=args.url, code=403, msg="Forbidden", hdrs={}, fp=None
+        )
+        with self.assertRaises(BambuError) as cm:
+            self._run_download(args)
+        self.assertEqual(cm.exception.exit_code, 2)
+        self.assertTrue(any("Access is forbidden" in c[0][0] for c in mock_logger.info.call_args_list))
+
+    def test_cmd_download_ssrf_security_violation(self):
+        args = self._args(url="https://127.0.0.1/private.stl")
+        import urllib.error
+        self.mock_safe_opener.open.side_effect = urllib.error.URLError("Security Error: private IP blocked")
+        with self.assertRaises(BambuError) as cm:
+            self._run_download(args)
+        self.assertEqual(cm.exception.exit_code, 5)
+
+    def test_cmd_download_local_oserror(self):
+        args = self._args(url="https://example.com/model.stl")
+        self._respond(_FakeResp([b"some bytes"]))
+        with patch("builtins.open", side_effect=OSError("Disk full")):
+            with self.assertRaises(BambuError) as cm:
+                self._run_download(args)
+            self.assertEqual(cm.exception.exit_code, 3)
+
+    def test_cmd_download_generic_exception(self):
+        args = self._args(url="https://example.com/model.stl")
+        self.mock_safe_opener.open.side_effect = RuntimeError("unhandled socket death")
+        with self.assertRaises(BambuError) as cm:
+            self._run_download(args)
+        self.assertEqual(cm.exception.exit_code, 2)
+
+    def test_cmd_download_ensure_parent_dir_failure(self):
+        args = self._args(url="https://example.com/model.stl", output="/no/perm/dir")
+        with patch("bambu_cli.download.downloader._ensure_output_dir", side_effect=BambuError("mkdir error", exit_code=3)):
+            with self.assertRaises(BambuError) as cm:
+                self._run_download(args)
+            self.assertEqual(cm.exception.exit_code, 3)
+
+    @patch("bambu_cli.download.downloader._extract_zip_model")
+    def test_cmd_download_archive_extraction_errors(self, mock_extract):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            args = self._args(url="https://example.com/model.zip", output=td)
+            self._respond(_FakeResp([b"PK zip bytes"], headers={"Content-Type": "application/zip"}))
+
+            # OSError during extraction
+            mock_extract.side_effect = OSError("CRC check failed")
+            with self.assertRaises(BambuError) as cm:
+                self._run_download(args)
+            self.assertEqual(cm.exception.exit_code, 3)
+
+            # ValueError during extraction (no printable 3D files in archive)
+            self._respond(_FakeResp([b"PK zip bytes"], headers={"Content-Type": "application/zip"}))
+            mock_extract.side_effect = ValueError("Archive contains no model files")
+            with self.assertRaises(BambuError) as cm:
+                self._run_download(args)
+            self.assertEqual(cm.exception.exit_code, 3)
+
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_download_with_progress_bar(self, mock_logger):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            args = self._args(url="https://example.com/model.stl", output=td, json=False, progress=True)
+            self._respond(_FakeResp([b"chunk1", b"chunk2", b""], headers={"Content-Length": "12"}))
+            with patch("builtins.open", mock_open()):
+                out = self._run_download(args)
+                self.assertTrue(out.endswith("model.stl"))
+
 
 if __name__ == "__main__":
     unittest.main()
