@@ -4,12 +4,14 @@ import os
 import tempfile
 import urllib.error
 import urllib.request
+import zipfile
 from typing import cast
 from urllib.parse import urlparse
 
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
     DOWNLOAD_TIMEOUT,
+    DOWNLOADABLE_EXTENSIONS,
     EXIT_COMMAND_ERROR,
     EXIT_FILE_ERROR,
     EXIT_NETWORK_ERROR,
@@ -20,6 +22,7 @@ from bambu_cli.download.html_links import _is_html_content_type, _resolve_html_m
 from bambu_cli.download.naming import (
     _download_filename_with_extension,
     _download_target_filename,
+    _file_extension,
     _filename_from_content_disposition,
     _sanitize_download_filename,
 )
@@ -524,7 +527,36 @@ def _cmd_download(
                     )
                     safe_log_error(message)
                     abort("", exit_code=EXIT_FILE_ERROR)
-                _remove_partial_file(archive_path)
+                preserve_archive = False
+                try:
+                    with zipfile.ZipFile(archive_path) as zf:
+                        models_in_archive = 0
+                        for info in zf.infolist():
+                            if not info.is_dir() and info.file_size > 0:
+                                ext = _file_extension(_portable_basename(info.filename))
+                                if ext in DOWNLOADABLE_EXTENSIONS:
+                                    models_in_archive += 1
+                                    if models_in_archive > 1:
+                                        preserve_archive = True
+                                        break
+                except Exception:
+                    pass
+
+                if preserve_archive:
+                    canonical_name = _portable_basename(urlparse(url).path) or "archive.zip"
+                    if not canonical_name.endswith(".zip"):
+                        canonical_name += ".zip"
+                    target_archive_path = _noncolliding(os.path.join(outdir, canonical_name))
+                    try:
+                        os.replace(archive_path, target_archive_path)
+                        archive_path = target_archive_path
+                    except OSError:
+                        pass
+                    logger.info(
+                        f"📦 Archive contains multiple model files; preserved archive at {_path_for_message(archive_path)}"
+                    )
+                else:
+                    _remove_partial_file(archive_path)
                 partial_path = None
                 logger.info(f"✅ Downloaded: {_path_for_message(extracted_path)} ({size // 1024}KB)")
                 _record_download_success(
