@@ -6,6 +6,13 @@ normalizes it into a compact form an agent can use to reason about what
 filament is loaded where and to build a correct ``--ams-mapping`` argument.
 """
 
+# Bambu firmware reports two sentinel values in ``tray_now`` that are not AMS
+# slot indices. They are distinct states and must not be conflated: 254 means
+# the printer is feeding from the external spool (vt_tray), 255 means nothing
+# is loaded at all.
+EXTERNAL_SPOOL_TRAY_ID = 254
+NOTHING_LOADED_TRAY_ID = 255
+
 
 def _to_int(value, default=None):
     try:
@@ -84,13 +91,18 @@ def parse_ams(status):
 
     external_tray = None
     if isinstance(vt_tray_raw, dict) and any(vt_tray_raw.values()):
-        vt_slot = _to_int(vt_tray_raw.get("id"), default=254)
-        if vt_slot is None:
-            vt_slot = 254
+        # _to_int returns `default` for missing AND unparseable input, so the
+        # default alone covers every case -- no None check needed after it.
+        vt_slot = _to_int(vt_tray_raw.get("id"), default=EXTERNAL_SPOOL_TRAY_ID)
         vt_type = vt_tray_raw.get("tray_type") or None
         vt_color = _normalize_color(vt_tray_raw.get("tray_color"))
         vt_remain = _to_int(vt_tray_raw.get("remain"))
-        is_vt_active = raw_tray_now in (254, 255) if raw_tray_now is not None else False
+        # 254 and 255 are BOTH sentinels, but they do not mean the same thing:
+        # 254 = printing from the external spool, 255 = nothing loaded at all.
+        # Only 254 marks the external spool active. Treating 255 as active
+        # showed a "▶" next to the external spool on an idle printer with no
+        # filament loaded, and put a false active filament in `status --json`.
+        is_vt_active = raw_tray_now == EXTERNAL_SPOOL_TRAY_ID
         external_tray = {
             "slot": vt_slot,
             "type": vt_type,
@@ -108,7 +120,7 @@ def parse_ams(status):
     # spool / nothing loaded, not a real AMS slot index. Normalize those to None
     # so no tray is falsely marked active and consumers don't present an
     # external-spool state as an AMS detection.
-    if active_tray in (254, 255):
+    if active_tray in (EXTERNAL_SPOOL_TRAY_ID, NOTHING_LOADED_TRAY_ID):
         active_tray = None
 
     units = []

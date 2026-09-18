@@ -241,16 +241,29 @@ import threading
 _RESOLVE_IP_CACHE: dict[str, str] = {}
 _RESOLVE_IP_LOCK = threading.Lock()
 _RESOLVE_IP_CACHE_MAX = 1024
+# host -> {"done": Event, "ip": str|None} for resolutions currently in flight.
+_RESOLVE_IP_INFLIGHT: dict[str, dict] = {}
 
 
-def _resolve_ip(host, timeout=5.0):
-    """Resolve a hostname to an IP address (supporting IPv4 and IPv6) exactly once.
-    Includes a timeout to prevent DNS resolution deadlocks.
+def _try_resolve_ip(host, timeout=5.0):
+    """Bounded hostname resolution. Returns the IP string, or None on failure.
+
+    This is the honest-signal variant of :func:`_resolve_ip`: callers that need
+    to distinguish "resolved" from "gave up" must use this one. ``_resolve_ip``
+    cannot express failure -- it returns the hostname unchanged -- so a caller
+    that wants to *validate* a hostname and follows it with its own
+    ``socket.getaddrinfo`` reintroduces the very unbounded lookup the timeout
+    exists to prevent.
+
+    ``getaddrinfo`` is not interruptible, so the timeout is implemented by
+    joining a daemon worker and walking away. In-flight resolutions are shared
+    per host, so repeatedly asking about a blackholed DNS server parks one
+    worker thread, not one per call.
     """
     if not host or host == "0.0.0.0":
-        return host
+        return None
 
-    # Fast path: already an IP literal (IPv4 or IPv6) — return immediately without thread spawn
+    # Fast path: already an IP literal (IPv4 or IPv6) — no thread, no lookup.
     try:
         ipaddress.ip_address(host)
         return host
@@ -260,35 +273,58 @@ def _resolve_ip(host, timeout=5.0):
     with _RESOLVE_IP_LOCK:
         if host in _RESOLVE_IP_CACHE:
             return _RESOLVE_IP_CACHE[host]
-
-    result = [host]
-    resolved = [False]
+        pending = _RESOLVE_IP_INFLIGHT.get(host)
+        if pending is None:
+            pending = {"done": threading.Event(), "ip": None}
+            _RESOLVE_IP_INFLIGHT[host] = pending
+            owner = True
+        else:
+            owner = False
 
     def _resolve():
         try:
             addr_info = socket.getaddrinfo(host, None)
             if addr_info:
-                result[0] = addr_info[0][4][0]
-                resolved[0] = True
+                pending["ip"] = addr_info[0][4][0]
         except Exception:
             pass
+        finally:
+            pending["done"].set()
+            with _RESOLVE_IP_LOCK:
+                # Drop the shared slot only once the worker is actually done, so
+                # a later call after a timeout starts a fresh attempt rather than
+                # attaching to a thread that has already been abandoned.
+                if _RESOLVE_IP_INFLIGHT.get(host) is pending:
+                    del _RESOLVE_IP_INFLIGHT[host]
 
-    t = threading.Thread(target=_resolve, daemon=True)
-    t.start()
-    t.join(timeout)
+    if owner:
+        threading.Thread(target=_resolve, daemon=True).start()
 
-    # Only cache a genuine success. A DNS failure or a join timeout (thread still
-    # hung in getaddrinfo) must NOT be cached permanently — otherwise a transient
-    # hiccup on the first resolve would skip pre-resolution for the whole process
-    # lifetime. On failure we return the unresolved host without caching so a
-    # later call retries; downstream (paho/ftplib) re-resolves anyway and TLS
-    # pinning still applies.
-    if resolved[0]:
+    if not pending["done"].wait(timeout):
+        return None  # still hung in getaddrinfo; the daemon thread is abandoned
+    ip = pending["ip"]
+
+    # Only cache a genuine success. A DNS failure or a join timeout must NOT be
+    # cached permanently — otherwise a transient hiccup on the first resolve
+    # would skip pre-resolution for the whole process lifetime.
+    if ip is not None:
         with _RESOLVE_IP_LOCK:
             if len(_RESOLVE_IP_CACHE) >= _RESOLVE_IP_CACHE_MAX:
                 _RESOLVE_IP_CACHE.clear()
-            _RESOLVE_IP_CACHE[host] = result[0]
-    return result[0]
+            _RESOLVE_IP_CACHE[host] = ip
+    return ip
+
+
+def _resolve_ip(host, timeout=5.0):
+    """Resolve a hostname to an IP, or return ``host`` unchanged if that fails.
+
+    The forgiving variant, for transport call sites (paho, ftplib) that will
+    re-resolve the name themselves anyway and where TLS pinning still applies.
+    Use :func:`_try_resolve_ip` when you need to know whether it worked.
+    """
+    if not host or host == "0.0.0.0":
+        return host
+    return _try_resolve_ip(host, timeout=timeout) or host
 
 
 _sequence_counter = 0

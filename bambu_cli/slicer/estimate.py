@@ -8,6 +8,7 @@ import zipfile
 from dataclasses import dataclass
 
 from bambu_cli.constants import SLICE_INFO_MAX_READ_BYTES
+from bambu_cli.logging_utils import logger
 
 _MAX_SECONDS = 2592000  # 30 days
 _MAX_GRAMS = 10000.0
@@ -134,6 +135,14 @@ def read_3mf_estimate(path: str) -> Estimate:
                     seconds, grams = _parse_slice_info(xml_text)
                     if seconds is not None or grams is not None:
                         return Estimate(seconds, grams)
+                else:
+                    # Skipping the primary source is a real (if recoverable)
+                    # degradation, not a non-event: say so rather than silently
+                    # reporting whatever the gcode fallback happens to find.
+                    logger.debug(
+                        f"slice_info.config is {info.file_size} bytes, over the "
+                        f"{SLICE_INFO_READ_BYTES}-byte cap; falling back to the gcode header"
+                    )
                 # slice_info.config was present but yielded nothing usable
                 # (malformed XML, or only implausible values).  Fall through to
                 # the gcode header rather than reporting "unknown" -- a truncated

@@ -122,6 +122,16 @@ class SafeHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         hop_count = getattr(req, "_bambu_redirect_hops", 0) + 1
         if hop_count > MAX_DOWNLOAD_REDIRECT_HOPS:
+            # Close the intermediate response ourselves before bailing out.
+            # HTTPRedirectHandler.http_error_302 calls this method *first* and
+            # only reaches its own ``fp.read(); fp.close()`` afterwards, so
+            # raising here means nothing else ever closes fp -- the 3xx
+            # response's socket would be left for the garbage collector.
+            if fp is not None:
+                try:
+                    fp.close()
+                except Exception:
+                    pass
             raise urllib.error.URLError(
                 f"Too many redirects: exceeded the {MAX_DOWNLOAD_REDIRECT_HOPS}-hop "
                 f"limit while fetching {_redact_url_credentials(req.full_url)}"
@@ -256,7 +266,14 @@ def _throttle_host(host, sleep=time.sleep) -> None:
         wait = max(wait, 0.0)
         _last_request_at[host] = now + wait
     if wait > 0:
-        sleep(min(wait, MIN_HOST_REQUEST_INTERVAL))
+        # Sleep the full computed wait. It can legitimately exceed
+        # MIN_HOST_REQUEST_INTERVAL: `previous` is a *scheduled* timestamp, so
+        # when calls queue up each one lands further in the future and the gap
+        # to close is correspondingly larger. Clamping to one interval made
+        # queued callers under-sleep and burst past the throttle. The upper
+        # bound that matters is MAX_RETRY_AFTER_WAIT, applied here so a
+        # pathological backlog still cannot park a caller indefinitely.
+        sleep(min(wait, MAX_RETRY_AFTER_WAIT))
 
 
 def _retry_after_seconds(err) -> float:
@@ -293,13 +310,30 @@ def polite_open(opener, req, timeout=None, sleep=time.sleep):
 
 
 def build_safe_opener():
-    """Build a urllib opener that only uses safe handlers and restricts schemes."""
+    """Build a urllib opener that only uses safe handlers and restricts schemes.
+
+    ``HTTPErrorProcessor`` is not optional. ``OpenerDirector`` is built by hand
+    here (rather than via ``build_opener``) so no unvetted handler sneaks in,
+    and that means every default handler must be added back deliberately. The
+    error processor is the one that routes a non-2xx response into
+    ``parent.error()`` -- which is what makes ``HTTPDefaultErrorHandler`` raise
+    ``HTTPError`` and what makes ``SafeHTTPRedirectHandler`` run at all.
+    Without it the opener silently returns 3xx/4xx/5xx responses as if they
+    were successful bodies: redirects are never followed, ``HTTPError`` is
+    never raised, and both the redirect hop cap and the 429/503 retry in
+    :func:`polite_open` become dead code. Regression-tested end to end (through
+    a live local server, not a mocked handler) in tests/test_netsafety_opener.py.
+    """
     opener = urllib.request.OpenerDirector()
     # Disable environment proxies so target IP validation cannot be bypassed by
-    # asking a proxy to fetch an internal/private address on our behalf.
+    # asking a proxy to fetch an internal/private address on our behalf. Note
+    # that an empty proxy map registers no *_open methods, so this handler adds
+    # nothing to the chain; env proxies are already absent because the chain is
+    # assembled by hand. It stays as an explicit statement of that intent.
     opener.add_handler(urllib.request.ProxyHandler({}))
     opener.add_handler(urllib.request.UnknownHandler())
     opener.add_handler(urllib.request.HTTPDefaultErrorHandler())
+    opener.add_handler(urllib.request.HTTPErrorProcessor())
     opener.add_handler(SafeHTTPRedirectHandler())
     opener.add_handler(SafeHTTPHandler())
     opener.add_handler(SafeHTTPSHandler())

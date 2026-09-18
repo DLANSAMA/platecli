@@ -122,3 +122,42 @@ def test_read_loaded_ams_material_no_ams_units_external_spool(monkeypatch):
 
     material = read_loaded_ams_material(argparse.Namespace())
     assert material == "ABS"
+
+
+def _status_with_tray_now(tray_now):
+    return {
+        "gcode_state": "IDLE",
+        "mc_percent": 0,
+        "vt_tray": {"id": "254", "tray_type": "PLA", "tray_color": "00FF00FF", "remain": 40},
+        "tray_now": tray_now,
+    }
+
+
+def test_tray_now_255_means_nothing_loaded_not_external_spool_active():
+    """254 and 255 are different states: 254 = feeding from the external spool,
+    255 = nothing loaded. Conflating them showed a false active filament for an
+    idle printer with a spool sitting in the holder but not loaded."""
+    result = parse_ams(_status_with_tray_now("255"))
+    assert result is not None
+    assert result["active_tray"] is None  # both sentinels normalize away here
+    assert result["external_tray"]["active"] is False
+
+
+def test_tray_now_254_still_marks_the_external_spool_active():
+    result = parse_ams(_status_with_tray_now("254"))
+    assert result["external_tray"]["active"] is True
+
+
+def test_external_spool_inactive_while_an_ams_tray_is_feeding():
+    status = _status_with_tray_now("1")
+    status["ams"] = {"ams": [{"id": "0", "tray": [{"id": "1", "tray_type": "ABS"}]}], "tray_now": "1"}
+    result = parse_ams(status)
+    assert result["active_tray"] == 1
+    assert result["external_tray"]["active"] is False
+    assert result["units"][0]["trays"][0]["active"] is True
+
+
+def test_external_tray_slot_falls_back_to_the_sentinel_when_id_is_unparseable():
+    status = _status_with_tray_now("254")
+    status["vt_tray"]["id"] = "not-a-number"
+    assert parse_ams(status)["external_tray"]["slot"] == 254

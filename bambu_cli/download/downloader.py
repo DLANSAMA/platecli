@@ -6,7 +6,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from typing import cast
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
@@ -543,15 +543,25 @@ def _cmd_download(
                     pass
 
                 if preserve_archive:
-                    canonical_name = _portable_basename(urlparse(url).path) or "archive.zip"
-                    if not canonical_name.endswith(".zip"):
-                        canonical_name += ".zip"
+                    # The name is URL-derived, so it goes through the same
+                    # sanitizer as every other write path: control characters,
+                    # Windows-illegal characters and reserved device stems out,
+                    # length capped. Skipping it left os.replace to fail with
+                    # ENAMETOOLONG on a long URL path -- swallowed below, which
+                    # silently stranded the archive under its hidden temp name.
+                    canonical_name = _sanitize_download_filename(
+                        _portable_basename(unquote(urlparse(url).path)) or "archive.zip"
+                    )
+                    if not canonical_name.lower().endswith(".zip"):
+                        canonical_name = _download_filename_with_extension(
+                            canonical_name, "archive.zip", fallback_name="archive.zip"
+                        )
                     target_archive_path = _noncolliding(os.path.join(outdir, canonical_name))
                     try:
                         os.replace(archive_path, target_archive_path)
                         archive_path = target_archive_path
-                    except OSError:
-                        pass
+                    except OSError as exc:
+                        logger.debug(f"Could not rename preserved archive to {canonical_name}: {exc}")
                     logger.info(
                         f"📦 Archive contains multiple model files; preserved archive at {_path_for_message(archive_path)}"
                     )

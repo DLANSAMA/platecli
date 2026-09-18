@@ -126,9 +126,10 @@ def iter_raw_imports():
             continue
         tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and not node.level and node.module:
-                if node.module.startswith("bambu_cli"):
-                    yield file, node.lineno, node.module
+            if isinstance(node, ast.ImportFrom):
+                resolved = absolute_module(file, node)
+                if resolved and resolved.startswith("bambu_cli"):
+                    yield file, node.lineno, resolved
             elif isinstance(node, ast.Import):
                 for alias in node.names:
                     if alias.name.startswith("bambu_cli"):
@@ -145,6 +146,31 @@ def sealed_violations():
                 if owner not in file.parents:
                     out.append((file, lineno, module, why))
     return out
+
+
+def absolute_module(file: Path, node: ast.ImportFrom) -> str | None:
+    """Resolve a relative ``from . import x`` to its absolute dotted path.
+
+    Relative imports used to be skipped outright, on the assumption that they
+    are "same unit by construction". That only holds for ``level=1`` inside a
+    *top-level* module. From within a subpackage, ``from ..protocols.ftps
+    import _x`` (level=2) crosses units and would sail straight past the
+    checker -- exactly the slicer-reaches-into-FTPS breach this script exists
+    to catch. Resolve them instead of trusting the shape.
+    """
+    if not node.level:
+        return node.module
+    # `.` is the containing package -- which is parts[:-1] for a plain module
+    # and for an __init__.py alike. Each extra dot walks one package further up.
+    pkg_parts = list(file.relative_to(ROOT).parts[:-1])
+    ascend = node.level - 1
+    if ascend:
+        if ascend > len(pkg_parts):
+            return None  # escapes the source tree; not our edge to police
+        pkg_parts = pkg_parts[:-ascend]
+    if not pkg_parts:
+        return None
+    return ".".join(pkg_parts + ([node.module] if node.module else []))
 
 
 def iter_edges():
@@ -165,10 +191,9 @@ def iter_edges():
         for node in ast.walk(tree):
             targets: list[str] = []
             if isinstance(node, ast.ImportFrom):
-                if node.level:  # relative import — same unit by construction
-                    continue
-                if node.module and node.module.startswith("bambu_cli"):
-                    targets = [node.module]
+                resolved = absolute_module(file, node)
+                if resolved and resolved.startswith("bambu_cli"):
+                    targets = [resolved]
             elif isinstance(node, ast.Import):
                 targets = [a.name for a in node.names if a.name.startswith("bambu_cli")]
             for target in targets:

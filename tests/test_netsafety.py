@@ -416,3 +416,77 @@ def test_safe_https_connection_wrap_socket_failure_closes_sock():
             conn.connect()
     mock_sock.close.assert_called_once()
 
+
+
+# --- bounded hostname resolution (audit P2) ---------------------------------
+
+
+def test_try_resolve_ip_reports_failure_instead_of_echoing_the_hostname():
+    """_resolve_ip cannot express failure (it returns the host unchanged), which
+    is what pushed cli.py into a second, unbounded socket.getaddrinfo. The
+    _try_resolve_ip variant returns None so callers can branch honestly."""
+    from bambu_cli.utils import _resolve_ip, _try_resolve_ip
+
+    assert _try_resolve_ip("no-such-host.invalid", timeout=5.0) is None
+    assert _resolve_ip("no-such-host.invalid", timeout=5.0) == "no-such-host.invalid"
+
+
+def test_try_resolve_ip_passes_ip_literals_through_without_a_lookup(monkeypatch):
+    import socket as socket_mod
+
+    from bambu_cli import utils
+
+    def _explode(*args, **kwargs):
+        raise AssertionError("getaddrinfo must not be called for an IP literal")
+
+    monkeypatch.setattr(socket_mod, "getaddrinfo", _explode)
+    assert utils._try_resolve_ip("192.0.2.10") == "192.0.2.10"
+    assert utils._try_resolve_ip("::1") == "::1"
+
+
+def test_try_resolve_ip_returns_none_when_the_lookup_outlives_the_timeout(monkeypatch):
+    """The whole point of the timeout: a hung resolver must not block the CLI."""
+    import socket as socket_mod
+    import threading
+
+    from bambu_cli import utils
+
+    release = threading.Event()
+
+    def _hang(*args, **kwargs):
+        release.wait(30)
+        return [(0, 0, 0, "", ("192.0.2.1", 0))]
+
+    monkeypatch.setattr(socket_mod, "getaddrinfo", _hang)
+    utils._RESOLVE_IP_CACHE.pop("slow.example", None)
+    utils._RESOLVE_IP_INFLIGHT.pop("slow.example", None)
+    try:
+        assert utils._try_resolve_ip("slow.example", timeout=0.2) is None
+    finally:
+        release.set()
+
+
+def test_concurrent_resolves_of_a_hung_host_share_one_worker_thread(monkeypatch):
+    """A blackholed DNS server must park one thread, not one per call."""
+    import socket as socket_mod
+    import threading
+
+    from bambu_cli import utils
+
+    release = threading.Event()
+    calls = []
+
+    def _hang(host, *args, **kwargs):
+        calls.append(host)
+        release.wait(30)
+        return [(0, 0, 0, "", ("192.0.2.1", 0))]
+
+    monkeypatch.setattr(socket_mod, "getaddrinfo", _hang)
+    utils._RESOLVE_IP_CACHE.pop("hung.example", None)
+    utils._RESOLVE_IP_INFLIGHT.pop("hung.example", None)
+    try:
+        for _ in range(4):
+            assert utils._try_resolve_ip("hung.example", timeout=0.1) is None
+        assert len(calls) == 1, f"spawned {len(calls)} resolver threads for one host"
+    finally:
+        release.set()
