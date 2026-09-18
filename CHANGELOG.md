@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Security
+
+- **SSRF filter hardening**: `netsafety` now unwraps IPv4-mapped IPv6,
+  deprecated IPv4-compatible IPv6 (`::/96`), and 6to4 addresses, and explicitly
+  rejects IPv4/IPv6 multicast addresses (`224.0.0.0/4`, `ff00::/8`) which Python
+  stdlib `ipaddress` previously treated as global.
+- **FTP transport command injection protection**: `BambuPrinter` now validates
+  all remote file paths passed to `STOR`, `RETR`, and `DELE` operations against
+  CRLF (`\r`, `\n`) and null (`\0`) control characters, preventing control channel
+  injection.
+- **URL validation & DoS prevention**: download URL validators now reject
+  whitespace and ASCII control characters up front, and `downloader` catches
+  low-level `http.client.HTTPException` to prevent unhandled tracebacks.
+- **Filename sanitization**: remote and local download filename sanitizers now
+  strip and reject ASCII DEL (`\x7f`).
+
 ### Changed
 
 - README: the "Print something" first-run steps (which start with installing

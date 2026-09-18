@@ -135,6 +135,7 @@ def test_main_allow_private_ips_reaches_get_safe_connection(monkeypatch, tmp_pat
     assert outcomes.get("result") is sentinel
     assert outcomes.get("connected") is True
 
+
 def test_ipv4_mapped_ipv6_private_address_refused():
     # ::ffff:192.168.0.1 must be unwrapped and evaluated as the private v4 addr.
     with (
@@ -143,6 +144,39 @@ def test_ipv4_mapped_ipv6_private_address_refused():
         pytest.raises(urllib.error.URLError, match="No safe/reachable"),
     ):
         _get_safe_connection("rebind.example.com", 443, 5, None)
+    conn.assert_not_called()
+
+
+@pytest.mark.parametrize("ip", ["224.0.0.1", "239.255.255.250", "ff02::1", "ff05::2"])
+def test_multicast_ip_refused_even_with_allow_private(ip):
+    with (
+        settings_ctx(allow_private_ips=True),
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo(ip)),
+        patch.object(netsafety.socket, "create_connection") as conn,
+        pytest.raises(urllib.error.URLError, match="No safe/reachable"),
+    ):
+        _get_safe_connection("multicast.example.com", 80, 5, None)
+    conn.assert_not_called()
+
+
+@pytest.mark.parametrize("ip", ["::127.0.0.1", "::169.254.169.254", "::10.0.0.1", "::192.168.1.1"])
+def test_ipv4_compatible_ipv6_refused_when_private(ip):
+    with (
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo(ip)),
+        patch.object(netsafety.socket, "create_connection") as conn,
+        pytest.raises(urllib.error.URLError, match="No safe/reachable"),
+    ):
+        _get_safe_connection("compat.example.com", 80, 5, None)
+    conn.assert_not_called()
+
+
+def test_6to4_embedding_private_ipv4_refused():
+    with (
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo("2002:7f00:1::")),
+        patch.object(netsafety.socket, "create_connection") as conn,
+        pytest.raises(urllib.error.URLError, match="No safe/reachable"),
+    ):
+        _get_safe_connection("sixtofour.example.com", 80, 5, None)
     conn.assert_not_called()
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 """The `download` command: HTTP fetch loop, redirects, HTML resolution, limits."""
 
+import http.client
 import os
 import tempfile
 import urllib.error
@@ -635,7 +636,7 @@ def _cmd_download(
             http_status=e.code,
             path=outpath,
         )
-    except urllib.error.URLError as e:
+    except (urllib.error.URLError, http.client.HTTPException) as e:
         _remove_partial_file(partial_path)
         _cleanup_reserved()
         err_msg = str(e.reason) if hasattr(e, "reason") else str(e)

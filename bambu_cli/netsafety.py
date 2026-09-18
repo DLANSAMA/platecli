@@ -33,6 +33,52 @@ MAX_DOWNLOAD_REDIRECT_HOPS = 5
 # urllib.request.Request stores header names.
 CROSS_HOST_STRIPPED_HEADERS = ("Authorization", "Proxy-authorization", "Cookie")
 
+_IPV6_COMPAT_NET = ipaddress.IPv6Network("::/96")
+
+
+def _is_safe_ip(
+    ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    allow_private: bool = False,
+) -> bool:
+    """Validate whether an IP is safe to connect to for download requests.
+
+    Multicast (IPv4 and IPv6) is unconditionally blocked regardless of
+    allow_private: TCP cannot connect to multicast addresses and doing so can
+    trigger amplification / network errors.
+
+    When allow_private is False (default):
+    - Rejects private, loopback, link-local, unspecified, and reserved addresses.
+    - Unwraps IPv4-mapped IPv6 (::ffff:0:0/96) and checks the embedded IPv4.
+    - Unwraps deprecated IPv4-compatible IPv6 (::/96) and checks the embedded IPv4.
+    - Unwraps 6to4 (2002::/16) and checks the embedded IPv4.
+    """
+    if ip_obj.is_multicast:
+        return False
+
+    if isinstance(ip_obj, ipaddress.IPv6Address):
+        if ip_obj.ipv4_mapped:
+            return _is_safe_ip(ip_obj.ipv4_mapped, allow_private=allow_private)
+        if ip_obj in _IPV6_COMPAT_NET:
+            return _is_safe_ip(ipaddress.IPv4Address(int(ip_obj) & 0xFFFFFFFF), allow_private=allow_private)
+        sixtofour = getattr(ip_obj, "sixtofour", None)
+        if sixtofour is not None and not _is_safe_ip(sixtofour, allow_private=allow_private):
+            return False
+
+        if allow_private:
+            return True
+
+        if ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_unspecified or ip_obj.is_reserved:
+            return False
+        return bool(ip_obj.is_global and not ip_obj.is_private)
+
+    # IPv4Address
+    if allow_private:
+        return True
+
+    if ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_private or ip_obj.is_reserved or ip_obj.is_unspecified:
+        return False
+    return bool(ip_obj.is_global)
+
 
 def _get_safe_connection(host, port, timeout, source_address):
     """Perform DNS resolution and validate IP is not internal/reserved."""
@@ -64,11 +110,9 @@ def _get_safe_connection(host, port, timeout, source_address):
         ip = res[4][0]
         try:
             ip_obj = ipaddress.ip_address(ip)
-            if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped:
-                ip_obj = ip_obj.ipv4_mapped
             from bambu_cli.context import current_settings
 
-            if not current_settings().allow_private_ips and not ip_obj.is_global:
+            if not _is_safe_ip(ip_obj, allow_private=current_settings().allow_private_ips):
                 logger.warning(f"Security Error: Refusing connection to non-public IP ({ip}) for {host}")
                 continue
         except ValueError:

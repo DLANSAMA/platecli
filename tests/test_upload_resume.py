@@ -310,3 +310,26 @@ def test_backoff_delays_increase_and_no_real_sleep(monkeypatch, local_file):
     assert recorded == sorted(recorded)
     assert len(recorded) == 3
     assert recorded[0] < recorded[1] < recorded[2]
+
+
+def test_remote_path_injection_rejected(monkeypatch, local_file, tmp_path):
+    path = local_file(1024)
+    printer = make_printer()
+
+    # upload_file
+    assert printer.upload_file(path, "/model/test.gcode\r\nDELE /model/bad.gcode") is False
+    assert printer.upload_file(path, "/model/test\0.gcode") is False
+    assert printer.upload_file(path, "/model/test\n.gcode") is False
+
+    # download_file
+    target = str(tmp_path / "out.gcode")
+    assert printer.download_file("/model/test.gcode\r\nDELE /model/bad.gcode", target) is False
+    assert printer.download_file("/model/test\0.gcode", target) is False
+
+    # delete_file
+    assert printer.delete_file("/model/test.gcode\r\nDELE /model/bad.gcode") is False
+    assert printer.delete_file("/model/test\0.gcode") is False
+
+    # list_files
+    assert printer.list_files("/model/\r\n") is None
+    assert printer.list_files("/model/\0") is None
