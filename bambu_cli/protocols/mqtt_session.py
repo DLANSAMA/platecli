@@ -248,6 +248,14 @@ class MqttSession:
             for attempt in range(retries + 1):
                 try:
                     if not self.ensure_connected(timeout):
+                        failed_broker = getattr(self, "_connect_failed", False)
+                        self._reset_client()
+                        if failed_broker:
+                            return None
+                        if attempt < retries:
+                            logger.warning(f"MQTT connection timeout on attempt {attempt + 1}. Retrying...")
+                            sleeper(2**attempt)
+                            continue
                         return None
                     # Background reports may already have assembled a usable
                     # snapshot. Request a refresh, but do not block or raise
@@ -305,6 +313,16 @@ class MqttSession:
                     self._publish_ok = False
                     self._publish_event = threading.Event()
                     if not self.ensure_connected(timeout):
+                        failed_broker = getattr(self, "_connect_failed", False)
+                        self._reset_client()
+                        if failed_broker:
+                            with self._state_lock:
+                                self._pending_payload = None
+                            return False
+                        if attempt < retries:
+                            logger.warning(f"MQTT command connection timeout on attempt {attempt + 1}. Retrying...")
+                            sleeper(2**attempt)
+                            continue
                         with self._state_lock:
                             self._pending_payload = None
                         return False
