@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 import socket
 import sys
@@ -251,12 +252,19 @@ def main():
             logger.error(message)
             sys.exit(EXIT_CONFIG_ERROR)
         try:
-            socket.getaddrinfo(printer_ip, None)
-        except socket.gaierror:
-            message = f"Invalid printer_ip or hostname in config: {printer_ip}"
-            write_error_envelope(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
-            logger.error(message)
-            sys.exit(EXIT_CONFIG_ERROR)
+            ipaddress.ip_address(printer_ip)
+        except ValueError:
+            try:
+                from bambu_cli.config import get_network_timeout
+
+                timeout = get_network_timeout(args)
+                resolved = utils._resolve_ip(printer_ip, timeout=timeout)
+                socket.getaddrinfo(resolved, None)
+            except (socket.gaierror, OSError):
+                message = f"Invalid printer_ip or hostname in config: {printer_ip}"
+                write_error_envelope(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
+                logger.error(message)
+                sys.exit(EXIT_CONFIG_ERROR)
 
     _handler = _resolve_command(args.cmd)
     if _handler is not None:

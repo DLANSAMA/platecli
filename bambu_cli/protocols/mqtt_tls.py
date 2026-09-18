@@ -51,11 +51,18 @@ class PinningSSLContext(ssl.SSLContext):
         kwargs = dict(kwargs)
         kwargs["do_handshake_on_connect"] = False
         tls_sock = super().wrap_socket(sock, *args, **kwargs)
-        tls_sock.do_handshake()
-        from bambu_cli.tlspin import verify_cert_fingerprint
+        try:
+            tls_sock.do_handshake()
+            from bambu_cli.tlspin import verify_cert_fingerprint
 
-        verify_cert_fingerprint(tls_sock.getpeercert(binary_form=True), self.expected_fingerprint)
-        return tls_sock
+            verify_cert_fingerprint(tls_sock.getpeercert(binary_form=True), self.expected_fingerprint)
+            return tls_sock
+        except Exception:
+            try:
+                tls_sock.close()
+            except Exception:
+                pass
+            raise
 
 
 def pinning_ssl_context(expected_fingerprint: str) -> PinningSSLContext:
@@ -109,7 +116,7 @@ class _SimMqttClient:
 
 def probe_cert_fingerprint(host, port=990, timeout=5):
     """Open a TLS connection purely to read the server cert's SHA-256 fingerprint."""
-    from bambu_cli.config import fingerprint_sha256
+    from bambu_cli.tlspin import fingerprint_sha256
 
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False

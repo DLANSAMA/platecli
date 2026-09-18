@@ -44,6 +44,13 @@ def normalize_fingerprint(fp: str | None) -> str | None:
     return fp.lower().replace(":", "").replace(" ", "")
 
 
+def fingerprint_sha256(der_cert: bytes | None) -> str | None:
+    """Hex SHA-256 of a DER-encoded certificate, or None if no cert."""
+    if not der_cert:
+        return None
+    return hashlib.sha256(der_cert).hexdigest()
+
+
 def verify_cert_fingerprint(
     peer_der: bytes | None,
     expected_fingerprint: str | None,

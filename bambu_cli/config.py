@@ -491,11 +491,9 @@ def _expected_fingerprint():
 
 def fingerprint_sha256(der_cert):
     """Hex SHA-256 of a DER-encoded certificate, or None if no cert."""
-    import hashlib
+    from bambu_cli.tlspin import fingerprint_sha256 as _fp
 
-    if not der_cert:
-        return None
-    return hashlib.sha256(der_cert).hexdigest()
+    return _fp(der_cert)
 
 
 def _timeout_from(args, key, default):

@@ -388,3 +388,31 @@ def test_polite_open_tolerates_non_string_full_url():
     assert netsafety.polite_open(opener, MagicMock(), timeout=5, sleep=slept.append) is sentinel
     assert slept == []
     assert netsafety._host_of(MagicMock().full_url) == ""
+
+
+def test_browser_like_user_agent_darwin_and_windows():
+    netsafety._default_user_agent.cache_clear()
+    with patch("bambu_cli.netsafety.platform.system", return_value="Darwin"):
+        ua = netsafety._default_user_agent()
+        assert "Macintosh; Intel Mac OS X 10_15_7" in ua
+
+    netsafety._default_user_agent.cache_clear()
+    with patch("bambu_cli.netsafety.platform.system", return_value="Windows"):
+        ua = netsafety._default_user_agent()
+        assert "Windows NT 10.0; Win64; x64" in ua
+
+    netsafety._default_user_agent.cache_clear()
+
+
+def test_safe_https_connection_wrap_socket_failure_closes_sock():
+    conn = netsafety.SafeHTTPSConnection("host.example.com", 443)
+    mock_sock = MagicMock()
+    mock_sock.close.side_effect = Exception("close error")
+    mock_ctx = MagicMock()
+    mock_ctx.wrap_socket.side_effect = Exception("handshake fail")
+    conn._context = mock_ctx
+    with patch.object(netsafety, "_get_safe_connection", return_value=mock_sock):
+        with pytest.raises(Exception, match="handshake fail"):
+            conn.connect()
+    mock_sock.close.assert_called_once()
+

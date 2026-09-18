@@ -234,10 +234,13 @@ def _record_download_success(args, payload):
         emit_json(payload)
 
 
+import ipaddress
 import socket
 import threading
 
 _RESOLVE_IP_CACHE: dict[str, str] = {}
+_RESOLVE_IP_LOCK = threading.Lock()
+_RESOLVE_IP_CACHE_MAX = 1024
 
 
 def _resolve_ip(host, timeout=5.0):
@@ -247,8 +250,16 @@ def _resolve_ip(host, timeout=5.0):
     if not host or host == "0.0.0.0":
         return host
 
-    if host in _RESOLVE_IP_CACHE:
-        return _RESOLVE_IP_CACHE[host]
+    # Fast path: already an IP literal (IPv4 or IPv6) — return immediately without thread spawn
+    try:
+        ipaddress.ip_address(host)
+        return host
+    except ValueError:
+        pass
+
+    with _RESOLVE_IP_LOCK:
+        if host in _RESOLVE_IP_CACHE:
+            return _RESOLVE_IP_CACHE[host]
 
     result = [host]
     resolved = [False]
@@ -273,7 +284,10 @@ def _resolve_ip(host, timeout=5.0):
     # later call retries; downstream (paho/ftplib) re-resolves anyway and TLS
     # pinning still applies.
     if resolved[0]:
-        _RESOLVE_IP_CACHE[host] = result[0]
+        with _RESOLVE_IP_LOCK:
+            if len(_RESOLVE_IP_CACHE) >= _RESOLVE_IP_CACHE_MAX:
+                _RESOLVE_IP_CACHE.clear()
+            _RESOLVE_IP_CACHE[host] = result[0]
     return result[0]
 
 

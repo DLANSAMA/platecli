@@ -243,8 +243,15 @@ def _throttle_host(host, sleep=time.sleep) -> None:
     if not host:
         return
     with _last_request_lock:
-        previous = _last_request_at.get(host)
         now = time.monotonic()
+        if len(_last_request_at) >= 1000:
+            cutoff = now - 60.0
+            stale = [h for h, t in _last_request_at.items() if t <= cutoff]
+            for h in stale:
+                del _last_request_at[h]
+            if len(_last_request_at) >= 1000:
+                _last_request_at.clear()
+        previous = _last_request_at.get(host)
         wait = 0.0 if previous is None else MIN_HOST_REQUEST_INTERVAL - (now - previous)
         wait = max(wait, 0.0)
         _last_request_at[host] = now + wait
