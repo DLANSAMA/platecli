@@ -34,6 +34,10 @@ MAX_DOWNLOAD_REDIRECT_HOPS = 5
 CROSS_HOST_STRIPPED_HEADERS = ("Authorization", "Proxy-authorization", "Cookie")
 
 _IPV6_COMPAT_NET = ipaddress.IPv6Network("::/96")
+# RFC 6052 well-known NAT64 prefix. It sits inside the reserved ::/8 block, so
+# without an explicit unwrap every download on a DNS64 (IPv6-only) network
+# would be refused as "reserved".
+_IPV6_NAT64_NET = ipaddress.IPv6Network("64:ff9b::/96")
 
 
 def _is_safe_ip(
@@ -51,6 +55,9 @@ def _is_safe_ip(
     - Unwraps IPv4-mapped IPv6 (::ffff:0:0/96) and checks the embedded IPv4.
     - Unwraps deprecated IPv4-compatible IPv6 (::/96) and checks the embedded IPv4.
     - Unwraps 6to4 (2002::/16) and checks the embedded IPv4.
+    - Unwraps NAT64 (64:ff9b::/96) and checks the embedded IPv4, so public
+      hosts stay reachable on DNS64 networks while private ones are refused.
+    - Rejects deprecated site-local IPv6 (fec0::/10), which stdlib calls global.
     """
     if ip_obj.is_multicast:
         return False
@@ -58,7 +65,7 @@ def _is_safe_ip(
     if isinstance(ip_obj, ipaddress.IPv6Address):
         if ip_obj.ipv4_mapped:
             return _is_safe_ip(ip_obj.ipv4_mapped, allow_private=allow_private)
-        if ip_obj in _IPV6_COMPAT_NET:
+        if ip_obj in _IPV6_COMPAT_NET or ip_obj in _IPV6_NAT64_NET:
             return _is_safe_ip(ipaddress.IPv4Address(int(ip_obj) & 0xFFFFFFFF), allow_private=allow_private)
         sixtofour = getattr(ip_obj, "sixtofour", None)
         if sixtofour is not None and not _is_safe_ip(sixtofour, allow_private=allow_private):
@@ -67,7 +74,13 @@ def _is_safe_ip(
         if allow_private:
             return True
 
-        if ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_unspecified or ip_obj.is_reserved:
+        if (
+            ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_site_local
+            or ip_obj.is_unspecified
+            or ip_obj.is_reserved
+        ):
             return False
         return bool(ip_obj.is_global and not ip_obj.is_private)
 

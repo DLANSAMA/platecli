@@ -179,6 +179,29 @@ def test_6to4_embedding_private_ipv4_refused():
         _get_safe_connection("sixtofour.example.com", 80, 5, None)
     conn.assert_not_called()
 
+
+@pytest.mark.parametrize("ip", ["64:ff9b::7f00:1", "64:ff9b::a00:1", "64:ff9b::a9fe:a9fe", "fec0::1"])
+def test_nat64_private_and_site_local_refused(ip):
+    with (
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo(ip)),
+        patch.object(netsafety.socket, "create_connection") as conn,
+        pytest.raises(urllib.error.URLError, match="No safe/reachable"),
+    ):
+        _get_safe_connection("nat64.example.com", 80, 5, None)
+    conn.assert_not_called()
+
+
+def test_nat64_public_ipv4_allowed():
+    # DNS64 networks synthesize 64:ff9b::<v4> for every v4-only host; refusing
+    # the whole prefix would break all downloads there.
+    with (
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo("64:ff9b::808:808")),
+        patch.object(netsafety.socket, "create_connection") as conn,
+    ):
+        _get_safe_connection("dns64.example.com", 443, 5, None)
+    conn.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # Resolution / candidate-iteration edge cases
 # ---------------------------------------------------------------------------

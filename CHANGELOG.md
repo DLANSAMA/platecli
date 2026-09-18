@@ -8,13 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ### Security
 
 - **SSRF filter hardening**: `netsafety` now unwraps IPv4-mapped IPv6,
-  deprecated IPv4-compatible IPv6 (`::/96`), and 6to4 addresses, and explicitly
-  rejects IPv4/IPv6 multicast addresses (`224.0.0.0/4`, `ff00::/8`) which Python
-  stdlib `ipaddress` previously treated as global.
-- **FTP transport command injection protection**: `BambuPrinter` now validates
-  all remote file paths passed to `STOR`, `RETR`, and `DELE` operations against
-  CRLF (`\r`, `\n`) and null (`\0`) control characters, preventing control channel
-  injection.
+  deprecated IPv4-compatible IPv6 (`::/96`), 6to4, and NAT64 (`64:ff9b::/96`)
+  addresses and checks the embedded IPv4, and explicitly rejects IPv4/IPv6
+  multicast (`224.0.0.0/4`, `ff00::/8`) and deprecated site-local IPv6
+  (`fec0::/10`), which Python stdlib `ipaddress` treats as global. Public hosts
+  reached through NAT64 on IPv6-only networks stay reachable.
+- **FTP remote-path validation (defense in depth)**: `BambuPrinter` now rejects
+  remote paths containing CR, LF, or NUL before any `STOR`, `RETR`, `DELE`, or
+  `NLST`, returning a clean failure. `ftplib` already refuses CR/LF on the
+  control channel; this adds the NUL check and avoids an unhandled `ValueError`.
 - **URL validation & DoS prevention**: download URL validators now reject
   whitespace and ASCII control characters up front, and `downloader` catches
   low-level `http.client.HTTPException` to prevent unhandled tracebacks.
