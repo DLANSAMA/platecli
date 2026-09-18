@@ -26,6 +26,13 @@ _dns_cache_lock = threading.Lock()
 # chain redirects up to urllib's built-in default of 10.
 MAX_DOWNLOAD_REDIRECT_HOPS = 5
 
+# Request headers that carry credentials for the host they were sent to. They
+# are dropped when a redirect lands on a different host. Nothing in platecli
+# sets them today; the guard is here so the first caller that does cannot leak
+# a token to whatever host a redirect happens to name. Capitalized the way
+# urllib.request.Request stores header names.
+CROSS_HOST_STRIPPED_HEADERS = ("Authorization", "Proxy-authorization", "Cookie")
+
 
 def _get_safe_connection(host, port, timeout, source_address):
     """Perform DNS resolution and validate IP is not internal/reserved."""
@@ -139,6 +146,17 @@ class SafeHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
         new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new_req is not None:
             new_req._bambu_redirect_hops = hop_count  # type: ignore[attr-defined]
+            if _host_of(newurl) != _host_of(req.full_url):
+                # urllib copies every request header onto the redirected
+                # request, whatever host it names. Credentials scoped to the
+                # first host must not follow a redirect to a second one, and
+                # the User-Agent policy is per host (honest token for
+                # first-party API hosts, browser-shaped elsewhere), so re-pick
+                # it for the host we are actually about to talk to.
+                for name in CROSS_HOST_STRIPPED_HEADERS:
+                    new_req.remove_header(name)
+                if req.has_header("User-agent"):
+                    new_req.add_header("User-Agent", user_agent_for_url(newurl))
         return new_req
 
 

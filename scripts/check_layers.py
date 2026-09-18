@@ -98,9 +98,7 @@ SEALED: dict[str, str] = {
         "the raw Printables GraphQL wire format — import from bambu_cli.printables instead, "
         "so a schema change stays contained in the adapter"
     ),
-    "bambu_cli.printables.adapter": (
-        "internal; the public names are re-exported from bambu_cli.printables"
-    ),
+    "bambu_cli.printables.adapter": ("internal; the public names are re-exported from bambu_cli.printables"),
 }
 
 
@@ -126,14 +124,8 @@ def iter_raw_imports():
             continue
         tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                resolved = absolute_module(file, node)
-                if resolved and resolved.startswith("bambu_cli"):
-                    yield file, node.lineno, resolved
-            elif isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name.startswith("bambu_cli"):
-                        yield file, node.lineno, alias.name
+            for target in import_targets(file, node):
+                yield file, node.lineno, target
 
 
 def sealed_violations():
@@ -173,6 +165,28 @@ def absolute_module(file: Path, node: ast.ImportFrom) -> str | None:
     return ".".join(pkg_parts + ([node.module] if node.module else []))
 
 
+def import_targets(file: Path, node: ast.AST) -> list[str]:
+    """Every dotted ``bambu_cli...`` path an import statement can bind.
+
+    A ``from`` import names a base *and* a list of names, and a name can be a
+    submodule: ``from bambu_cli import protocols`` binds ``bambu_cli.protocols``
+    and ``from bambu_cli.printables import client`` binds the sealed
+    ``bambu_cli.printables.client``. Judging the base alone let both sail past
+    the checker (the base of the first is the bare package, which owns no
+    unit). So yield the base and every ``base.name``; a name that is a plain
+    function rather than a module still maps to the same unit as its base, so
+    the extra candidates never invent an edge that does not exist.
+    """
+    if isinstance(node, ast.ImportFrom):
+        base = absolute_module(file, node)
+        if not base or not base.startswith("bambu_cli"):
+            return []
+        return [base] + [f"{base}.{alias.name}" for alias in node.names]
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names if alias.name.startswith("bambu_cli")]
+    return []
+
+
 def iter_edges():
     """Yield (src_unit, dst_unit, file, lineno, deferred)."""
     for file in sorted(PKG.rglob("*.py")):
@@ -189,17 +203,12 @@ def iter_edges():
                     deferred_nodes.add(id(inner))
 
         for node in ast.walk(tree):
-            targets: list[str] = []
-            if isinstance(node, ast.ImportFrom):
-                resolved = absolute_module(file, node)
-                if resolved and resolved.startswith("bambu_cli"):
-                    targets = [resolved]
-            elif isinstance(node, ast.Import):
-                targets = [a.name for a in node.names if a.name.startswith("bambu_cli")]
-            for target in targets:
+            seen: set[str] = set()
+            for target in import_targets(file, node):
                 dst = unit_of(target)
-                if dst is None or dst == src:
+                if dst is None or dst == src or dst in seen:
                     continue
+                seen.add(dst)
                 yield src, dst, file, node.lineno, id(node) in deferred_nodes
 
 

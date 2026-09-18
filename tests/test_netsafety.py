@@ -490,3 +490,76 @@ def test_concurrent_resolves_of_a_hung_host_share_one_worker_thread(monkeypatch)
         assert len(calls) == 1, f"spawned {len(calls)} resolver threads for one host"
     finally:
         release.set()
+
+
+# --- regressions found by mutation: each of these went green with the guarded
+# line removed, so the line was untested ------------------------------------
+
+
+def test_throttle_queued_callers_sleep_the_full_backlog_not_one_interval(monkeypatch):
+    """`previous` is a scheduled timestamp: with three calls queued the third
+    must wait ~2 intervals. Clamping the sleep to one interval (the old code)
+    let queued callers burst past the throttle."""
+    monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 1.0)
+    netsafety._last_request_at.clear()
+    slept = []
+    for _ in range(3):
+        netsafety._throttle_host("api.printables.com", sleep=slept.append)
+    assert len(slept) == 2
+    assert slept[1] > netsafety.MIN_HOST_REQUEST_INTERVAL * 1.5, slept
+    assert slept[1] <= netsafety.MAX_RETRY_AFTER_WAIT
+
+
+def test_throttle_backlog_is_capped_at_max_retry_after_wait(monkeypatch):
+    monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 10.0)
+    netsafety._last_request_at.clear()
+    slept = []
+    for _ in range(6):
+        netsafety._throttle_host("api.printables.com", sleep=slept.append)
+    assert max(slept) <= netsafety.MAX_RETRY_AFTER_WAIT
+
+
+def test_try_resolve_ip_recovers_when_the_worker_thread_cannot_start(monkeypatch):
+    """A failed Thread.start() must not leave a dead in-flight entry behind:
+    every later call for that host would attach to it, wait its full timeout
+    and report None forever, surfacing as a bogus 'Invalid printer_ip'."""
+    import socket as socket_mod
+    import threading
+
+    from bambu_cli import utils
+
+    utils._RESOLVE_IP_CACHE.pop("limit.example", None)
+    utils._RESOLVE_IP_INFLIGHT.pop("limit.example", None)
+
+    def _no_threads(self):
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", _no_threads)
+    assert utils._try_resolve_ip("limit.example", timeout=0.2) is None
+    assert "limit.example" not in utils._RESOLVE_IP_INFLIGHT
+    monkeypatch.undo()
+
+    monkeypatch.setattr(socket_mod, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("192.0.2.9", 0))])
+    assert utils._try_resolve_ip("limit.example", timeout=2.0) == "192.0.2.9"
+    utils._RESOLVE_IP_CACHE.pop("limit.example", None)
+
+
+def test_resolve_ip_cache_expires_so_a_moved_printer_is_re_resolved(monkeypatch):
+    """The cached IP is handed to paho/ftplib as a literal, so a permanent
+    cache would pin a long-lived process (the TUI) to a stale DHCP lease."""
+    import socket as socket_mod
+
+    from bambu_cli import utils
+
+    utils._RESOLVE_IP_CACHE.pop("moved.example", None)
+    utils._RESOLVE_IP_INFLIGHT.pop("moved.example", None)
+    answers = iter(["192.0.2.1", "192.0.2.2"])
+    monkeypatch.setattr(socket_mod, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", (next(answers), 0))])
+
+    assert utils._try_resolve_ip("moved.example", timeout=2.0) == "192.0.2.1"
+    assert utils._try_resolve_ip("moved.example", timeout=2.0) == "192.0.2.1", "fresh entry must be served"
+
+    ip, stamp = utils._RESOLVE_IP_CACHE["moved.example"]
+    utils._RESOLVE_IP_CACHE["moved.example"] = (ip, stamp - utils._RESOLVE_IP_CACHE_TTL - 1)
+    assert utils._try_resolve_ip("moved.example", timeout=2.0) == "192.0.2.2"
+    utils._RESOLVE_IP_CACHE.pop("moved.example", None)

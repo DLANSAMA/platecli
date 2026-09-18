@@ -237,10 +237,16 @@ def _record_download_success(args, payload):
 import ipaddress
 import socket
 import threading
+import time
 
-_RESOLVE_IP_CACHE: dict[str, str] = {}
+# host -> (ip, monotonic timestamp). Entries expire after _RESOLVE_IP_CACHE_TTL
+# seconds: the resolved IP is handed to paho/ftplib as a literal, so without an
+# expiry a printer that moves to a new DHCP lease would be unreachable for the
+# rest of a long-lived process (the TUI) even though its name still resolves.
+_RESOLVE_IP_CACHE: dict[str, tuple[str, float]] = {}
 _RESOLVE_IP_LOCK = threading.Lock()
 _RESOLVE_IP_CACHE_MAX = 1024
+_RESOLVE_IP_CACHE_TTL = 300.0
 # host -> {"done": Event, "ip": str|None} for resolutions currently in flight.
 _RESOLVE_IP_INFLIGHT: dict[str, dict] = {}
 
@@ -271,8 +277,12 @@ def _try_resolve_ip(host, timeout=5.0):
         pass
 
     with _RESOLVE_IP_LOCK:
-        if host in _RESOLVE_IP_CACHE:
-            return _RESOLVE_IP_CACHE[host]
+        cached = _RESOLVE_IP_CACHE.get(host)
+        if cached is not None:
+            ip, stamp = cached
+            if time.monotonic() - stamp < _RESOLVE_IP_CACHE_TTL:
+                return ip
+            del _RESOLVE_IP_CACHE[host]
         pending = _RESOLVE_IP_INFLIGHT.get(host)
         if pending is None:
             pending = {"done": threading.Event(), "ip": None}
@@ -298,7 +308,18 @@ def _try_resolve_ip(host, timeout=5.0):
                     del _RESOLVE_IP_INFLIGHT[host]
 
     if owner:
-        threading.Thread(target=_resolve, daemon=True).start()
+        try:
+            threading.Thread(target=_resolve, daemon=True).start()
+        except RuntimeError:
+            # "can't start new thread" (thread limit / memory). The worker never
+            # runs, so nothing else will ever set ``done`` or clear the slot;
+            # do both here or every later call for this host would attach to a
+            # dead entry, wait its full timeout and report None forever.
+            pending["done"].set()
+            with _RESOLVE_IP_LOCK:
+                if _RESOLVE_IP_INFLIGHT.get(host) is pending:
+                    del _RESOLVE_IP_INFLIGHT[host]
+            return None
 
     if not pending["done"].wait(timeout):
         return None  # still hung in getaddrinfo; the daemon thread is abandoned
@@ -311,16 +332,19 @@ def _try_resolve_ip(host, timeout=5.0):
         with _RESOLVE_IP_LOCK:
             if len(_RESOLVE_IP_CACHE) >= _RESOLVE_IP_CACHE_MAX:
                 _RESOLVE_IP_CACHE.clear()
-            _RESOLVE_IP_CACHE[host] = ip
+            _RESOLVE_IP_CACHE[host] = (ip, time.monotonic())
     return ip
 
 
 def _resolve_ip(host, timeout=5.0):
     """Resolve a hostname to an IP, or return ``host`` unchanged if that fails.
 
-    The forgiving variant, for transport call sites (paho, ftplib) that will
-    re-resolve the name themselves anyway and where TLS pinning still applies.
-    Use :func:`_try_resolve_ip` when you need to know whether it worked.
+    The forgiving variant, for transport call sites (paho, ftplib). On failure
+    they receive the bare hostname and perform their own (untimed) lookup, so
+    connection errors keep their natural shape; on success they receive the IP
+    literal and never resolve the name again, which is why the cache above
+    expires. TLS pinning applies either way. Use :func:`_try_resolve_ip` when
+    you need to know whether resolution worked.
     """
     if not host or host == "0.0.0.0":
         return host

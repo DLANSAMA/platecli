@@ -43,10 +43,19 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if body:
             self.wfile.write(body)
 
+    # Set by the cross-host tests below; a Location for /redirect-elsewhere.
+    redirect_target = "/final"
+
     def do_GET(self):  # noqa: N802 -- BaseHTTPRequestHandler's required spelling
         path = self.path
         if path == "/final":
             self._send(200, BODY)
+        elif path == "/echo":
+            import json
+
+            self._send(200, json.dumps(dict(self.headers.items())).encode(), [("Content-Type", "application/json")])
+        elif path == "/redirect-elsewhere":
+            self._send(302, headers=[("Location", type(self).redirect_target)])
         elif path == "/redirect-once":
             self._send(302, headers=[("Location", "/final")])
         elif path.startswith("/hop/"):
@@ -263,3 +272,72 @@ def test_hop_cap_tolerates_a_missing_intermediate_response():
 
     with pytest.raises(urllib.error.URLError):
         handler.redirect_request(req, None, 302, "Found", {}, "https://example.com/next")
+
+
+# --- cross-host redirects ----------------------------------------------------
+# urllib copies every request header onto the redirected request whatever host
+# it names. Nothing in platecli sends credentials today; this pins the guard
+# so the first caller that does cannot leak a token to a redirect target.
+
+
+@pytest.fixture
+def cross_host(server, monkeypatch):
+    """Route a made-up second hostname to the same local server, bypassing DNS.
+
+    The redirect handler only looks at the URL's host, so any distinct name will
+    do; mapping it here keeps the test independent of the resolver and of
+    whether ``localhost`` resolves to ::1 first on the CI runner."""
+    from urllib.parse import urlparse
+
+    from bambu_cli import netsafety
+
+    port = urlparse(server).port
+    real = netsafety._get_safe_connection
+
+    def _route(host, p, timeout, source_address):
+        if host == "second-host.invalid":
+            return real("127.0.0.1", port, timeout, source_address)
+        return real(host, p, timeout, source_address)
+
+    monkeypatch.setattr(netsafety, "_get_safe_connection", _route)
+    return f"http://second-host.invalid:{port}"
+
+
+def _echo_headers(server_or_target, path, headers):
+    """Open ``path`` and return (final url, headers the last hop received)."""
+    import json
+
+    opener = build_safe_opener()
+    req = urllib.request.Request(f"{server_or_target}{path}", headers=headers)
+    with settings_ctx(allow_private_ips=True), opener.open(req, timeout=10) as resp:
+        assert resp.status == 200
+        return resp.url, json.loads(resp.read())
+
+
+def test_cross_host_redirect_drops_credential_headers(server, cross_host, monkeypatch):
+    _Handler.redirect_target = f"{cross_host}/echo"
+    final_url, seen = _echo_headers(
+        server,
+        "/redirect-elsewhere",
+        {"Authorization": "Bearer SECRET", "Cookie": "sid=1", "X-Custom": "kept"},
+    )
+    assert final_url.startswith(cross_host)
+    assert "Authorization" not in seen and "Cookie" not in seen, seen
+    assert seen.get("X-Custom") == "kept"
+
+
+def test_same_host_redirect_keeps_credential_headers(server):
+    _Handler.redirect_target = "/echo"
+    _, seen = _echo_headers(server, "/redirect-elsewhere", {"Authorization": "Bearer SECRET"})
+    assert seen.get("Authorization") == "Bearer SECRET"
+
+
+def test_cross_host_redirect_repicks_the_user_agent_for_the_new_host(server, cross_host, monkeypatch):
+    """UA policy is per host; a generic URL redirecting onto a first-party API
+    host must present the honest token, not the one chosen for the first URL."""
+    from bambu_cli import netsafety
+
+    monkeypatch.setattr(netsafety, "HONEST_UA_HOSTS", frozenset({"second-host.invalid"}))
+    _Handler.redirect_target = f"{cross_host}/echo"
+    _, seen = _echo_headers(server, "/redirect-elsewhere", {"User-Agent": "Mozilla/5.0 generic"})
+    assert seen.get("User-Agent") == netsafety.platecli_user_agent()

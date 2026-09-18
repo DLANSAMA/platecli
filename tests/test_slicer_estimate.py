@@ -84,6 +84,24 @@ def test_oversized_slice_info_falls_back_to_gcode(tmp_path):
     assert read_3mf_estimate(path).seconds == 1200
 
 
+def test_oversized_slice_info_fallback_is_logged(tmp_path, caplog):
+    """Skipping the primary source is a real degradation; it must say so rather
+    than silently reporting whatever the gcode header happens to contain."""
+    import logging
+
+    oversized_data = b"a" * (10 * 1024 * 1024 + 1)
+    path = _write_zip(
+        tmp_path / "oversized.3mf",
+        {
+            "Metadata/slice_info.config": oversized_data,
+            "Metadata/plate_1.gcode": b"; model printing time: 20m 0s\n",
+        },
+    )
+    with caplog.at_level(logging.DEBUG, logger="bambu"):
+        assert read_3mf_estimate(path).seconds == 1200
+    assert any("slice_info.config" in rec.getMessage() and "falling back" in rec.getMessage() for rec in caplog.records)
+
+
 def test_slice_info_with_only_implausible_values_falls_back_to_gcode(tmp_path):
     """A well-formed config carrying junk must not shadow a good gcode header."""
     bad_config = (

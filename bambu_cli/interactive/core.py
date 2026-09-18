@@ -313,7 +313,7 @@ def read_loaded_ams_material(args: argparse.Namespace, on_active_slot=None) -> s
                 if loaded_type is not None:
                     break
         elif ext_tray and ext_tray.get("active") and not ext_tray.get("empty"):
-            # External spool is currently active (tray_now was 254/255)
+            # External spool is currently active (tray_now was 254; 255 means nothing loaded)
             loaded_type = ext_tray.get("type")
         else:
             # Nothing is marked active: fall back to the first non-empty tray
