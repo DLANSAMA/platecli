@@ -84,9 +84,15 @@ def setting_catalog(profiles_dir: str) -> dict[str, dict[str, Any]]:
     ``slice --list-settings``. Empty sections mean "no profiles readable here" —
     callers degrade rather than fail.
     """
+    # G-code/script keys are refused as overrides (see _override_safety_problem),
+    # so they are not advertised as settable either.
     return {
-        "process": _known_setting_keys(profiles_dir, "process"),
-        "filament": _known_setting_keys(profiles_dir, "filament"),
+        kind: {
+            key: value
+            for key, value in _known_setting_keys(profiles_dir, kind).items()
+            if not _SCRIPT_KEY_RE.search(key)
+        }
+        for kind in ("process", "filament")
     }
 
 
@@ -159,10 +165,43 @@ def _warn_unknown_keys(overrides: dict[str, str], known: dict[str, Any], kind: s
         logger.warning(f"⚠️  Unknown {kind} setting '{key}'{hint} — passing through to OrcaSlicer anyway.")
 
 
-def _numeric_values(value: Any) -> list[float]:
-    """Best-effort extraction of numbers from a raw override value.
+# Keys whose value is G-code or a program to run. Their contents are never
+# range-checked, so letting them through would sidestep every bound below
+# (``filament_start_gcode=M104 S399`` reached the printer G-code unchanged).
+_SCRIPT_KEY_RE = re.compile(r"gcode|post_process", re.IGNORECASE)
 
-    Accepts ``"999"``, ``"[999]"``, ``[999]``, ``999`` — ignores non-numeric.
+# OrcaSlicer merges every loaded profile into one config, so a machine key sent
+# through --set replaces the printer profile's value: ``printable_area`` changes
+# the bed the model is laid out on. The installed machine profiles name the full
+# set; these are refused even when no profiles can be read.
+_BUILTIN_MACHINE_KEYS = frozenset(
+    {
+        "bed_exclude_area",
+        "extruder_clearance_height_to_lid",
+        "extruder_clearance_height_to_rod",
+        "extruder_clearance_radius",
+        "extruder_offset",
+        "gcode_flavor",
+        "nozzle_diameter",
+        "printable_area",
+        "printable_height",
+        "printer_model",
+        "printer_variant",
+        "z_offset",
+    }
+)
+_BUILTIN_MACHINE_PREFIXES = ("machine_",)
+
+
+def _temperature_values(value: Any) -> list[float] | None:
+    """Every number OrcaSlicer would read from a temperature override.
+
+    Returns ``None`` when any part of the value is not a plain number, so the
+    caller can refuse it: the check has to fail closed. OrcaSlicer reads a
+    comma-separated string as a per-extruder list (``"400,220"`` sets extruder
+    0 to 400 C) and joins JSON array elements the same way, so both are split
+    here. A bare JSON number, a numeric string, and a flat list of either are
+    accepted; booleans, nested lists, objects and empty values are not.
     """
     parsed: Any = value
     if isinstance(value, str):
@@ -173,11 +212,19 @@ def _numeric_values(value: Any) -> list[float]:
     items = parsed if isinstance(parsed, list) else [parsed]
     out: list[float] = []
     for item in items:
-        try:
+        if isinstance(item, bool):
+            return None
+        if isinstance(item, (int, float)):
             out.append(float(item))
-        except (TypeError, ValueError):
             continue
-    return out
+        if not isinstance(item, str):
+            return None
+        for token in item.split(","):
+            try:
+                out.append(float(token.strip()))
+            except ValueError:
+                return None
+    return out or None
 
 
 def _is_bed_temp_key(key: str) -> bool:
@@ -191,20 +238,20 @@ def _is_bed_temp_key(key: str) -> bool:
     return isinstance(key, str) and (key.endswith("_plate_temp") or key.endswith("_plate_temp_initial_layer"))
 
 
-def _effective_override_temps(args: argparse.Namespace) -> tuple[list[float], list[float]]:
-    """Nozzle and bed temps implied by generic overrides (filament *and* process).
+def _is_temperature_key(key: str) -> bool:
+    """Any setting that holds a temperature: nozzle, bed, chamber, or otherwise."""
+    lowered = key.lower()
+    return "temperature" in lowered or lowered.endswith(("_temp", "_temp_initial_layer"))
 
-    Inspects ``--settings-json`` (both ``"filament"`` and ``"process"``
-    sections), ``--set-filament``, and ``--set`` so that temperature keys
-    supplied through any of these paths are validated against the same
-    printer-safety bounds.  Named flags (``--nozzle-temp`` / ``--bed-temp``)
-    are range-checked separately.
+
+def _override_sections(args: argparse.Namespace) -> list[tuple[str, dict[str, Any]]]:
+    """Every generic override as ``(kind, {key: raw value})``, kind 'process'|'filament'.
+
+    Reads ``--settings-json`` (both sections), ``--set-filament`` and ``--set``.
+    Format errors are reported by the caller's own checks, so they are skipped
+    here rather than raised.
     """
-    from bambu_cli.constants import BED_PLATE_TYPES
-
-    nozzle: list[float] = []
-    bed: list[float] = []
-    sources: list[dict[str, Any]] = []
+    sections: list[tuple[str, dict[str, Any]]] = []
     raw_json = _namespace_get(args, "settings_json", None)
     if raw_json:
         try:
@@ -212,31 +259,74 @@ def _effective_override_temps(args: argparse.Namespace) -> tuple[list[float], li
         except ValueError:
             blob = {}
         if isinstance(blob, dict):
-            for section in ("filament", "process"):
-                sec = blob.get(section, {})
-                if isinstance(sec, dict):
-                    sources.append(sec)
-    try:
-        sources.append(_parse_kv_overrides(_namespace_get(args, "set_filament", None), "set-filament"))
-    except ValueError:
-        pass  # format error surfaced elsewhere in validation
-    try:
-        sources.append(_parse_kv_overrides(_namespace_get(args, "set_process", None), "set"))
-    except ValueError:
-        pass  # format error surfaced elsewhere in validation
-    bed_keys = set(BED_PLATE_TYPES) | {f"{plate}_initial_layer" for plate in BED_PLATE_TYPES}
-    for src in sources:
-        for key, value in src.items():
-            if key in ("nozzle_temperature", "nozzle_temperature_initial_layer"):
-                nozzle += _numeric_values(value)
-            elif key in bed_keys or _is_bed_temp_key(key):
-                # Range-check ANY bed-plate temperature key, not just the four
-                # legacy plate types. OrcaSlicer 2.2+ added supertack_plate_temp
-                # (Cool Plate SuperTack); matching the *_plate_temp[_initial_layer]
-                # pattern keeps new bed types inside MAX_BED_TEMP_C without a
-                # constants edit each time.
-                bed += _numeric_values(value)
-    return nozzle, bed
+            for kind in ("filament", "process"):
+                section = blob.get(kind, {})
+                if isinstance(section, dict):
+                    sections.append((kind, section))
+    for kind, dest, label in (("filament", "set_filament", "set-filament"), ("process", "set_process", "set")):
+        try:
+            sections.append((kind, _parse_kv_overrides(_namespace_get(args, dest, None), label)))
+        except ValueError:
+            pass
+    return sections
+
+
+def _machine_key_problem(key: str, kind: str, profiles_dir: str) -> str | None:
+    """Refuse a printer (machine) setting sent as a process/filament override."""
+    machine_keys = _known_setting_keys(profiles_dir, "machine") if profiles_dir else {}
+    own_keys = _known_setting_keys(profiles_dir, kind) if profiles_dir else {}
+    is_machine = (key in machine_keys and key not in own_keys) or (
+        key in _BUILTIN_MACHINE_KEYS or key.startswith(_BUILTIN_MACHINE_PREFIXES)
+    )
+    if not is_machine:
+        return None
+    message = (
+        f"'{key}' is a printer (machine) setting and cannot be overridden: it would slice for "
+        "hardware your printer does not have. Change the printer profile in OrcaSlicer instead."
+    )
+    filament_keys = _known_setting_keys(profiles_dir, "filament") if profiles_dir else {}
+    if f"filament_{key}" in filament_keys:
+        message += f" To change it for this print, use --set-filament filament_{key}=..."
+    return message
+
+
+def _override_safety_problem(args: argparse.Namespace) -> str | None:
+    """First reason a generic override is unsafe, or ``None``.
+
+    Temperatures must be plain numbers inside the printer-safety bounds;
+    G-code, scripts and printer (machine) settings cannot be overridden at all.
+    """
+    from bambu_cli.constants import MAX_BED_TEMP_C, MAX_NOZZLE_TEMP_C, MIN_BED_TEMP_C, MIN_NOZZLE_TEMP_C
+    from bambu_cli.context import current_settings
+
+    profiles_dir = current_settings().profiles_dir
+    for kind, section in _override_sections(args):
+        for key, value in section.items():
+            key = str(key)
+            if _SCRIPT_KEY_RE.search(key):
+                return (
+                    f"'{key}' cannot be overridden: G-code and post-processing scripts are not "
+                    "safety-checked. Edit the profile in OrcaSlicer instead."
+                )
+            machine_problem = _machine_key_problem(key, kind, profiles_dir)
+            if machine_problem:
+                return machine_problem
+            if not _is_temperature_key(key):
+                continue
+            temps = _temperature_values(value)
+            if temps is None:
+                return f"temperature override {key}={value!r} must be a number or a comma-separated list of numbers"
+            if _is_bed_temp_key(key):
+                label, low, high = "bed", MIN_BED_TEMP_C, MAX_BED_TEMP_C
+            elif key.lower().endswith("_delta"):
+                # standby_temperature_delta is an offset and legitimately negative.
+                label, low, high = "nozzle", -MAX_NOZZLE_TEMP_C, MAX_NOZZLE_TEMP_C
+            else:
+                label, low, high = "nozzle", MIN_NOZZLE_TEMP_C, MAX_NOZZLE_TEMP_C
+            for temp in temps:
+                if not (low <= temp <= high):
+                    return f"{label} temperature override {key}={temp:g}°C is outside the safe range {low}-{high}°C"
+    return None
 
 
 def _sliced_output_path(filepath: str, output_dir: str | None = None, copies: int = 1) -> str:
@@ -326,18 +416,9 @@ def _validate_slice_options(args: argparse.Namespace) -> str | None:
             if section in blob and not isinstance(blob[section], dict):
                 return f"--settings-json '{section}' must be an object of key/value overrides"
 
-    # Safety: overrides must not push temps past the printer-safety bounds.
-    nozzle_over, bed_over = _effective_override_temps(args)
-    for temp in nozzle_over:
-        if not (MIN_NOZZLE_TEMP_C <= temp <= MAX_NOZZLE_TEMP_C):
-            return (
-                f"nozzle temperature override {temp:g}°C is outside the safe range "
-                f"{MIN_NOZZLE_TEMP_C}-{MAX_NOZZLE_TEMP_C}°C"
-            )
-    for temp in bed_over:
-        if not (MIN_BED_TEMP_C <= temp <= MAX_BED_TEMP_C):
-            return f"bed temperature override {temp:g}°C is outside the safe range {MIN_BED_TEMP_C}-{MAX_BED_TEMP_C}°C"
-    return None
+    # Safety: overrides must not push temps past the printer-safety bounds, and
+    # G-code, scripts and printer settings cannot be overridden at all.
+    return _override_safety_problem(args)
 
 
 def _safe_temp_prefix(value: Any, fallback: str = "tmp", max_length: int = 48) -> str:

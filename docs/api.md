@@ -259,6 +259,11 @@ plate slice --list-settings | grep layer_height
 plate slice --list-settings > settings.txt
 ```
 
+The listing omits G-code and script settings, because `--set`, `--set-filament` and
+`--settings-json` refuse them (exit 5, `failed_step: validate`), along with printer
+(machine) settings such as `printable_area` and any temperature outside the safety
+bounds or not written as plain numbers.
+
 ### `download`
 
 Schema: [`download.json`](schemas/download.json).

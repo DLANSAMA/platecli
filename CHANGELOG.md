@@ -19,6 +19,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   re-asks (and has no default when discovery found no model), and
   non-interactive setup requires `--model`. `config validate` / `preflight`
   report a new `printer-model` check.
+- **Slice overrides can no longer get around the temperature limits.** The
+  0-350 °C nozzle / 0-150 °C bed check did not understand OrcaSlicer's own
+  comma-list syntax, so `--set-filament nozzle_temperature=400,220` produced
+  `M109 S400`; every temperature value is now split and checked, and one that
+  is not a plain number is refused. G-code and script settings
+  (`filament_start_gcode`, `machine_start_gcode`, `post_process`, ...) and
+  printer (machine) settings such as `printable_area` — which OrcaSlicer honoured
+  when sent through `--set` — are refused outright, and `slice --list-settings`
+  no longer lists the G-code ones. Other temperature keys (chamber,
+  vitrification, range limits) are bounded too.
 
 ### Security
 

@@ -589,7 +589,10 @@ plate slice --list-settings
 
 If that prints nothing, OrcaSlicer is not set up yet — see
 [OrcaSlicer or its BBL profiles were not found](#orcaslicer-or-its-bbl-profiles-were-not-found).
-Overrides still work in the meantime; unknown keys are warn-but-pass.
+Overrides still work in the meantime; unknown keys are warn-but-pass. Three kinds
+are always refused: G-code and script settings, printer (machine) settings such as
+`printable_area` or `retraction_length` (use `--set-filament filament_retraction_length=…`
+instead), and temperatures outside the safety bounds.
 
 ## Nothing happens when I run a print command
 

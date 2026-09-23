@@ -898,11 +898,27 @@ async def test_an_empty_value_is_a_real_override(tmp_path):
     async with app.run_test() as pilot:
         await _settle(pilot)
         prepare, settings = await _open_settings(pilot, app)
-        await _add_override(pilot, settings, "machine_start_gcode", "")
-        assert _pending(settings) == ["[process] machine_start_gcode="]
+        await _add_override(pilot, settings, "sparse_infill_pattern", "")
+        assert _pending(settings) == ["[process] sparse_infill_pattern="]
         settings.action_apply()
         await _settle(pilot)
-    assert prepare.overrides.process == {"machine_start_gcode": ""}
+    assert prepare.overrides.process == {"sparse_infill_pattern": ""}
+
+
+async def test_gcode_override_is_refused_inline(tmp_path):
+    """G-code settings go through the same refusal as `slice --set`: clearing
+    machine_start_gcode would drop homing and bed levelling from the print."""
+    from bambu_cli.interactive.core import GoSteps
+
+    _install_ready_settings(tmp_path, profiles=_profiles_with_keys(tmp_path))
+    app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        prepare, settings = await _open_settings(pilot, app)
+        await _add_override(pilot, settings, "machine_start_gcode", "")
+        settings.action_apply()
+        await _settle(pilot)
+    assert "machine_start_gcode" not in prepare.overrides.process
 
 async def test_settings_screen_fits_80x24(tmp_path):
     """The screen gained controls; it still has to work on the smallest terminal.
