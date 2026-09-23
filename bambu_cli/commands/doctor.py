@@ -188,7 +188,7 @@ def cmd_doctor(args, ctx=None):
             if ctx.settings.insecure_tls or not _offer_pin_fingerprint(fp, CONFIG_PATH, json_mode):
                 logger.info('      Add "cert_fingerprint": "<above>" to config.json to pin this connection.')
 
-    model_info = MODEL_MAPPING.get(ctx.settings.printer_model, MODEL_MAPPING["P1P"])
+    model_info = MODEL_MAPPING.get(ctx.settings.printer_model) or {"full_name": ctx.settings.printer_model}
     firmware = status.get("sw_ver")
     modules = printer.get_version(timeout=net_timeout)
     if modules:

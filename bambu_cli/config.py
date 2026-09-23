@@ -335,6 +335,36 @@ MODEL_MAPPING = {
     "A1M": {"token": "A1M", "full_name": "Bambu Lab A1 mini"},
 }
 
+# Product names people actually type, keyed by their squashed form (upper case,
+# no spaces/hyphens/underscores, "BAMBULAB" prefix dropped). "A1 mini" is the
+# printer's own name and used to fall through to the P1P profile.
+_MODEL_ALIASES = {
+    "A1MINI": "A1M",
+    "X1CARBON": "X1C",
+}
+
+
+def resolve_printer_model(raw):
+    """Map a configured model name to a ``MODEL_MAPPING`` key, or ``None``.
+
+    Never guesses: anything that is not a supported model or a known alias of
+    one returns ``None``, and callers refuse to slice rather than pick a
+    profile for a different printer.
+    """
+    if not isinstance(raw, str):
+        return None
+    squashed = "".join(ch for ch in raw.upper() if ch not in " -_")
+    if squashed.startswith("BAMBULAB"):
+        squashed = squashed[len("BAMBULAB") :]
+    if squashed in MODEL_MAPPING:
+        return squashed
+    return _MODEL_ALIASES.get(squashed)
+
+
+def supported_models_text():
+    """``"P1P, P1S, ..."`` for error messages."""
+    return ", ".join(MODEL_MAPPING)
+
 
 def apply_config(cfg):
     """Apply a configuration dictionary to the runtime state.

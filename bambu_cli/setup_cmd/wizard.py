@@ -58,10 +58,14 @@ def _service_info_address(info):
 
 
 def _parse_mdns_printer_identity(name):
-    """Return (serial, model) from a Bambu mDNS service name."""
+    """Return (serial, model) from a Bambu mDNS service name.
+
+    ``model`` is None when the name does not carry one: the setup prompt then
+    asks instead of pre-filling a guess.
+    """
     match = re.search(r"BBLP-([^._]+)", name, re.IGNORECASE)
     service_id = match.group(1).upper() if match else ""
-    detected_model = "P1P"
+    detected_model = None
     serial = service_id or "YOUR_SERIAL"
 
     for model in sorted(MODEL_MAPPING, key=len, reverse=True):
@@ -75,6 +79,25 @@ def _parse_mdns_printer_identity(name):
             break
 
     return serial, detected_model
+
+
+def _prompt_printer_model(args, detected_model):
+    """Ask for the printer model until the answer is a supported one.
+
+    There is no silent default. A detected model is offered as the default
+    answer; with nothing detected the user has to type one.
+    """
+    if detected_model:
+        logger.info(f"Printer model detected: {detected_model}")
+    default_hint = f" [default: {detected_model}]" if detected_model else ""
+    for _attempt in range(3):
+        answer = _prompt_text(f"Printer model (P1P/P1S/X1C/X1E/X1/A1/A1M){default_hint}: ", args)
+        try:
+            return _normalize_model(answer, detected_model)
+        except ValueError as exc:
+            logger.error(str(exc))
+    logger.error("No supported printer model entered; setup was not saved.")
+    abort("", exit_code=EXIT_CONFIG_ERROR)
 
 
 def _cmd_setup_noninteractive(args):
@@ -107,6 +130,10 @@ def _cmd_setup_noninteractive(args):
         missing.append("--serial")
     if not access_code and not access_code_file:
         missing.append("--access-code, --access-code-env, or --access-code-file")
+    if not _namespace_get(args, "model"):
+        # No default: the model picks the machine profile, and a guessed one
+        # slices G-code for another printer's bed.
+        missing.append("--model")
     if missing:
         message = "Non-interactive setup is missing required values: " + ", ".join(missing)
         logger.error(message)
@@ -160,7 +187,7 @@ def _cmd_setup_noninteractive(args):
         config = _build_setup_config(
             ip=ip,
             serial=serial,
-            model=_normalize_model(_namespace_get(args, "model"), "P1P"),
+            model=_normalize_model(_namespace_get(args, "model")),
             nozzle=_normalize_nozzle(_namespace_get(args, "nozzle")),
             access_code=access_code,
             access_code_file=access_code_file,
@@ -352,7 +379,7 @@ def _cmd_setup_interactive(args):
         if not serial:
             logger.error("Serial Number is required.")
             abort("", exit_code=EXIT_CONFIG_ERROR)
-        detected_model = "P1P"
+        detected_model = None
     else:
         if not discovered:
             logger.error("No printers found. Ensure printer is on the same network.")
@@ -393,11 +420,7 @@ def _cmd_setup_interactive(args):
     access_code = _prompt_interactive_access_code(args)
 
     # Guided prompt for model & nozzle
-    logger.info(f"Printer model detected: {detected_model}")
-    model_input = _normalize_model(
-        _prompt_text(f"Confirm printer model (P1P/P1S/X1C/X1E/X1/A1/A1M) [default: {detected_model}]: ", args),
-        detected_model,
-    )
+    model_input = _prompt_printer_model(args, detected_model)
     nozzle_input = _normalize_nozzle(_prompt_text("Enter nozzle size (0.2, 0.4, 0.6, 0.8) [default: 0.4]: ", args))
     access_code_file = _prompt_access_code_file_path(args)
     _validate_setup_access_code_file(args, access_code_file)

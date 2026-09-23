@@ -100,17 +100,18 @@ class TestBambuCmdSlice(unittest.TestCase):
 
         mock_exists.side_effect = exists_side_effect
 
-        with self.assertRaises((SystemExit, BambuError)) as cm:
+        # OrcaSlicer itself is present; only the machine profile is missing.
+        with (
+            patch("bambu_cli.slicer.cmd._slicer_executable_problem", return_value=None),
+            self.assertRaises((SystemExit, BambuError)) as cm,
+        ):
             cmd_slice(args)
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
+        self.assertIn("Missing machine profile", str(cm.exception))
 
-        # We need to find what missing profile message is logged
-        self.assertTrue(
-            any(
-                "Fallback machine profile" in call[0][0] or "not found. Using standard P1P" in call[0][0]
-                for call in mock_logger.warning.call_args_list
-            )
-        )
+        # No fallback to another model's machine profile, and OrcaSlicer never runs.
+        self.assertFalse(any("P1P" in call[0][0] for call in mock_logger.warning.call_args_list))
+        mock_popen.assert_not_called()
 
     @patch("bambu_cli.slicer.output._is_valid_sliced_3mf", return_value=True)
     @patch("os.path.exists")
@@ -572,7 +573,7 @@ class TestBambuCmdSliceEdgeCases(unittest.TestCase):
             mock_listdir.return_value = []
             result = _discover_process_profile("standard", quality_map)
             self.assertIsNone(result)
-            mock_logger.error.assert_called_with(f"No slicer profiles found in {os.path.join('/tmp', 'process')}")
+            mock_logger.error.assert_called_with(f"No slicer profiles for P1P found in {os.path.join('/tmp', 'process')}")
 
             # Test directory does not exist
             mock_isdir.return_value = False

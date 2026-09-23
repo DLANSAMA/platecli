@@ -9,7 +9,7 @@ import shutil
 import sys
 import tempfile
 
-from bambu_cli.config import CONFIG_PATH, MODEL_MAPPING
+from bambu_cli.config import CONFIG_PATH
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR
 from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
@@ -23,12 +23,24 @@ def _config_path():
     return CONFIG_PATH
 
 
-def _normalize_model(model, default="P1P"):
-    model = (model or default or "P1P").strip().upper()
-    if model not in MODEL_MAPPING:
-        logger.warning(f"⚠️  Unknown model '{model}'. Defaulting to 'P1P'.")
-        return "P1P"
-    return model
+def _normalize_model(model, default=None):
+    """Return the ``MODEL_MAPPING`` key for ``model`` (or ``default`` when blank).
+
+    Raises ``ValueError`` for anything unrecognised. It used to warn and return
+    "P1P", which then sliced 256 mm-bed G-code for whatever printer it was.
+    """
+    from bambu_cli.config import resolve_printer_model, supported_models_text
+
+    raw = model if (model is not None and str(model).strip()) else default
+    if raw is None or not str(raw).strip():
+        raise ValueError(f"Printer model is required. Supported models: {supported_models_text()}.")
+    resolved = resolve_printer_model(str(raw))
+    if resolved is None:
+        raise ValueError(
+            f"Unknown printer model '{str(raw).strip()}'. Supported models: {supported_models_text()} "
+            '("A1 mini" and "X1 Carbon" are accepted too).'
+        )
+    return resolved
 
 
 def _normalize_nozzle(nozzle):

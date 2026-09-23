@@ -124,7 +124,16 @@ class Settings:
 
         orca_slicer = _expand_path(cfg.get("orca_slicer", default_orca))
         profiles_dir = _expand_path(cfg.get("profiles_dir", default_profiles))
-        printer_model = cfg.get("model", cfg.get("printer_model", "P1P")).upper()
+        raw_model = cfg.get("model", cfg.get("printer_model", "P1P"))
+        # Resolve product names ("A1 mini" -> "A1M"). An unrecognised name is kept
+        # as typed, never replaced with a default: the slicer refuses it by name
+        # rather than producing G-code for a different printer.
+        try:
+            from bambu_cli.config import resolve_printer_model
+
+            printer_model = resolve_printer_model(raw_model) or str(raw_model).strip().upper()
+        except ImportError:  # pragma: no cover -- config is always importable
+            printer_model = str(raw_model).strip().upper()
         nozzle_size = str(cfg.get("nozzle", cfg.get("nozzle_size", "0.4")))
         camera_port = cfg.get("camera_port", default_camera_port)
         host_port = _stream_host_port(camera_port)

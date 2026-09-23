@@ -23,6 +23,7 @@ CONFIG_CHECK_NAMES = {
     "insecure-tls",
     "printer-ip",
     "serial",
+    "printer-model",
     "access-code",
     "access-code-inline-conflict",
     "access-code-permissions",

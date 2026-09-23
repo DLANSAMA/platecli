@@ -60,7 +60,7 @@ items are **accepted 1.0 residuals** in [SECURITY.md](../SECURITY.md), not open 
 | Correctness / bugs | **A+** | No known dead flags; property tests on filenames/SSRF/ZIP/temps in `tests/test_properties_safety.py` |
 | Typing | **A** | Full-package mypy + `check_untyped_defs`. A+ (`mypy --strict`) is **1521** errors — not this release |
 | Error model | **A+** | `sys.exit` only in `cli.py`; `emit_json_error` is `NoReturn`; domain uses `abort` / `BambuError` |
-| Tests | **A+** | **1611** non-live tests passing (2026-09-16, local Linux; 1 live deselected). A column cleared. Measured **92.8%** branch coverage over 8396 statements; A+ threshold met |
+| Tests | **A+** | **1719** non-live tests passing (2026-09-22, local Linux; 1 live deselected). A column cleared. Measured **92.8%** branch coverage over 8396 statements; A+ threshold met |
 | CI / release | **A** | `--cov-fail-under=90` (floor raised 86→90 with comfortable margin). A+ is fail-under 92 |
 | Docs / governance | **A+** | Roadmap + backlog match this measurement; stability policy + support matrix in `docs/api.md`; docs-consistency pins floor / % / count |
 | Product polish | **A−** | Support matrix + hermetic Orca stub; still **Beta / pre-1.0** (no Production/Stable, no v1.0.0 tag). A+ is the §5 checklist |

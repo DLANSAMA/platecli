@@ -142,17 +142,11 @@ def _discover_process_profile(
             if process_file:
                 logger.warning(f"⚠️  Requested quality not found, using: {process_file}")
                 return os.path.join(proc_dir, process_file)
-            else:
-                # If still not found, try falling back to P1P standard
-                process_file = next(
-                    (f for f in files if f.startswith("0.20mm") and "P1P" in f and "nozzle" not in f), None
-                )
-                if process_file:
-                    logger.warning(f"⚠️  Requested quality/model profile not found, falling back to: {process_file}")
-                    return os.path.join(proc_dir, process_file)
-                else:
-                    logger.error(f"No slicer profiles found in {proc_dir}")
-                    return None
+            # No profile for this model at all. Borrowing another model's
+            # (the old "fall back to P1P") tuned speeds and accelerations for
+            # a different machine; report it instead.
+            logger.error(f"No slicer profiles for {model_code} found in {proc_dir}")
+            return None
     return None
 
 

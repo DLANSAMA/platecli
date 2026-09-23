@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Printer safety
+
+- **No more slicing for a guessed printer.** An unrecognised `model` in
+  config.json (including the A1 mini's own product name, "A1 mini") used to
+  fall back to the P1P profile — a 256 mm bed — without a warning, as did a
+  missing machine profile for the configured model or nozzle. `slice`, `job`
+  and `send` now refuse with a config error (exit 1) that names the model and
+  the supported list. "A1 mini" and "X1 Carbon" are accepted as spellings of
+  `A1M` / `X1C`. The process-profile search no longer borrows another model's
+  profile either.
+- `setup` no longer turns an unknown model into `P1P`: the interactive prompt
+  re-asks (and has no default when discovery found no model), and
+  non-interactive setup requires `--model`. `config validate` / `preflight`
+  report a new `printer-model` check.
+
 ### Security
 
 - **SSRF filter hardening**: `netsafety` now unwraps IPv4-mapped IPv6,

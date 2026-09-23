@@ -189,7 +189,7 @@ class TestBambuCmdSetup(unittest.TestCase):
         from bambu_cli.commands import cmd_setup
 
         mock_getpass.return_value = "12345678"
-        self.input_mock_obj.side_effect = ["", "", "n"]
+        self.input_mock_obj.side_effect = ["P1P", "", "n"]
 
         tmpdir = tempfile.mkdtemp()
         cfg_path = _os.path.join(tmpdir, "config.json")

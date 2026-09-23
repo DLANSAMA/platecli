@@ -38,7 +38,8 @@ def test_parse_mdns_identity_model_prefix():
 
 def test_parse_mdns_identity_plain():
     serial, model = wizard_mod._parse_mdns_printer_identity("something-else.local")
-    assert model == "P1P"
+    # No model in the service name: nothing is guessed, the setup prompt asks.
+    assert model is None
 
 def test_normalize_model_nozzle():
     assert common_mod._normalize_model("x1c", "P1P") == "X1C"
