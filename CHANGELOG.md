@@ -67,6 +67,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   `--allow-private-ips`, and `blocked_addresses` in the JSON envelope. The
   branch meant to do this matched on text that only ever reached a log line,
   and its two tests injected that text; they now drive the real error.
+- A ZIP with damaged compressed data (intact headers) crashed `job` and
+  `download` with "Unexpected error" and a traceback (exit 5), losing the job
+  summary. It is now an extract failure: exit 3, `failed_step: extract`.
 
 ### Security
 
