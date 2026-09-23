@@ -60,6 +60,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   It now fails with exit 2 (`failed_step: mqtt`) on a refused connection, on a
   socket/TLS error (previously an "Unexpected error", exit 5), and when the
   printer never answers within the MQTT timeout (previously it waited forever).
+- A download blocked by the private-address guard (for example
+  `http://localhost/...`) was reported as a retryable network error (exit 2,
+  a nested `<urlopen error ...>` message, no hint). It is now a refusal: exit
+  5, `failed_step: validate`, a message naming the addresses and suggesting
+  `--allow-private-ips`, and `blocked_addresses` in the JSON envelope. The
+  branch meant to do this matched on text that only ever reached a log line,
+  and its two tests injected that text; they now drive the real error.
 
 ### Security
 

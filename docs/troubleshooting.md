@@ -428,7 +428,10 @@ alongside the decimal one because Bambu documents them in hex.
 `plate download` and `plate job` are SSRF-hardened: they resolve the URL and
 refuse any address that is not globally routable (loopback, RFC1918, link-local).
 So pointing `plate` at a model on your own NAS or a LAN web server is blocked by
-default, with an error saying no safe or reachable IP addresses were found.
+default: the error says the host "resolves only to private or local addresses",
+names them, and exits `5` with `failed_step: validate` (a refusal, not a network
+failure, so retrying will not help). With `--json` the envelope carries
+`blocked_addresses`.
 
 That's intentional. Opt in per invocation:
 

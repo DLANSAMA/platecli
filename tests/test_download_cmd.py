@@ -442,11 +442,14 @@ class TestDownloadLoopBranches(unittest.TestCase):
         import urllib.error
         from bambu_cli.commands import cmd_download
 
-        self.mock_open.side_effect = urllib.error.URLError("Security Error: blocked host")
+        from bambu_cli.netsafety import BlockedAddressError
+
+        # urllib wraps the guard's refusal from connect() in a second URLError.
+        self.mock_open.side_effect = urllib.error.URLError(BlockedAddressError("blocked.example", ["10.0.0.7"]))
         with self.assertRaises((SystemExit, BambuError)) as cm:
             self._run_download(self._args())
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 5)
-        self.assertTrue(any("SSRF Security Violation" in c[0][0] for c in mock_logger.error.call_args_list))
+        self.assertTrue(any("--allow-private-ips" in c[0][0] for c in mock_logger.error.call_args_list))
 
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_oserror_reported_as_local_file_error(self, mock_logger):
@@ -544,6 +547,7 @@ class TestDownloadLoopBranches(unittest.TestCase):
     def test_cmd_download_http_403_forbidden(self, mock_logger):
         args = self._args(url="https://example.com/forbidden.stl")
         import urllib.error
+
         self.mock_safe_opener.open.side_effect = urllib.error.HTTPError(
             url=args.url, code=403, msg="Forbidden", hdrs={}, fp=None
         )
@@ -555,10 +559,13 @@ class TestDownloadLoopBranches(unittest.TestCase):
     def test_cmd_download_ssrf_security_violation(self):
         args = self._args(url="https://127.0.0.1/private.stl")
         import urllib.error
-        self.mock_safe_opener.open.side_effect = urllib.error.URLError("Security Error: private IP blocked")
+        from bambu_cli.netsafety import BlockedAddressError
+
+        self.mock_safe_opener.open.side_effect = BlockedAddressError("127.0.0.1", ["127.0.0.1"])
         with self.assertRaises(BambuError) as cm:
             self._run_download(args)
         self.assertEqual(cm.exception.exit_code, 5)
+        self.assertEqual(cm.exception.failed_step, "validate")
 
     def test_cmd_download_local_oserror(self):
         args = self._args(url="https://example.com/model.stl")
@@ -577,7 +584,9 @@ class TestDownloadLoopBranches(unittest.TestCase):
 
     def test_cmd_download_ensure_parent_dir_failure(self):
         args = self._args(url="https://example.com/model.stl", output="/no/perm/dir")
-        with patch("bambu_cli.download.downloader._ensure_output_dir", side_effect=BambuError("mkdir error", exit_code=3)):
+        with patch(
+            "bambu_cli.download.downloader._ensure_output_dir", side_effect=BambuError("mkdir error", exit_code=3)
+        ):
             with self.assertRaises(BambuError) as cm:
                 self._run_download(args)
             self.assertEqual(cm.exception.exit_code, 3)
@@ -585,6 +594,7 @@ class TestDownloadLoopBranches(unittest.TestCase):
     @patch("bambu_cli.download.downloader._extract_zip_model")
     def test_cmd_download_archive_extraction_errors(self, mock_extract):
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             args = self._args(url="https://example.com/model.zip", output=td)
             self._respond(_FakeResp([b"PK zip bytes"], headers={"Content-Type": "application/zip"}))
@@ -605,6 +615,7 @@ class TestDownloadLoopBranches(unittest.TestCase):
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_download_with_progress_bar(self, mock_logger):
         import tempfile
+
         with tempfile.TemporaryDirectory() as td:
             args = self._args(url="https://example.com/model.stl", output=td, json=False, progress=True)
             self._respond(_FakeResp([b"chunk1", b"chunk2", b""], headers={"Content-Length": "12"}))

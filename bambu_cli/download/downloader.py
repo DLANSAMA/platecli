@@ -40,7 +40,7 @@ from bambu_cli.errors import BambuError, abort
 from bambu_cli.fsutil import _download_partial_path, _noncolliding_path, _portable_basename, _remove_partial_file
 from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import logger, safe_log_error
-from bambu_cli.netsafety import build_safe_opener, polite_open, user_agent_for_url
+from bambu_cli.netsafety import BlockedAddressError, build_safe_opener, polite_open, user_agent_for_url
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
@@ -639,9 +639,20 @@ def _cmd_download(
     except (urllib.error.URLError, http.client.HTTPException) as e:
         _remove_partial_file(partial_path)
         _cleanup_reserved()
-        err_msg = str(e.reason) if hasattr(e, "reason") else str(e)
-        if "Security Error" in err_msg:
-            message = f"SSRF Security Violation Blocked: {err_msg}"
+        # urllib wraps a connect-time error in a second URLError, so the guard's
+        # refusal arrives either bare or as ``.reason``.
+        blocked = e if isinstance(e, BlockedAddressError) else getattr(e, "reason", None)
+        if isinstance(blocked, BlockedAddressError):
+            from bambu_cli.context import current_settings
+
+            message = (
+                f"Refusing to download from {blocked.host}: it resolves only to private or local addresses "
+                f"({', '.join(blocked.addresses)})."
+            )
+            # Multicast stays refused even with the override, so only suggest it
+            # when it would actually help.
+            if not current_settings().allow_private_ips:
+                message += " Pass --allow-private-ips to allow a LAN download."
             emit_json_error(
                 args,
                 "download",
@@ -652,9 +663,8 @@ def _cmd_download(
                 normalized_source=normalized_source_report,
                 download_url=_redact_url_credentials(url),
                 path=outpath,
+                blocked_addresses=blocked.addresses,
             )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_COMMAND_ERROR)
         message = f"Network error during download: {e}"
         logger.info("   Please check your internet connection or verify the domain name resolves correctly.")
         emit_json_error(

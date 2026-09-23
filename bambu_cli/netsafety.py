@@ -93,6 +93,23 @@ def _is_safe_ip(
     return bool(ip_obj.is_global)
 
 
+class BlockedAddressError(urllib.error.URLError):
+    """Every address ``host`` resolved to is private, local or reserved.
+
+    A refusal by the SSRF guard, not a network failure: retrying cannot help,
+    ``--allow-private-ips`` can. Distinct from the generic URLError raised when
+    public addresses exist but none of them answered.
+    """
+
+    def __init__(self, host, addresses):
+        self.host = host
+        self.addresses = list(addresses)
+        super().__init__(
+            f"No safe/reachable IP addresses found for {host}: it resolves only to non-public "
+            f"addresses ({', '.join(self.addresses)})"
+        )
+
+
 def _get_safe_connection(host, port, timeout, source_address):
     """Perform DNS resolution and validate IP is not internal/reserved."""
     from bambu_cli.constants import DNS_CACHE_TTL
@@ -119,6 +136,8 @@ def _get_safe_connection(host, port, timeout, source_address):
         except socket.gaierror as e:
             raise urllib.error.URLError(f"DNS resolution failed for {host}: {e}") from e
 
+    refused: list[str] = []
+    tried_public = False
     for res in addr_info:
         ip = res[4][0]
         try:
@@ -126,10 +145,13 @@ def _get_safe_connection(host, port, timeout, source_address):
             from bambu_cli.context import current_settings
 
             if not _is_safe_ip(ip_obj, allow_private=current_settings().allow_private_ips):
-                logger.warning(f"Security Error: Refusing connection to non-public IP ({ip}) for {host}")
+                logger.warning(f"Refusing connection to non-public IP ({ip}) for {host}")
+                if str(ip) not in refused:
+                    refused.append(str(ip))
                 continue
         except ValueError:
             continue
+        tried_public = True
 
         # Connect directly to the validated IP to prevent TOCTOU/DNS rebinding
         try:
@@ -142,6 +164,8 @@ def _get_safe_connection(host, port, timeout, source_address):
     with _dns_cache_lock:
         _dns_cache.pop(cache_key, None)
 
+    if refused and not tried_public:
+        raise BlockedAddressError(host, refused)
     raise urllib.error.URLError(f"Could not connect to {host}: No safe/reachable IP addresses found")
 
 
