@@ -191,8 +191,15 @@ def _add_job_arguments(parser):
     parser.add_argument("--filament", type=str, default="PLA Basic", help="Filament type (e.g. 'PLA Basic', 'PETG')")
     parser.add_argument("--infill", type=int, default=15, help="Infill density %% (default: 15)")
     parser.add_argument("--pattern", default="3dhoneycomb", help="Infill pattern (default: 3dhoneycomb)")
-    parser.add_argument("--nozzle-temp", type=int, default=220, help="Nozzle temp °C (default: 220)")
-    parser.add_argument("--bed-temp", type=int, default=60, help="Bed temp °C (default: 60)")
+    parser.add_argument(
+        "--nozzle-temp", type=int, default=None, help="Nozzle temp °C (default: the filament profile's own)"
+    )
+    parser.add_argument(
+        "--bed-temp",
+        type=int,
+        default=None,
+        help="Bed temp °C for every plate type (default: the filament profile's own)",
+    )
     parser.add_argument("--supports", action="store_true", help="Enable supports")
     parser.add_argument("--support-type", choices=["tree", "normal"], help="Support type: tree or normal")
     parser.add_argument("--support-interface-density", type=float, help="Support interface density %%")
@@ -394,8 +401,15 @@ def build_parser():
     p_slice.add_argument("--filament", type=str, default="PLA Basic", help="Filament type (e.g. 'PLA Basic', 'PETG')")
     p_slice.add_argument("--infill", type=int, default=15, help="Infill density %% (default: 15)")
     p_slice.add_argument("--pattern", default="3dhoneycomb", help="Infill pattern (default: 3dhoneycomb)")
-    p_slice.add_argument("--nozzle-temp", type=int, default=220, help="Nozzle temp °C (default: 220)")
-    p_slice.add_argument("--bed-temp", type=int, default=60, help="Bed temp °C (default: 60)")
+    p_slice.add_argument(
+        "--nozzle-temp", type=int, default=None, help="Nozzle temp °C (default: the filament profile's own)"
+    )
+    p_slice.add_argument(
+        "--bed-temp",
+        type=int,
+        default=None,
+        help="Bed temp °C for every plate type (default: the filament profile's own)",
+    )
     p_slice.add_argument("--supports", action="store_true", help="Enable supports")
     p_slice.add_argument("--support-type", choices=["tree", "normal"], help="Support type: tree or normal")
     p_slice.add_argument("--support-interface-density", type=float, help="Support interface density %%")

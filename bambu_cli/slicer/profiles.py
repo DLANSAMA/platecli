@@ -150,13 +150,78 @@ def _discover_process_profile(
     return None
 
 
-def _create_temp_profiles(process: str, filament: str, args: argparse.Namespace) -> tuple[IO[str], IO[str]]:
-    """Create temporary process and filament profiles with overrides."""
+def _load_flattened_profile(path: str) -> dict:
+    """Load an OrcaSlicer profile with its ``inherits`` chain merged in.
+
+    OrcaSlicer does not resolve ``inherits`` for a profile loaded from a temp
+    file outside its profiles tree. Every inherited value then falls back to a
+    generic default without a warning: measured on 2026-09-22, a PETG slice
+    lost 50 process settings (acceleration 500 instead of 10000, no
+    elephant-foot compensation) and 12 filament settings (``filament_type`` came
+    out as PLA, nozzle 200 C). So parents are merged here, child keys winning,
+    and ``inherits`` is dropped. A parent is looked up next to its child (same
+    kind directory); a missing parent leaves the reference in place, and a
+    cycle is an error rather than infinite recursion.
+    """
+    seen: set[str] = set()
+
+    def _resolve(current: str) -> dict:
+        real = os.path.realpath(current)
+        if real in seen:
+            raise ValueError(f"profile inherits cycle at {os.path.basename(current)}")
+        seen.add(real)
+        with open(current, encoding="utf-8") as f:
+            data = json.load(f)
+        parent = data.get("inherits")
+        if parent:
+            parent_path = os.path.join(os.path.dirname(current), f"{parent}.json")
+            if os.path.exists(parent_path):
+                merged = _resolve(parent_path)
+                del data["inherits"]
+                merged.update(data)
+                return merged
+        return data
+
+    return _resolve(path)
+
+
+# What every Bambu printer definition in OrcaSlicer's BBL profiles declares.
+FALLBACK_BED_TYPE = "Textured PEI Plate"
+
+
+def _default_bed_type(profiles_dir: str, full_model_name: str) -> str:
+    """The plate OrcaSlicer's GUI assumes for this printer (``default_bed_type``).
+
+    It lives in the printer definition (``machine/Bambu Lab P1P.json``), which a
+    CLI slice never loads, so without it OrcaSlicer slices for its own default,
+    the Cool Plate -- where Bambu's PETG and ABS profiles set 0 C (unsupported)
+    and the bed would not be heated at all.
+    """
+    path = os.path.join(profiles_dir, "machine", f"{full_model_name}.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            value = json.load(f).get("default_bed_type")
+    except (OSError, ValueError, AttributeError):
+        return FALLBACK_BED_TYPE
+    return value if isinstance(value, str) and value else FALLBACK_BED_TYPE
+
+
+def _create_temp_profiles(
+    process: str, filament: str, args: argparse.Namespace, *, bed_type: str | None = None
+) -> tuple[IO[str], IO[str]]:
+    """Create temporary process and filament profiles with overrides.
+
+    ``bed_type`` becomes the process ``curr_bed_type`` (the plate the filament's
+    bed temperature is read for) unless an override sets it.
+    """
     infill = getattr(args, "infill", 15)
     pattern = getattr(args, "pattern", "3dhoneycomb")
     supports = getattr(args, "supports", False)
-    nozzle_temp = getattr(args, "nozzle_temp", 220)
-    bed_temp = getattr(args, "bed_temp", 60)
+    # None (the default) keeps the filament profile's own temperatures. They used
+    # to default to 220/60 and overwrite every filament: PETG and ABS printed at
+    # PLA temperatures unless the caller passed --nozzle-temp/--bed-temp.
+    nozzle_temp = getattr(args, "nozzle_temp", None)
+    bed_temp = getattr(args, "bed_temp", None)
     support_type = getattr(args, "support_type", None)
     support_interface_density = getattr(args, "support_interface_density", None)
     walls = getattr(args, "walls", None)
@@ -176,8 +241,9 @@ def _create_temp_profiles(process: str, filament: str, args: argparse.Namespace)
             mode="w", suffix=".json", delete=False, prefix="proc_", encoding="utf-8"
         )
         created.append(tmp_process)
-        with open(process, encoding="utf-8") as f:
-            proc_data = json.load(f)
+        proc_data = _load_flattened_profile(process)
+        if bed_type:
+            proc_data["curr_bed_type"] = bed_type
         proc_data["sparse_infill_density"] = f"{infill}%"
         proc_data["sparse_infill_pattern"] = pattern
         proc_data["enable_support"] = "1" if supports else "0"
@@ -251,19 +317,20 @@ def _create_temp_profiles(process: str, filament: str, args: argparse.Namespace)
             mode="w", suffix=".json", delete=False, prefix="fil_", encoding="utf-8"
         )
         created.append(tmp_filament)
-        with open(filament, encoding="utf-8") as f:
-            fil_data = json.load(f)
+        fil_data = _load_flattened_profile(filament)
 
-        nozzle_temp_str_list = [str(nozzle_temp)]
-        fil_data["nozzle_temperature"] = nozzle_temp_str_list
-        fil_data["nozzle_temperature_initial_layer"] = nozzle_temp_str_list
+        if nozzle_temp is not None:
+            nozzle_temp_str_list = [str(nozzle_temp)]
+            fil_data["nozzle_temperature"] = nozzle_temp_str_list
+            fil_data["nozzle_temperature_initial_layer"] = nozzle_temp_str_list
 
-        bed_temp_str_list = [str(bed_temp)]
-        from bambu_cli.constants import BED_PLATE_TYPES
+        if bed_temp is not None:
+            bed_temp_str_list = [str(bed_temp)]
+            from bambu_cli.constants import BED_PLATE_TYPES
 
-        for plate in BED_PLATE_TYPES:
-            fil_data[plate] = bed_temp_str_list
-            fil_data[f"{plate}_initial_layer"] = bed_temp_str_list
+            for plate in BED_PLATE_TYPES:
+                fil_data[plate] = bed_temp_str_list
+                fil_data[f"{plate}_initial_layer"] = bed_temp_str_list
 
         # Named filament convenience flags (fan_max_speed is a per-extruder list).
         fan_speed = getattr(args, "fan_speed", None)
@@ -310,20 +377,7 @@ def _create_temp_machine(machine_path: str, profiles_dir: str) -> IO[str]:
     propagate; the caller reports them as profile-preparation failures.
     """
 
-    def _resolve_inherits(path: str) -> dict:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        inherits = data.get("inherits")
-        if inherits:
-            parent_path = os.path.join(profiles_dir, "machine", f"{inherits}.json")
-            if os.path.exists(parent_path):
-                merged = _resolve_inherits(parent_path)
-                del data["inherits"]
-                merged.update(data)
-                return merged
-        return data
-
-    resolved = _resolve_inherits(machine_path)
+    resolved = _load_flattened_profile(machine_path)
     tmp_machine = tempfile.NamedTemporaryFile(  # noqa: SIM115 — handle outlives block; cleaned up by caller
         mode="w", suffix=".json", delete=False, prefix="mach_", encoding="utf-8"
     )

@@ -37,6 +37,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   has been published; a sent-but-unacknowledged command exits 6 with
   `"sent": true, "acknowledged": false` and `next_command: ["status", "--json"]`.
   The TUI's long-lived connection had the same flaw and is fixed too.
+- **Slices now use the filament's and profile's real settings.** Three problems
+  stacked up, found together (all measured in real OrcaSlicer G-code):
+  `--nozzle-temp` / `--bed-temp` defaulted to 220 / 60 and overwrote every
+  filament, so `--filament PETG` or `ABS` printed at PLA temperatures; the
+  process and filament profiles handed to OrcaSlicer kept an `inherits`
+  reference it cannot resolve from a temp file, so every inherited value fell
+  back to a generic default (PETG came out as `filament_type = PLA` at 200 °C,
+  acceleration 500 instead of 10000, no elephant-foot compensation); and the
+  printer's default plate (Textured PEI) was never applied, so OrcaSlicer
+  sliced for the Cool Plate. Both profiles are now flattened like the machine
+  profile already was, the temperature flags default to the filament profile,
+  and `curr_bed_type` comes from the printer definition (`--set
+  curr_bed_type=...` still overrides it). PETG / PLA / ABS now slice at
+  255/70, 220/55 and 270/90 °C. Expect different (Bambu-default) speeds and
+  print-time estimates than before.
 
 ### Security
 

@@ -29,6 +29,7 @@ from bambu_cli.slicer.output import _finalize_slice, _output_snapshot
 from bambu_cli.slicer.profiles import (
     _create_temp_machine,
     _create_temp_profiles,
+    _default_bed_type,
     _discover_process_profile,
     _profiles_dir_diagnostic,
     _slicer_executable_problem,
@@ -321,7 +322,9 @@ def cmd_slice(
                 )
 
         try:
-            tmp_process, tmp_filament = _create_temp_profiles(process, filament, args)
+            tmp_process, tmp_filament = _create_temp_profiles(
+                process, filament, args, bed_type=_default_bed_type(settings.profiles_dir, full_model_name)
+            )
             tmp_machine = _create_temp_machine(machine, settings.profiles_dir)
         except Exception as exc:
             message = f"Failed to prepare OrcaSlicer profiles: {_exception_for_message(exc)}"
@@ -349,14 +352,16 @@ def cmd_slice(
         layer_height = layer.split(" ")[0]
         infill = getattr(args, "infill", 15)
         pattern = getattr(args, "pattern", "3dhoneycomb")
-        nozzle_temp = getattr(args, "nozzle_temp", 220)
-        bed_temp = getattr(args, "bed_temp", 60)
+        nozzle_temp = getattr(args, "nozzle_temp", None)
+        bed_temp = getattr(args, "bed_temp", None)
         supports = getattr(args, "supports", False)
 
         filament_name = os.path.basename(filament).replace(".json", "").replace(" @base", "").strip()
 
         settings_summary = (
-            f"{filament_name}, {layer_height} layer, {infill}% {pattern}, nozzle {nozzle_temp}°C, bed {bed_temp}°C"
+            f"{filament_name}, {layer_height} layer, {infill}% {pattern}, "
+            f"nozzle {'profile' if nozzle_temp is None else f'{nozzle_temp}°C'}, "
+            f"bed {'profile' if bed_temp is None else f'{bed_temp}°C'}"
         )
         if copies > 1:
             settings_summary += f", {copies} copies"
