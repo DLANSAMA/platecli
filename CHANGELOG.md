@@ -29,6 +29,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   when sent through `--set` — are refused outright, and `slice --list-settings`
   no longer lists the G-code ones. Other temperature keys (chamber,
   vitrification, range limits) are bounded too.
+- **A printer command is sent once, never repeated.** When the MQTT
+  acknowledgement arrived after the timeout, `gcode`, `stop`, `pause`, `resume`
+  and `light` published the same command again on each retry (up to three
+  times) and then reported `"sent": false` — so `plate gcode "G1 E50"` could
+  extrude 150 mm and invite a fourth try. Retries now happen only while nothing
+  has been published; a sent-but-unacknowledged command exits 6 with
+  `"sent": true, "acknowledged": false` and `next_command: ["status", "--json"]`.
+  The TUI's long-lived connection had the same flaw and is fixed too.
 
 ### Security
 

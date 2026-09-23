@@ -7,7 +7,7 @@ from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_NETWORK_ERROR
 from bambu_cli.context import RuntimeContext
 from bambu_cli.contracts import Gcode
 from bambu_cli.download.naming import _has_command_injection_chars
-from bambu_cli.errors import abort
+from bambu_cli.errors import CommandUnconfirmed, abort
 from bambu_cli.logging_utils import logger
 from bambu_cli.utils import emit_json, get_sequence_id
 
@@ -44,7 +44,15 @@ def cmd_gcode(args, ctx=None):
 
     payload = json.dumps({"print": {"sequence_id": get_sequence_id(), "command": "gcode_line", "param": gcode}})
     printer = ctx.printer()
-    if not printer.send_command(payload):
+    try:
+        sent = printer.send_command(payload)
+    except CommandUnconfirmed as exc:
+        # Published but never acknowledged: it may have run. Say so, with the
+        # G-code, rather than "not sent" -- a caller that retried would run it twice.
+        exc.extra = {"gcode": gcode, **exc.extra}
+        exc.next_command = exc.next_command or ["status", "--json"]
+        raise
+    if not sent:
         abort(
             "Failed to send G-code command.",
             exit_code=EXIT_NETWORK_ERROR,

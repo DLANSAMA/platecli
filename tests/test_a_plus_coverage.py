@@ -17,6 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from bambu_cli.errors import CommandUnconfirmed
+
 from bambu_cli.errors import BambuError
 from bambu_cli.printer import BambuPrinter
 from bambu_cli.protocols import mqtt as mqtt_mod
@@ -159,7 +161,9 @@ def test_session_send_command_timeout_and_oserror():
 
     printer = _printer()
     _held(printer, factory, sleep=lambda _s: None)
-    assert mqtt_mod.send_command(printer, '{"print":{"command":"pause"}}', timeout=0.01, retries=1) is False
+    # Published but never acknowledged: reported as unconfirmed, never re-sent.
+    with pytest.raises(CommandUnconfirmed):
+        mqtt_mod.send_command(printer, '{"print":{"command":"pause"}}', timeout=0.01, retries=1)
     printer.release_mqtt()
 
     class BoomClient(FakeBrokerClient):

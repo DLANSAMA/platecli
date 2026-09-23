@@ -77,6 +77,13 @@ destroys printer-side data — `print`, `stop`, `pause`, `resume`, `gcode`,
 without `--confirm` is **not** a refusal: the download/slice/upload really
 happened, so it exits `0` with `"status": "uploaded_not_printed"`.
 
+**Sent but unacknowledged:** `gcode`, `stop`, `pause`, `resume` and `light` publish
+their command once. If the printer's MQTT acknowledgement does not arrive in time,
+the command may still have run, so it is never re-sent automatically: the error
+exits `6` with `failed_step: "mqtt"`, `"sent": true`, `"acknowledged": false` and
+`next_command: ["status", "--json"]`. Check the printer state before sending it
+again. An exit `2` with `"sent": false` still means nothing reached the printer.
+
 Domain code raises `BambuError` / `abort()`; only `cli.main()` calls `sys.exit`.
 
 When a print fails with a printer-reported code, the error envelope carries both

@@ -75,14 +75,17 @@ def send_command(
     if session is not None:
         return session.send_command(payload, timeout, retries)
 
+    # Shared by every attempt: once the payload has been handed to a client it
+    # may already have reached the printer, so no later attempt publishes it
+    # again. Retrying is only safe while nothing has gone out yet.
+    published = [False]
     for attempt in range(retries + 1):
         client = _factory(printer)
         client.user_data_set({})
         publish_done = threading.Event()
         success = [False]
-        published = [False]
 
-        def on_connect(client, userdata, flags, rc, properties=None, published=published):
+        def on_connect(client, userdata, flags, rc, properties=None, published=published, publish_done=publish_done):
             if rc == 0:
                 if not published[0]:
                     published[0] = True
@@ -91,31 +94,53 @@ def send_command(
                 logger.error(f"Connection failed: rc={rc}")
                 publish_done.set()
 
-        def on_publish(client, userdata, mid, reason_code=None, properties=None):
+        def on_publish(
+            client, userdata, mid, reason_code=None, properties=None, success=success, publish_done=publish_done
+        ):
             success[0] = True
             publish_done.set()
 
         client.on_connect = on_connect
         client.on_publish = on_publish
 
+        acked = False
+        error = None
         try:
             _connect(printer, client)
             client.loop_start()
-            if publish_done.wait(timeout):
-                return success[0]
-            if attempt < retries:
-                logger.warning(f"MQTT command timeout on attempt {attempt + 1}. Retrying...")
-                _sleep_fn(2**attempt)
+            acked = publish_done.wait(timeout)
         except (OSError, ssl.SSLError) as e:
-            if attempt < retries:
-                logger.warning(f"MQTT command attempt {attempt + 1} failed: {e}. Retrying...")
-                _sleep_fn(2**attempt)
-            else:
-                logger.error(f"MQTT command error: {e}")
+            error = e
         finally:
+            # Decide only after the network thread is stopped, so a publish
+            # racing the timeout is still seen below.
             _teardown_mqtt_client(client)
+        if acked:
+            return success[0]
+        if published[0]:
+            raise _unconfirmed(timeout)
+        if attempt < retries:
+            if error is not None:
+                logger.warning(f"MQTT command attempt {attempt + 1} failed: {error}. Retrying...")
+            else:
+                logger.warning(f"MQTT command timeout on attempt {attempt + 1}. Retrying...")
+            _sleep_fn(2**attempt)
+        elif error is not None:
+            logger.error(f"MQTT command error: {error}")
 
     return False
+
+
+def _unconfirmed(timeout):
+    """The error for a command that went out without an acknowledgement."""
+    from bambu_cli.errors import CommandUnconfirmed
+
+    return CommandUnconfirmed(
+        f"The command was sent, but the printer did not acknowledge it within {timeout:g}s. "
+        "It may already have run; check `plate status` before sending it again.",
+        extra={"sent": True, "acknowledged": False},
+        next_command=["status", "--json"],
+    )
 
 
 def status_is_complete(data):

@@ -29,6 +29,7 @@ __all__ = [
     "FileError",
     "TimeoutError",
     "PrinterStatusIncomplete",
+    "CommandUnconfirmed",
     "PrinterError",
     "abort",
 ]
@@ -156,6 +157,18 @@ class PrinterStatusIncomplete(TimeoutError):
     """
 
     failed_step = "status"
+
+
+class CommandUnconfirmed(TimeoutError):
+    """A printer command was published but its MQTT acknowledgement never came.
+
+    The printer may already have run it, so it is never re-sent automatically
+    and must not be reported as "not sent": a caller that retries could run a
+    move or an extrusion twice. ``extra`` carries ``sent=True`` and
+    ``acknowledged=False``.
+    """
+
+    failed_step = "mqtt"
 
 
 class PrinterError(BambuError):
