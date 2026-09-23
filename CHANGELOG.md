@@ -85,6 +85,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   before upload. `print`, `job` and `send` take `--plate N`, and the JSON
   reports `plate`. Time estimates for a multi-plate 3MF are for the printed
   plate, not the last one.
+- Slicing no longer litters the output folder. OrcaSlicer also writes
+  `plate_1.gcode` and `result.json` into its output directory, which was the
+  user's folder — by default the model's own — so every slice left both
+  behind and overwrote same-named files. OrcaSlicer now writes into a private
+  temporary directory and only the sliced 3MF is moved out.
 
 ### Security
 

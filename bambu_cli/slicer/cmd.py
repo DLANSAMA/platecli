@@ -6,6 +6,7 @@ import argparse
 import os
 import shutil
 import subprocess
+import tempfile
 
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.config import MODEL_MAPPING, get_slicer_timeout, supported_models_text
@@ -120,6 +121,7 @@ def cmd_slice(
     tmp_filament = None
     tmp_machine = None
     result = None
+    work_dir = None
 
     try:
         # Auto-convert STEP → STL (OrcaSlicer CLI doesn't support STEP)
@@ -337,6 +339,22 @@ def cmd_slice(
                 file=filepath,
             )
 
+        # OrcaSlicer also writes plate_1.gcode and result.json into --outputdir,
+        # which was the user's folder (by default the model's own), clobbering
+        # same-named files there. It gets a private directory on the same
+        # filesystem instead, and only the 3MF is moved out.
+        try:
+            work_dir = tempfile.mkdtemp(prefix=".plate-slice-", dir=outdir)
+        except OSError as exc:
+            emit_json_error(
+                args,
+                "slice",
+                EXIT_FILE_ERROR,
+                f"Could not prepare output directory: {_path_for_message(outdir)}: {_exception_for_message(exc)}",
+                failed_step="validate",
+                file=filepath,
+                output=outdir,
+            )
         cmd = _build_orcaslicer_cmd(
             settings,
             args,
@@ -344,7 +362,7 @@ def cmd_slice(
             tmp_process.name,
             tmp_filament.name,
             outfile,
-            outdir,
+            work_dir,
             copies,
             filepath,
         )
@@ -411,7 +429,14 @@ def cmd_slice(
                 orca_slicer=settings.orca_slicer,
                 output=outpath,
             )
+        produced = os.path.join(work_dir, outfile)
+        if os.path.isfile(produced):
+            # Only a file OrcaSlicer actually wrote replaces outpath, so
+            # _finalize_slice's freshness check still catches a stale one.
+            os.replace(produced, outpath)
     finally:
+        if work_dir is not None:
+            shutil.rmtree(work_dir, ignore_errors=True)
         for tmp_file in (tmp_process, tmp_filament, tmp_machine):
             if tmp_file is not None and hasattr(tmp_file, "name"):
                 try:
