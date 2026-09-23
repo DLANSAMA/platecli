@@ -90,6 +90,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   user's folder — by default the model's own — so every slice left both
   behind and overwrote same-named files. OrcaSlicer now writes into a private
   temporary directory and only the sliced 3MF is moved out.
+- `setup --migrate-access-code` with both `access_code` and `access_code_file`
+  deleted the inline code without looking at the file. When the file did not
+  exist, or held a placeholder, that left no usable access code. A missing file
+  now receives the inline code; an unreadable or placeholder file keeps the
+  inline code and reports an error.
 
 ### Security
 
