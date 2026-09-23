@@ -134,3 +134,21 @@ def test_gcode_command_reports_sent_but_unacknowledged(capsys):
     assert caught.value.extra == {"gcode": "G1 E50", "sent": True, "acknowledged": False}
     assert caught.value.next_command == ["status", "--json"]
     assert json.loads(json.dumps(caught.value.to_error_payload("gcode")))["sent"] is True
+
+
+class _AckDuringTeardown(_SlowAck):
+    """The PUBACK arrives while the network loop is being stopped."""
+
+    def loop_stop(self):
+        self.on_publish(self, None, 1)
+
+
+def test_ack_that_lands_during_teardown_counts():
+    # Found in review: the decision used the already-expired wait() result, so
+    # an acknowledged command was reported as unacknowledged (exit 6).
+    with mock.patch.object(mqtt_cmd, "_connect", lambda p, c: None):
+        result = mqtt_cmd.send_command(
+            _one_shot_printer(), PAYLOAD, timeout=0.02, client_factory=_AckDuringTeardown, sleep=lambda s: None
+        )
+    assert result is True
+    assert len(_SlowAck.published) == 1

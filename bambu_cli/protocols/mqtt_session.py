@@ -345,6 +345,9 @@ class MqttSession:
                             logger.error(f"MQTT command error: {exc}")
                             return False
                     if self._command_issued:
+                        # A PUBACK that landed just after the wait timed out still counts.
+                        if self._publish_event.is_set():
+                            return self._publish_ok
                         from bambu_cli.protocols.mqtt_cmd import _unconfirmed
 
                         raise _unconfirmed(timeout)

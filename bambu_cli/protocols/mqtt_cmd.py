@@ -115,7 +115,10 @@ def send_command(
             # Decide only after the network thread is stopped, so a publish
             # racing the timeout is still seen below.
             _teardown_mqtt_client(client)
-        if acked:
+        # Re-check after teardown: a PUBACK (or a refusal) that landed while the
+        # loop was being stopped still counts; the expired wait() result alone
+        # reported an acknowledged command as unacknowledged.
+        if acked or publish_done.is_set():
             return success[0]
         if published[0]:
             raise _unconfirmed(timeout)
