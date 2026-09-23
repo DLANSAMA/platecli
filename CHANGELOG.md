@@ -95,6 +95,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   exist, or held a placeholder, that left no usable access code. A missing file
   now receives the inline code; an unreadable or placeholder file keeps the
   inline code and reports an error.
+- `snapshot --json` via the Docker streamer reported `"docker_container":
+  "bambu_camera"` whatever `camera_container_name` was set to; it now reports
+  the container actually used.
 
 ### Security
 
