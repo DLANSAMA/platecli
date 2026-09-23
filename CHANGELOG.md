@@ -55,6 +55,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Security
 
+- **`"camera_allow_streamer": "false"` no longer enables the unpinned camera
+  streamer.** The key was read with `bool()`, so any non-empty string —
+  including `"false"` — turned on the Docker streamer that ignores
+  `cert_fingerprint`. Camera switches now use the same strict reader as
+  `insecure_tls`: JSON booleans and true/false spellings are honoured, and an
+  unreadable value falls to the safe side (streamer off, `camera_direct_only`
+  on) with a warning.
 - **SSRF filter hardening**: `netsafety` now unwraps IPv4-mapped IPv6,
   deprecated IPv4-compatible IPv6 (`::/96`), 6to4, and NAT64 (`64:ff9b::/96`)
   addresses and checks the embedded IPv4, and explicitly rejects IPv4/IPv6
