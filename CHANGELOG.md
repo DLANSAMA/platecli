@@ -38,7 +38,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   0-350 °C nozzle / 0-150 °C bed check did not understand OrcaSlicer's own
   comma-list syntax, so `--set-filament nozzle_temperature=400,220` produced
   `M109 S400`; every temperature value is now split and checked, and one that
-  is not a plain number is refused. G-code and script settings
+  is not a plain ASCII decimal is refused (`3_5_0`, `1e2` and non-ASCII digits
+  read differently in OrcaSlicer than in the check). G-code and script settings
   (`filament_start_gcode`, `machine_start_gcode`, `post_process`, ...) and
   printer (machine) settings such as `printable_area` — which OrcaSlicer honoured
   when sent through `--set` — are refused outright, and `slice --list-settings`
@@ -51,7 +52,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   extrude 150 mm and invite a fourth try. Retries now happen only while nothing
   has been published; a sent-but-unacknowledged command exits 6 with
   `"sent": true, "acknowledged": false` and `next_command: ["status", "--json"]`.
-  The TUI's long-lived connection had the same flaw and is fixed too.
+  The TUI's long-lived connection had the same flaw and is fixed too. A PUBACK
+  that arrives while the connection is being closed still counts as an
+  acknowledgement.
 - **Slices now use the filament's and profile's real settings.** Three problems
   stacked up, found together (all measured in real OrcaSlicer G-code):
   `--nozzle-temp` / `--bed-temp` defaulted to 220 / 60 and overwrote every
@@ -141,7 +144,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   streamer.** The key was read with `bool()`, so any non-empty string —
   including `"false"` — turned on the Docker streamer that ignores
   `cert_fingerprint`. Camera switches now use the same strict reader as
-  `insecure_tls`: JSON booleans and true/false spellings are honoured, and an
+  `insecure_tls`: JSON booleans, 0/1 and true/false spellings are honoured, and an
   unreadable value falls to the safe side (streamer off, `camera_direct_only`
   on) with a warning.
 - **SSRF filter hardening**: `netsafety` now unwraps IPv4-mapped IPv6,
