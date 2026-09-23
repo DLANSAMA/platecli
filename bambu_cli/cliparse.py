@@ -23,6 +23,24 @@ from bambu_cli.constants import DEFAULT_MAX_DOWNLOAD_MB, EXIT_COMMAND_ERROR
 from bambu_cli.utils import emit_json
 
 
+def positive_seconds(value):
+    """argparse type for a timeout: a positive, finite number of seconds.
+
+    ``float`` alone accepted ``-5``, ``0``, ``nan`` and ``inf``; ``nan``/``inf``
+    meant a slice could never time out and a negative value failed deep inside
+    a socket call instead of at the command line.
+    """
+    import math
+
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"must be a positive number of seconds (got {value!r})") from None
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive number of seconds (got {value!r})")
+    return seconds
+
+
 class _SilentArgumentParser(argparse.ArgumentParser):
     """A parser whose error()/exit() never terminate the process.
 
@@ -287,18 +305,24 @@ def get_global_parser():
     )
     global_parser.add_argument(
         "--network-timeout",
-        type=float,
+        type=positive_seconds,
         default=argparse.SUPPRESS,
         help="Timeout in seconds for general network communication",
     )
     global_parser.add_argument(
-        "--slicer-timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for the slicing process"
+        "--slicer-timeout",
+        type=positive_seconds,
+        default=argparse.SUPPRESS,
+        help="Timeout in seconds for the slicing process",
     )
     global_parser.add_argument(
-        "--command-timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for printer commands"
+        "--command-timeout",
+        type=positive_seconds,
+        default=argparse.SUPPRESS,
+        help="Timeout in seconds for printer commands",
     )
     global_parser.add_argument(
-        "--upload-timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for file uploads"
+        "--upload-timeout", type=positive_seconds, default=argparse.SUPPRESS, help="Timeout in seconds for file uploads"
     )
     global_parser.add_argument(
         "--allow-private-ips",
@@ -524,7 +548,9 @@ def build_parser():
     p_setup.add_argument("--profiles-dir", help="Path to OrcaSlicer BBL profiles directory")
     p_setup.add_argument("--cert-fingerprint", help="SHA-256 fingerprint to pin the printer TLS certificate")
     p_setup.add_argument("--insecure-tls", action="store_true", help="Disable TLS verification entirely (last resort)")
-    p_setup.add_argument("--scan-timeout", type=float, help="Custom duration for local printer network scanning")
+    p_setup.add_argument(
+        "--scan-timeout", type=positive_seconds, help="Custom duration for local printer network scanning"
+    )
     p_setup.add_argument(
         "--migrate-access-code",
         action="store_true",

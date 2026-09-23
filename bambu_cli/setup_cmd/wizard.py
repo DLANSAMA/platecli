@@ -345,12 +345,10 @@ def _cmd_setup_interactive(args):
 
         zc = None
         browser = None
+        # argparse (positive_seconds) already validated --scan-timeout.
         scan_timeout = 5.0
-        if hasattr(args, "scan_timeout") and args.scan_timeout is not None:
-            try:
-                scan_timeout = float(args.scan_timeout)
-            except ValueError:
-                pass
+        if getattr(args, "scan_timeout", None) is not None:
+            scan_timeout = float(args.scan_timeout)
         try:
             zc = Zeroconf()
             browser = ServiceBrowser(zc, "_bblp._tcp.local.", MyListener())

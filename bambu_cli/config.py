@@ -526,8 +526,32 @@ def fingerprint_sha256(der_cert):
     return _fp(der_cert)
 
 
+TIMEOUT_CONFIG_KEYS = ("network_timeout", "slicer_timeout", "command_timeout", "upload_timeout")
+
+
+def config_timeout_problem(value):
+    """Why ``value`` is not a usable timeout (positive, finite seconds), or None."""
+    import math
+
+    if isinstance(value, bool):
+        return f"{value!r} is not a number of seconds"
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return f"{value!r} is not a number of seconds"
+    if not math.isfinite(seconds) or seconds <= 0:
+        return f"{value!r} must be a positive number of seconds"
+    return None
+
+
 def _timeout_from(args, key, default):
-    """Resolve a timeout from CLI args, then config, then the default."""
+    """Resolve a timeout from CLI args, then config, then the default.
+
+    CLI flags are validated by argparse (``positive_seconds``). A bad config
+    value is not fatal here -- this runs before any command handler, where an
+    exception would surface as a traceback -- so it warns and uses the default;
+    ``config validate`` reports it as an error.
+    """
     from bambu_cli.argutils import namespace_get as _namespace_get
     from bambu_cli.context import current_config
 
@@ -539,7 +563,10 @@ def _timeout_from(args, key, default):
     if cfg:
         val = cfg.get(key)
         if val is not None:
-            return float(val)
+            problem = config_timeout_problem(val)
+            if problem is None:
+                return float(val)
+            logger.warning(f"⚠️  Ignoring config '{key}': {problem}. Using the default of {default:g}s.")
     return default
 
 

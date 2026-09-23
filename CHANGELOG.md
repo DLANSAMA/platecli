@@ -70,6 +70,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - A ZIP with damaged compressed data (intact headers) crashed `job` and
   `download` with "Unexpected error" and a traceback (exit 5), losing the job
   summary. It is now an extract failure: exit 3, `failed_step: extract`.
+- Timeouts are validated. `--network-timeout`, `--slicer-timeout`,
+  `--command-timeout`, `--upload-timeout` and `--scan-timeout` accepted `-5`,
+  `0`, `nan` and `inf` (with `nan`/`inf` a slice could never time out); they now
+  require a positive, finite number of seconds (exit 5 otherwise). A bad
+  `*_timeout` value in config.json is ignored with a warning instead of
+  crashing before the command runs, and `config validate` reports it under a
+  new `timeouts` check.
 
 ### Security
 

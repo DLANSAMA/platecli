@@ -24,6 +24,7 @@ CONFIG_CHECK_NAMES = {
     "printer-ip",
     "serial",
     "printer-model",
+    "timeouts",
     "access-code",
     "access-code-inline-conflict",
     "access-code-permissions",

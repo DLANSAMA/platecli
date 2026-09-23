@@ -76,6 +76,23 @@ def _printer_model_check(cfg):
     return _preflight_result("ok", "printer-model", f"Printer model is {resolved}.")
 
 
+def _timeouts_check(cfg):
+    """Error when a *_timeout key in config.json is not positive, finite seconds."""
+    from bambu_cli.config import TIMEOUT_CONFIG_KEYS, config_timeout_problem
+
+    problems = []
+    for key in TIMEOUT_CONFIG_KEYS:
+        if key in cfg:
+            problem = config_timeout_problem(cfg[key])
+            if problem:
+                problems.append(f"{key}: {problem}")
+    if problems:
+        return _preflight_result(
+            "error", "timeouts", "Invalid timeout in config.json (the default is used instead): " + "; ".join(problems)
+        )
+    return _preflight_result("ok", "timeouts", "Configured timeouts are valid.")
+
+
 def collect_preflight_checks():
     """Collect local install/config checks without contacting the printer."""
     from bambu_cli.context import current_config, current_settings
@@ -142,6 +159,7 @@ def collect_preflight_checks():
             checks.append(_preflight_result("ok", "serial", "Printer serial is configured."))
 
         checks.append(_printer_model_check(cfg))
+        checks.append(_timeouts_check(cfg))
 
         access_code = cfg.get("access_code")
         has_inline_code = bool(access_code)
