@@ -41,14 +41,17 @@ def _coerce_config_bool(key: str, value: Any, *, default: bool, unreadable: bool
     """Read a boolean config key strictly.
 
     ``bool()`` is wrong for hand-edited JSON: ``bool("false")`` is True. JSON
-    booleans and the usual spellings (true/1/yes/on, false/0/no/off) are
-    honoured; ``null`` means "not set" and gives ``default``. Anything else
+    booleans, the numbers 0/1 and the usual spellings (true/1/yes/on,
+    false/0/no/off) are honoured; ``null`` means "not set" and gives ``default``. Anything else
     gives ``unreadable`` -- the safe side for that key -- and warns, so a
     security switch is never flipped by a value nobody meant.
     """
     if value is None:
         return default
     if value is True or value is False:
+        return bool(value)
+    if isinstance(value, int) and value in (0, 1):
+        # JSON 0/1, consistent with the "0"/"1" strings below.
         return bool(value)
     if isinstance(value, str):
         normalized = value.strip().lower()
