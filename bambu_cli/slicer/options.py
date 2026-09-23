@@ -193,6 +193,12 @@ _BUILTIN_MACHINE_KEYS = frozenset(
 _BUILTIN_MACHINE_PREFIXES = ("machine_",)
 
 
+# A plain ASCII decimal: what OrcaSlicer reads the same way Python does. float()
+# also accepts "3_5_0", "1e2" and non-ASCII digits, which OrcaSlicer reads
+# differently (or not at all), so the checked and sliced values could differ.
+_PLAIN_NUMBER_RE = re.compile(r"[+-]?[0-9]+(\.[0-9]+)?")
+
+
 def _temperature_values(value: Any) -> list[float] | None:
     """Every number OrcaSlicer would read from a temperature override.
 
@@ -209,6 +215,11 @@ def _temperature_values(value: Any) -> list[float] | None:
             parsed = json.loads(value)
         except ValueError:
             parsed = value
+        if not isinstance(parsed, list):
+            # A bare scalar reaches OrcaSlicer as the raw text (see
+            # _coerce_override_value), so check that text, not json's reading
+            # of it ("1e2" decodes to 100.0 but OrcaSlicer reads 1).
+            parsed = value
     items = parsed if isinstance(parsed, list) else [parsed]
     out: list[float] = []
     for item in items:
@@ -220,10 +231,10 @@ def _temperature_values(value: Any) -> list[float] | None:
         if not isinstance(item, str):
             return None
         for token in item.split(","):
-            try:
-                out.append(float(token.strip()))
-            except ValueError:
+            token = token.strip()
+            if not _PLAIN_NUMBER_RE.fullmatch(token):
                 return None
+            out.append(float(token))
     return out or None
 
 

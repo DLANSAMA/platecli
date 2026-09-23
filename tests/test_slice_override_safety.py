@@ -57,7 +57,26 @@ def test_comma_list_bed_temperature_is_range_checked():
     assert err is not None and "bed temperature override" in err
 
 
-@pytest.mark.parametrize("value", ["400abc", "", "hot", "0x190", "[]", "true", "[[400]]", '{"a": 1}'])
+@pytest.mark.parametrize(
+    "value",
+    # 3_5_0 / 1e2 / non-ASCII digits: Python's float() reads them (350, 100,
+    # 400) but OrcaSlicer does not, so the checked value and the sliced one
+    # differed (3_5_0 sliced at 3 C).
+    [
+        "400abc",
+        "",
+        "hot",
+        "0x190",
+        "[]",
+        "true",
+        "[[400]]",
+        '{"a": 1}',
+        "3_5_0",
+        "1e2",
+        "\uff14\uff10\uff10",
+        "\u0663\u0665\u0660",
+    ],
+)
 def test_unreadable_temperature_values_fail_closed(value):
     err = S._validate_slice_options(_args(set_filament=[f"nozzle_temperature={value}"]))
     assert err is not None and "must be a number" in err
