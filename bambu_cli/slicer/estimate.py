@@ -7,11 +7,14 @@ import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
 
+from bambu_cli.constants import SLICE_INFO_MAX_READ_BYTES
+from bambu_cli.logging_utils import logger
+
 _MAX_SECONDS = 2592000  # 30 days
 _MAX_GRAMS = 10000.0
 
 GCODE_READ_BYTES = 65536  # 64 KB
-SLICE_INFO_READ_BYTES = 10 * 1024 * 1024  # 10 MB safety limit for XML config (Zip Bomb protection)
+SLICE_INFO_READ_BYTES = SLICE_INFO_MAX_READ_BYTES  # 64 KB safety limit for XML config (Zip Bomb protection)
 
 
 @dataclass(frozen=True)
@@ -20,20 +23,63 @@ class Estimate:
     grams: float | None
 
 
-def _parse_slice_info(xml_text: str) -> tuple[int | None, float | None]:
+_PLATE_GCODE_RE = re.compile(r"^Metadata/plate_(\d+)\.gcode$")
+
+
+def sliced_plates(path: str) -> list[int]:
+    """Plate numbers that have sliced G-code in a .3mf (``Metadata/plate_<n>.gcode``).
+
+    Sorted ascending; ``[]`` for an unsliced project, an unreadable file, or
+    anything that is not a zip. Never raises.
+    """
+    try:
+        with zipfile.ZipFile(path, "r") as zf:
+            names = zf.namelist()
+    except Exception:  # noqa: BLE001 -- a probe: "no sliced plates" is the safe answer
+        return []
+    plates = set()
+    for name in names:
+        match = _PLATE_GCODE_RE.match(name.replace("\\", "/"))
+        if match:
+            plates.add(int(match.group(1)))
+    return sorted(plates)
+
+
+def _parse_slice_info(xml_text: str, plate: int | None = None) -> tuple[int | None, float | None]:
     """Parse prediction (seconds) and weight (grams) from slice_info.config XML.
 
     Uses xml.etree.ElementTree to parse bounded metadata XML from .3mf packages.
+    Rejects any XML containing DTD or entity declarations (entity bomb protection).
+    A multi-plate project has one ``<plate>`` element per plate: the estimate is
+    for ``plate`` (by its ``index`` metadata) or, when None, the first plate.
+    It used to be whichever plate came last.
     """
+    upper = xml_text.upper()
+    if "<!ENTITY" in upper or "<!DOCTYPE" in upper:
+        return None, None
+
     try:
-        root = ET.fromstring(xml_text)  # nosec B314 — local file produced by OrcaSlicer, not network input
+        root = ET.fromstring(xml_text)  # nosec: B314 # local file produced by OrcaSlicer, not network input
     except ET.ParseError:
         return None, None
+
+    scope = root
+    plate_elems = list(root.iter("plate"))
+    if plate_elems:
+        scope = plate_elems[0]
+        if plate is not None:
+            for elem in plate_elems:
+                index = next((m.get("value") for m in elem.iter("metadata") if m.get("key") == "index"), None)
+                if index is not None and index.strip() == str(plate):
+                    scope = elem
+                    break
+            else:
+                return None, None
 
     seconds: int | None = None
     grams: float | None = None
 
-    for elem in root.iter("metadata"):
+    for elem in scope.iter("metadata"):
         key = elem.get("key", "")
         value = elem.get("value", "")
         if key == "prediction":
@@ -95,7 +141,7 @@ def _parse_gcode_header(gcode_bytes: bytes) -> tuple[int | None, float | None]:
     return seconds, grams
 
 
-def read_3mf_estimate(path: str) -> Estimate:
+def read_3mf_estimate(path: str, plate: int | None = None) -> Estimate:
     """Parse time/filament estimate from a .3mf file.
 
     Returns Estimate(None, None) on any failure — never raises.
@@ -124,9 +170,17 @@ def read_3mf_estimate(path: str) -> Estimate:
                     with zf.open(slice_info_name) as fh:
                         xml_bytes = fh.read(SLICE_INFO_READ_BYTES)
                     xml_text = xml_bytes.decode("utf-8", errors="replace")
-                    seconds, grams = _parse_slice_info(xml_text)
+                    seconds, grams = _parse_slice_info(xml_text, plate)
                     if seconds is not None or grams is not None:
                         return Estimate(seconds, grams)
+                else:
+                    # Skipping the primary source is a real (if recoverable)
+                    # degradation, not a non-event: say so rather than silently
+                    # reporting whatever the gcode fallback happens to find.
+                    logger.debug(
+                        f"slice_info.config is {info.file_size} bytes, over the "
+                        f"{SLICE_INFO_READ_BYTES}-byte cap; falling back to the gcode header"
+                    )
                 # slice_info.config was present but yielded nothing usable
                 # (malformed XML, or only implausible values).  Fall through to
                 # the gcode header rather than reporting "unknown" -- a truncated
@@ -135,6 +189,8 @@ def read_3mf_estimate(path: str) -> Estimate:
 
             # Fallback: gcode members under Metadata/, in plate order.  Keep
             # trying later plates if an earlier one carries no usable header.
+            if plate is not None:
+                gcode_members = [n for n in gcode_members if n.replace("\\", "/") == f"Metadata/plate_{plate}.gcode"]
             if gcode_members:
                 gcode_members.sort()
                 for n in gcode_members:

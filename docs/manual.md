@@ -172,7 +172,7 @@ profiles dir) is also probed, for running from a source tree.
 ### Overriding the paths
 
 The supported way is `plate setup` — it accepts both as flags and writes them to
-`config.json`:
+`config.json`, keeping every other value already there:
 
 ```bash
 plate setup \
@@ -282,7 +282,7 @@ The TUI keeps every guarantee the CLI makes:
 - **Upload only** uploads the sliced file and leaves it unstarted — the same as `plate job` without `--confirm`.
 - **Cancel keeps your work.** The sliced file is moved out of the temp directory and the app tells you where it is, exactly like the wizard's "Nothing sent. Sliced file kept at …".
 - **Leaving the monitor is not stopping the print.** `Esc` stops watching; it never sends a stop or pause command.
-- **Advanced settings cannot exceed CLI limits.** Every override goes through the same `slice` validation, so an unsafe temperature is refused in the form rather than sent to the printer. The **Applies to** dropdown is the routing, exactly as `--set` vs `--set-filament` is on the command line: a filament setting such as `filament_flow_ratio` sent as a process override is accepted by OrcaSlicer and then *silently ignored*, so the slice comes out unchanged. The picker starts every new key at *process* (the bucket a bare `--set` uses) rather than carrying your last choice over, so a process setting is never sent as a filament override by accident either.
+- **Advanced settings cannot exceed CLI limits.** Every override goes through the same `slice` validation, so an unsafe temperature is refused in the form rather than sent to the printer. That includes OrcaSlicer's comma-list form (`400,220` is checked value by value) and any temperature that is not a plain number. G-code and post-processing settings (`filament_start_gcode`, anything with `gcode` in its name, `post_process`) and printer (machine) settings such as `printable_area` cannot be overridden at all: they would bypass these checks or slice for hardware your printer does not have. The **Applies to** dropdown is the routing, exactly as `--set` vs `--set-filament` is on the command line: a filament setting such as `filament_flow_ratio` sent as a process override is accepted by OrcaSlicer and then *silently ignored*, so the slice comes out unchanged. The picker starts every new key at *process* (the bucket a bare `--set` uses) rather than carrying your last choice over, so a process setting is never sent as a filament override by accident either.
 - Quitting is refused while an upload or print-start is still running, so a physical action is never abandoned half-way.
 
 ### Where it runs

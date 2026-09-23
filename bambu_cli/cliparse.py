@@ -23,6 +23,35 @@ from bambu_cli.constants import DEFAULT_MAX_DOWNLOAD_MB, EXIT_COMMAND_ERROR
 from bambu_cli.utils import emit_json
 
 
+def positive_seconds(value):
+    """argparse type for a timeout: a positive, finite number of seconds.
+
+    ``float`` alone accepted ``-5``, ``0``, ``nan`` and ``inf``; ``nan``/``inf``
+    meant a slice could never time out and a negative value failed deep inside
+    a socket call instead of at the command line.
+    """
+    import math
+
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"must be a positive number of seconds (got {value!r})") from None
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive number of seconds (got {value!r})")
+    return seconds
+
+
+def positive_int(value):
+    """argparse type for a 1-based index such as a plate number."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"must be a positive whole number (got {value!r})") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be a positive whole number (got {value!r})")
+    return number
+
+
 class _SilentArgumentParser(argparse.ArgumentParser):
     """A parser whose error()/exit() never terminate the process.
 
@@ -176,6 +205,11 @@ def _add_job_arguments(parser):
         "--dry-run", action="store_true", help="No-side-effect validation; skip download/slice/upload/print"
     )
     parser.add_argument("--upload-only", action="store_true", help="Upload the printable but do not start the print")
+    parser.add_argument(
+        "--plate",
+        type=positive_int,
+        help="Plate of a multi-plate 3MF to print (default: for job/send, the only sliced plate or plate 1; for print, plate 1)",
+    )
     parser.add_argument("--name", help="Save downloaded URL as filename before slicing/upload")
     parser.add_argument(
         "--output",
@@ -191,8 +225,15 @@ def _add_job_arguments(parser):
     parser.add_argument("--filament", type=str, default="PLA Basic", help="Filament type (e.g. 'PLA Basic', 'PETG')")
     parser.add_argument("--infill", type=int, default=15, help="Infill density %% (default: 15)")
     parser.add_argument("--pattern", default="3dhoneycomb", help="Infill pattern (default: 3dhoneycomb)")
-    parser.add_argument("--nozzle-temp", type=int, default=220, help="Nozzle temp °C (default: 220)")
-    parser.add_argument("--bed-temp", type=int, default=60, help="Bed temp °C (default: 60)")
+    parser.add_argument(
+        "--nozzle-temp", type=int, default=None, help="Nozzle temp °C (default: the filament profile's own)"
+    )
+    parser.add_argument(
+        "--bed-temp",
+        type=int,
+        default=None,
+        help="Bed temp °C for every plate type (default: the filament profile's own)",
+    )
     parser.add_argument("--supports", action="store_true", help="Enable supports")
     parser.add_argument("--support-type", choices=["tree", "normal"], help="Support type: tree or normal")
     parser.add_argument("--support-interface-density", type=float, help="Support interface density %%")
@@ -280,18 +321,24 @@ def get_global_parser():
     )
     global_parser.add_argument(
         "--network-timeout",
-        type=float,
+        type=positive_seconds,
         default=argparse.SUPPRESS,
         help="Timeout in seconds for general network communication",
     )
     global_parser.add_argument(
-        "--slicer-timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for the slicing process"
+        "--slicer-timeout",
+        type=positive_seconds,
+        default=argparse.SUPPRESS,
+        help="Timeout in seconds for the slicing process",
     )
     global_parser.add_argument(
-        "--command-timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for printer commands"
+        "--command-timeout",
+        type=positive_seconds,
+        default=argparse.SUPPRESS,
+        help="Timeout in seconds for printer commands",
     )
     global_parser.add_argument(
-        "--upload-timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for file uploads"
+        "--upload-timeout", type=positive_seconds, default=argparse.SUPPRESS, help="Timeout in seconds for file uploads"
     )
     global_parser.add_argument(
         "--allow-private-ips",
@@ -359,6 +406,11 @@ def build_parser():
     p_print.add_argument("--timelapse", action="store_true", help="Enable timelapse")
     p_print.add_argument("--skip-bed-leveling", action="store_true", help="Skip bed leveling")
     p_print.add_argument("--skip-flow-cali", action="store_true", help="Skip flow calibration")
+    p_print.add_argument(
+        "--plate",
+        type=positive_int,
+        help="Plate of a multi-plate 3MF to print (default: for job/send, the only sliced plate or plate 1; for print, plate 1)",
+    )
 
     p_job = sub.add_parser(
         "job",
@@ -394,8 +446,15 @@ def build_parser():
     p_slice.add_argument("--filament", type=str, default="PLA Basic", help="Filament type (e.g. 'PLA Basic', 'PETG')")
     p_slice.add_argument("--infill", type=int, default=15, help="Infill density %% (default: 15)")
     p_slice.add_argument("--pattern", default="3dhoneycomb", help="Infill pattern (default: 3dhoneycomb)")
-    p_slice.add_argument("--nozzle-temp", type=int, default=220, help="Nozzle temp °C (default: 220)")
-    p_slice.add_argument("--bed-temp", type=int, default=60, help="Bed temp °C (default: 60)")
+    p_slice.add_argument(
+        "--nozzle-temp", type=int, default=None, help="Nozzle temp °C (default: the filament profile's own)"
+    )
+    p_slice.add_argument(
+        "--bed-temp",
+        type=int,
+        default=None,
+        help="Bed temp °C for every plate type (default: the filament profile's own)",
+    )
     p_slice.add_argument("--supports", action="store_true", help="Enable supports")
     p_slice.add_argument("--support-type", choices=["tree", "normal"], help="Support type: tree or normal")
     p_slice.add_argument("--support-interface-density", type=float, help="Support interface density %%")
@@ -510,7 +569,9 @@ def build_parser():
     p_setup.add_argument("--profiles-dir", help="Path to OrcaSlicer BBL profiles directory")
     p_setup.add_argument("--cert-fingerprint", help="SHA-256 fingerprint to pin the printer TLS certificate")
     p_setup.add_argument("--insecure-tls", action="store_true", help="Disable TLS verification entirely (last resort)")
-    p_setup.add_argument("--scan-timeout", type=float, help="Custom duration for local printer network scanning")
+    p_setup.add_argument(
+        "--scan-timeout", type=positive_seconds, help="Custom duration for local printer network scanning"
+    )
     p_setup.add_argument(
         "--migrate-access-code",
         action="store_true",

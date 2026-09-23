@@ -33,32 +33,54 @@ def _stream_host_port(camera_port: str, default: str = "1985") -> str:
     return default
 
 
-def _coerce_insecure_tls(value: Any) -> bool:
-    """Strictly resolve the ``insecure_tls`` opt-out, failing CLOSED.
+_TRUE_WORDS = frozenset({"true", "1", "yes", "on"})
+_FALSE_WORDS = frozenset({"false", "0", "no", "off", ""})
 
-    Unlike ``camera_direct_only`` (a security opt-*in*, where ``bool()`` on a
-    truthy string harmlessly errs toward the safer, more-locked-down state),
-    ``insecure_tls`` is a security opt-*out*: any accidental truthiness disables
-    TLS validation and is fail-*open*. A hand-edited ``"insecure_tls": "false"``
-    is a truthy ``str`` and would silently disable certificate validation while
-    the user believes it is off.
 
-    So enable it only for the literal boolean ``True`` (JSON ``true``). The
-    common string spellings ``"true"``/``"1"``/``"yes"``/``"on"`` are also
-    accepted for convenience, since a user who typed them clearly meant to opt
-    in. Every other value — including any non-bool type — is treated as ``False``
-    (validation stays on) and warns, because a config that meant to disable TLS
-    but did not is the fail-safe outcome; one that meant to keep it on and
-    accidentally disabled it is not.
+def _coerce_config_bool(key: str, value: Any, *, default: bool, unreadable: bool) -> bool:
+    """Read a boolean config key strictly.
+
+    ``bool()`` is wrong for hand-edited JSON: ``bool("false")`` is True. JSON
+    booleans, the numbers 0/1 and the usual spellings (true/1/yes/on,
+    false/0/no/off) are honoured; ``null`` means "not set" and gives ``default``. Anything else
+    gives ``unreadable`` -- the safe side for that key -- and warns, so a
+    security switch is never flipped by a value nobody meant.
     """
+    if value is None:
+        return default
     if value is True or value is False:
+        return bool(value)
+    if isinstance(value, int) and value in (0, 1):
+        # JSON 0/1, consistent with the "0"/"1" strings below.
         return bool(value)
     if isinstance(value, str):
         normalized = value.strip().lower()
-        if normalized in {"true", "1", "yes", "on"}:
+        if normalized in _TRUE_WORDS:
             return True
-        if normalized in {"false", "0", "no", "off", ""}:
+        if normalized in _FALSE_WORDS:
             return False
+    from bambu_cli.logging_utils import logger
+
+    logger.warning(
+        f"⚠️  Ignoring non-boolean {key!r} value {value!r} in config; using {str(unreadable).lower()}. "
+        f"Use a JSON boolean ({key}: true/false)."
+    )
+    return unreadable
+
+
+def _coerce_insecure_tls(value: Any) -> bool:
+    """Strictly resolve the ``insecure_tls`` opt-out, failing CLOSED.
+
+    ``insecure_tls`` is a security opt-*out*: any accidental truthiness disables
+    TLS validation. A hand-edited ``"insecure_tls": "false"`` is a truthy
+    ``str`` and would silently disable certificate validation while the user
+    believes it is off. So only a clear true enables it; anything unreadable
+    keeps validation on (and warns).
+    """
+    if value is True or value is False:
+        return bool(value)
+    if isinstance(value, str) and value.strip().lower() in _TRUE_WORDS | _FALSE_WORDS:
+        return value.strip().lower() in _TRUE_WORDS
     from bambu_cli.logging_utils import logger
 
     logger.warning(
@@ -124,7 +146,16 @@ class Settings:
 
         orca_slicer = _expand_path(cfg.get("orca_slicer", default_orca))
         profiles_dir = _expand_path(cfg.get("profiles_dir", default_profiles))
-        printer_model = cfg.get("model", cfg.get("printer_model", "P1P")).upper()
+        raw_model = cfg.get("model", cfg.get("printer_model", "P1P"))
+        # Resolve product names ("A1 mini" -> "A1M"). An unrecognised name is kept
+        # as typed, never replaced with a default: the slicer refuses it by name
+        # rather than producing G-code for a different printer.
+        try:
+            from bambu_cli.config import resolve_printer_model
+
+            printer_model = resolve_printer_model(raw_model) or str(raw_model).strip().upper()
+        except ImportError:  # pragma: no cover -- config is always importable
+            printer_model = str(raw_model).strip().upper()
         nozzle_size = str(cfg.get("nozzle", cfg.get("nozzle_size", "0.4")))
         camera_port = cfg.get("camera_port", default_camera_port)
         host_port = _stream_host_port(camera_port)
@@ -136,8 +167,8 @@ class Settings:
             username=cfg.get("username", "bblp"),
             mqtt_port=cfg.get("mqtt_port", 8883),
             # Strict, fail-CLOSED coercion: a JSON string ("false"/"no"/…) must
-            # NOT sneak through truthy and disable TLS validation. Contrast
-            # camera_direct_only below, a security opt-in where bool() is safe.
+            # NOT sneak through truthy and disable TLS validation. The camera
+            # switches below use the same strict reader.
             insecure_tls=_coerce_insecure_tls(cfg.get("insecure_tls", False)),
             cert_fingerprint=cfg.get("cert_fingerprint"),
             orca_slicer=orca_slicer,
@@ -149,12 +180,16 @@ class Settings:
             camera_port=camera_port,
             camera_stream_url=camera_stream_url,
             # Deliberately a sticky config key (unlike allow_private_ips below): it is a
-            # security opt-in, so it must survive across invocations. bool() so a JSON
-            # string cannot sneak through truthy.
-            camera_direct_only=bool(cfg.get("camera_direct_only", False)),
-            # Sticky opt-in for the unpinned Docker streamer. Default false: snapshot
-            # no longer falls through to Docker unless the user asked.
-            camera_allow_streamer=bool(cfg.get("camera_allow_streamer", False)),
+            # security opt-in, so an unreadable value keeps it ON.
+            camera_direct_only=_coerce_config_bool(
+                "camera_direct_only", cfg.get("camera_direct_only"), default=False, unreadable=True
+            ),
+            # Sticky opt-in for the unpinned Docker streamer. It used bool(), so
+            # "camera_allow_streamer": "false" turned the unpinned path ON; an
+            # unreadable value now keeps it OFF.
+            camera_allow_streamer=_coerce_config_bool(
+                "camera_allow_streamer", cfg.get("camera_allow_streamer"), default=False, unreadable=False
+            ),
             # Always false from config: private-IP downloads are a per-invocation
             # CLI override only (``--allow-private-ips``), never a sticky config key.
             allow_private_ips=False,

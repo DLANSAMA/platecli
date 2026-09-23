@@ -118,6 +118,25 @@ def test_redirected_url_with_unsupported_extension_rejected(tmp_path):
     leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
     assert not leftovers, f"partial download not cleaned up: {leftovers}"
 
+def test_redirected_url_with_a_non_http_scheme_is_rejected_before_any_write(tmp_path):
+    """The final (post-redirect) URL is re-validated like the original one. This
+    line went green with the validation replaced by a no-op, so pin it: a
+    response whose final URL is not http(s) must abort as a command error."""
+    from bambu_cli.constants import EXIT_COMMAND_ERROR
+
+    original_url = "https://example.com/model.stl"
+    resp = _base_resp("ftp://example.com/model.stl")
+    opener = _mock_opener(resp)
+    args = _args(tmp_path, original_url)
+
+    with pytest.raises((SystemExit, BambuError)) as excinfo:
+        download._cmd_download(args, opener_factory=lambda: opener)
+
+    assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_COMMAND_ERROR
+    leftovers = [p for p in tmp_path.iterdir() if p.stat().st_size > 0]
+    assert not leftovers, f"partial download not cleaned up: {leftovers}"
+
+
 # ---------------------------------------------------------------------------
 # Mid-stream size enforcement / short reads / empty files
 # ---------------------------------------------------------------------------

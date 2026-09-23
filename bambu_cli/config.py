@@ -335,6 +335,36 @@ MODEL_MAPPING = {
     "A1M": {"token": "A1M", "full_name": "Bambu Lab A1 mini"},
 }
 
+# Product names people actually type, keyed by their squashed form (upper case,
+# no spaces/hyphens/underscores, "BAMBULAB" prefix dropped). "A1 mini" is the
+# printer's own name and used to fall through to the P1P profile.
+_MODEL_ALIASES = {
+    "A1MINI": "A1M",
+    "X1CARBON": "X1C",
+}
+
+
+def resolve_printer_model(raw):
+    """Map a configured model name to a ``MODEL_MAPPING`` key, or ``None``.
+
+    Never guesses: anything that is not a supported model or a known alias of
+    one returns ``None``, and callers refuse to slice rather than pick a
+    profile for a different printer.
+    """
+    if not isinstance(raw, str):
+        return None
+    squashed = "".join(ch for ch in raw.upper() if ch not in " -_")
+    if squashed.startswith("BAMBULAB"):
+        squashed = squashed[len("BAMBULAB") :]
+    if squashed in MODEL_MAPPING:
+        return squashed
+    return _MODEL_ALIASES.get(squashed)
+
+
+def supported_models_text():
+    """``"P1P, P1S, ..."`` for error messages."""
+    return ", ".join(MODEL_MAPPING)
+
 
 def apply_config(cfg):
     """Apply a configuration dictionary to the runtime state.
@@ -491,15 +521,37 @@ def _expected_fingerprint():
 
 def fingerprint_sha256(der_cert):
     """Hex SHA-256 of a DER-encoded certificate, or None if no cert."""
-    import hashlib
+    from bambu_cli.tlspin import fingerprint_sha256 as _fp
 
-    if not der_cert:
-        return None
-    return hashlib.sha256(der_cert).hexdigest()
+    return _fp(der_cert)
+
+
+TIMEOUT_CONFIG_KEYS = ("network_timeout", "slicer_timeout", "command_timeout", "upload_timeout")
+
+
+def config_timeout_problem(value):
+    """Why ``value`` is not a usable timeout (positive, finite seconds), or None."""
+    import math
+
+    if isinstance(value, bool):
+        return f"{value!r} is not a number of seconds"
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return f"{value!r} is not a number of seconds"
+    if not math.isfinite(seconds) or seconds <= 0:
+        return f"{value!r} must be a positive number of seconds"
+    return None
 
 
 def _timeout_from(args, key, default):
-    """Resolve a timeout from CLI args, then config, then the default."""
+    """Resolve a timeout from CLI args, then config, then the default.
+
+    CLI flags are validated by argparse (``positive_seconds``). A bad config
+    value is not fatal here -- this runs before any command handler, where an
+    exception would surface as a traceback -- so it warns and uses the default;
+    ``config validate`` reports it as an error.
+    """
     from bambu_cli.argutils import namespace_get as _namespace_get
     from bambu_cli.context import current_config
 
@@ -511,7 +563,10 @@ def _timeout_from(args, key, default):
     if cfg:
         val = cfg.get(key)
         if val is not None:
-            return float(val)
+            problem = config_timeout_problem(val)
+            if problem is None:
+                return float(val)
+            logger.warning(f"⚠️  Ignoring config '{key}': {problem}. Using the default of {default:g}s.")
     return default
 
 

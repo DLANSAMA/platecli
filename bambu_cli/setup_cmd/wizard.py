@@ -58,10 +58,14 @@ def _service_info_address(info):
 
 
 def _parse_mdns_printer_identity(name):
-    """Return (serial, model) from a Bambu mDNS service name."""
+    """Return (serial, model) from a Bambu mDNS service name.
+
+    ``model`` is None when the name does not carry one: the setup prompt then
+    asks instead of pre-filling a guess.
+    """
     match = re.search(r"BBLP-([^._]+)", name, re.IGNORECASE)
     service_id = match.group(1).upper() if match else ""
-    detected_model = "P1P"
+    detected_model = None
     serial = service_id or "YOUR_SERIAL"
 
     for model in sorted(MODEL_MAPPING, key=len, reverse=True):
@@ -75,6 +79,40 @@ def _parse_mdns_printer_identity(name):
             break
 
     return serial, detected_model
+
+
+def _prompt_printer_model(args, detected_model):
+    """Ask for the printer model until the answer is a supported one.
+
+    There is no silent default. A detected model is offered as the default
+    answer; with nothing detected the user has to type one.
+    """
+    if detected_model:
+        logger.info(f"Printer model detected: {detected_model}")
+    default_hint = f" [default: {detected_model}]" if detected_model else ""
+    for _attempt in range(3):
+        answer = _prompt_text(f"Printer model (P1P/P1S/X1C/X1E/X1/A1/A1M){default_hint}: ", args)
+        try:
+            return _normalize_model(answer, detected_model)
+        except ValueError as exc:
+            logger.error(str(exc))
+    logger.error("No supported printer model entered; setup was not saved.")
+    abort("", exit_code=EXIT_CONFIG_ERROR)
+
+
+def _existing_setup_config():
+    """The current config.json as a dict, or {} when absent, unreadable or not an object."""
+    from bambu_cli.config import read_config_json
+
+    try:
+        data = read_config_json(_config_path())
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _same_path(first, second):
+    return bool(first and second) and os.path.abspath(_expand_path(first)) == os.path.abspath(_expand_path(second))
 
 
 def _cmd_setup_noninteractive(args):
@@ -100,6 +138,35 @@ def _cmd_setup_noninteractive(args):
             _setup_json_error(args, message, access_code_env=access_code_env)
             abort("", exit_code=EXIT_CONFIG_ERROR)
 
+    # Update mode: with a config already present, values not given on the
+    # command line are kept, so `plate setup --printer-ip <new-ip>` or
+    # `--access-code-env CODE` changes just that (as the docs describe). The
+    # printer-specific values -- address, model, nozzle, access code, pin -- are
+    # only inherited for the same printer (serial unchanged); a pin or code from
+    # another printer would fail closed or authenticate against the wrong one.
+    existing = _existing_setup_config() if _setup_args_provided(args) else {}
+    same_printer = bool(existing) and (
+        not serial or str(serial).strip().upper() == str(existing.get("serial", "")).strip().upper()
+    )
+    inherited = existing if same_printer else {}
+    rotating_configured_file = False
+    if same_printer:
+        ip = ip or existing.get("printer_ip")
+        serial = serial or existing.get("serial")
+        configured_file = existing.get("access_code_file")
+        if not access_code and not access_code_file:
+            if configured_file:
+                access_code_file = configured_file
+            elif existing.get("access_code"):
+                access_code = str(existing["access_code"])
+        elif access_code and not access_code_file and configured_file:
+            access_code_file = configured_file
+        # A new code for the file this printer already uses is a rotation, not a
+        # clobber of some unrelated secret.
+        rotating_configured_file = bool(access_code and _same_path(access_code_file, configured_file))
+        expanded_access_code_file = _validate_setup_access_code_file(args, access_code_file)
+    model_value = _namespace_get(args, "model") or inherited.get("model")
+
     missing = []
     if not ip:
         missing.append("--printer-ip")
@@ -107,6 +174,10 @@ def _cmd_setup_noninteractive(args):
         missing.append("--serial")
     if not access_code and not access_code_file:
         missing.append("--access-code, --access-code-env, or --access-code-file")
+    if not model_value:
+        # No default: the model picks the machine profile, and a guessed one
+        # slices G-code for another printer's bed.
+        missing.append("--model")
     if missing:
         message = "Non-interactive setup is missing required values: " + ", ".join(missing)
         logger.error(message)
@@ -160,14 +231,15 @@ def _cmd_setup_noninteractive(args):
         config = _build_setup_config(
             ip=ip,
             serial=serial,
-            model=_normalize_model(_namespace_get(args, "model"), "P1P"),
-            nozzle=_normalize_nozzle(_namespace_get(args, "nozzle")),
+            model=_normalize_model(model_value),
+            nozzle=_normalize_nozzle(_namespace_get(args, "nozzle") or inherited.get("nozzle")),
             access_code=access_code,
             access_code_file=access_code_file,
-            orca_slicer=_namespace_get(args, "orca_slicer") or _DEFAULT_ORCA,
-            profiles_dir=_namespace_get(args, "profiles_dir") or _DEFAULT_PROFILES,
-            cert_fingerprint=_namespace_get(args, "cert_fingerprint"),
-            insecure_tls=bool(_namespace_get(args, "insecure_tls", False)),
+            # Local install paths belong to this machine, not the printer.
+            orca_slicer=_namespace_get(args, "orca_slicer") or existing.get("orca_slicer") or _DEFAULT_ORCA,
+            profiles_dir=_namespace_get(args, "profiles_dir") or existing.get("profiles_dir") or _DEFAULT_PROFILES,
+            cert_fingerprint=_namespace_get(args, "cert_fingerprint") or inherited.get("cert_fingerprint"),
+            insecure_tls=bool(_namespace_get(args, "insecure_tls", False)) or inherited.get("insecure_tls") is True,
         )
     except ValueError as exc:
         message = str(exc)
@@ -177,7 +249,7 @@ def _cmd_setup_noninteractive(args):
     # Refuse to silently clobber an existing secret file when both --access-code
     # and --access-code-file are given (the existence check above is skipped in
     # that case). Fails closed on an unreadable existing file too.
-    if access_code and access_code_file and not _namespace_get(args, "force", False):
+    if access_code and access_code_file and not rotating_configured_file and not _namespace_get(args, "force", False):
         conflict = _access_code_file_overwrite_conflict(expanded_access_code_file, access_code)
         if conflict:
             message = f"{conflict} (pass --force to overwrite, or point --access-code-file at a new path)."
@@ -318,12 +390,10 @@ def _cmd_setup_interactive(args):
 
         zc = None
         browser = None
+        # argparse (positive_seconds) already validated --scan-timeout.
         scan_timeout = 5.0
-        if hasattr(args, "scan_timeout") and args.scan_timeout is not None:
-            try:
-                scan_timeout = float(args.scan_timeout)
-            except ValueError:
-                pass
+        if getattr(args, "scan_timeout", None) is not None:
+            scan_timeout = float(args.scan_timeout)
         try:
             zc = Zeroconf()
             browser = ServiceBrowser(zc, "_bblp._tcp.local.", MyListener())
@@ -352,7 +422,7 @@ def _cmd_setup_interactive(args):
         if not serial:
             logger.error("Serial Number is required.")
             abort("", exit_code=EXIT_CONFIG_ERROR)
-        detected_model = "P1P"
+        detected_model = None
     else:
         if not discovered:
             logger.error("No printers found. Ensure printer is on the same network.")
@@ -393,11 +463,7 @@ def _cmd_setup_interactive(args):
     access_code = _prompt_interactive_access_code(args)
 
     # Guided prompt for model & nozzle
-    logger.info(f"Printer model detected: {detected_model}")
-    model_input = _normalize_model(
-        _prompt_text(f"Confirm printer model (P1P/P1S/X1C/X1E/X1/A1/A1M) [default: {detected_model}]: ", args),
-        detected_model,
-    )
+    model_input = _prompt_printer_model(args, detected_model)
     nozzle_input = _normalize_nozzle(_prompt_text("Enter nozzle size (0.2, 0.4, 0.6, 0.8) [default: 0.4]: ", args))
     access_code_file = _prompt_access_code_file_path(args)
     _validate_setup_access_code_file(args, access_code_file)

@@ -78,6 +78,31 @@ class TestMain(unittest.TestCase):
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
         mock_logger.error.assert_called_with("Invalid printer_ip or hostname in config: invalid_ip")
 
+    @patch("sys.argv", ["bambu.py", "status"])
+    @patch("bambu_cli.cli.logger")
+    @patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("192.0.2.10", 0))])
+    def test_main_accepts_a_resolvable_hostname(self, mock_getaddrinfo, mock_logger):
+        """The success half of the hostname check: a name that resolves must reach
+        the command. Inverting the check to reject every hostname went unnoticed
+        by the suite, which only pinned the failure path above."""
+        import bambu_cli.bambu
+        from bambu_cli import context, utils
+        from bambu_cli.context import RuntimeContext, Settings
+
+        utils._RESOLVE_IP_CACHE.pop("printer.lan", None)
+        utils._RESOLVE_IP_INFLIGHT.pop("printer.lan", None)
+        context.set_current(RuntimeContext(settings=Settings(printer_ip="printer.lan")))
+        with (
+            patch("bambu_cli.config.load_config", return_value=None),
+            patch("bambu_cli.commands.cmd_status") as mock_status,
+        ):
+            bambu_cli.cli.main()
+
+        mock_status.assert_called_once()
+        for call in mock_logger.error.call_args_list:
+            self.assertNotIn("Invalid printer_ip", str(call))
+        utils._RESOLVE_IP_CACHE.pop("printer.lan", None)
+
     @patch("sys.argv", ["bambu.py", "--json", "--sim", "upload", "x.stl"])
     @patch("bambu_cli.cli.setup_logging")
     def test_json_envelope_survives_logger_failure(self, _mock_setup_logging):
@@ -164,7 +189,7 @@ class TestBambuCmdSetup(unittest.TestCase):
         from bambu_cli.commands import cmd_setup
 
         mock_getpass.return_value = "12345678"
-        self.input_mock_obj.side_effect = ["", "", "n"]
+        self.input_mock_obj.side_effect = ["P1P", "", "n"]
 
         tmpdir = tempfile.mkdtemp()
         cfg_path = _os.path.join(tmpdir, "config.json")

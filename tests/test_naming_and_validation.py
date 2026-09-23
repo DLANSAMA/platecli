@@ -29,9 +29,13 @@ def test_safe_remote_name_rejects_controls_and_paths():
     assert N._safe_remote_name("model.3mf ") is None
     assert N._safe_remote_name("CON.3mf") is None
     assert N._safe_remote_name("a" * 200 + ".3mf") is None
+    assert N._safe_remote_name("test\x7f.3mf") is None
+
 
 def test_sanitize_download_filename_reserved_and_controls():
     assert "\n" not in N._sanitize_download_filename("x\ny.stl")
+    assert "\x7f" not in N._sanitize_download_filename("x\x7fy.stl")
+    assert N._sanitize_download_filename("x\x7fy.stl") == "x_y.stl"
     name = N._sanitize_download_filename("CON.stl")
     assert name.upper().startswith("_") or name != "CON.stl"
 
@@ -50,6 +54,7 @@ _HOSTILE_NAMES = [
     "AUX.",
     "aux.GCODE.3MF",
     "prn.stl",
+    "test\x7fmodel.stl",
     # A pathological "extension" consumed the whole budget, leaving the result over
     # the cap entirely untruncated.
     "x." + "a" * 200,
@@ -236,3 +241,17 @@ def test_reject_oversized_download_when_content_length_set():
             1024 * 1024,
             content_length=5 * 1024 * 1024,
         )
+
+
+def test_validate_http_url_rejects_control_characters_and_whitespace():
+    for hostile in [
+        "https://example.com/test\r\nInjected: True",
+        "https://example.com/test\n",
+        "https://example.com/test\0",
+        "https://example.com/test\t.stl",
+        "https://example.com/test file.stl",
+    ]:
+        assert V._is_http_url(hostile) is False
+        with pytest.raises(BambuError) as exc_info:
+            V._validate_http_url_or_exit(hostile)
+        assert "control characters" in str(exc_info.value) or "whitespace" in str(exc_info.value)

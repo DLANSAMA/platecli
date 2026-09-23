@@ -74,7 +74,7 @@ jobs:
       - name: Pytest with coverage
         run: |
           uv pip install '.[test]'
-          python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=86
+          python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=90
       - name: Syntax smoke
         # Auto-discovers bambu_cli/**/*.py (see scripts/syntax_smoke.py).
         run: python scripts/syntax_smoke.py
@@ -176,8 +176,8 @@ jobs:
         #
         # Pinned to 3.12 on purpose. The generator needs 3.10+ to evaluate the
         # contracts' `X | None` annotations, and pydantic is only installed
-        # above that floor (see the marker in pyproject). The package itself
-        # still runs on 3.9 — that leg is covered by the test matrix.
+        # above that floor (see the marker in pyproject). The package requires
+        # Python >=3.10 — that floor is covered by the test matrix.
         run: uv run --python 3.12 --with pydantic python scripts/gen_schemas.py --check
       - name: layer boundaries (blocking)
         # Directories alone never held: protocols/, slicer/ and download/ already

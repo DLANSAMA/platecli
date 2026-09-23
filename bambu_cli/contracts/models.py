@@ -69,22 +69,29 @@ class FilamentSettings:
 
 @dataclass(frozen=True)
 class AmsTray:
-    slot: float | None = None
-    active: bool | None = None
+    slot: int | None = None
+    type: str | None = None
+    color: str | None = None
+    remain: int | None = None
     empty: bool | None = None
+    active: bool | None = None
 
 
 @dataclass(frozen=True)
 class AmsUnit:
-    id: float | None = None
-    humidity: float | None = None
+    id: int | None = None
+    humidity: int | None = None
     temp: float | None = None
     trays: list[AmsTray] | None = None
 
 
 @dataclass(frozen=True)
 class AmsState:
+    keep_none: ClassVar[frozenset[str]] = frozenset({"external_tray"})
+
+    active_tray: int | None = None
     units: list[AmsUnit] | None = None
+    external_tray: AmsTray | None = None
 
 
 @dataclass(frozen=True)
@@ -101,7 +108,6 @@ class PrinterState:
     wifi_signal: str | None = None
     sw_ver: str | None = None
     hw_ver: str | None = None
-    ams: AmsState | None = spec(default=None, description="Normalised AMS state (present when AMS is attached).")
 
 
 # ---------------------------------------------------------------------------
@@ -171,9 +177,9 @@ class Status(Contract):
         ),
         requires_keys=("gcode_state", "mc_percent", "bed_temper", "nozzle_temper"),
     )
-    ams: dict[str, Any] | None = spec(
+    ams: AmsState | None = spec(
         default=None,
-        description="Normalised AMS trays for --ams-mapping; null when the printer has no AMS.",
+        description="Normalised AMS trays and external spool for --ams-mapping; null when the printer has no AMS.",
     )
 
 
@@ -297,6 +303,7 @@ class Print(Contract):
     printed: bool | None = None
     dry_run: bool | None = None
     next_command: list[str] | None = None
+    plate: int | None = spec(default=None, description="Plate of the 3MF sent to print (Metadata/plate_<n>.gcode).")
 
 
 @dataclass(frozen=True)
@@ -503,6 +510,7 @@ class JobOk(Contract):
     print_started: bool | None = None
     dry_run: bool | None = None
     copies_ignored: bool | None = None
+    plate: int | None = spec(default=None, description="Plate of a pre-sliced 3MF chosen for printing.")
 
 
 @dataclass(frozen=True)

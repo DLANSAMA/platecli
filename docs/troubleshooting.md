@@ -428,7 +428,10 @@ alongside the decimal one because Bambu documents them in hex.
 `plate download` and `plate job` are SSRF-hardened: they resolve the URL and
 refuse any address that is not globally routable (loopback, RFC1918, link-local).
 So pointing `plate` at a model on your own NAS or a LAN web server is blocked by
-default, with an error saying no safe or reachable IP addresses were found.
+default: the error says the host "resolves only to private or local addresses",
+names them, and exits `5` with `failed_step: validate` (a refusal, not a network
+failure, so retrying will not help). With `--json` the envelope carries
+`blocked_addresses`.
 
 That's intentional. Opt in per invocation:
 
@@ -506,7 +509,11 @@ always prints the path actually in use.
 
 There is no `plate config set`; `plate config` only supports `show` and
 `validate`. Change settings by re-running `plate setup` (it accepts every value
-as a flag for non-interactive use) or by editing `config.json` directly.
+as a flag for non-interactive use) or by editing `config.json` directly. With a
+config already present, `plate setup` updates only the values you pass and keeps
+the rest; the access code, certificate pin, address and model are kept only
+when `--serial` is unchanged, so a second printer never inherits the first
+one's pin or code.
 
 ## Missing dependency: paho-mqtt
 
@@ -589,7 +596,10 @@ plate slice --list-settings
 
 If that prints nothing, OrcaSlicer is not set up yet — see
 [OrcaSlicer or its BBL profiles were not found](#orcaslicer-or-its-bbl-profiles-were-not-found).
-Overrides still work in the meantime; unknown keys are warn-but-pass.
+Overrides still work in the meantime; unknown keys are warn-but-pass. Three kinds
+are always refused: G-code and script settings, printer (machine) settings such as
+`printable_area` or `retraction_length` (use `--set-filament filament_retraction_length=…`
+instead), and temperatures outside the safety bounds.
 
 ## Nothing happens when I run a print command
 

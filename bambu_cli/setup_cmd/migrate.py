@@ -33,6 +33,20 @@ def _secure_write_json_no_secret_backup(path, config):
     _scrub_config_backup(path)
 
 
+def _access_code_file_problem(path):
+    """Why the access-code file at ``path`` is not usable, or None."""
+    from bambu_cli.config import _access_code_value_problem
+
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            value = f.read().strip()
+    except OSError as exc:
+        return f"access_code_file {_display_path(path)} could not be read ({_exception_for_message(exc)})"
+    if _access_code_value_problem(value):
+        return f"access_code_file {_display_path(path)} does not hold a real access code"
+    return None
+
+
 def migrate_access_code(config_path=None, access_code_file_path=None):
     """Move an inline ``access_code`` in config.json into a separate,
     0600-protected ``access_code_file`` and remove the inline value.
@@ -64,13 +78,35 @@ def migrate_access_code(config_path=None, access_code_file_path=None):
                 "config_path": _display_path(expanded_config),
                 "access_code_file": _display_path(_expand_path(existing_file)),
             }
+        expanded_existing = _expand_path(existing_file)
+        if not os.path.exists(expanded_existing):
+            # The configured file was never written: the inline value is the only
+            # working copy, so move it there rather than deleting it.
+            _secure_write_text(expanded_existing, str(inline_code).rstrip("\n") + "\n")
+            del config["access_code"]
+            _secure_write_json_no_secret_backup(path, config)
+            return {
+                "status": "migrated",
+                "reason": "Wrote the inline access_code to the configured access_code_file, which did not exist.",
+                "config_path": _display_path(expanded_config),
+                "access_code_file": _display_path(expanded_existing),
+            }
+        problem = _access_code_file_problem(expanded_existing)
+        if problem:
+            # Deleting the inline key here would leave no usable code at all.
+            return {
+                "status": "error",
+                "reason": f"{problem}; the inline access_code was kept. Fix the file, then run the migration again.",
+                "config_path": _display_path(expanded_config),
+                "access_code_file": _display_path(expanded_existing),
+            }
         del config["access_code"]
         _secure_write_json_no_secret_backup(path, config)
         return {
             "status": "migrated",
             "reason": "Removed stale inline access_code; access_code_file was already configured.",
             "config_path": _display_path(expanded_config),
-            "access_code_file": _display_path(_expand_path(existing_file)),
+            "access_code_file": _display_path(expanded_existing),
         }
 
     if not inline_code:

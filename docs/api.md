@@ -77,6 +77,13 @@ destroys printer-side data — `print`, `stop`, `pause`, `resume`, `gcode`,
 without `--confirm` is **not** a refusal: the download/slice/upload really
 happened, so it exits `0` with `"status": "uploaded_not_printed"`.
 
+**Sent but unacknowledged:** `gcode`, `stop`, `pause`, `resume` and `light` publish
+their command once. If the printer's MQTT acknowledgement does not arrive in time,
+the command may still have run, so it is never re-sent automatically: the error
+exits `6` with `failed_step: "mqtt"`, `"sent": true`, `"acknowledged": false` and
+`next_command: ["status", "--json"]`. Check the printer state before sending it
+again. An exit `2` with `"sent": false` still means nothing reached the printer.
+
 Domain code raises `BambuError` / `abort()`; only `cli.main()` calls `sys.exit`.
 
 When a print fails with a printer-reported code, the error envelope carries both
@@ -259,6 +266,11 @@ plate slice --list-settings | grep layer_height
 plate slice --list-settings > settings.txt
 ```
 
+The listing omits G-code and script settings, because `--set`, `--set-filament` and
+`--settings-json` refuse them (exit 5, `failed_step: validate`), along with printer
+(machine) settings such as `printable_area` and any temperature outside the safety
+bounds or not written as plain numbers.
+
 ### `download`
 
 Schema: [`download.json`](schemas/download.json).
@@ -309,6 +321,13 @@ Failure: [`job_error.json`](schemas/job_error.json).
 
 Print start requires `--confirm`. Without it, download → slice → upload still runs and the command exits `0` with `"status": "uploaded_not_printed"`; only the print step is withheld.
 
+For a pre-sliced 3MF, `job` reads which plates carry G-code and prints plate 1,
+or the only sliced plate when plate 1 is not sliced; `--plate N` chooses one.
+The summary reports it as `plate`, and a `next_command` carries `--plate`. A 3MF
+with no sliced plate is refused before upload (exit `3`, `failed_step:
+validate`), as is a `--plate` that is not sliced (exit `5`). `--plate` other
+than 1 is refused for a model that `job` slices itself.
+
 ### `go`
 
 `go` is the interactive guided-print wizard and has **no machine contract**: it
@@ -356,6 +375,16 @@ Without `--confirm` (schema: [`print.json`](schemas/print.json)):
   "next_command": ["print", "cube.gcode.3mf", "--confirm", "--json"]
 }
 ```
+
+`--plate N` prints `Metadata/plate_N.gcode` of the 3MF (default plate 1); the
+success payload reports it as `plate`.
+
+**Plain `.gcode` files are not verified on hardware.** `print` starts every file
+with the `project_file` command, which names a plate inside a 3MF. Whether Bambu
+firmware starts a plain `.gcode` that way (or through the separate `gcode_file`
+command) has not been confirmed on a printer, so `print` warns before sending one.
+Prefer a sliced `.3mf`; an uploaded `.gcode` can always be started from the
+printer's screen.
 
 ### `delete`
 

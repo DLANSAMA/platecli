@@ -26,6 +26,89 @@ _dns_cache_lock = threading.Lock()
 # chain redirects up to urllib's built-in default of 10.
 MAX_DOWNLOAD_REDIRECT_HOPS = 5
 
+# Request headers that carry credentials for the host they were sent to. They
+# are dropped when a redirect lands on a different host. Nothing in platecli
+# sets them today; the guard is here so the first caller that does cannot leak
+# a token to whatever host a redirect happens to name. Capitalized the way
+# urllib.request.Request stores header names.
+CROSS_HOST_STRIPPED_HEADERS = ("Authorization", "Proxy-authorization", "Cookie")
+
+_IPV6_COMPAT_NET = ipaddress.IPv6Network("::/96")
+# RFC 6052 well-known NAT64 prefix. It sits inside the reserved ::/8 block, so
+# without an explicit unwrap every download on a DNS64 (IPv6-only) network
+# would be refused as "reserved".
+_IPV6_NAT64_NET = ipaddress.IPv6Network("64:ff9b::/96")
+
+
+def _is_safe_ip(
+    ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    allow_private: bool = False,
+) -> bool:
+    """Validate whether an IP is safe to connect to for download requests.
+
+    Multicast (IPv4 and IPv6) is unconditionally blocked regardless of
+    allow_private: TCP cannot connect to multicast addresses and doing so can
+    trigger amplification / network errors.
+
+    When allow_private is False (default):
+    - Rejects private, loopback, link-local, unspecified, and reserved addresses.
+    - Unwraps IPv4-mapped IPv6 (::ffff:0:0/96) and checks the embedded IPv4.
+    - Unwraps deprecated IPv4-compatible IPv6 (::/96) and checks the embedded IPv4.
+    - Unwraps 6to4 (2002::/16) and checks the embedded IPv4.
+    - Unwraps NAT64 (64:ff9b::/96) and checks the embedded IPv4, so public
+      hosts stay reachable on DNS64 networks while private ones are refused.
+    - Rejects deprecated site-local IPv6 (fec0::/10), which stdlib calls global.
+    """
+    if ip_obj.is_multicast:
+        return False
+
+    if isinstance(ip_obj, ipaddress.IPv6Address):
+        if ip_obj.ipv4_mapped:
+            return _is_safe_ip(ip_obj.ipv4_mapped, allow_private=allow_private)
+        if ip_obj in _IPV6_COMPAT_NET or ip_obj in _IPV6_NAT64_NET:
+            return _is_safe_ip(ipaddress.IPv4Address(int(ip_obj) & 0xFFFFFFFF), allow_private=allow_private)
+        sixtofour = getattr(ip_obj, "sixtofour", None)
+        if sixtofour is not None and not _is_safe_ip(sixtofour, allow_private=allow_private):
+            return False
+
+        if allow_private:
+            return True
+
+        if (
+            ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_site_local
+            or ip_obj.is_unspecified
+            or ip_obj.is_reserved
+        ):
+            return False
+        return bool(ip_obj.is_global and not ip_obj.is_private)
+
+    # IPv4Address
+    if allow_private:
+        return True
+
+    if ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_private or ip_obj.is_reserved or ip_obj.is_unspecified:
+        return False
+    return bool(ip_obj.is_global)
+
+
+class BlockedAddressError(urllib.error.URLError):
+    """Every address ``host`` resolved to is private, local or reserved.
+
+    A refusal by the SSRF guard, not a network failure: retrying cannot help,
+    ``--allow-private-ips`` can. Distinct from the generic URLError raised when
+    public addresses exist but none of them answered.
+    """
+
+    def __init__(self, host, addresses):
+        self.host = host
+        self.addresses = list(addresses)
+        super().__init__(
+            f"No safe/reachable IP addresses found for {host}: it resolves only to non-public "
+            f"addresses ({', '.join(self.addresses)})"
+        )
+
 
 def _get_safe_connection(host, port, timeout, source_address):
     """Perform DNS resolution and validate IP is not internal/reserved."""
@@ -53,19 +136,22 @@ def _get_safe_connection(host, port, timeout, source_address):
         except socket.gaierror as e:
             raise urllib.error.URLError(f"DNS resolution failed for {host}: {e}") from e
 
+    refused: list[str] = []
+    tried_public = False
     for res in addr_info:
         ip = res[4][0]
         try:
             ip_obj = ipaddress.ip_address(ip)
-            if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped:
-                ip_obj = ip_obj.ipv4_mapped
             from bambu_cli.context import current_settings
 
-            if not current_settings().allow_private_ips and not ip_obj.is_global:
-                logger.warning(f"Security Error: Refusing connection to non-public IP ({ip}) for {host}")
+            if not _is_safe_ip(ip_obj, allow_private=current_settings().allow_private_ips):
+                logger.warning(f"Refusing connection to non-public IP ({ip}) for {host}")
+                if str(ip) not in refused:
+                    refused.append(str(ip))
                 continue
         except ValueError:
             continue
+        tried_public = True
 
         # Connect directly to the validated IP to prevent TOCTOU/DNS rebinding
         try:
@@ -78,6 +164,8 @@ def _get_safe_connection(host, port, timeout, source_address):
     with _dns_cache_lock:
         _dns_cache.pop(cache_key, None)
 
+    if refused and not tried_public:
+        raise BlockedAddressError(host, refused)
     raise urllib.error.URLError(f"Could not connect to {host}: No safe/reachable IP addresses found")
 
 
@@ -122,6 +210,16 @@ class SafeHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         hop_count = getattr(req, "_bambu_redirect_hops", 0) + 1
         if hop_count > MAX_DOWNLOAD_REDIRECT_HOPS:
+            # Close the intermediate response ourselves before bailing out.
+            # HTTPRedirectHandler.http_error_302 calls this method *first* and
+            # only reaches its own ``fp.read(); fp.close()`` afterwards, so
+            # raising here means nothing else ever closes fp -- the 3xx
+            # response's socket would be left for the garbage collector.
+            if fp is not None:
+                try:
+                    fp.close()
+                except Exception:
+                    pass
             raise urllib.error.URLError(
                 f"Too many redirects: exceeded the {MAX_DOWNLOAD_REDIRECT_HOPS}-hop "
                 f"limit while fetching {_redact_url_credentials(req.full_url)}"
@@ -129,6 +227,17 @@ class SafeHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
         new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new_req is not None:
             new_req._bambu_redirect_hops = hop_count  # type: ignore[attr-defined]
+            if _host_of(newurl) != _host_of(req.full_url):
+                # urllib copies every request header onto the redirected
+                # request, whatever host it names. Credentials scoped to the
+                # first host must not follow a redirect to a second one, and
+                # the User-Agent policy is per host (honest token for
+                # first-party API hosts, browser-shaped elsewhere), so re-pick
+                # it for the host we are actually about to talk to.
+                for name in CROSS_HOST_STRIPPED_HEADERS:
+                    new_req.remove_header(name)
+                if req.has_header("User-agent"):
+                    new_req.add_header("User-Agent", user_agent_for_url(newurl))
         return new_req
 
 
@@ -243,13 +352,27 @@ def _throttle_host(host, sleep=time.sleep) -> None:
     if not host:
         return
     with _last_request_lock:
-        previous = _last_request_at.get(host)
         now = time.monotonic()
+        if len(_last_request_at) >= 1000:
+            cutoff = now - 60.0
+            stale = [h for h, t in _last_request_at.items() if t <= cutoff]
+            for h in stale:
+                del _last_request_at[h]
+            if len(_last_request_at) >= 1000:
+                _last_request_at.clear()
+        previous = _last_request_at.get(host)
         wait = 0.0 if previous is None else MIN_HOST_REQUEST_INTERVAL - (now - previous)
         wait = max(wait, 0.0)
         _last_request_at[host] = now + wait
     if wait > 0:
-        sleep(min(wait, MIN_HOST_REQUEST_INTERVAL))
+        # Sleep the full computed wait. It can legitimately exceed
+        # MIN_HOST_REQUEST_INTERVAL: `previous` is a *scheduled* timestamp, so
+        # when calls queue up each one lands further in the future and the gap
+        # to close is correspondingly larger. Clamping to one interval made
+        # queued callers under-sleep and burst past the throttle. The upper
+        # bound that matters is MAX_RETRY_AFTER_WAIT, applied here so a
+        # pathological backlog still cannot park a caller indefinitely.
+        sleep(min(wait, MAX_RETRY_AFTER_WAIT))
 
 
 def _retry_after_seconds(err) -> float:
@@ -286,13 +409,30 @@ def polite_open(opener, req, timeout=None, sleep=time.sleep):
 
 
 def build_safe_opener():
-    """Build a urllib opener that only uses safe handlers and restricts schemes."""
+    """Build a urllib opener that only uses safe handlers and restricts schemes.
+
+    ``HTTPErrorProcessor`` is not optional. ``OpenerDirector`` is built by hand
+    here (rather than via ``build_opener``) so no unvetted handler sneaks in,
+    and that means every default handler must be added back deliberately. The
+    error processor is the one that routes a non-2xx response into
+    ``parent.error()`` -- which is what makes ``HTTPDefaultErrorHandler`` raise
+    ``HTTPError`` and what makes ``SafeHTTPRedirectHandler`` run at all.
+    Without it the opener silently returns 3xx/4xx/5xx responses as if they
+    were successful bodies: redirects are never followed, ``HTTPError`` is
+    never raised, and both the redirect hop cap and the 429/503 retry in
+    :func:`polite_open` become dead code. Regression-tested end to end (through
+    a live local server, not a mocked handler) in tests/test_netsafety_opener.py.
+    """
     opener = urllib.request.OpenerDirector()
     # Disable environment proxies so target IP validation cannot be bypassed by
-    # asking a proxy to fetch an internal/private address on our behalf.
+    # asking a proxy to fetch an internal/private address on our behalf. Note
+    # that an empty proxy map registers no *_open methods, so this handler adds
+    # nothing to the chain; env proxies are already absent because the chain is
+    # assembled by hand. It stays as an explicit statement of that intent.
     opener.add_handler(urllib.request.ProxyHandler({}))
     opener.add_handler(urllib.request.UnknownHandler())
     opener.add_handler(urllib.request.HTTPDefaultErrorHandler())
+    opener.add_handler(urllib.request.HTTPErrorProcessor())
     opener.add_handler(SafeHTTPRedirectHandler())
     opener.add_handler(SafeHTTPHandler())
     opener.add_handler(SafeHTTPSHandler())

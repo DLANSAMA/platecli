@@ -47,6 +47,7 @@ from bambu_cli.job.predict import (
 )
 from bambu_cli.job.steps import JobSteps
 from bambu_cli.job.support import (
+    _choose_plate,
     _emit_job_failure,
     _emit_job_ok,
     _exit_code_from_error,
@@ -374,6 +375,14 @@ def _run_job(ctx, args, steps=None):
 
         if _ext_would_slice(ext):
             summary["would_slice"] = True
+            if _namespace_get(args, "plate") not in (None, 1):
+                _job_fail(
+                    args,
+                    summary,
+                    "validate",
+                    EXIT_COMMAND_ERROR,
+                    "--plate only applies to a pre-sliced 3MF; a model platecli slices has a single plate (1).",
+                )
             predicted_remote_name = _predicted_sliced_remote_name(source_path, getattr(args, "copies", 1))
             if _safe_remote_name(predicted_remote_name) is None:
                 _job_fail(
@@ -444,6 +453,8 @@ def _run_job(ctx, args, steps=None):
                     f"Refusing to upload file with unsafe name: {_name_for_message(remote_candidate)!r}",
                 )
             summary["remote_name"] = remote_candidate
+            if ext == ".3mf":
+                summary["plate"] = _choose_plate(args, summary, source_path)
             if not _is_http_url(source) and getattr(args, "output", None):
                 logger.warning(
                     "⚠️  --output is only used when job/send downloads, extracts, or slices; ignoring it for a printer-ready local file."
@@ -529,7 +540,7 @@ def _run_job(ctx, args, steps=None):
             logger.info(f"✅ Job uploaded {remote_name}; print not started because --upload-only was set.")
             if getattr(args, "json", False):
                 summary["status"] = "uploaded"
-                summary["next_command"] = _print_next_command(args, remote_name)
+                summary["next_command"] = _print_next_command(args, remote_name, plate=summary.get("plate"))
                 _emit_job_ok(summary)
             return printable_path
 
@@ -537,7 +548,7 @@ def _run_job(ctx, args, steps=None):
             logger.warning(f"⚠️  Job uploaded {remote_name}, but print was not started. Re-run with --confirm to print.")
             if getattr(args, "json", False):
                 summary["status"] = "uploaded_not_printed"
-                summary["next_command"] = _print_next_command(args, remote_name)
+                summary["next_command"] = _print_next_command(args, remote_name, plate=summary.get("plate"))
                 _emit_job_ok(summary)
             return printable_path
 
@@ -554,6 +565,7 @@ def _run_job(ctx, args, steps=None):
                     timelapse=getattr(args, "timelapse", False),
                     skip_bed_leveling=getattr(args, "skip_bed_leveling", False),
                     skip_flow_cali=getattr(args, "skip_flow_cali", False),
+                    plate=summary.get("plate") or getattr(args, "plate", None),
                     json=False,
                 )
             )

@@ -46,11 +46,17 @@ def _normalize_url_input(value):
 
 
 def _is_http_url(value):
+    if any(ord(c) < 32 or ord(c) == 127 or c.isspace() for c in (value or "")):
+        return False
     parsed = urlparse(value)
     return parsed.scheme.lower() in ("http", "https") and bool(parsed.netloc)
 
 
 def _validate_http_url_or_exit(value):
+    if any(ord(c) < 32 or ord(c) == 127 or c.isspace() for c in (value or "")):
+        message = "Invalid URL: contains whitespace or control characters"
+        safe_log_error(message)
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
     parsed = urlparse(value)
     if parsed.scheme.lower() not in ("http", "https"):
         message = f"Invalid URL scheme: {parsed.scheme or 'none'}"

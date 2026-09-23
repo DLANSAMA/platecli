@@ -378,7 +378,7 @@ def test_guided_setup_mdns_discovery_error(tmp_path, monkeypatch):
             "192.168.1.100",  # manual IP fallback
             "03000A222",  # manual Serial fallback
             "12341234",  # access code
-            "",  # confirm model
+            "A1 mini",  # printer model: nothing detected on the manual path, so no default
             "",  # confirm nozzle
             "",  # access code file
         ]

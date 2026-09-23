@@ -2,6 +2,19 @@
 
 import os
 import zipfile
+import zlib
+
+# What zipfile raises for damaged compressed data behind intact headers. None of
+# these is a BadZipFile, so without this list they escaped as "Unexpected error".
+# lzma is optional in some Python builds; bz2 corruption surfaces as OSError,
+# which callers already report as an extract failure.
+_CORRUPT_DATA_ERRORS: tuple[type[BaseException], ...] = (zlib.error, EOFError)
+try:
+    import lzma
+
+    _CORRUPT_DATA_ERRORS += (lzma.LZMAError,)
+except ImportError:  # pragma: no cover -- lzma ships with CPython builds we support
+    pass
 from urllib.parse import unquote, urlparse
 
 from bambu_cli.argutils import namespace_get as _namespace_get
@@ -122,6 +135,8 @@ def _extract_zip_model(zip_path, outdir, args, *, noncolliding_path=None):
             return outpath, filename, member_filename, size
     except zipfile.BadZipFile as exc:
         raise ValueError("Downloaded ZIP archive is invalid or corrupt.") from exc
+    except _CORRUPT_DATA_ERRORS as exc:
+        raise ValueError(f"ZIP member data is corrupt and cannot be decompressed: {exc}") from exc
     except NotImplementedError as exc:
         # zipfile raises NotImplementedError("compression type N") for members it
         # can't decompress, e.g. Deflate64 (type 9) archives produced by Windows

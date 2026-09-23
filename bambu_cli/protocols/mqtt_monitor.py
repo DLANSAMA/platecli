@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import ssl
 import sys
 import threading
+import time
 
+from bambu_cli.constants import EXIT_NETWORK_ERROR
 from bambu_cli.contracts import StatusEvent
+from bambu_cli.errors import PrinterConnectionError
 from bambu_cli.logging_utils import logger
 from bambu_cli.protocols.mqtt_cmd import (
     TERMINAL_GCODE_STATES,
@@ -74,13 +78,19 @@ def monitor_status(args, printer):
     userdata: dict = {}
     client.user_data_set(userdata)
 
+    # Set once the broker accepted us (or a report arrived, which proves it).
+    connected = threading.Event()
+    refused_rc: list = [None]
+
     def on_connect(client, userdata, flags, rc, properties=None):
         if rc == 0:
+            connected.set()
             client.subscribe(f"device/{printer.serial}/report")
             push = json.dumps({"pushing": {"sequence_id": get_sequence_id(), "command": "pushall"}})
             client.publish(f"device/{printer.serial}/request", push)
         else:
             logger.error(f"Connection failed: rc={rc}")
+            refused_rc[0] = rc
             received_terminal.set()
 
     last_state = [None]
@@ -88,6 +98,7 @@ def monitor_status(args, printer):
     merged: dict = {}
 
     def on_message(client, userdata, msg):
+        connected.set()
         try:
             data = json.loads(msg.payload.decode("utf-8"))
             if isinstance(data, dict) and isinstance(data.get("print"), dict):
@@ -143,11 +154,27 @@ def monitor_status(args, printer):
     client.on_connect = on_connect
     client.on_message = on_message
 
+    # A broker that never answers CONNACK used to leave this loop waiting forever.
+    connect_timeout = float(getattr(printer, "mqtt_timeout", None) or 5.0)
     try:
-        _connect(printer, client)
+        try:
+            _connect(printer, client)
+        except (OSError, ssl.SSLError) as exc:
+            raise PrinterConnectionError(
+                f"Could not connect to the printer to monitor it: {exc}",
+                exit_code=EXIT_NETWORK_ERROR,
+                failed_step="mqtt",
+            ) from exc
         client.loop_start()
+        deadline = time.monotonic() + connect_timeout
         while not received_terminal.is_set():
-            received_terminal.wait(1.0)
+            received_terminal.wait(1.0 if connected.is_set() else 0.1)
+            if not connected.is_set() and not received_terminal.is_set() and time.monotonic() > deadline:
+                raise PrinterConnectionError(
+                    f"The printer did not accept the MQTT connection within {connect_timeout:g}s.",
+                    exit_code=EXIT_NETWORK_ERROR,
+                    failed_step="mqtt",
+                )
     except KeyboardInterrupt:
         logger.info("\n🛑 Monitor loop stopped by user.")
     finally:
@@ -164,3 +191,11 @@ def monitor_status(args, printer):
             client.disconnect()
         except Exception:
             pass
+    if refused_rc[0] is not None:
+        # Exit 0 with no events here used to be indistinguishable from success.
+        raise PrinterConnectionError(
+            f"The printer refused the MQTT connection (rc={refused_rc[0]}); check the access code "
+            "and that LAN mode is on.",
+            exit_code=EXIT_NETWORK_ERROR,
+            failed_step="mqtt",
+        )

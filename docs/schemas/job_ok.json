@@ -40,6 +40,10 @@
     },
     "copies_ignored": {
       "type": "boolean"
+    },
+    "plate": {
+      "description": "Plate of a pre-sliced 3MF chosen for printing.",
+      "type": "integer"
     }
   },
   "additionalProperties": true

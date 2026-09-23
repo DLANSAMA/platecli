@@ -176,7 +176,8 @@ def test_resolve_ip_does_not_cache_failure(monkeypatch):
 
     monkeypatch.setattr(utils.socket, "getaddrinfo", _ok)
     assert utils._resolve_ip("printer.local") == "10.0.0.5"
-    assert utils._RESOLVE_IP_CACHE.get("printer.local") == "10.0.0.5"
+    cached_ip, _stamp = utils._RESOLVE_IP_CACHE["printer.local"]  # (ip, monotonic timestamp)
+    assert cached_ip == "10.0.0.5"
     utils._RESOLVE_IP_CACHE.clear()
 
 

@@ -57,6 +57,18 @@ FORBIDDEN_LOCAL_ARTIFACT_SUFFIXES = {
     ".gcode",
 }
 
+# The project's published contact identity, and the ONLY exception this gate
+# makes. It is deliberately public: pyproject.toml puts the address in the
+# package metadata, PyPI renders it on the project page, and the README prints
+# it -- so flagging it would red CI over the one address that is supposed to be
+# there. A personal address is a different thing and still fails, in the tree
+# and in the release archives. Add to this tuple only for an address the project
+# intends to publish, never to silence a leak.
+PUBLISHED_AUTHOR_IDENTIFIERS = (
+    "reedworks.sc@gmail.com",
+    "Dylan Reed",
+)
+
 
 def local_identity_patterns():
     """Build local-identity patterns without storing a developer's identity in repo."""
@@ -142,6 +154,28 @@ def iter_files(include_dist=False):
     excluded_dirs = set(BASE_EXCLUDED_DIRS)
     if include_dist:
         excluded_dirs.discard("dist")
+
+    git_dir = ROOT / ".git"
+    if git_dir.exists():
+        import subprocess
+
+        try:
+            cmd = ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"]
+            out = subprocess.check_output(cmd, cwd=ROOT)
+            for raw_rel in out.split(b"\0"):
+                if not raw_rel:
+                    continue
+                rel = raw_rel.decode("utf-8", errors="replace")
+                path = ROOT / rel
+                if any(part in excluded_dirs for part in path.parts):
+                    continue
+                if path.is_symlink() or not path.is_file():
+                    continue
+                yield path
+            return
+        except (subprocess.SubprocessError, OSError):
+            pass
+
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = [name for name in dirnames if name not in excluded_dirs]
         for filename in filenames:
@@ -168,11 +202,39 @@ def check_forbidden_local_artifact(label, findings):
         findings.append(f"{label}: generated printer-ready file should not be committed")
 
 
+def published_identifier_spans(text):
+    """Character ranges covered by the project's published contact identity.
+
+    Returned as spans rather than exact strings so a *substring* match is exempt
+    too: a local-account-name pattern derived from a developer's git config can
+    match inside the published address or name, and that is the same deliberate
+    credit rather than a leak.
+    """
+    spans = []
+    lowered = text.lower()
+    for identifier in PUBLISHED_AUTHOR_IDENTIFIERS:
+        needle = identifier.lower()
+        start = lowered.find(needle)
+        while start != -1:
+            spans.append((start, start + len(needle)))
+            start = lowered.find(needle, start + 1)
+    return spans
+
+
+def _within_published_identifier(spans, match):
+    return any(start <= match.start() and match.end() <= end for start, end in spans)
+
+
 def scan_text(label, text, patterns, findings):
+    spans = published_identifier_spans(text)
+    label_spans = published_identifier_spans(label)
     for pattern_label, pattern in patterns.items():
-        if pattern.search(label):
+        label_match = pattern.search(label)
+        if label_match and not _within_published_identifier(label_spans, label_match):
             findings.append(f"{label}: path looks like {pattern_label}")
         for match in pattern.finditer(text):
+            if _within_published_identifier(spans, match):
+                continue
             line = text.count("\n", 0, match.start()) + 1
             findings.append(f"{label}:{line}: content looks like {pattern_label}")
 

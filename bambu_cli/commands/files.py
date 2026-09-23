@@ -5,7 +5,7 @@ import sys
 
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.config import get_upload_timeout
-from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR
+from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR, EXIT_NETWORK_ERROR, EXIT_PRINTER_ERROR
 from bambu_cli.context import RuntimeContext
 from bambu_cli.download.naming import (
     _is_print_ready_name,
@@ -21,6 +21,37 @@ from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.slicer import _directory_input_message, _is_directory_input
 from bambu_cli.utils import emit_json
+
+# gcode_state values for which the printer is using its current file.
+_ACTIVE_GCODE_STATES = frozenset({"PREPARE", "RUNNING", "PAUSE", "SLICING"})
+
+
+def _print_name_key(name):
+    """``model.gcode.3mf`` / ``model.3mf`` / ``model`` all compare as ``model``."""
+    base = _portable_basename(str(name or "")).lower()
+    for suffix in (".3mf", ".gcode"):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
+    return base
+
+
+def _printing_this_file(printer, filename):
+    """True when the printer reports an active print of ``filename``.
+
+    ``upload_file`` deletes the remote file before storing the new one, so an
+    upload with the name of the running print pulls the file out from under
+    the printer (what the firmware does then is unverified). Best effort: a
+    status query that fails returns False and the upload goes ahead.
+    """
+    try:
+        data = printer.status(retries=0, require_complete=False)
+    except Exception as exc:  # noqa: BLE001 -- a probe must never block the upload
+        logger.debug(f"Could not check the printer's current job before upload: {exc}")
+        return False
+    if not isinstance(data, dict) or str(data.get("gcode_state") or "").upper() not in _ACTIVE_GCODE_STATES:
+        return False
+    target = _print_name_key(filename)
+    return target in {_print_name_key(data.get("subtask_name")), _print_name_key(data.get("gcode_file"))}
 
 
 def cmd_upload(args, ctx=None):
@@ -134,9 +165,16 @@ def cmd_upload(args, ctx=None):
             )
         return filename
 
-    logger.info(f"📤 Uploading {filename} ({filesize // 1024}KB)...")
-
     printer = ctx.printer()
+    if _printing_this_file(printer, filename):
+        abort(
+            f"The printer is printing {filename} right now; uploading would replace that file mid-print. "
+            "Wait for the print to finish, or upload under a different name.",
+            exit_code=EXIT_PRINTER_ERROR,
+            failed_step="upload",
+            extra={"file": filepath, "remote_name": filename},
+        )
+    logger.info(f"📤 Uploading {filename} ({filesize // 1024}KB)...")
 
     progress = None
     task_id = None

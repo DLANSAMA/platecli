@@ -1,21 +1,64 @@
-"""Sliced .3mf validation and slice-result finalization."""
-
 from __future__ import annotations
 
 import argparse
 import os
 import subprocess
 import zipfile
+from enum import Enum, auto
 
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
-from bambu_cli.errors import abort
+from bambu_cli.errors import FileError, SliceError
 from bambu_cli.fsutil import _remove_partial_file
 from bambu_cli.logging_utils import logger, safe_log_error
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
-from bambu_cli.utils import emit_json, emit_json_error
+from bambu_cli.utils import emit_json
+
+
+class SliceOutcome(Enum):
+    SUCCESS = auto()
+    BENIGN_GL_WARNING = auto()
+    STALE_OUTPUT = auto()
+    EMPTY_OUTPUT = auto()
+    CORRUPT_3MF = auto()
+    SLICER_ERROR = auto()
+
+
+def _classify_slice_result(
+    returncode: int,
+    stdout_stderr: str,
+    fresh: bool,
+    file_exists: bool,
+    file_size: int,
+    is_valid_3mf: bool,
+) -> SliceOutcome:
+    """Pure classifier for OrcaSlicer execution outcome.
+
+    Evaluates return code, process output text, freshness, and file validity
+    to categorize the slice outcome into a discrete SliceOutcome enum.
+    """
+    if file_exists and not fresh:
+        return SliceOutcome.STALE_OUTPUT
+
+    blob = (stdout_stderr or "").lower()
+    gl_noise = any(k in blob for k in ("glfw", "glew", "init opengl failed", "skip thumbnail"))
+    real_err = ("nothing to be sliced" in blob) or ("slicing error" in blob)
+
+    if returncode != 0:
+        if file_exists and fresh and file_size > 0 and gl_noise and not real_err and is_valid_3mf:
+            return SliceOutcome.BENIGN_GL_WARNING
+        return SliceOutcome.SLICER_ERROR
+
+    # returncode == 0
+    if not file_exists:
+        return SliceOutcome.SLICER_ERROR
+    if file_size <= 0:
+        return SliceOutcome.EMPTY_OUTPUT
+    if not is_valid_3mf:
+        return SliceOutcome.CORRUPT_3MF
+    return SliceOutcome.SUCCESS
 
 
 def _is_valid_sliced_3mf(path: str) -> bool:
@@ -81,95 +124,69 @@ def _finalize_slice(
     pre_snapshot: tuple[bool, float, int] | None = None,
 ) -> str:
     """Evaluate the OrcaSlicer result, emit success/error output, and return the .3mf path."""
-
-    # A pre-existing *_sliced.3mf at outpath that this run did NOT rewrite must
-    # never be accepted as fresh output — otherwise an OrcaSlicer failure whose
-    # message lacks the known error markers would "succeed" with a stale artifact
-    # (uploadable/printable). Require the file to be newly written this run.
     _fresh = _was_written_this_run(outpath, pre_snapshot)
-
-    # OrcaSlicer can exit non-zero on a headless GL/thumbnail step even when the slice
-    # itself succeeded and a valid .3mf was written. Treat that specific case as success
-    # only when the output is a real, non-corrupt 3MF package (not truncated garbage).
-    _benign_rc = False
-    if result is not None and result.returncode != 0 and _fresh and os.path.exists(outpath):
+    file_exists = os.path.exists(outpath)
+    file_size = 0
+    if file_exists:
         try:
-            _ok_size = os.path.getsize(outpath) > 0
-        except OSError:
-            _ok_size = False
-        _blob = ((result.stdout or "") + (result.stderr or "")).lower()
-        _gl_noise = any(k in _blob for k in ("glfw", "glew", "init opengl failed", "skip thumbnail"))
-        _real_err = ("nothing to be sliced" in _blob) or ("slicing error" in _blob)
-        _benign_rc = _ok_size and _gl_noise and not _real_err and _is_valid_sliced_3mf(outpath)
-        if _benign_rc:
+            file_size = os.path.getsize(outpath)
+        except OSError as exc:
+            message = f"Could not read sliced output file: {_exception_for_message(exc)}"
+            raise FileError(
+                message,
+                exit_code=EXIT_FILE_ERROR,
+                failed_step="slicer",
+                extra={"file": filepath, "output": outpath},
+            ) from exc
+
+    is_valid = _is_valid_sliced_3mf(outpath) if file_exists and file_size > 0 else False
+    rc = result.returncode if result is not None else -1
+    stdout_stderr = ((result.stdout or "") + (result.stderr or "")) if result is not None else ""
+
+    outcome = _classify_slice_result(
+        returncode=rc,
+        stdout_stderr=stdout_stderr,
+        fresh=_fresh,
+        file_exists=file_exists,
+        file_size=file_size,
+        is_valid_3mf=is_valid,
+    )
+
+    if outcome == SliceOutcome.STALE_OUTPUT:
+        message = f"Slicing did not write a new output file; refusing to reuse the stale {_path_for_message(outpath)}"
+        raise SliceError(
+            message,
+            exit_code=EXIT_COMMAND_ERROR,
+            failed_step="slicer",
+            extra={"file": filepath, "output": outpath, "returncode": rc},
+        )
+
+    if outcome == SliceOutcome.EMPTY_OUTPUT:
+        _remove_partial_file(outpath)
+        message = f"Slicing produced an empty output file: {_path_for_message(outpath)}"
+        raise FileError(
+            message,
+            exit_code=EXIT_FILE_ERROR,
+            failed_step="slicer",
+            extra={"file": filepath, "output": outpath, "bytes": file_size},
+        )
+
+    if outcome == SliceOutcome.CORRUPT_3MF:
+        _remove_partial_file(outpath)
+        message = f"Slicing produced a corrupt or incomplete .3mf: {_path_for_message(outpath)}"
+        raise FileError(
+            message,
+            exit_code=EXIT_FILE_ERROR,
+            failed_step="slicer",
+            extra={"file": filepath, "output": outpath, "bytes": file_size},
+        )
+
+    if outcome in (SliceOutcome.SUCCESS, SliceOutcome.BENIGN_GL_WARNING):
+        if outcome == SliceOutcome.BENIGN_GL_WARNING:
             logger.warning(
                 "   OrcaSlicer exited non-zero on a headless GL/thumbnail step, but a valid .3mf was produced — continuing."
             )
-    # Reject a pre-existing output that this run did not rewrite. Without this,
-    # rc==0-with-no-write (OrcaSlicer exits 0 but never exports over an old file)
-    # or a benign-GL non-zero exit would accept a STALE *_sliced.3mf as fresh.
-    if result is not None and os.path.exists(outpath) and not _fresh:
-        message = f"Slicing did not write a new output file; refusing to reuse the stale {_path_for_message(outpath)}"
-        emit_json_error(
-            args,
-            "slice",
-            EXIT_COMMAND_ERROR,
-            message,
-            failed_step="slicer",
-            file=filepath,
-            output=outpath,
-            returncode=(result.returncode if result is not None else -1),
-        )
-        safe_log_error(message)
-        abort("", exit_code=EXIT_COMMAND_ERROR)
-    if result is not None and os.path.exists(outpath) and _fresh and (result.returncode == 0 or _benign_rc):
-        try:
-            size = os.path.getsize(outpath)
-        except OSError as exc:
-            message = f"Could not read sliced output file: {_exception_for_message(exc)}"
-            emit_json_error(
-                args,
-                "slice",
-                EXIT_FILE_ERROR,
-                message,
-                failed_step="slicer",
-                file=filepath,
-                output=outpath,
-            )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_FILE_ERROR)
-        if size <= 0:
-            _remove_partial_file(outpath)
-            message = f"Slicing produced an empty output file: {_path_for_message(outpath)}"
-            emit_json_error(
-                args,
-                "slice",
-                EXIT_FILE_ERROR,
-                message,
-                failed_step="slicer",
-                file=filepath,
-                output=outpath,
-                bytes=size,
-            )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_FILE_ERROR)
-        # Zero returncode also requires a real 3MF — do not trust size alone.
-        if not _is_valid_sliced_3mf(outpath):
-            _remove_partial_file(outpath)
-            message = f"Slicing produced a corrupt or incomplete .3mf: {_path_for_message(outpath)}"
-            emit_json_error(
-                args,
-                "slice",
-                EXIT_FILE_ERROR,
-                message,
-                failed_step="slicer",
-                file=filepath,
-                output=outpath,
-                bytes=size,
-            )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_FILE_ERROR)
-        logger.info(f"✅ Sliced: {_path_for_message(outpath)} ({size // 1024}KB)")
+        logger.info(f"✅ Sliced: {_path_for_message(outpath)} ({file_size // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
             from bambu_cli.contracts import Slice
 
@@ -180,33 +197,30 @@ def _finalize_slice(
                     file=_expand_path(args.file),
                     path=outpath,
                     filename=os.path.basename(outpath),
-                    bytes=size,
+                    bytes=file_size,
                     step_converted=step_converted,
                 )
             )
         return outpath
-    else:
-        rc = result.returncode if result is not None else -1
-        message = f"Slicing failed (RC={rc})"
-        safe_log_error(message)
-        all_output = ""
-        if result is not None:
-            all_output = (result.stdout or "") + (result.stderr or "")
-        error_found = False
-        for line in all_output.split("\n"):
-            lower_line = line.lower()
-            if "[error]" in lower_line or "nothing to be sliced" in lower_line or "error:" in lower_line:
-                msg = line.split("] ")[-1].strip() if "] " in line else line.strip()
-                if msg:
-                    safe_log_error(f"   {msg}")
-                    error_found = True
 
-        if not error_found:
-            logger.info("   Check OrcaSlicer profiles or syntax.")
-        abort(
-            message,
-            exit_code=EXIT_COMMAND_ERROR,
-            failed_step="slicer",
-            extra={"file": filepath, "output": outpath, "returncode": rc},
-            command="slice",
-        )
+    # outcome == SliceOutcome.SLICER_ERROR
+    message = f"Slicing failed (RC={rc})"
+    safe_log_error(message)
+    error_found = False
+    for line in stdout_stderr.split("\n"):
+        lower_line = line.lower()
+        if "[error]" in lower_line or "nothing to be sliced" in lower_line or "error:" in lower_line:
+            msg = line.split("] ")[-1].strip() if "] " in line else line.strip()
+            if msg:
+                safe_log_error(f"   {msg}")
+                error_found = True
+
+    if not error_found:
+        logger.info("   Check OrcaSlicer profiles or syntax.")
+    raise SliceError(
+        message,
+        exit_code=EXIT_COMMAND_ERROR,
+        failed_step="slicer",
+        extra={"file": filepath, "output": outpath, "returncode": rc},
+        logged=True,
+    )

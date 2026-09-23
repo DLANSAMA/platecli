@@ -2,6 +2,7 @@
 
 from tests.bambu_test_base import *  # noqa: F401,F403
 
+
 class TestBambuCmdPrint(unittest.TestCase):
     @patch("bambu_cli.protocols.mqtt.get_status")
     @patch("bambu_cli.logging_utils._BACKEND")
@@ -236,6 +237,12 @@ class TestBambuCmdPrint(unittest.TestCase):
         cmd_print(args)
 
         mock_generate.assert_called_once_with(
-            "test.gcode", use_ams=False, ams_mapping=None, timelapse=False, bed_leveling=False, flow_cali=False
+            "test.gcode",
+            use_ams=False,
+            ams_mapping=None,
+            timelapse=False,
+            bed_leveling=False,
+            flow_cali=False,
+            plate=1,
         )
         mock_execute.assert_called_once_with(ANY, "test_payload", "test.gcode", dry_run=False)

@@ -248,6 +248,14 @@ class MqttSession:
             for attempt in range(retries + 1):
                 try:
                     if not self.ensure_connected(timeout):
+                        failed_broker = getattr(self, "_connect_failed", False)
+                        self._reset_client()
+                        if failed_broker:
+                            return None
+                        if attempt < retries:
+                            logger.warning(f"MQTT connection timeout on attempt {attempt + 1}. Retrying...")
+                            sleeper(2**attempt)
+                            continue
                         return None
                     # Background reports may already have assembled a usable
                     # snapshot. Request a refresh, but do not block or raise
@@ -295,38 +303,61 @@ class MqttSession:
             return self._ready_snapshot(require_complete)
 
     def send_command(self, payload: str, timeout: float, retries: int = 2) -> bool:
+        """Publish ``payload`` once and wait for its PUBACK.
+
+        Retries only cover attempts where nothing was published yet (no
+        connection). Once the command has gone out, a missing acknowledgement
+        raises ``CommandUnconfirmed`` instead of publishing it again: the
+        printer may already have run it.
+        """
         sleeper = _sleep_fn(self._sleep)
         with self._op_lock:
-            for attempt in range(retries + 1):
-                try:
-                    with self._state_lock:
-                        self._pending_payload = payload
-                        self._command_issued = False
-                    self._publish_ok = False
-                    self._publish_event = threading.Event()
-                    if not self.ensure_connected(timeout):
-                        with self._state_lock:
-                            self._pending_payload = None
-                        return False
-                    self._issue_pending()
-                    if self._publish_event.wait(timeout):
-                        ok = self._publish_ok
-                        with self._state_lock:
-                            self._pending_payload = None
-                        return ok
+            with self._state_lock:
+                self._pending_payload = payload
+                # Reset once per command, not per attempt: this is what stops a
+                # retry (or a reconnect's on_connect) from re-issuing it.
+                self._command_issued = False
+            try:
+                for attempt in range(retries + 1):
+                    try:
+                        self._publish_ok = False
+                        self._publish_event = threading.Event()
+                        if not self.ensure_connected(timeout):
+                            failed_broker = getattr(self, "_connect_failed", False)
+                            self._reset_client()
+                            if failed_broker:
+                                return False
+                            if attempt < retries:
+                                logger.warning(f"MQTT command connection timeout on attempt {attempt + 1}. Retrying...")
+                                sleeper(2**attempt)
+                                continue
+                            return False
+                        self._issue_pending()
+                        if self._publish_event.wait(timeout):
+                            return self._publish_ok
+                    except (OSError, ssl.SSLError) as exc:
+                        self._reset_client()
+                        if not self._command_issued:
+                            if attempt < retries:
+                                logger.warning(f"MQTT command attempt {attempt + 1} failed: {exc}. Retrying...")
+                                sleeper(2**attempt)
+                                continue
+                            logger.error(f"MQTT command error: {exc}")
+                            return False
+                    if self._command_issued:
+                        # A PUBACK that landed just after the wait timed out still counts.
+                        if self._publish_event.is_set():
+                            return self._publish_ok
+                        from bambu_cli.protocols.mqtt_cmd import _unconfirmed
+
+                        raise _unconfirmed(timeout)
                     if attempt < retries:
                         logger.warning(f"MQTT command timeout on attempt {attempt + 1}. Retrying...")
                         sleeper(2**attempt)
-                except (OSError, ssl.SSLError) as exc:
-                    self._reset_client()
-                    if attempt < retries:
-                        logger.warning(f"MQTT command attempt {attempt + 1} failed: {exc}. Retrying...")
-                        sleeper(2**attempt)
-                    else:
-                        logger.error(f"MQTT command error: {exc}")
-            with self._state_lock:
-                self._pending_payload = None
-            return False
+                return False
+            finally:
+                with self._state_lock:
+                    self._pending_payload = None
 
     def get_version(self, timeout: float, retries: int = 1) -> Any:
         sleeper = _sleep_fn(self._sleep)

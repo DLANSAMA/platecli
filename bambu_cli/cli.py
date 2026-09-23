@@ -1,5 +1,5 @@
+import ipaddress
 import logging
-import socket
 import sys
 
 import bambu_cli.printer as _printer  # noqa: F401 — registers the RuntimeContext printer factory
@@ -251,12 +251,22 @@ def main():
             logger.error(message)
             sys.exit(EXIT_CONFIG_ERROR)
         try:
-            socket.getaddrinfo(printer_ip, None)
-        except socket.gaierror:
-            message = f"Invalid printer_ip or hostname in config: {printer_ip}"
-            write_error_envelope(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
-            logger.error(message)
-            sys.exit(EXIT_CONFIG_ERROR)
+            ipaddress.ip_address(printer_ip)
+        except ValueError:
+            # Not an IP literal, so it has to resolve. _try_resolve_ip is the
+            # only bounded lookup available: it returns None on failure *or*
+            # timeout. Do not "confirm" its answer with a second
+            # socket.getaddrinfo — that call takes no timeout, so on a
+            # blackholed DNS server it blocks for the OS resolver's full retry
+            # budget, after the configured timeout has already elapsed.
+            from bambu_cli.config import get_network_timeout
+
+            timeout = get_network_timeout(args)
+            if utils._try_resolve_ip(printer_ip, timeout=timeout) is None:
+                message = f"Invalid printer_ip or hostname in config: {printer_ip}"
+                write_error_envelope(args, args.cmd or "main", EXIT_CONFIG_ERROR, message, failed_step="config")
+                logger.error(message)
+                sys.exit(EXIT_CONFIG_ERROR)
 
     _handler = _resolve_command(args.cmd)
     if _handler is not None:

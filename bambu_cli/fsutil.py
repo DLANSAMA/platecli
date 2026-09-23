@@ -25,10 +25,20 @@ import tempfile
 
 __all__ = [
     "_download_partial_path",
+    "_has_command_injection_chars",
     "_noncolliding_path",
     "_portable_basename",
     "_remove_partial_file",
 ]
+
+
+def _has_command_injection_chars(value):
+    """True if *value* contains CR, LF, or NUL.
+
+    FTP and MQTT command lines are delimited by these characters; embedding them
+    in a filename or G-code payload can smuggle a second command.
+    """
+    return any(c in (value or "") for c in ("\r", "\n", "\0"))
 
 
 def _portable_basename(path):

@@ -222,3 +222,67 @@ def test_preflight_unset_profiles_dir_is_actionable():
     assert "plate setup" in profiles["message"]
     assert "profiles_dir" in profiles["message"]
     assert "not found at ." not in profiles["message"]
+
+
+def test_preflight_placeholder_checks():
+    # IP placeholder
+    cfg_ip = {"printer_ip": "192.168.0.XXX", "serial": "SN123", "access_code": "x"}
+    with (
+        patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg_ip),
+        patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"),
+        patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p),
+    ):
+        checks = setup_cmd.collect_preflight_checks()
+    ip_check = [c for c in checks if c["name"] == "printer-ip"][0]
+    assert ip_check["status"] == "error"
+
+    # Serial placeholder
+    cfg_serial = {"printer_ip": "1.2.3.4", "serial": "YOUR_SERIAL", "access_code": "x"}
+    with (
+        patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg_serial),
+        patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"),
+        patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p),
+    ):
+        checks = setup_cmd.collect_preflight_checks()
+    serial_check = [c for c in checks if c["name"] == "serial"][0]
+    assert serial_check["status"] == "error"
+
+    # Missing access code and file
+    cfg_no_code = {"printer_ip": "1.2.3.4", "serial": "SN123"}
+    with (
+        patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg_no_code),
+        patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"),
+        patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p),
+    ):
+        checks = setup_cmd.collect_preflight_checks()
+    code_check = [c for c in checks if c["name"] == "access-code"][0]
+    assert code_check["status"] == "error"
+
+
+def test_preflight_access_code_file_errors():
+    # File not found
+    cfg_missing = {"printer_ip": "1.2.3.4", "serial": "SN123", "access_code_file": "/nonexistent/code"}
+    with (
+        patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg_missing),
+        patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"),
+        patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p),
+    ):
+        checks = setup_cmd.collect_preflight_checks()
+    code_check = [c for c in checks if c["name"] == "access-code"][0]
+    assert code_check["status"] == "error"
+    assert "not found" in code_check["message"]
+
+    # File open OSError
+    cfg_oserror = {"printer_ip": "1.2.3.4", "serial": "SN123", "access_code_file": "/tmp/code"}
+    with (
+        patch("bambu_cli.setup_cmd.preflight.load_config", return_value=cfg_oserror),
+        patch("bambu_cli.setup_cmd.preflight._config_path", return_value="/tmp/config.json"),
+        patch("bambu_cli.setup_cmd.preflight._display_path", side_effect=lambda p: p),
+        patch("os.path.exists", return_value=True),
+        patch("builtins.open", side_effect=OSError("Read error")),
+    ):
+        checks = setup_cmd.collect_preflight_checks()
+    code_check = [c for c in checks if c["name"] == "access-code"][0]
+    assert code_check["status"] == "error"
+    assert "could not be read" in code_check["message"]
+

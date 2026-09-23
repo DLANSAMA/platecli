@@ -63,6 +63,8 @@ def cmd_print(args, ctx=None):
             )
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
+    plate = getattr(args, "plate", None)
+    plate = plate if isinstance(plate, int) and plate >= 1 else 1
     payload = generate_print_payload(
         basename,
         use_ams=getattr(args, "use_ams", False),
@@ -70,11 +72,20 @@ def cmd_print(args, ctx=None):
         timelapse=getattr(args, "timelapse", False),
         bed_leveling=not getattr(args, "skip_bed_leveling", False),
         flow_cali=not getattr(args, "skip_flow_cali", False),
+        plate=plate,
     )
-    from bambu_cli.printer import get_printer
     from bambu_cli.protocols.mqtt import execute_print_command
 
-    printer = get_printer()
+    if not dry_run and basename.lower().endswith(".gcode"):
+        # project_file names Metadata/plate_<n>.gcode inside a 3MF, which a plain
+        # .gcode does not have; the separate gcode_file command is documented by
+        # the community but reported not to start custom files. Neither path has
+        # been verified on a printer, so say so rather than imply it works.
+        logger.warning(
+            f"⚠️  Starting a plain .gcode file over LAN is not verified on Bambu firmware. If {basename} "
+            "does not start, print a sliced .3mf instead or start the file from the printer's screen."
+        )
+    printer = ctx.printer()
     execute_print_command(printer, payload, basename, dry_run=dry_run)
     if bool(_namespace_get(args, "json", False)):
         emit_json(
@@ -84,6 +95,7 @@ def cmd_print(args, ctx=None):
                 file=basename,
                 printed=not dry_run,
                 dry_run=bool(dry_run),
+                plate=plate,
             )
         )
     return basename

@@ -292,5 +292,227 @@ class TestCmdConfig(unittest.TestCase):
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 1)
 
 
+class TestConfigPlatformAndCandidates(unittest.TestCase):
+    def test_default_config_path_platforms(self):
+        from bambu_cli.config import _default_config_path
+
+        # darwin
+        with patch("sys.platform", "darwin"), patch("os.path.exists", return_value=False):
+            p = _default_config_path()
+            self.assertIn("Library/Application Support/bambu/config.json", p.replace("\\", "/"))
+
+        # win32 with APPDATA
+        with patch("sys.platform", "win32"), patch("os.path.exists", return_value=False):
+            with patch.dict(os.environ, {"APPDATA": "C:\\MockAppData"}):
+                p = _default_config_path()
+                self.assertIn("bambu/config.json", p.replace("\\", "/"))
+
+        # win32 without APPDATA
+        with patch("sys.platform", "win32"), patch("os.path.exists", return_value=False):
+            with patch.dict(os.environ, {}, clear=True):
+                p = _default_config_path()
+                self.assertIn("AppData/Roaming/bambu/config.json", p.replace("\\", "/"))
+
+        # linux with XDG_CONFIG_HOME
+        with patch("sys.platform", "linux"), patch("os.path.exists", return_value=False):
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": "/custom/xdg"}):
+                p = _default_config_path()
+                self.assertIn("/custom/xdg/bambu/config.json", p.replace("\\", "/"))
+
+        # linux without XDG_CONFIG_HOME
+        with patch("sys.platform", "linux"), patch("os.path.exists", return_value=False):
+            with patch.dict(os.environ, {}, clear=True):
+                p = _default_config_path()
+                self.assertIn(".config/bambu/config.json", p.replace("\\", "/"))
+
+    def test_orca_binary_and_profile_candidates_platforms(self):
+        from bambu_cli.config import (
+            _orca_binary_candidates,
+            _profiles_dir_candidates,
+            _first_existing_path,
+        )
+
+        # darwin
+        with patch("sys.platform", "darwin"):
+            orca_cands = _orca_binary_candidates()
+            self.assertTrue(any("OrcaSlicer.app" in c for c in orca_cands))
+            prof_cands = _profiles_dir_candidates()
+            self.assertTrue(any("OrcaSlicer.app" in c for c in prof_cands))
+
+        # win32 with PROGRAMFILES(X86)
+        with patch("sys.platform", "win32"), patch("shutil.which", return_value=None):
+            with patch.dict(os.environ, {"PROGRAMFILES(X86)": r"C:\Program Files (x86)"}):
+                orca_cands = _orca_binary_candidates()
+                self.assertTrue(any("orca-slicer.exe" in c for c in orca_cands))
+                prof_cands = _profiles_dir_candidates()
+                self.assertTrue(any("OrcaSlicer" in c for c in prof_cands))
+
+        # win32 without PROGRAMFILES(X86)
+        with patch("sys.platform", "win32"), patch("shutil.which", return_value=None):
+            with patch.dict(os.environ, {}, clear=True):
+                orca_cands = _orca_binary_candidates()
+                prof_cands = _profiles_dir_candidates()
+                self.assertTrue(len(orca_cands) > 0)
+                self.assertTrue(len(prof_cands) > 0)
+
+        # _first_existing_path
+        self.assertIsNone(_first_existing_path([]))
+        with patch("os.path.exists", return_value=False):
+            first = _first_existing_path(["/dummy/one", "/dummy/two"])
+            self.assertIn("dummy/one", first)
+
+
+class TestConfigErrorsAndSecurity(unittest.TestCase):
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_load_config_not_found_platforms(self, mock_logger):
+        with patch("bambu_cli.config.CONFIG_PATH", "/nonexistent/path/config.json"):
+            with patch("sys.platform", "win32"):
+                with self.assertRaises(BambuError):
+                    load_config()
+                self.assertTrue(any("orca-slicer.exe" in call[0][0] for call in mock_logger.info.call_args_list))
+
+            with patch("sys.platform", "darwin"):
+                with self.assertRaises(BambuError):
+                    load_config()
+                self.assertTrue(any("OrcaSlicer.app" in call[0][0] for call in mock_logger.info.call_args_list))
+
+    def test_load_config_stat_oserror(self):
+        with patch("os.path.exists", return_value=True):
+            with patch("sys.platform", "linux"):
+                with patch("os.stat", side_effect=OSError("stat error")):
+                    self.assertIsNone(load_config(exit_on_fail=False))
+                    with self.assertRaises(BambuError) as cm:
+                        load_config(exit_on_fail=True)
+                    self.assertEqual(cm.exception.exit_code, 1)
+
+    def test_load_config_chmod_oserror_continues(self):
+        st = MagicMock()
+        st.st_mode = 0o644  # world-readable, triggers chmod
+        with patch("os.path.exists", return_value=True):
+            with patch("sys.platform", "linux"):
+                with patch("os.stat", return_value=st):
+                    with patch("os.chmod", side_effect=OSError("chmod error")):
+                        with patch("builtins.open", mock_open(read_data='{"printer_ip": "127.0.0.1", "serial": "S1", "access_code": "code"}')):
+                            cfg = load_config(exit_on_fail=True)
+                            self.assertIsNotNone(cfg)
+
+    def test_load_config_generic_exception(self):
+        with patch("os.path.exists", return_value=True):
+            with patch("sys.platform", "win32"):
+                with patch("builtins.open", side_effect=RuntimeError("unexpected crash")):
+                    self.assertIsNone(load_config(exit_on_fail=False))
+                    with self.assertRaises(BambuError) as cm:
+                        load_config(exit_on_fail=True)
+                    self.assertEqual(cm.exception.exit_code, 1)
+
+    def test_apply_config_empty_and_insecure_tls(self):
+        from bambu_cli.config import apply_config
+
+        self.assertIsNone(apply_config({}))
+        with patch("bambu_cli.logging_utils._BACKEND") as mock_logger:
+            apply_config({"insecure_tls": True})
+            self.assertTrue(any("SECURITY WARNING" in call[0][0] for call in mock_logger.warning.call_args_list))
+
+    def test_enforce_secret_file_permissions_win32_and_chmod_error(self):
+        from bambu_cli.config import _enforce_secret_file_permissions
+
+        with patch("sys.platform", "win32"):
+            # win32 returns early
+            self.assertIsNone(_enforce_secret_file_permissions("dummy", "dummy"))
+
+        with patch("sys.platform", "linux"):
+            # Already 0600
+            st_secure = MagicMock(st_mode=0o600)
+            with patch("os.stat", return_value=st_secure), patch("os.chmod") as mock_chmod:
+                _enforce_secret_file_permissions("dummy", "dummy")
+                mock_chmod.assert_not_called()
+
+            # Chmod succeeds
+            st_insecure = MagicMock(st_mode=0o644)
+            with patch("os.stat", return_value=st_insecure), patch("os.chmod") as mock_chmod:
+                with patch("bambu_cli.logging_utils._BACKEND") as mock_logger:
+                    _enforce_secret_file_permissions("dummy", "dummy")
+                    mock_chmod.assert_called_once_with("dummy", 0o600)
+                    self.assertTrue(any("Automatically enforced 0600" in call[0][0] for call in mock_logger.info.call_args_list))
+
+            # Chmod error
+            with patch("os.stat", return_value=st_insecure):
+                with patch("os.chmod", side_effect=OSError("chmod denied")):
+                    with patch("bambu_cli.logging_utils._BACKEND") as mock_logger:
+                        _enforce_secret_file_permissions("dummy", "dummy")
+                        self.assertTrue(any("Could not tighten permissions" in call[0][0] for call in mock_logger.warning.call_args_list))
+
+    def test_load_access_code_both_keys_warns(self):
+        from bambu_cli.config import load_access_code
+
+        with config_ctx({"access_code": "inline_val", "access_code_file": "/path/to/code"}):
+            with patch("os.stat", side_effect=OSError("missing")):
+                with patch("builtins.open", mock_open(read_data="file_val")):
+                    with patch("bambu_cli.logging_utils._BACKEND") as mock_logger:
+                        code = load_access_code()
+                        self.assertEqual(code, "file_val")
+                        self.assertTrue(any("BOTH an inline access_code and an access_code_file" in call[0][0] for call in mock_logger.warning.call_args_list))
+
+    def test_load_access_code_errors(self):
+        from bambu_cli.config import load_access_code
+
+        # Inline placeholder value
+        with config_ctx({"access_code": "YOUR_ACCESS_CODE"}):
+            with self.assertRaises(BambuError) as cm:
+                load_access_code()
+            self.assertEqual(cm.exception.exit_code, 1)
+
+        # access_code_file OSError
+        with config_ctx({"access_code_file": "/path/to/secret"}):
+            with patch("os.stat", side_effect=OSError("missing")):
+                with patch("builtins.open", side_effect=OSError("read denied")):
+                    with self.assertRaises(BambuError) as cm:
+                        load_access_code()
+                    self.assertEqual(cm.exception.exit_code, 1)
+
+        # access_code_file placeholder content
+        with config_ctx({"access_code_file": "/path/to/secret"}):
+            with patch("os.stat", side_effect=OSError("missing")):
+                with patch("builtins.open", mock_open(read_data="ACCESS_CODE")):
+                    with self.assertRaises(BambuError) as cm:
+                        load_access_code()
+                    self.assertEqual(cm.exception.exit_code, 1)
+
+    def test_misc_config_helpers(self):
+        import argparse
+        from bambu_cli.config import (
+            load_username,
+            fingerprint_sha256,
+            get_network_timeout,
+            get_slicer_timeout,
+            get_command_timeout,
+            get_upload_timeout,
+            _expected_fingerprint,
+        )
+
+        with settings_ctx(username="test_user"):
+            self.assertEqual(load_username(), "test_user")
+
+        self.assertIsNone(fingerprint_sha256(None))
+        self.assertIsNone(fingerprint_sha256(b""))
+
+        with config_ctx({"cert_fingerprint": "AA:BB:CC:DD"}):
+            self.assertEqual(_expected_fingerprint(), "aabbccdd")
+
+        # CLI args override config and default
+        args = argparse.Namespace(network_timeout=99.0, slicer_timeout=88.0, command_timeout=77.0, upload_timeout=66.0)
+        self.assertEqual(get_network_timeout(args), 99.0)
+        self.assertEqual(get_slicer_timeout(args), 88.0)
+        self.assertEqual(get_command_timeout(args), 77.0)
+        self.assertEqual(get_upload_timeout(args), 66.0)
+
+        # Config override for timeout
+        with config_ctx({"network_timeout": 42.0, "slicer_timeout": 500.0, "command_timeout": 30.0, "upload_timeout": 120.0}):
+            self.assertEqual(get_network_timeout(), 42.0)
+            self.assertEqual(get_slicer_timeout(), 500.0)
+            self.assertEqual(get_command_timeout(), 30.0)
+            self.assertEqual(get_upload_timeout(), 120.0)
+
+
 if __name__ == "__main__":
     unittest.main()

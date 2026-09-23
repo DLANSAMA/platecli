@@ -5,6 +5,176 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Printer safety
+
+- **A1 and A1 mini can be sliced.** Every A1/A1 mini slice failed inside
+  OrcaSlicer ("Relative extruder addressing requires resetting the extruder
+  position at each layer"): Bambu's A1 profiles omit the per-layer `G92 E0`
+  reset and rely on an exemption OrcaSlicer's command line does not apply.
+  The machine profile handed to OrcaSlicer now appends `G92 E0` to the
+  layer-change G-code when no reset is present (a counter reset with relative
+  extrusion; nothing moves). X1/P1 profiles already carry it and are unchanged.
+- **P1S, X1 and X1E slice with the Standard profile they asked for.** These
+  models have no process profiles of their own and borrow the X1C ones. The
+  search took the first file in directory order whose name merely contained
+  the model code, which with the real profiles was `0.20mm Bambu Support W @BBL
+  X1C` — a profile for printing with support material — for every standard
+  slice ("X1" also matched X1C/X1E files, "A1" A1 mini ones). It now requires
+  an exact `@BBL <model>` name or a `compatible_printers` entry and prefers the
+  requested quality ("Standard", "Fine", ...).
+- **No more slicing for a guessed printer.** An unrecognised `model` in
+  config.json (including the A1 mini's own product name, "A1 mini") used to
+  fall back to the P1P profile — a 256 mm bed — without a warning, as did a
+  missing machine profile for the configured model or nozzle. `slice`, `job`
+  and `send` now refuse with a config error (exit 1) that names the model and
+  the supported list. "A1 mini" and "X1 Carbon" are accepted as spellings of
+  `A1M` / `X1C`. The process-profile search no longer borrows another model's
+  profile either.
+- `setup` no longer turns an unknown model into `P1P`: the interactive prompt
+  re-asks (and has no default when discovery found no model), and
+  non-interactive setup requires `--model`. `config validate` / `preflight`
+  report a new `printer-model` check.
+- **Slice overrides can no longer get around the temperature limits.** The
+  0-350 °C nozzle / 0-150 °C bed check did not understand OrcaSlicer's own
+  comma-list syntax, so `--set-filament nozzle_temperature=400,220` produced
+  `M109 S400`; every temperature value is now split and checked, and one that
+  is not a plain ASCII decimal is refused (`3_5_0`, `1e2` and non-ASCII digits
+  read differently in OrcaSlicer than in the check). G-code and script settings
+  (`filament_start_gcode`, `machine_start_gcode`, `post_process`, ...) and
+  printer (machine) settings such as `printable_area` — which OrcaSlicer honoured
+  when sent through `--set` — are refused outright, and `slice --list-settings`
+  no longer lists the G-code ones. Other temperature keys (chamber,
+  vitrification, range limits) are bounded too.
+- **A printer command is sent once, never repeated.** When the MQTT
+  acknowledgement arrived after the timeout, `gcode`, `stop`, `pause`, `resume`
+  and `light` published the same command again on each retry (up to three
+  times) and then reported `"sent": false` — so `plate gcode "G1 E50"` could
+  extrude 150 mm and invite a fourth try. Retries now happen only while nothing
+  has been published; a sent-but-unacknowledged command exits 6 with
+  `"sent": true, "acknowledged": false` and `next_command: ["status", "--json"]`.
+  The TUI's long-lived connection had the same flaw and is fixed too. A PUBACK
+  that arrives while the connection is being closed still counts as an
+  acknowledgement.
+- **Slices now use the filament's and profile's real settings.** Three problems
+  stacked up, found together (all measured in real OrcaSlicer G-code):
+  `--nozzle-temp` / `--bed-temp` defaulted to 220 / 60 and overwrote every
+  filament, so `--filament PETG` or `ABS` printed at PLA temperatures; the
+  process and filament profiles handed to OrcaSlicer kept an `inherits`
+  reference it cannot resolve from a temp file, so every inherited value fell
+  back to a generic default (PETG came out as `filament_type = PLA` at 200 °C,
+  acceleration 500 instead of 10000, no elephant-foot compensation); and the
+  printer's default plate (Textured PEI) was never applied, so OrcaSlicer
+  sliced for the Cool Plate. Both profiles are now flattened like the machine
+  profile already was, the temperature flags default to the filament profile,
+  and `curr_bed_type` comes from the printer definition (`--set
+  curr_bed_type=...` still overrides it). PETG / PLA / ABS now slice at
+  255/70, 220/55 and 270/90 °C. Expect different (Bambu-default) speeds and
+  print-time estimates than before.
+
+### Fixed
+
+- `status --monitor` exited 0 with no output when the printer refused the
+  connection (wrong access code), so a script could not tell it from success.
+  It now fails with exit 2 (`failed_step: mqtt`) on a refused connection, on a
+  socket/TLS error (previously an "Unexpected error", exit 5), and when the
+  printer never answers within the MQTT timeout (previously it waited forever).
+- A download blocked by the private-address guard (for example
+  `http://localhost/...`) was reported as a retryable network error (exit 2,
+  a nested `<urlopen error ...>` message, no hint). It is now a refusal: exit
+  5, `failed_step: validate`, a message naming the addresses and suggesting
+  `--allow-private-ips`, and `blocked_addresses` in the JSON envelope. The
+  branch meant to do this matched on text that only ever reached a log line,
+  and its two tests injected that text; they now drive the real error.
+- A ZIP with damaged compressed data (intact headers) crashed `job` and
+  `download` with "Unexpected error" and a traceback (exit 5), losing the job
+  summary. It is now an extract failure: exit 3, `failed_step: extract`.
+- Timeouts are validated. `--network-timeout`, `--slicer-timeout`,
+  `--command-timeout`, `--upload-timeout` and `--scan-timeout` accepted `-5`,
+  `0`, `nan` and `inf` (with `nan`/`inf` a slice could never time out); they now
+  require a positive, finite number of seconds (exit 5 otherwise). A bad
+  `*_timeout` value in config.json is ignored with a warning instead of
+  crashing before the command runs, and `config validate` reports it under a
+  new `timeouts` check.
+- The print command always named `Metadata/plate_1.gcode`, so a pre-sliced
+  3MF whose only sliced plate was another one failed on the printer, and a
+  3MF with no sliced plate at all was uploaded and sent to print. `job`/`send`
+  now read which plates are sliced: plate 1, or the only sliced plate, is
+  printed (with a warning when there are several); an unsliced 3MF is refused
+  before upload. `print`, `job` and `send` take `--plate N`, and the JSON
+  reports `plate`. Time estimates for a multi-plate 3MF are for the printed
+  plate, not the last one.
+- Slicing no longer litters the output folder. OrcaSlicer also writes
+  `plate_1.gcode` and `result.json` into its output directory, which was the
+  user's folder — by default the model's own — so every slice left both
+  behind and overwrote same-named files. OrcaSlicer now writes into a private
+  temporary directory and only the sliced 3MF is moved out.
+- `setup --migrate-access-code` with both `access_code` and `access_code_file`
+  deleted the inline code without looking at the file. When the file did not
+  exist, or held a placeholder, that left no usable access code. A missing file
+  now receives the inline code; an unreadable or placeholder file keeps the
+  inline code and reports an error.
+- `snapshot --json` via the Docker streamer reported `"docker_container":
+  "bambu_camera"` whatever `camera_container_name` was set to; it now reports
+  the container actually used.
+- `upload` (and `job`/`send`, which upload through it) refuses to replace the
+  file the printer is printing right now: an upload deletes the old file on
+  the printer first, and re-running a job on the same model mid-print would
+  pull the file out from under the running print. What the firmware does in
+  that case has not been verified on hardware; this check is the code-level
+  safeguard. It asks the printer for its current job first (exit 4 if that is
+  the same file); if the printer cannot be asked, the upload goes ahead.
+- Printing a plain `.gcode` file is now flagged as unverified: `print` sends
+  every file with `project_file`, which names a plate inside a 3MF, and it has
+  not been confirmed that Bambu firmware starts a plain `.gcode` that way (or
+  through the documented `gcode_file` command, which a community report says
+  does not start custom files). `print` warns before sending one; the open
+  question is listed in docs/live-printer-smoke.md.
+- `plate setup --<value>` now updates that value in an existing config, as the
+  manual and troubleshooting guide already described (`--printer-ip` after a
+  DHCP change, `--access-code-env` after rotating the LAN code,
+  `--profiles-dir`/`--orca-slicer`, `--cert-fingerprint` to re-pin). Before,
+  a partial non-interactive setup failed on "missing required values", and the
+  path and pin flags alone started the interactive wizard and ignored the
+  flag. Values not passed are kept; the access code, pin, address and model
+  only when `--serial` is unchanged.
+
+### Security
+
+- **`"camera_allow_streamer": "false"` no longer enables the unpinned camera
+  streamer.** The key was read with `bool()`, so any non-empty string —
+  including `"false"` — turned on the Docker streamer that ignores
+  `cert_fingerprint`. Camera switches now use the same strict reader as
+  `insecure_tls`: JSON booleans, 0/1 and true/false spellings are honoured, and an
+  unreadable value falls to the safe side (streamer off, `camera_direct_only`
+  on) with a warning.
+- **SSRF filter hardening**: `netsafety` now unwraps IPv4-mapped IPv6,
+  deprecated IPv4-compatible IPv6 (`::/96`), 6to4, and NAT64 (`64:ff9b::/96`)
+  addresses and checks the embedded IPv4, and explicitly rejects IPv4/IPv6
+  multicast (`224.0.0.0/4`, `ff00::/8`) and deprecated site-local IPv6
+  (`fec0::/10`), which Python stdlib `ipaddress` treats as global. Public hosts
+  reached through NAT64 on IPv6-only networks stay reachable.
+- **FTP remote-path validation (defense in depth)**: `BambuPrinter` now rejects
+  remote paths containing CR, LF, or NUL before any `STOR`, `RETR`, `DELE`, or
+  `NLST`, returning a clean failure. `ftplib` already refuses CR/LF on the
+  control channel; this adds the NUL check and avoids an unhandled `ValueError`.
+- **URL validation & DoS prevention**: download URL validators now reject
+  whitespace and ASCII control characters up front, and `downloader` catches
+  low-level `http.client.HTTPException` to prevent unhandled tracebacks.
+- **Filename sanitization**: remote and local download filename sanitizers now
+  strip and reject ASCII DEL (`\x7f`).
+
+### Changed
+
+- README: the "Print something" first-run steps (which start with installing
+  OrcaSlicer) now come before the "Try it in 30 seconds" simulation section,
+  and that section says plainly that `plate --sim status` needs neither a
+  printer nor OrcaSlicer while a real print needs both. No CLI behaviour
+  changed; the empty-`HOME` first-run contract is now pinned by tests:
+  `plate preflight` reports the missing config, OrcaSlicer binary, and BBL
+  profiles as three separate checks, `plate setup --sim` without a TTY prints
+  the non-interactive `--printer-ip`/`--serial`/`--access-code-file` hint
+  instead of a traceback, and `plate --sim status` still exits `0`.
+
 ## [0.5.1] - 2026-08-28
 
 ### Fixed

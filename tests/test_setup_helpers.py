@@ -38,7 +38,8 @@ def test_parse_mdns_identity_model_prefix():
 
 def test_parse_mdns_identity_plain():
     serial, model = wizard_mod._parse_mdns_printer_identity("something-else.local")
-    assert model == "P1P"
+    # No model in the service name: nothing is guessed, the setup prompt asks.
+    assert model is None
 
 def test_normalize_model_nozzle():
     assert common_mod._normalize_model("x1c", "P1P") == "X1C"
@@ -248,3 +249,169 @@ def test_service_info_parsed_addresses_raises():
     info.parsed_addresses = boom
     info.addresses = [socket.inet_aton("10.0.0.1")]
     assert wizard_mod._service_info_address(info) == "10.0.0.1"
+
+
+def test_service_info_raw_ipv6():
+    info = MagicMock()
+    info.parsed_addresses = None
+    info.addresses = [socket.inet_pton(socket.AF_INET6, "2001:db8::1")]
+    assert wizard_mod._service_info_address(info) == "2001:db8::1"
+
+
+def test_noninteractive_both_code_and_env():
+    args = Namespace(
+        printer_ip="10.0.0.1",
+        serial="SN123",
+        access_code="code1",
+        access_code_env="ENV_VAR",
+        access_code_file=None,
+        json=False,
+    )
+    with pytest.raises(BambuError) as cm:
+        wizard_mod._cmd_setup_noninteractive(args)
+    assert cm.value.exit_code == 1
+
+
+def test_noninteractive_access_code_env_unset(monkeypatch):
+    monkeypatch.delenv("UNSET_ACCESS_CODE_VAR", raising=False)
+    args = Namespace(
+        printer_ip="10.0.0.1",
+        serial="SN123",
+        access_code=None,
+        access_code_env="UNSET_ACCESS_CODE_VAR",
+        access_code_file=None,
+        json=False,
+    )
+    with pytest.raises(BambuError) as cm:
+        wizard_mod._cmd_setup_noninteractive(args)
+    assert cm.value.exit_code == 1
+
+
+def test_noninteractive_missing_required_args():
+    args = Namespace(
+        printer_ip=None,
+        serial=None,
+        access_code=None,
+        access_code_env=None,
+        access_code_file=None,
+        json=False,
+    )
+    with pytest.raises(BambuError) as cm:
+        wizard_mod._cmd_setup_noninteractive(args)
+    assert cm.value.exit_code == 1
+
+
+def test_noninteractive_access_code_file_not_found(tmp_path):
+    args = Namespace(
+        printer_ip="10.0.0.1",
+        serial="SN123",
+        access_code=None,
+        access_code_env=None,
+        access_code_file=str(tmp_path / "nonexistent_code"),
+        json=False,
+    )
+    with pytest.raises(BambuError) as cm:
+        wizard_mod._cmd_setup_noninteractive(args)
+    assert cm.value.exit_code == 1
+
+
+def test_noninteractive_placeholders():
+    args = Namespace(
+        printer_ip="192.168.0.XXX",
+        serial="YOUR_SERIAL",
+        access_code="ACCESS_CODE",
+        access_code_env=None,
+        access_code_file=None,
+        json=False,
+    )
+    with pytest.raises(BambuError) as cm:
+        wizard_mod._cmd_setup_noninteractive(args)
+    assert cm.value.exit_code == 1
+
+
+def test_noninteractive_write_oserror():
+    args = Namespace(
+        printer_ip="10.0.0.1",
+        serial="SNVALID001",
+        access_code="valid_code_123",
+        access_code_env=None,
+        access_code_file=None,
+        model="P1P",
+        nozzle="0.4",
+        orca_slicer="/bin/true",
+        profiles_dir="/tmp",
+        cert_fingerprint=None,
+        insecure_tls=False,
+        json=False,
+    )
+    with patch("bambu_cli.setup_cmd.wizard._write_setup_config", side_effect=OSError("Disk full")):
+        with pytest.raises(BambuError) as cm:
+            wizard_mod._cmd_setup_noninteractive(args)
+        assert cm.value.exit_code == 3
+
+
+def test_cmd_setup_dispatches_migrate():
+    args = Namespace(migrate_access_code=True)
+    with patch("bambu_cli.setup_cmd.migrate._cmd_migrate_access_code") as mock_mig:
+        wizard_mod._cmd_setup(args)
+        mock_mig.assert_called_once_with(args)
+
+
+def test_interactive_zeroconf_missing_refuse_manual():
+    args = Namespace(json=False)
+    with patch.dict("sys.modules", {"zeroconf": None}):
+        with patch("bambu_cli.setup_cmd.wizard._prompt_text", return_value="n"):
+            with pytest.raises(BambuError) as cm:
+                wizard_mod._cmd_setup_interactive(args)
+            assert cm.value.exit_code == 1
+
+
+def test_interactive_manual_setup_missing_ip_or_serial():
+    args = Namespace(json=False)
+    with patch.dict("sys.modules", {"zeroconf": None}):
+        # Choice 'y', but empty IP
+        with patch("bambu_cli.setup_cmd.wizard._prompt_text", side_effect=["y", ""]):
+            with pytest.raises(BambuError) as cm:
+                wizard_mod._cmd_setup_interactive(args)
+            assert cm.value.exit_code == 1
+
+        # Choice 'y', IP given, but empty serial
+        with patch("bambu_cli.setup_cmd.wizard._prompt_text", side_effect=["y", "192.168.1.50", ""]):
+            with pytest.raises(BambuError) as cm:
+                wizard_mod._cmd_setup_interactive(args)
+            assert cm.value.exit_code == 1
+
+
+def test_interactive_discovery_no_printers_found():
+    args = Namespace(json=False, scan_timeout=0.01)
+    with patch("zeroconf.Zeroconf"), patch("zeroconf.ServiceBrowser"):
+        with pytest.raises(BambuError) as cm:
+            wizard_mod._cmd_setup_interactive(args)
+        assert cm.value.exit_code == 2
+
+
+def test_interactive_discovery_multiple_printers_invalid_choices():
+    args = Namespace(json=False, scan_timeout=0.01)
+
+    def fake_sb(zc, type_, listener):
+        info1 = MagicMock()
+        info1.parsed_addresses = lambda: ["10.0.0.1"]
+        info2 = MagicMock()
+        info2.parsed_addresses = lambda: ["10.0.0.2"]
+        zc.get_service_info.side_effect = [info1, info2]
+        listener.add_service(zc, type_, "BBLP-P1P-01P00A111._bblp._tcp.local.")
+        listener.add_service(zc, type_, "BBLP-X1C-01S00A222._bblp._tcp.local.")
+
+    with patch("zeroconf.Zeroconf") as mock_zc, patch("zeroconf.ServiceBrowser", side_effect=fake_sb):
+        # Out of bounds choice
+        with patch("bambu_cli.setup_cmd.wizard._prompt_text", return_value="5"):
+            with pytest.raises(BambuError) as cm:
+                wizard_mod._cmd_setup_interactive(args)
+            assert cm.value.exit_code == 5
+
+        # ValueError choice
+        with patch("bambu_cli.setup_cmd.wizard._prompt_text", return_value="not_int"):
+            with pytest.raises(BambuError) as cm:
+                wizard_mod._cmd_setup_interactive(args)
+            assert cm.value.exit_code == 5
+

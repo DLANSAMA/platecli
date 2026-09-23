@@ -5,6 +5,7 @@ one module per command surface, so a failure names the command it broke)."""
 
 from tests.bambu_test_base import *  # noqa: F401,F403
 
+
 class TestBambuCmdUploadEdgeCases(unittest.TestCase):
     @patch("bambu_cli.logging_utils._BACKEND")
     @patch("sys.exit")
@@ -51,6 +52,9 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         mock_get_ftp = MagicMock()
         mock_get_ftp.return_value.__enter__.return_value = mock_ftp
         printer = _test_printer()
+        # cmd_upload asks the printer what it is printing before replacing a file;
+        # answer locally instead of attempting a real MQTT connection.
+        printer.status = MagicMock(return_value={"gcode_state": "IDLE"})
         printer.get_ftp_client = mock_get_ftp
         mock_get_printer.return_value = printer
 
@@ -74,6 +78,9 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
 
         mock_get_ftp = MagicMock(side_effect=OSError("FTP Error"))
         printer = _test_printer()
+        # cmd_upload asks the printer what it is printing before replacing a file;
+        # answer locally instead of attempting a real MQTT connection.
+        printer.status = MagicMock(return_value={"gcode_state": "IDLE"})
         printer.get_ftp_client = mock_get_ftp
         mock_get_printer.return_value = printer
         mock_exit.side_effect = SystemExit(2)
@@ -118,6 +125,9 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
             ]
         )
         printer = _test_printer()
+        # cmd_upload asks the printer what it is printing before replacing a file;
+        # answer locally instead of attempting a real MQTT connection.
+        printer.status = MagicMock(return_value={"gcode_state": "IDLE"})
         printer.get_ftp_client = mock_get_ftp
         mock_get_printer.return_value = printer
 
@@ -154,6 +164,9 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
         mock_get_ftp = MagicMock()
         mock_get_ftp.return_value.__enter__.return_value = mock_ftp
         printer = _test_printer()
+        # cmd_upload asks the printer what it is printing before replacing a file;
+        # answer locally instead of attempting a real MQTT connection.
+        printer.status = MagicMock(return_value={"gcode_state": "IDLE"})
         printer.get_ftp_client = mock_get_ftp
         mock_get_printer.return_value = printer
         mock_exit.side_effect = SystemExit(2)
@@ -163,6 +176,7 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
 
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         self.assertIn("Upload failed", str(cm.exception))
+
 
 class TestBambuUploadRetry(unittest.TestCase):
     @patch("bambu_cli.printer.get_printer")
@@ -193,6 +207,9 @@ class TestBambuUploadRetry(unittest.TestCase):
         mock_get_ftp = MagicMock()
         mock_get_ftp.return_value.__enter__.return_value = mock_ftp
         printer = _test_printer()
+        # cmd_upload asks the printer what it is printing before replacing a file;
+        # answer locally instead of attempting a real MQTT connection.
+        printer.status = MagicMock(return_value={"gcode_state": "IDLE"})
         printer.get_ftp_client = mock_get_ftp
         mock_get_printer.return_value = printer
 

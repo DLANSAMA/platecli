@@ -11,7 +11,14 @@ description = "platecli — local CLI for Bambu Lab printers (not affiliated wit
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-authors = [{ name = "platecli contributors" }]
+# This address is published deliberately: PyPI renders it on the project page,
+# which is the point -- it is the project's public contact, not a personal
+# mailbox. tests/privacy_smoke.py fails on every other address, in the tree and
+# in the built archives, and allowlists this one by name. Do not swap in a
+# personal address to "fix" a privacy-smoke failure; the failure is the gate
+# working.
+authors = [{ name = "Dylan Reed", email = "reedworks.sc@gmail.com" }]
+maintainers = [{ name = "Dylan Reed", email = "reedworks.sc@gmail.com" }]
 keywords = ["bambu", "3d-printing", "agent", "cli", "orcaslicer"]
 dependencies = [
     "rich>=13.0.0",

@@ -9,6 +9,7 @@ import time
 from typing import Any
 
 from bambu_cli.context import set_printer_factory
+from bambu_cli.fsutil import _has_command_injection_chars
 from bambu_cli.protocols import ftps as ftps_protocol
 from bambu_cli.protocols import mqtt as mqtt_protocol
 
@@ -145,6 +146,9 @@ class BambuPrinter:
         sleep=time.sleep,
     ) -> bool:
         """Upload a file via FTPS as a verified state machine: (fresh|probe) -> (resume|restart) -> transfer -> verify."""
+        if _has_command_injection_chars(remote_path):
+            logger.error(f"Upload failed: unsafe remote path {remote_path!r}")
+            return False
         filesize = os.path.getsize(local_path)
         max_retries = 3
         uploaded_bytes = 0
@@ -258,6 +262,9 @@ class BambuPrinter:
         truncated transfer; size mismatch must fail without replacing the
         destination (mirrors upload_file's post-STOR verification).
         """
+        if _has_command_injection_chars(remote_path):
+            logger.error(f"Download failed: unsafe remote path {remote_path!r}")
+            return False
         import tempfile
 
         directory = os.path.dirname(os.path.abspath(local_path)) or "."
@@ -299,6 +306,9 @@ class BambuPrinter:
 
     def delete_file(self, remote_path: str, timeout: float | None = None) -> bool:
         """Delete a file from the printer via FTPS."""
+        if _has_command_injection_chars(remote_path):
+            logger.error(f"Delete failed: unsafe remote path {remote_path!r}")
+            return False
         try:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp:
                 ftp.delete(remote_path)
@@ -309,6 +319,9 @@ class BambuPrinter:
 
     def list_files(self, remote_dir: str = "/model/", timeout: float | None = None) -> list | None:
         """List files in a remote directory via FTPS."""
+        if _has_command_injection_chars(remote_dir):
+            logger.error(f"List files failed: unsafe remote directory {remote_dir!r}")
+            return None
         try:
             with self.get_ftp_client(timeout=timeout or self.ftps_timeout) as ftp:
                 return ftp.nlst(remote_dir)

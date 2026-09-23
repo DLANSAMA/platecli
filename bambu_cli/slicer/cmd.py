@@ -6,9 +6,10 @@ import argparse
 import os
 import shutil
 import subprocess
+import tempfile
 
 from bambu_cli.argutils import namespace_get as _namespace_get
-from bambu_cli.config import MODEL_MAPPING, get_slicer_timeout
+from bambu_cli.config import MODEL_MAPPING, get_slicer_timeout, supported_models_text
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_TIMEOUT
 from bambu_cli.context import current_settings
 from bambu_cli.errors import BambuError
@@ -29,6 +30,7 @@ from bambu_cli.slicer.output import _finalize_slice, _output_snapshot
 from bambu_cli.slicer.profiles import (
     _create_temp_machine,
     _create_temp_profiles,
+    _default_bed_type,
     _discover_process_profile,
     _profiles_dir_diagnostic,
     _slicer_executable_problem,
@@ -119,6 +121,7 @@ def cmd_slice(
     tmp_filament = None
     tmp_machine = None
     result = None
+    work_dir = None
 
     try:
         # Auto-convert STEP → STL (OrcaSlicer CLI doesn't support STEP)
@@ -136,7 +139,21 @@ def cmd_slice(
             filepath = new_filepath
             step_converted = True
 
-        model_info = MODEL_MAPPING.get(settings.printer_model, MODEL_MAPPING["P1P"])
+        model_info = MODEL_MAPPING.get(settings.printer_model)
+        if model_info is None:
+            # Never slice for a guessed printer: G-code built for another
+            # model's bed and start sequence can drive the head into the frame.
+            emit_json_error(
+                args,
+                "slice",
+                EXIT_CONFIG_ERROR,
+                f"Unknown printer model '{settings.printer_model}' in config.json. "
+                f'Supported models: {supported_models_text()}. Set "model" to one of them '
+                "(plate setup --model ...); platecli will not slice for a guessed printer.",
+                failed_step="config",
+                file=filepath,
+                model=settings.printer_model,
+            )
         model_code = model_info["token"]
         full_model_name = model_info["full_name"]
 
@@ -186,22 +203,11 @@ def cmd_slice(
         outpath = _sliced_output_path(source_filepath, outdir, copies)
         outfile = os.path.basename(outpath)
 
+        # The machine profile carries the bed size and start G-code, so there is
+        # deliberately no fallback to another model or nozzle size: a missing
+        # profile is reported below as a config error.
         machine_file = f"{full_model_name} {settings.nozzle_size} nozzle.json"
         machine = os.path.join(settings.profiles_dir, "machine", machine_file)
-        if not os.path.exists(machine):
-            logger.warning(
-                f"⚠️  Machine profile '{machine_file}' not found. Trying standard P1P with {settings.nozzle_size} nozzle..."
-            )
-            machine_file_fallback = f"Bambu Lab P1P {settings.nozzle_size} nozzle.json"
-            machine_fallback = os.path.join(settings.profiles_dir, "machine", machine_file_fallback)
-            if os.path.exists(machine_fallback):
-                machine = machine_fallback
-            else:
-                logger.warning(
-                    f"⚠️  Fallback machine profile '{machine_file_fallback}' not found. Using standard P1P 0.4 nozzle."
-                )
-                machine = os.path.join(settings.profiles_dir, "machine", "Bambu Lab P1P 0.4 nozzle.json")
-
         process = os.path.join(settings.profiles_dir, "process", process_file)
 
         filament_dir = os.path.join(settings.profiles_dir, "filament")
@@ -252,6 +258,25 @@ def cmd_slice(
                 detected_orca_slicer=detected_orca,
             )
 
+        if not os.path.exists(machine):
+            hint, detected_profiles = _profiles_dir_diagnostic(settings.profiles_dir)
+            if hint:
+                logger.info(hint)
+            emit_json_error(
+                args,
+                "slice",
+                EXIT_CONFIG_ERROR,
+                f"Missing machine profile for {full_model_name} with a {settings.nozzle_size} mm nozzle: "
+                f'{_path_for_message(machine)}. Check "model" and "nozzle" in config.json, or point '
+                "profiles_dir at an OrcaSlicer install that has this printer.",
+                failed_step="profiles",
+                file=filepath,
+                profile="machine",
+                path=machine,
+                profiles_dir=settings.profiles_dir,
+                detected_profiles_dir=detected_profiles,
+            )
+
         if not os.path.exists(process):
             compatible_printer = f"{full_model_name} {settings.nozzle_size} nozzle"
             discovered_process = _discover_process_profile(
@@ -299,7 +324,9 @@ def cmd_slice(
                 )
 
         try:
-            tmp_process, tmp_filament = _create_temp_profiles(process, filament, args)
+            tmp_process, tmp_filament = _create_temp_profiles(
+                process, filament, args, bed_type=_default_bed_type(settings.profiles_dir, full_model_name)
+            )
             tmp_machine = _create_temp_machine(machine, settings.profiles_dir)
         except Exception as exc:
             message = f"Failed to prepare OrcaSlicer profiles: {_exception_for_message(exc)}"
@@ -312,6 +339,22 @@ def cmd_slice(
                 file=filepath,
             )
 
+        # OrcaSlicer also writes plate_1.gcode and result.json into --outputdir,
+        # which was the user's folder (by default the model's own), clobbering
+        # same-named files there. It gets a private directory on the same
+        # filesystem instead, and only the 3MF is moved out.
+        try:
+            work_dir = tempfile.mkdtemp(prefix=".plate-slice-", dir=outdir)
+        except OSError as exc:
+            emit_json_error(
+                args,
+                "slice",
+                EXIT_FILE_ERROR,
+                f"Could not prepare output directory: {_path_for_message(outdir)}: {_exception_for_message(exc)}",
+                failed_step="validate",
+                file=filepath,
+                output=outdir,
+            )
         cmd = _build_orcaslicer_cmd(
             settings,
             args,
@@ -319,7 +362,7 @@ def cmd_slice(
             tmp_process.name,
             tmp_filament.name,
             outfile,
-            outdir,
+            work_dir,
             copies,
             filepath,
         )
@@ -327,14 +370,16 @@ def cmd_slice(
         layer_height = layer.split(" ")[0]
         infill = getattr(args, "infill", 15)
         pattern = getattr(args, "pattern", "3dhoneycomb")
-        nozzle_temp = getattr(args, "nozzle_temp", 220)
-        bed_temp = getattr(args, "bed_temp", 60)
+        nozzle_temp = getattr(args, "nozzle_temp", None)
+        bed_temp = getattr(args, "bed_temp", None)
         supports = getattr(args, "supports", False)
 
         filament_name = os.path.basename(filament).replace(".json", "").replace(" @base", "").strip()
 
         settings_summary = (
-            f"{filament_name}, {layer_height} layer, {infill}% {pattern}, nozzle {nozzle_temp}°C, bed {bed_temp}°C"
+            f"{filament_name}, {layer_height} layer, {infill}% {pattern}, "
+            f"nozzle {'profile' if nozzle_temp is None else f'{nozzle_temp}°C'}, "
+            f"bed {'profile' if bed_temp is None else f'{bed_temp}°C'}"
         )
         if copies > 1:
             settings_summary += f", {copies} copies"
@@ -384,7 +429,14 @@ def cmd_slice(
                 orca_slicer=settings.orca_slicer,
                 output=outpath,
             )
+        produced = os.path.join(work_dir, outfile)
+        if os.path.isfile(produced):
+            # Only a file OrcaSlicer actually wrote replaces outpath, so
+            # _finalize_slice's freshness check still catches a stale one.
+            os.replace(produced, outpath)
     finally:
+        if work_dir is not None:
+            shutil.rmtree(work_dir, ignore_errors=True)
         for tmp_file in (tmp_process, tmp_filament, tmp_machine):
             if tmp_file is not None and hasattr(tmp_file, "name"):
                 try:

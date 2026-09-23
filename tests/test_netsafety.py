@@ -135,6 +135,7 @@ def test_main_allow_private_ips_reaches_get_safe_connection(monkeypatch, tmp_pat
     assert outcomes.get("result") is sentinel
     assert outcomes.get("connected") is True
 
+
 def test_ipv4_mapped_ipv6_private_address_refused():
     # ::ffff:192.168.0.1 must be unwrapped and evaluated as the private v4 addr.
     with (
@@ -144,6 +145,62 @@ def test_ipv4_mapped_ipv6_private_address_refused():
     ):
         _get_safe_connection("rebind.example.com", 443, 5, None)
     conn.assert_not_called()
+
+
+@pytest.mark.parametrize("ip", ["224.0.0.1", "239.255.255.250", "ff02::1", "ff05::2"])
+def test_multicast_ip_refused_even_with_allow_private(ip):
+    with (
+        settings_ctx(allow_private_ips=True),
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo(ip)),
+        patch.object(netsafety.socket, "create_connection") as conn,
+        pytest.raises(urllib.error.URLError, match="No safe/reachable"),
+    ):
+        _get_safe_connection("multicast.example.com", 80, 5, None)
+    conn.assert_not_called()
+
+
+@pytest.mark.parametrize("ip", ["::127.0.0.1", "::169.254.169.254", "::10.0.0.1", "::192.168.1.1"])
+def test_ipv4_compatible_ipv6_refused_when_private(ip):
+    with (
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo(ip)),
+        patch.object(netsafety.socket, "create_connection") as conn,
+        pytest.raises(urllib.error.URLError, match="No safe/reachable"),
+    ):
+        _get_safe_connection("compat.example.com", 80, 5, None)
+    conn.assert_not_called()
+
+
+def test_6to4_embedding_private_ipv4_refused():
+    with (
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo("2002:7f00:1::")),
+        patch.object(netsafety.socket, "create_connection") as conn,
+        pytest.raises(urllib.error.URLError, match="No safe/reachable"),
+    ):
+        _get_safe_connection("sixtofour.example.com", 80, 5, None)
+    conn.assert_not_called()
+
+
+@pytest.mark.parametrize("ip", ["64:ff9b::7f00:1", "64:ff9b::a00:1", "64:ff9b::a9fe:a9fe", "fec0::1"])
+def test_nat64_private_and_site_local_refused(ip):
+    with (
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo(ip)),
+        patch.object(netsafety.socket, "create_connection") as conn,
+        pytest.raises(urllib.error.URLError, match="No safe/reachable"),
+    ):
+        _get_safe_connection("nat64.example.com", 80, 5, None)
+    conn.assert_not_called()
+
+
+def test_nat64_public_ipv4_allowed():
+    # DNS64 networks synthesize 64:ff9b::<v4> for every v4-only host; refusing
+    # the whole prefix would break all downloads there.
+    with (
+        patch.object(netsafety.socket, "getaddrinfo", return_value=_addrinfo("64:ff9b::808:808")),
+        patch.object(netsafety.socket, "create_connection") as conn,
+    ):
+        _get_safe_connection("dns64.example.com", 443, 5, None)
+    conn.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Resolution / candidate-iteration edge cases
@@ -388,3 +445,178 @@ def test_polite_open_tolerates_non_string_full_url():
     assert netsafety.polite_open(opener, MagicMock(), timeout=5, sleep=slept.append) is sentinel
     assert slept == []
     assert netsafety._host_of(MagicMock().full_url) == ""
+
+
+def test_browser_like_user_agent_darwin_and_windows():
+    netsafety._default_user_agent.cache_clear()
+    with patch("bambu_cli.netsafety.platform.system", return_value="Darwin"):
+        ua = netsafety._default_user_agent()
+        assert "Macintosh; Intel Mac OS X 10_15_7" in ua
+
+    netsafety._default_user_agent.cache_clear()
+    with patch("bambu_cli.netsafety.platform.system", return_value="Windows"):
+        ua = netsafety._default_user_agent()
+        assert "Windows NT 10.0; Win64; x64" in ua
+
+    netsafety._default_user_agent.cache_clear()
+
+
+def test_safe_https_connection_wrap_socket_failure_closes_sock():
+    conn = netsafety.SafeHTTPSConnection("host.example.com", 443)
+    mock_sock = MagicMock()
+    mock_sock.close.side_effect = Exception("close error")
+    mock_ctx = MagicMock()
+    mock_ctx.wrap_socket.side_effect = Exception("handshake fail")
+    conn._context = mock_ctx
+    with patch.object(netsafety, "_get_safe_connection", return_value=mock_sock):
+        with pytest.raises(Exception, match="handshake fail"):
+            conn.connect()
+    mock_sock.close.assert_called_once()
+
+
+
+# --- bounded hostname resolution (audit P2) ---------------------------------
+
+
+def test_try_resolve_ip_reports_failure_instead_of_echoing_the_hostname():
+    """_resolve_ip cannot express failure (it returns the host unchanged), which
+    is what pushed cli.py into a second, unbounded socket.getaddrinfo. The
+    _try_resolve_ip variant returns None so callers can branch honestly."""
+    from bambu_cli.utils import _resolve_ip, _try_resolve_ip
+
+    assert _try_resolve_ip("no-such-host.invalid", timeout=5.0) is None
+    assert _resolve_ip("no-such-host.invalid", timeout=5.0) == "no-such-host.invalid"
+
+
+def test_try_resolve_ip_passes_ip_literals_through_without_a_lookup(monkeypatch):
+    import socket as socket_mod
+
+    from bambu_cli import utils
+
+    def _explode(*args, **kwargs):
+        raise AssertionError("getaddrinfo must not be called for an IP literal")
+
+    monkeypatch.setattr(socket_mod, "getaddrinfo", _explode)
+    assert utils._try_resolve_ip("192.0.2.10") == "192.0.2.10"
+    assert utils._try_resolve_ip("::1") == "::1"
+
+
+def test_try_resolve_ip_returns_none_when_the_lookup_outlives_the_timeout(monkeypatch):
+    """The whole point of the timeout: a hung resolver must not block the CLI."""
+    import socket as socket_mod
+    import threading
+
+    from bambu_cli import utils
+
+    release = threading.Event()
+
+    def _hang(*args, **kwargs):
+        release.wait(30)
+        return [(0, 0, 0, "", ("192.0.2.1", 0))]
+
+    monkeypatch.setattr(socket_mod, "getaddrinfo", _hang)
+    utils._RESOLVE_IP_CACHE.pop("slow.example", None)
+    utils._RESOLVE_IP_INFLIGHT.pop("slow.example", None)
+    try:
+        assert utils._try_resolve_ip("slow.example", timeout=0.2) is None
+    finally:
+        release.set()
+
+
+def test_concurrent_resolves_of_a_hung_host_share_one_worker_thread(monkeypatch):
+    """A blackholed DNS server must park one thread, not one per call."""
+    import socket as socket_mod
+    import threading
+
+    from bambu_cli import utils
+
+    release = threading.Event()
+    calls = []
+
+    def _hang(host, *args, **kwargs):
+        calls.append(host)
+        release.wait(30)
+        return [(0, 0, 0, "", ("192.0.2.1", 0))]
+
+    monkeypatch.setattr(socket_mod, "getaddrinfo", _hang)
+    utils._RESOLVE_IP_CACHE.pop("hung.example", None)
+    utils._RESOLVE_IP_INFLIGHT.pop("hung.example", None)
+    try:
+        for _ in range(4):
+            assert utils._try_resolve_ip("hung.example", timeout=0.1) is None
+        assert len(calls) == 1, f"spawned {len(calls)} resolver threads for one host"
+    finally:
+        release.set()
+
+
+# --- regressions found by mutation: each of these went green with the guarded
+# line removed, so the line was untested ------------------------------------
+
+
+def test_throttle_queued_callers_sleep_the_full_backlog_not_one_interval(monkeypatch):
+    """`previous` is a scheduled timestamp: with three calls queued the third
+    must wait ~2 intervals. Clamping the sleep to one interval (the old code)
+    let queued callers burst past the throttle."""
+    monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 1.0)
+    netsafety._last_request_at.clear()
+    slept = []
+    for _ in range(3):
+        netsafety._throttle_host("api.printables.com", sleep=slept.append)
+    assert len(slept) == 2
+    assert slept[1] > netsafety.MIN_HOST_REQUEST_INTERVAL * 1.5, slept
+    assert slept[1] <= netsafety.MAX_RETRY_AFTER_WAIT
+
+
+def test_throttle_backlog_is_capped_at_max_retry_after_wait(monkeypatch):
+    monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 10.0)
+    netsafety._last_request_at.clear()
+    slept = []
+    for _ in range(6):
+        netsafety._throttle_host("api.printables.com", sleep=slept.append)
+    assert max(slept) <= netsafety.MAX_RETRY_AFTER_WAIT
+
+
+def test_try_resolve_ip_recovers_when_the_worker_thread_cannot_start(monkeypatch):
+    """A failed Thread.start() must not leave a dead in-flight entry behind:
+    every later call for that host would attach to it, wait its full timeout
+    and report None forever, surfacing as a bogus 'Invalid printer_ip'."""
+    import socket as socket_mod
+    import threading
+
+    from bambu_cli import utils
+
+    utils._RESOLVE_IP_CACHE.pop("limit.example", None)
+    utils._RESOLVE_IP_INFLIGHT.pop("limit.example", None)
+
+    def _no_threads(self):
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", _no_threads)
+    assert utils._try_resolve_ip("limit.example", timeout=0.2) is None
+    assert "limit.example" not in utils._RESOLVE_IP_INFLIGHT
+    monkeypatch.undo()
+
+    monkeypatch.setattr(socket_mod, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("192.0.2.9", 0))])
+    assert utils._try_resolve_ip("limit.example", timeout=2.0) == "192.0.2.9"
+    utils._RESOLVE_IP_CACHE.pop("limit.example", None)
+
+
+def test_resolve_ip_cache_expires_so_a_moved_printer_is_re_resolved(monkeypatch):
+    """The cached IP is handed to paho/ftplib as a literal, so a permanent
+    cache would pin a long-lived process (the TUI) to a stale DHCP lease."""
+    import socket as socket_mod
+
+    from bambu_cli import utils
+
+    utils._RESOLVE_IP_CACHE.pop("moved.example", None)
+    utils._RESOLVE_IP_INFLIGHT.pop("moved.example", None)
+    answers = iter(["192.0.2.1", "192.0.2.2"])
+    monkeypatch.setattr(socket_mod, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", (next(answers), 0))])
+
+    assert utils._try_resolve_ip("moved.example", timeout=2.0) == "192.0.2.1"
+    assert utils._try_resolve_ip("moved.example", timeout=2.0) == "192.0.2.1", "fresh entry must be served"
+
+    ip, stamp = utils._RESOLVE_IP_CACHE["moved.example"]
+    utils._RESOLVE_IP_CACHE["moved.example"] = (ip, stamp - utils._RESOLVE_IP_CACHE_TTL - 1)
+    assert utils._try_resolve_ip("moved.example", timeout=2.0) == "192.0.2.2"
+    utils._RESOLVE_IP_CACHE.pop("moved.example", None)

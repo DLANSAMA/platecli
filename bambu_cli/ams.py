@@ -6,6 +6,13 @@ normalizes it into a compact form an agent can use to reason about what
 filament is loaded where and to build a correct ``--ams-mapping`` argument.
 """
 
+# Bambu firmware reports two sentinel values in ``tray_now`` that are not AMS
+# slot indices. They are distinct states and must not be conflated: 254 means
+# the printer is feeding from the external spool (vt_tray), 255 means nothing
+# is loaded at all.
+EXTERNAL_SPOOL_TRAY_ID = 254
+NOTHING_LOADED_TRAY_ID = 255
+
 
 def _to_int(value, default=None):
     try:
@@ -38,8 +45,9 @@ def _normalize_color(raw):
 def parse_ams(status):
     """Normalize the AMS section of a printer status payload.
 
-    Returns ``None`` when the payload carries no AMS data (printers without an
-    AMS, or a simulated status). Otherwise returns::
+    Returns ``None`` when the payload carries no AMS data and no external spool
+    (printers without an AMS or loaded spool, or a simulated status).
+    Otherwise returns::
 
         {
           "active_tray": <int|None>,   # absolute tray index currently loaded
@@ -51,6 +59,10 @@ def parse_ams(status):
                ...
              ]}
           ],
+          "external_tray": {
+            "slot": 254, "type": "PLA", "color": "FFFFFF",
+            "remain": None, "empty": False, "active": False,
+          } | None,
         }
 
     ``active`` marks the tray whose absolute index (``unit_id * 4 + slot``)
@@ -59,49 +71,87 @@ def parse_ams(status):
     """
     if not isinstance(status, dict):
         return None
+
     ams_block = status.get("ams")
-    if not isinstance(ams_block, dict):
-        return None
-    units_raw = ams_block.get("ams")
-    if not isinstance(units_raw, list) or not units_raw:
+    units_raw = ams_block.get("ams") if isinstance(ams_block, dict) else None
+
+    # Resolve raw tray_now before sentinel normalization
+    raw_tray_now = None
+    if isinstance(ams_block, dict):
+        raw_tray_now = _to_int(ams_block.get("tray_now"))
+    if raw_tray_now is None:
+        raw_tray_now = _to_int(status.get("tray_now"))
+
+    # Resolve vt_tray (external spool / virtual tray)
+    vt_tray_raw = status.get("vt_tray")
+    if vt_tray_raw is None and isinstance(ams_block, dict):
+        vt_tray_raw = ams_block.get("vt_tray")
+    if vt_tray_raw is None and isinstance(status.get("print"), dict):
+        vt_tray_raw = status["print"].get("vt_tray")
+
+    external_tray = None
+    if isinstance(vt_tray_raw, dict) and any(vt_tray_raw.values()):
+        # _to_int returns `default` for missing AND unparseable input, so the
+        # default alone covers every case -- no None check needed after it.
+        vt_slot = _to_int(vt_tray_raw.get("id"), default=EXTERNAL_SPOOL_TRAY_ID)
+        vt_type = vt_tray_raw.get("tray_type") or None
+        vt_color = _normalize_color(vt_tray_raw.get("tray_color"))
+        vt_remain = _to_int(vt_tray_raw.get("remain"))
+        # 254 and 255 are BOTH sentinels, but they do not mean the same thing:
+        # 254 = printing from the external spool, 255 = nothing loaded at all.
+        # Only 254 marks the external spool active. Treating 255 as active
+        # showed a "▶" next to the external spool on an idle printer with no
+        # filament loaded, and put a false active filament in `status --json`.
+        is_vt_active = raw_tray_now == EXTERNAL_SPOOL_TRAY_ID
+        external_tray = {
+            "slot": vt_slot,
+            "type": vt_type,
+            "color": vt_color,
+            "remain": vt_remain,
+            "empty": not vt_type,
+            "active": is_vt_active,
+        }
+
+    if (not isinstance(units_raw, list) or not units_raw) and external_tray is None:
         return None
 
-    active_tray = _to_int(ams_block.get("tray_now"))
+    active_tray = raw_tray_now
     # Bambu firmware reports tray_now 254/255 as a sentinel for the external
     # spool / nothing loaded, not a real AMS slot index. Normalize those to None
     # so no tray is falsely marked active and consumers don't present an
     # external-spool state as an AMS detection.
-    if active_tray in (254, 255):
+    if active_tray in (EXTERNAL_SPOOL_TRAY_ID, NOTHING_LOADED_TRAY_ID):
         active_tray = None
 
     units = []
-    for unit_raw in units_raw:
-        if not isinstance(unit_raw, dict):
-            continue
-        unit_id = _to_int(unit_raw.get("id"), default=0) or 0
-        trays = []
-        for tray_raw in unit_raw.get("tray") or []:
-            if not isinstance(tray_raw, dict):
+    if isinstance(units_raw, list):
+        for unit_raw in units_raw:
+            if not isinstance(unit_raw, dict):
                 continue
-            slot = _to_int(tray_raw.get("id"), default=0) or 0
-            ftype = tray_raw.get("tray_type") or None
-            absolute = unit_id * 4 + slot
-            trays.append(
+            unit_id = _to_int(unit_raw.get("id"), default=0) or 0
+            trays = []
+            for tray_raw in unit_raw.get("tray") or []:
+                if not isinstance(tray_raw, dict):
+                    continue
+                slot = _to_int(tray_raw.get("id"), default=0) or 0
+                ftype = tray_raw.get("tray_type") or None
+                absolute = unit_id * 4 + slot
+                trays.append(
+                    {
+                        "slot": slot,
+                        "type": ftype,
+                        "color": _normalize_color(tray_raw.get("tray_color")),
+                        "remain": _to_int(tray_raw.get("remain")),
+                        "empty": not ftype,
+                        "active": active_tray is not None and absolute == active_tray,
+                    }
+                )
+            units.append(
                 {
-                    "slot": slot,
-                    "type": ftype,
-                    "color": _normalize_color(tray_raw.get("tray_color")),
-                    "remain": _to_int(tray_raw.get("remain")),
-                    "empty": not ftype,
-                    "active": active_tray is not None and absolute == active_tray,
+                    "id": unit_id,
+                    "humidity": _to_int(unit_raw.get("humidity")),
+                    "temp": _to_float(unit_raw.get("temp")),
+                    "trays": trays,
                 }
             )
-        units.append(
-            {
-                "id": unit_id,
-                "humidity": _to_int(unit_raw.get("humidity")),
-                "temp": _to_float(unit_raw.get("temp")),
-                "trays": trays,
-            }
-        )
-    return {"active_tray": active_tray, "units": units}
+    return {"active_tray": active_tray, "units": units, "external_tray": external_tray}

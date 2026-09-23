@@ -18,11 +18,12 @@ class TestBambuDoctor(unittest.TestCase):
         self.assertEqual(cm.exception.exit_code, 1)
         mock_logger.error.assert_any_call("   ❌ Config check failed.")
 
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)
     @patch("bambu_cli.commands.doctor.load_config")
     @patch("bambu_cli.protocols.mqtt.get_status")
     @patch("sys.exit")
     @patch("bambu_cli.logging_utils._BACKEND")
-    def test_cmd_doctor_mqtt_fail(self, mock_logger, mock_exit, mock_get_status, mock_load):
+    def test_cmd_doctor_mqtt_fail(self, mock_logger, mock_exit, mock_get_status, mock_load, mock_probe):
         from bambu_cli.commands import cmd_doctor
         from bambu_cli.context import current_settings
 
@@ -38,12 +39,13 @@ class TestBambuDoctor(unittest.TestCase):
             f"   ❌ MQTT connection failed. Ensure printer at {current_settings().printer_ip} is on and access code is correct."
         )
 
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)
     @patch("bambu_cli.commands.doctor.load_config")
     @patch("bambu_cli.protocols.mqtt.get_status")
     @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("sys.exit")
     @patch("bambu_cli.logging_utils._BACKEND")
-    def test_cmd_doctor_ftps_fail(self, mock_logger, mock_exit, mock_get_ftp, mock_get_status, mock_load):
+    def test_cmd_doctor_ftps_fail(self, mock_logger, mock_exit, mock_get_ftp, mock_get_status, mock_load, mock_probe):
         from bambu_cli.commands import cmd_doctor
 
         mock_load.return_value = {"printer_ip": "1.2.3.4"}
@@ -58,11 +60,15 @@ class TestBambuDoctor(unittest.TestCase):
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_any_call("   ❌ FTPS connection failed: FTPS Fail")
 
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="a" * 64)
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
     @patch("bambu_cli.protocols.mqtt.get_status")
     @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     @patch("builtins.open")
-    def test_cmd_doctor_success(self, mock_file_open, mock_logger, mock_get_ftp, mock_get_status):
+    def test_cmd_doctor_success(
+        self, mock_file_open, mock_logger, mock_get_ftp, mock_get_status, mock_get_ver, mock_probe
+    ):
         from bambu_cli.commands import cmd_doctor
         import tempfile
 
@@ -75,7 +81,7 @@ class TestBambuDoctor(unittest.TestCase):
 
         def custom_open(file, *args, **kwargs):
             if "config.json" in str(file):
-                return original_open(file, *args, **kwargs)
+                return original_open(mock_config_path, *args, **kwargs)
             return MagicMock()
 
         mock_file_open.side_effect = custom_open
@@ -97,11 +103,15 @@ class TestBambuDoctor(unittest.TestCase):
             any_caps_open, "Expected a randomly generated printer_capabilities_*.json to be opened for writing"
         )
 
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="a" * 64)
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
     @patch("bambu_cli.protocols.mqtt.get_status")
     @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     @patch("builtins.open")
-    def test_cmd_doctor_honours_network_timeout(self, mock_file_open, mock_logger, mock_get_ftp, mock_get_status):
+    def test_cmd_doctor_honours_network_timeout(
+        self, mock_file_open, mock_logger, mock_get_ftp, mock_get_status, mock_get_ver, mock_probe
+    ):
         """--network-timeout is forwarded to printer.status() and get_ftp_client()."""
         from bambu_cli.commands import cmd_doctor
         import io
@@ -115,7 +125,7 @@ class TestBambuDoctor(unittest.TestCase):
 
         def custom_open(file, *args, **kwargs):
             if "config.json" in str(file):
-                return original_open(file, *args, **kwargs)
+                return original_open(mock_config_path, *args, **kwargs)
             return MagicMock()
 
         mock_file_open.side_effect = custom_open
@@ -362,12 +372,13 @@ class TestDoctorRedaction(unittest.TestCase):
         calls = list(mock_logger.info.call_args_list) + list(mock_logger.warning.call_args_list)
         return [c[0][0] for c in calls if c[0]]
 
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)
     @patch("bambu_cli.protocols.mqtt.get_status")
     @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_human_output_redacts_printer_ip_by_default(
-        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe
+        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_get_ver
     ):
         import argparse
         import tempfile
@@ -390,12 +401,13 @@ class TestDoctorRedaction(unittest.TestCase):
             f"doctor human output leaked the printer IP {settings.printer_ip}",
         )
 
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)
     @patch("bambu_cli.protocols.mqtt.get_status")
     @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_human_output_shows_printer_ip_with_verbose(
-        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe
+        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_get_ver
     ):
         """Guard for the -v escape hatch.
 
@@ -421,13 +433,14 @@ class TestDoctorRedaction(unittest.TestCase):
         self.assertIn(f"   [3/3] Verifying FTPS connectivity to {settings.printer_ip}:990...", logged)
         self.assertFalse([line for line in logged if "<redacted>:" in line])
 
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
     @patch("bambu_cli.commands.doctor._expected_fingerprint", return_value="ab" * 32)
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="ab" * 32)
     @patch("bambu_cli.protocols.mqtt.get_status")
     @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_hides_fingerprint_when_already_pinned(
-        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_expected
+        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_expected, mock_get_ver
     ):
         import argparse
         import tempfile
@@ -449,6 +462,7 @@ class TestDoctorRedaction(unittest.TestCase):
             "   \U0001f510 \u2705 Printer certificate matches the pinned cert_fingerprint in your config.", logged
         )
 
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
     @patch("bambu_cli.commands.doctor._offer_pin_fingerprint", return_value=False)
     @patch("bambu_cli.commands.doctor._expected_fingerprint", return_value=None)
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="cd" * 32)
@@ -456,7 +470,7 @@ class TestDoctorRedaction(unittest.TestCase):
     @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_shows_fingerprint_when_not_pinned(
-        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_expected, mock_offer
+        self, mock_logger, mock_get_ftp, mock_get_status, mock_probe, mock_expected, mock_offer, mock_get_ver
     ):
         import argparse
         import tempfile
@@ -475,6 +489,236 @@ class TestDoctorRedaction(unittest.TestCase):
         self.assertIn(hex_line, logged)
         self.assertIn(hint, logged)
         self.assertLess(logged.index(hex_line), logged.index(hint))
+
+
+class TestDoctorEdgeCases(unittest.TestCase):
+    def setUp(self):
+        install_baseline_context()
+
+    def tearDown(self):
+        install_baseline_context()
+
+    def _logged(self, mock_backend):
+        out = []
+        for call in mock_backend.info.call_args_list:
+            out.append(str(call[0][0]))
+        for call in mock_backend.warning.call_args_list:
+            out.append(str(call[0][0]))
+        for call in mock_backend.error.call_args_list:
+            out.append(str(call[0][0]))
+        return out
+
+    def test_cmd_doctor_invalid_output_path_dash(self):
+        import argparse
+        from bambu_cli.commands import cmd_doctor
+
+        args = argparse.Namespace(json=True, output="-invalid_name.json", verbose=False)
+        with patch("bambu_cli.utils.emit_json") as mock_emit:
+            with self.assertRaises(BambuError) as cm:
+                cmd_doctor(args)
+            self.assertEqual(cm.exception.exit_code, 3)
+            mock_emit.assert_called_once()
+            payload = mock_emit.call_args[0][0]
+            self.assertEqual(payload["failed_step"], "validate")
+            self.assertFalse(payload["ok"])
+
+    def test_cmd_doctor_ensure_parent_dir_error(self):
+        import argparse
+        from bambu_cli.commands import cmd_doctor
+
+        args = argparse.Namespace(json=True, output="/invalid/dir/caps.json", verbose=False)
+        with patch("bambu_cli.commands.doctor._ensure_parent_dir", side_effect=BambuError("perm error", exit_code=3)):
+            with patch("bambu_cli.utils.emit_json") as mock_emit:
+                with self.assertRaises(BambuError) as cm:
+                    cmd_doctor(args)
+                self.assertEqual(cm.exception.exit_code, 3)
+                mock_emit.assert_called_once()
+                payload = mock_emit.call_args[0][0]
+                self.assertEqual(payload["failed_step"], "validate")
+
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", side_effect=Exception("network down"))
+    @patch("bambu_cli.printer.BambuPrinter.status", return_value={"hw_ver": "P1P", "sw_ver": "01.05.00.00"})
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_doctor_probe_cert_fingerprint_exception(
+        self, mock_logger, mock_get_ftp, mock_status, mock_probe, mock_get_ver
+    ):
+        import argparse
+        import tempfile
+        from bambu_cli.commands import cmd_doctor
+
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+        with tempfile.TemporaryDirectory() as td:
+            args = argparse.Namespace(json=False, output=os.path.join(td, "caps.json"), verbose=False)
+            cmd_doctor(args)
+
+            self.assertTrue(os.path.exists(os.path.join(td, "caps.json")))
+
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
+    @patch("bambu_cli.commands.doctor._expected_fingerprint", return_value="aa" * 32)
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="bb" * 32)
+    @patch("bambu_cli.printer.BambuPrinter.status", return_value={"hw_ver": "P1P", "sw_ver": "01.05.00.00"})
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_doctor_fingerprint_mismatch(
+        self, mock_logger, mock_get_ftp, mock_status, mock_probe, mock_expected, mock_get_ver
+    ):
+        import argparse
+        import tempfile
+        from bambu_cli.commands import cmd_doctor
+
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+        with tempfile.TemporaryDirectory() as td:
+            args = argparse.Namespace(json=False, output=os.path.join(td, "caps.json"), verbose=False)
+            cmd_doctor(args)
+
+        logged = self._logged(mock_logger)
+        self.assertTrue(any("Printer certificate does NOT match" in line for line in logged))
+
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
+    @patch("bambu_cli.commands.doctor._expected_fingerprint", return_value="cc" * 32)
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="cc" * 32)
+    @patch("bambu_cli.printer.BambuPrinter.status", return_value={"hw_ver": "P1P", "sw_ver": "01.05.00.00"})
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_doctor_verbose_pinned_fingerprint(
+        self, mock_logger, mock_get_ftp, mock_status, mock_probe, mock_expected, mock_get_ver
+    ):
+        import argparse
+        import tempfile
+        from bambu_cli.commands import cmd_doctor
+
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+        with tempfile.TemporaryDirectory() as td:
+            args = argparse.Namespace(json=False, output=os.path.join(td, "caps.json"), verbose=True)
+            cmd_doctor(args)
+
+        logged = self._logged(mock_logger)
+        self.assertTrue(any("Printer certificate SHA-256: " + "cc" * 32 in line for line in logged))
+
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="dd" * 32)
+    @patch("bambu_cli.printer.BambuPrinter.status", return_value={"hw_ver": "X1C", "sw_ver": "01.05.00.00"})
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
+    def test_cmd_doctor_camera_notes(self, mock_get_ftp, mock_status, mock_probe, mock_get_ver):
+        import argparse
+        import json
+        import tempfile
+        from bambu_cli.commands import cmd_doctor
+
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+
+        with settings_ctx(printer_model="X1C", camera_direct_only=True):
+            with tempfile.TemporaryDirectory() as td:
+                out_file = os.path.join(td, "caps1.json")
+                args = argparse.Namespace(json=False, output=out_file, verbose=False)
+                cmd_doctor(args)
+                with open(out_file, "r") as f:
+                    data = json.load(f)
+                self.assertIn("camera_direct_only is set", data["capabilities"]["camera_snapshot_note"])
+
+        with settings_ctx(printer_model="X1C", camera_direct_only=False, camera_allow_streamer=True):
+            with tempfile.TemporaryDirectory() as td:
+                out_file = os.path.join(td, "caps2.json")
+                args = argparse.Namespace(json=False, output=out_file, verbose=False)
+                cmd_doctor(args)
+                with open(out_file, "r") as f:
+                    data = json.load(f)
+                self.assertIn("camera_allow_streamer is set", data["capabilities"]["camera_snapshot_note"])
+
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="ee" * 32)
+    @patch("bambu_cli.printer.BambuPrinter.status", return_value={"hw_ver": "P1P", "sw_ver": "01.05.00.00"})
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
+    def test_cmd_doctor_output_write_oserror(
+        self, mock_get_ftp, mock_status, mock_probe, mock_get_ver
+    ):
+        import argparse
+        from bambu_cli.commands import cmd_doctor
+
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+        args = argparse.Namespace(json=True, output="/tmp/test_caps.json", verbose=False)
+
+        orig_open = open
+
+        def custom_open(file, *args, **kwargs):
+            if "test_caps.json" in str(file):
+                raise OSError("Disk full")
+            return orig_open(file, *args, **kwargs)
+
+        with patch("builtins.open", side_effect=custom_open):
+            with patch("bambu_cli.utils.emit_json") as mock_emit:
+                with self.assertRaises(BambuError) as cm:
+                    cmd_doctor(args)
+                self.assertEqual(cm.exception.exit_code, 3)
+                mock_emit.assert_called_once()
+                payload = mock_emit.call_args[0][0]
+                self.assertEqual(payload["failed_step"], "output")
+
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[{"name": "ota", "sw_ver": "01.05.00.00"}])
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="ff" * 32)
+    @patch("bambu_cli.printer.BambuPrinter.status", return_value={"hw_ver": "P1P", "sw_ver": "01.05.00.00"})
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
+    def test_cmd_doctor_json_mode_reported_ip(
+        self, mock_get_ftp, mock_status, mock_probe, mock_get_ver
+    ):
+        import argparse
+        import tempfile
+        from bambu_cli.commands import cmd_doctor
+
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+
+        # Non-verbose JSON mode -> IP redacted
+        with settings_ctx(printer_ip="192.168.1.50"):
+            with tempfile.TemporaryDirectory() as td:
+                args = argparse.Namespace(json=True, output=os.path.join(td, "caps.json"), verbose=False)
+                with patch("bambu_cli.utils.emit_json") as mock_emit:
+                    cmd_doctor(args)
+                    payload = mock_emit.call_args[0][0]
+                    self.assertEqual(payload["printer_ip"], "<redacted>")
+
+        # Verbose JSON mode -> IP exposed
+        with settings_ctx(printer_ip="192.168.1.50"):
+            with tempfile.TemporaryDirectory() as td:
+                args = argparse.Namespace(json=True, output=os.path.join(td, "caps.json"), verbose=True)
+                with patch("bambu_cli.utils.emit_json") as mock_emit:
+                    cmd_doctor(args)
+                    payload = mock_emit.call_args[0][0]
+                    self.assertEqual(payload["printer_ip"], "192.168.1.50")
+
+    @patch("bambu_cli.printer.BambuPrinter.get_version", return_value=[])
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="11" * 32)
+    @patch("bambu_cli.printer.BambuPrinter.status", return_value={"hw_ver": "P1P", "sw_ver": "01.00.00.00"})
+    @patch("bambu_cli.printer.BambuPrinter.get_ftp_client")
+    def test_cmd_doctor_empty_modules(self, mock_get_ftp, mock_status, mock_probe, mock_get_ver):
+        import argparse
+        import tempfile
+        from bambu_cli.commands import cmd_doctor
+
+        mock_get_ftp.return_value.__enter__.return_value = MagicMock()
+        with tempfile.TemporaryDirectory() as td:
+            args = argparse.Namespace(json=False, output=os.path.join(td, "caps.json"), verbose=False)
+            cmd_doctor(args)
+            self.assertTrue(os.path.exists(os.path.join(td, "caps.json")))
+
+    @patch("bambu_cli.commands.doctor._expected_fingerprint", return_value=None)
+    @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value="22" * 32)
+    @patch("bambu_cli.printer.BambuPrinter.status", return_value=None)
+    @patch("bambu_cli.logging_utils._BACKEND")
+    def test_cmd_doctor_mqtt_fail_with_fp_pin_hint(self, mock_logger, mock_status, mock_probe, mock_expected):
+        import argparse
+        import tempfile
+        from bambu_cli.commands import cmd_doctor
+
+        with tempfile.TemporaryDirectory() as td:
+            args = argparse.Namespace(json=False, output=os.path.join(td, "caps.json"), verbose=False)
+            with self.assertRaises(BambuError) as cm:
+                cmd_doctor(args)
+            self.assertEqual(cm.exception.exit_code, 2)
+
+        logged = self._logged(mock_logger)
+        self.assertTrue(any("The printer uses a self-signed certificate" in line for line in logged))
 
 
 if __name__ == "__main__":

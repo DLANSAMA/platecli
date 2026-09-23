@@ -16,7 +16,7 @@ from bambu_cli.constants import (
     WINDOWS_RESERVED_FILENAMES,
 )
 from bambu_cli.errors import abort
-from bambu_cli.fsutil import _portable_basename
+from bambu_cli.fsutil import _has_command_injection_chars, _portable_basename
 from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import logger
 
@@ -100,7 +100,7 @@ def _sanitize_download_filename(filename):
     each of which the printer-side check then rejected.
     """
     filename = _portable_basename(filename)
-    filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", filename).strip(" .")
+    filename = re.sub(r'[\x00-\x1f\x7f<>:"/\\|?*]', "_", filename).strip(" .")
     if filename in (".", "..") or not filename:
         return "model.stl"
     if _reserved_device_stem(filename):
@@ -140,16 +140,6 @@ def _filename_from_content_disposition(value):
     return _sanitize_download_filename(filename) if filename else None
 
 
-def _has_command_injection_chars(value):
-    """True if *value* contains CR, LF, or NUL.
-
-    FTP and MQTT command lines are delimited by these characters; embedding them
-    in a filename or G-code payload can smuggle a second command. Shared by
-    ``_safe_remote_name`` and ``cmd_gcode`` validation.
-    """
-    return any(c in (value or "") for c in ("\r", "\n", "\0"))
-
-
 def _safe_remote_name(filename):
     """Reject names that are unsafe for printer-side files.
 
@@ -166,7 +156,7 @@ def _safe_remote_name(filename):
         return None
     if _has_command_injection_chars(filename):
         return None
-    if any(c in filename for c in '<>:"/\\|?*'):
+    if any(c in filename for c in '<>:"/\\|?*\x7f'):
         return None
     if filename != filename.strip(" ."):
         return None

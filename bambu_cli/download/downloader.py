@@ -1,15 +1,18 @@
 """The `download` command: HTTP fetch loop, redirects, HTML resolution, limits."""
 
+import http.client
 import os
 import tempfile
 import urllib.error
 import urllib.request
+import zipfile
 from typing import cast
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
     DOWNLOAD_TIMEOUT,
+    DOWNLOADABLE_EXTENSIONS,
     EXIT_COMMAND_ERROR,
     EXIT_FILE_ERROR,
     EXIT_NETWORK_ERROR,
@@ -20,6 +23,7 @@ from bambu_cli.download.html_links import _is_html_content_type, _resolve_html_m
 from bambu_cli.download.naming import (
     _download_filename_with_extension,
     _download_target_filename,
+    _file_extension,
     _filename_from_content_disposition,
     _sanitize_download_filename,
 )
@@ -36,7 +40,7 @@ from bambu_cli.errors import BambuError, abort
 from bambu_cli.fsutil import _download_partial_path, _noncolliding_path, _portable_basename, _remove_partial_file
 from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import logger, safe_log_error
-from bambu_cli.netsafety import build_safe_opener, polite_open, user_agent_for_url
+from bambu_cli.netsafety import BlockedAddressError, build_safe_opener, polite_open, user_agent_for_url
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
@@ -524,7 +528,46 @@ def _cmd_download(
                     )
                     safe_log_error(message)
                     abort("", exit_code=EXIT_FILE_ERROR)
-                _remove_partial_file(archive_path)
+                preserve_archive = False
+                try:
+                    with zipfile.ZipFile(archive_path) as zf:
+                        models_in_archive = 0
+                        for info in zf.infolist():
+                            if not info.is_dir() and info.file_size > 0:
+                                ext = _file_extension(_portable_basename(info.filename))
+                                if ext in DOWNLOADABLE_EXTENSIONS:
+                                    models_in_archive += 1
+                                    if models_in_archive > 1:
+                                        preserve_archive = True
+                                        break
+                except Exception:
+                    pass
+
+                if preserve_archive:
+                    # The name is URL-derived, so it goes through the same
+                    # sanitizer as every other write path: control characters,
+                    # Windows-illegal characters and reserved device stems out,
+                    # length capped. Skipping it left os.replace to fail with
+                    # ENAMETOOLONG on a long URL path -- swallowed below, which
+                    # silently stranded the archive under its hidden temp name.
+                    canonical_name = _sanitize_download_filename(
+                        _portable_basename(unquote(urlparse(url).path)) or "archive.zip"
+                    )
+                    if not canonical_name.lower().endswith(".zip"):
+                        canonical_name = _download_filename_with_extension(
+                            canonical_name, "archive.zip", fallback_name="archive.zip"
+                        )
+                    target_archive_path = _noncolliding(os.path.join(outdir, canonical_name))
+                    try:
+                        os.replace(archive_path, target_archive_path)
+                        archive_path = target_archive_path
+                    except OSError as exc:
+                        logger.debug(f"Could not rename preserved archive to {canonical_name}: {exc}")
+                    logger.info(
+                        f"📦 Archive contains multiple model files; preserved archive at {_path_for_message(archive_path)}"
+                    )
+                else:
+                    _remove_partial_file(archive_path)
                 partial_path = None
                 logger.info(f"✅ Downloaded: {_path_for_message(extracted_path)} ({size // 1024}KB)")
                 _record_download_success(
@@ -593,12 +636,23 @@ def _cmd_download(
             http_status=e.code,
             path=outpath,
         )
-    except urllib.error.URLError as e:
+    except (urllib.error.URLError, http.client.HTTPException) as e:
         _remove_partial_file(partial_path)
         _cleanup_reserved()
-        err_msg = str(e.reason) if hasattr(e, "reason") else str(e)
-        if "Security Error" in err_msg:
-            message = f"SSRF Security Violation Blocked: {err_msg}"
+        # urllib wraps a connect-time error in a second URLError, so the guard's
+        # refusal arrives either bare or as ``.reason``.
+        blocked = e if isinstance(e, BlockedAddressError) else getattr(e, "reason", None)
+        if isinstance(blocked, BlockedAddressError):
+            from bambu_cli.context import current_settings
+
+            message = (
+                f"Refusing to download from {blocked.host}: it resolves only to private or local addresses "
+                f"({', '.join(blocked.addresses)})."
+            )
+            # Multicast stays refused even with the override, so only suggest it
+            # when it would actually help.
+            if not current_settings().allow_private_ips:
+                message += " Pass --allow-private-ips to allow a LAN download."
             emit_json_error(
                 args,
                 "download",
@@ -609,9 +663,8 @@ def _cmd_download(
                 normalized_source=normalized_source_report,
                 download_url=_redact_url_credentials(url),
                 path=outpath,
+                blocked_addresses=blocked.addresses,
             )
-            safe_log_error(message)
-            abort("", exit_code=EXIT_COMMAND_ERROR)
         message = f"Network error during download: {e}"
         logger.info("   Please check your internet connection or verify the domain name resolves correctly.")
         emit_json_error(

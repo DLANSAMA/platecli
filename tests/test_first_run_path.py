@@ -344,3 +344,116 @@ def test_manual_leads_with_first_print_and_demotes_agents():
         assert phrase in first, phrase
     assert "uploaded_not_printed" in manual
     assert "without touching a slicer" not in manual
+
+
+# ---------------------------------------------------------------------------
+# 6. First run with an empty HOME: preflight, `setup --sim` off a TTY, `--sim status`
+# ---------------------------------------------------------------------------
+
+
+def _empty_home(monkeypatch, tmp_path, argv):
+    """Route every config lookup at a fresh, empty HOME and pin the context to unconfigured.
+
+    ``setup_cmd.common`` holds its own from-import copy of ``CONFIG_PATH``, so
+    the ``bambu_cli.config`` patch in ``_cli`` alone would leave preflight
+    reading the developer's real config.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+    config_path = str(home / ".config" / "bambu" / "config.json")
+    _cli(monkeypatch, argv, config_path)
+    monkeypatch.setattr("bambu_cli.setup_cmd.common.CONFIG_PATH", config_path)
+    # Nothing detected anywhere, whatever the CI host has installed.
+    monkeypatch.setattr("bambu_cli.config.detect_orca_slicer", lambda: None)
+    monkeypatch.setattr("bambu_cli.config.detect_profiles_dir", lambda: None)
+    return config_path
+
+
+def test_readme_names_orcaslicer_before_the_thirty_second_claim():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    # A newcomer reads about the second slicer before any "30 seconds" / sim promise.
+    assert readme.index("OrcaSlicer") < readme.index("30 seconds")
+    assert readme.index("OrcaSlicer") < readme.index("plate --sim status")
+    # The first-run steps (which start with installing OrcaSlicer) come before the sim section.
+    assert readme.index("## Print something") < readme.index("## Try it in 30 seconds")
+    print_something = _section(readme, "## Print something")
+    assert re.search(r"^1\. \*\*Install OrcaSlicer\*\*", print_something, flags=re.MULTILINE)
+    # The sim section itself says what it does and does not need.
+    sim = _section(readme, "## Try it in 30 seconds")
+    assert "OrcaSlicer" in sim and "neither" in sim
+    assert sim.index("OrcaSlicer") < sim.index("plate --sim status")
+
+
+def test_preflight_empty_home_names_each_missing_piece_separately(monkeypatch, tmp_path):
+    from tests.bambu_test_base import config_ctx, settings_ctx
+
+    _empty_home(monkeypatch, tmp_path, ["preflight"])
+    # config_ctx({}) drops the test base's mock config (which points at /tmp/mock_orca);
+    # settings_ctx then blanks the platform-default slicer paths on top of it.
+    with (
+        config_ctx({}),
+        settings_ctx(printer_ip="0.0.0.0", orca_slicer="", profiles_dir=""),
+        patch("bambu_cli.logging_utils._BACKEND") as log,
+        pytest.raises(SystemExit) as ei,
+    ):
+        main()
+    assert ei.value.code == 1
+    failed = [m for m in _messages(log, "info") if "❌" in m]
+    names = [m.split("❌", 1)[1].split(":", 1)[0].strip() for m in failed]
+    # One line per missing piece, not one generic "run setup".
+    assert names == ["config", "orca-slicer", "profiles-dir"], failed
+    by_name = dict(zip(names, failed, strict=True))
+    assert "Config not found" in by_name["config"]
+    assert "OrcaSlicer path is not configured" in by_name["orca-slicer"]
+    assert "OrcaSlicer profile directory is not configured" in by_name["profiles-dir"]
+    # Each names an install / config step of its own, and the summary counts all three.
+    for name in ("orca-slicer", "profiles-dir"):
+        assert "Install it with" in by_name[name] and "config.json" in by_name[name], by_name[name]
+    assert any("Preflight failed: 3 error(s)" in m for m in _messages(log, "error"))
+
+
+def test_preflight_empty_home_json_lists_each_missing_piece(monkeypatch, tmp_path, capsys):
+    from tests.bambu_test_base import config_ctx, settings_ctx
+
+    _empty_home(monkeypatch, tmp_path, ["--json", "preflight"])
+    with (
+        config_ctx({}),
+        settings_ctx(printer_ip="0.0.0.0", orca_slicer="", profiles_dir=""),
+        pytest.raises(SystemExit) as ei,
+    ):
+        main()
+    assert ei.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "error"
+    errors = {c["name"]: c["message"] for c in payload["checks"] if c["status"] == "error"}
+    assert set(errors) == {"config", "orca-slicer", "profiles-dir"}, errors
+    assert payload["errors"] == 3
+
+
+def test_setup_sim_without_tty_is_a_usable_error_not_a_crash(monkeypatch, tmp_path, capsys):
+    _empty_home(monkeypatch, tmp_path, ["setup", "--sim"])
+    with patch("bambu_cli.logging_utils._BACKEND") as log, pytest.raises(SystemExit) as ei:
+        main()
+    assert ei.value.code == 1
+    errors = _messages(log, "error")
+    assert len(errors) == 1, errors
+    assert "cannot run in a headless environment" in errors[0]
+    for flag in ("--printer-ip", "--serial", "--access-code-file"):
+        assert flag in errors[0], flag
+    assert "plate setup --printer-ip" in errors[0]
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err and "Traceback" not in captured.out
+
+
+def test_sim_status_with_empty_home_exits_zero_and_reports_idle(monkeypatch, tmp_path):
+    _empty_home(monkeypatch, tmp_path, ["--sim", "status"])
+    with patch("bambu_cli.logging_utils._BACKEND") as log:
+        try:
+            main()
+        except SystemExit as exc:  # pragma: no cover - main() may return or exit 0
+            assert exc.code in (None, 0)
+    assert _messages(log, "error") == []
+    info = _messages(log, "info")
+    assert any("State: IDLE" in m for m in info), info

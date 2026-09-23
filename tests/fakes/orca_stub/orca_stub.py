@@ -193,6 +193,13 @@ def main(argv: list[str]) -> int:
         print("100%", file=stdout)
         if outpath:
             _write_valid_3mf(outpath)
+            # Real OrcaSlicer also drops these next to the export (seen in a real
+            # run, 2026-09-22), clobbering same-named files in --outputdir.
+            outdir = os.path.dirname(outpath)
+            with open(os.path.join(outdir, "plate_1.gcode"), "w", encoding="utf-8") as fh:
+                fh.write(_PLATE_GCODE)
+            with open(os.path.join(outdir, "result.json"), "w", encoding="utf-8") as fh:
+                json.dump({"return_code": 0}, fh)
         rc = 0
 
     elif scenario == "progress":

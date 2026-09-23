@@ -8,7 +8,8 @@ from urllib.parse import quote
 from bambu_cli.argutils import namespace_get as _namespace_get
 
 
-def _print_next_command(args, basename):
+def _print_next_command(args, basename, plate=None):
+    """The ``print`` command that finishes a job; ``plate`` overrides ``args.plate``."""
     command = ["print", basename, "--confirm", "--json"]
     if _namespace_get(args, "use_ams", False):
         command.append("--use-ams")
@@ -21,19 +22,26 @@ def _print_next_command(args, basename):
         command.append("--skip-bed-leveling")
     if _namespace_get(args, "skip_flow_cali", False):
         command.append("--skip-flow-cali")
+    plate = plate or _namespace_get(args, "plate")
+    if plate and plate != 1:  # plate 1 is print's default; do not add noise
+        command.extend(["--plate", str(plate)])
     return command
 
 
 def generate_print_payload(
-    basename, use_ams=False, ams_mapping=None, timelapse=False, bed_leveling=True, flow_cali=True
+    basename, use_ams=False, ams_mapping=None, timelapse=False, bed_leveling=True, flow_cali=True, plate=1
 ):
-    """Generate the JSON payload for the print command."""
+    """Generate the JSON payload for the print command.
+
+    ``plate`` picks ``Metadata/plate_<n>.gcode`` inside the 3MF. It was always
+    plate 1, which the printer rejects when only another plate is sliced.
+    """
     # Files are stored in /sdcard/model/ on the printer (referenced via the url field below).
     encoded_basename = quote(basename, safe="")
     print_cmd = {
         "sequence_id": "0",
         "command": "project_file",
-        "param": "Metadata/plate_1.gcode",
+        "param": f"Metadata/plate_{int(plate)}.gcode",
         "subtask_name": basename,
         "url": f"file:///sdcard/model/{encoded_basename}",
         "bed_type": "auto",

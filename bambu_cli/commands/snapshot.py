@@ -414,7 +414,7 @@ def cmd_snapshot(
                     captured_at=captured_at,
                     sha256=sha256,
                     camera_image=camera_image,
-                    docker_container="bambu_camera",
+                    docker_container=ctx.settings.camera_container_name,
                 )
             )
     except urllib.error.URLError as e:

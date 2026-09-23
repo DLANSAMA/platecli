@@ -83,6 +83,12 @@ def _inline_defs(schema):
                 # `status.printer`'s description and required list.
                 merged = walk(dict(target))
                 merged.update({k: v for k, v in node.items() if k != "$ref"})
+                if merged.pop("_nullable", False):
+                    t = merged.get("type", "object")
+                    if isinstance(t, str):
+                        merged["type"] = [t, "null"]
+                    elif isinstance(t, list) and "null" not in t:
+                        merged["type"] = t + ["null"]
                 return merged
             return {k: walk(v) for k, v in node.items()}
         if isinstance(node, list):
@@ -117,8 +123,11 @@ def _normalize_optional(prop, *, nullable):
 
     merged = {k: v for k, v in prop.items() if k != "anyOf"}
     merged.update(non_null[0])
-    if nullable and isinstance(merged.get("type"), str):
-        merged["type"] = [merged["type"], "null"]
+    if nullable:
+        if isinstance(merged.get("type"), str):
+            merged["type"] = [merged["type"], "null"]
+        elif "$ref" in merged:
+            merged["_nullable"] = True
     return merged
 
 

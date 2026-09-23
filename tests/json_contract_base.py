@@ -29,6 +29,7 @@ from bambu_cli.cli import build_parser, main
 # dependency available/allowed).
 # ---------------------------------------------------------------------------
 
+
 def assert_shape(payload, spec, path="$"):
     """Validate `payload` against a small hand-rolled spec.
 
@@ -63,6 +64,7 @@ def assert_shape(payload, spec, path="$"):
         for idx, item in enumerate(payload):
             assert_shape(item, spec["items"], path=f"{path}[{idx}]")
 
+
 ANY = {}
 STR = {"type": str}
 BOOL = {"type": bool}
@@ -72,6 +74,7 @@ DICT = {"type": dict}
 LIST = {"type": list}
 
 BASE_OK = {"type": dict, "required": {"status": {"enum": ["ok"]}, "command": STR}}
+
 
 def base_error_spec(command=None, require_failed_step=True):
     required = {
@@ -84,9 +87,11 @@ def base_error_spec(command=None, require_failed_step=True):
         required["failed_step"] = STR
     return {"type": dict, "required": required}
 
+
 # ---------------------------------------------------------------------------
 # Harness
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _reset_json_state():
@@ -97,6 +102,7 @@ def _reset_json_state():
     utils._JSON_EMITTED = False
     utils._LAST_ERROR_PAYLOAD = None
     utils._LAST_DOWNLOAD_PAYLOAD = None
+
 
 def run_main(monkeypatch, tmp_path, argv, config_path=None):
     """Drive bambu_cli.cli.main() with a scratch config path so no real
@@ -114,11 +120,34 @@ def run_main(monkeypatch, tmp_path, argv, config_path=None):
         exc = e
     return exc
 
+
 def read_json(capsys):
     out = capsys.readouterr().out
     return json.loads(out)
 
-def make_ready_file(tmp_path, name="ready.3mf", content="simulated 3mf content"):
+
+def sliced_3mf_bytes(plates=(1,)):
+    """A minimal *sliced* 3MF: a zip with ``Metadata/plate_<n>.gcode`` per plate.
+
+    job/send refuse a .3mf with no sliced plate (the printer would reject it),
+    so printer-ready fixtures must be real sliced packages, not placeholder text.
+    """
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    stamp = (2026, 1, 1, 0, 0, 0)  # fixed, so the bytes are identical on every call
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(zipfile.ZipInfo("[Content_Types].xml", date_time=stamp), "<Types/>")
+        for n in plates:
+            zf.writestr(zipfile.ZipInfo(f"Metadata/plate_{n}.gcode", date_time=stamp), f"; plate {n}\nG28\n")
+    return buf.getvalue()
+
+
+def make_ready_file(tmp_path, name="ready.3mf", content=None):
     path = tmp_path / name
-    path.write_text(content, encoding="utf-8")
+    if content is None and name.endswith(".3mf"):
+        path.write_bytes(sliced_3mf_bytes())
+    else:
+        path.write_text(content if content is not None else "simulated printer-ready content", encoding="utf-8")
     return path
