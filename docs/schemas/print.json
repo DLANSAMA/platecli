@@ -30,6 +30,10 @@
         "type": "string"
       },
       "type": "array"
+    },
+    "plate": {
+      "description": "Plate of the 3MF sent to print (Metadata/plate_<n>.gcode).",
+      "type": "integer"
     }
   },
   "additionalProperties": true

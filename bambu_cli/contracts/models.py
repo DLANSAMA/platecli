@@ -303,6 +303,7 @@ class Print(Contract):
     printed: bool | None = None
     dry_run: bool | None = None
     next_command: list[str] | None = None
+    plate: int | None = spec(default=None, description="Plate of the 3MF sent to print (Metadata/plate_<n>.gcode).")
 
 
 @dataclass(frozen=True)
@@ -509,6 +510,7 @@ class JobOk(Contract):
     print_started: bool | None = None
     dry_run: bool | None = None
     copies_ignored: bool | None = None
+    plate: int | None = spec(default=None, description="Plate of a pre-sliced 3MF chosen for printing.")
 
 
 @dataclass(frozen=True)

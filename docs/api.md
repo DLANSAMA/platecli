@@ -321,6 +321,13 @@ Failure: [`job_error.json`](schemas/job_error.json).
 
 Print start requires `--confirm`. Without it, download → slice → upload still runs and the command exits `0` with `"status": "uploaded_not_printed"`; only the print step is withheld.
 
+For a pre-sliced 3MF, `job` reads which plates carry G-code and prints plate 1,
+or the only sliced plate when plate 1 is not sliced; `--plate N` chooses one.
+The summary reports it as `plate`, and a `next_command` carries `--plate`. A 3MF
+with no sliced plate is refused before upload (exit `3`, `failed_step:
+validate`), as is a `--plate` that is not sliced (exit `5`). `--plate` other
+than 1 is refused for a model that `job` slices itself.
+
 ### `go`
 
 `go` is the interactive guided-print wizard and has **no machine contract**: it
@@ -368,6 +375,9 @@ Without `--confirm` (schema: [`print.json`](schemas/print.json)):
   "next_command": ["print", "cube.gcode.3mf", "--confirm", "--json"]
 }
 ```
+
+`--plate N` prints `Metadata/plate_N.gcode` of the 3MF (default plate 1); the
+success payload reports it as `plate`.
 
 ### `delete`
 

@@ -19,6 +19,19 @@ import tempfile
 import zipfile
 
 
+def _sliced_3mf_bytes():
+    """A minimal sliced 3MF (zip with Metadata/plate_1.gcode); job refuses unsliced ones."""
+    import io
+    import zipfile as _zipfile
+
+    buf = io.BytesIO()
+    with _zipfile.ZipFile(buf, "w") as zf:
+        # Fixed timestamps: the bytes must be identical on every call.
+        for name, data in (("[Content_Types].xml", "<Types/>"), ("Metadata/plate_1.gcode", "; plate 1\nG28\n")):
+            zf.writestr(_zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0)), data)
+    return buf.getvalue()
+
+
 def split_configured_cli(configured, platform=None):
     """Split BAMBU_CLI without corrupting plain Windows executable paths."""
     active_platform = sys.platform if platform is None else platform
@@ -373,7 +386,7 @@ def smoke_preflight_json(root):
 def smoke_local_job_dry_run_json(root):
     env = isolated_env(root)
     ready = root / "ready.3mf"
-    ready.write_text("simulated 3mf content", encoding="utf-8")
+    ready.write_bytes(_sliced_3mf_bytes())
 
     result = run_cli(["job", str(ready), "--confirm", "--dry-run", "--json"], env)
     payload = json_stdout(result)
@@ -553,7 +566,7 @@ def smoke_sim_local_zip_job_json(root):
     root.mkdir(parents=True, exist_ok=True)
     archive_path = root / "agent-bundle.zip"
     with zipfile.ZipFile(archive_path, "w") as archive:
-        archive.writestr("../agent-ready.3mf", "simulated 3mf content")
+        archive.writestr("../agent-ready.3mf", _sliced_3mf_bytes())
         archive.writestr(("a" * 300) + ".txt", "ignored")
 
     result = run_cli(["--sim", "job", str(archive_path), "--confirm", "--json"], env)
@@ -571,7 +584,7 @@ def smoke_sim_local_zip_job_json(root):
     if payload.get("uploaded") is not True or payload.get("printed") is not True:
         assert False, f"local ZIP job did not complete simulated upload/print: {payload}"
     try:
-        if not extracted_path.exists() or extracted_path.read_text(encoding="utf-8") != "simulated 3mf content":
+        if not extracted_path.exists() or extracted_path.read_bytes() != _sliced_3mf_bytes():
             assert False, "local ZIP job did not extract the expected printer-ready file"
     finally:
         if extracted_path.parent.name.startswith("bambu-job-"):
@@ -585,7 +598,7 @@ def smoke_sim_local_zip_long_name_json(root):
     archive_path = root / "agent-long-name-bundle.zip"
     member_name = ("a" * 300) + ".3mf"
     with zipfile.ZipFile(archive_path, "w") as archive:
-        archive.writestr(member_name, "simulated 3mf content")
+        archive.writestr(member_name, _sliced_3mf_bytes())
 
     result = run_cli(["--sim", "job", str(archive_path), "--upload-only", "--json"], env)
     payload = json_stdout(result)
@@ -627,7 +640,7 @@ def smoke_local_zip_extract_error_json(root):
 def smoke_sim_job_json(root):
     env = isolated_env(root)
     ready = root / "ready file.3mf"
-    ready.write_text("simulated 3mf content", encoding="utf-8")
+    ready.write_bytes(_sliced_3mf_bytes())
 
     unconfirmed = run_cli(["--sim", "job", str(ready), "--json"], env)
     unconfirmed_payload = json_stdout(unconfirmed)
@@ -654,7 +667,7 @@ def smoke_sim_job_json(root):
 def smoke_send_alias_json(root):
     env = isolated_env(root)
     ready = root / "ready.3mf"
-    ready.write_text("simulated 3mf content", encoding="utf-8")
+    ready.write_bytes(_sliced_3mf_bytes())
 
     result = run_cli(["--sim", "send", str(ready), "--upload-only", "--json"], env)
     payload = json_stdout(result)
@@ -672,7 +685,7 @@ def smoke_send_alias_json(root):
 def smoke_sim_lower_level_json(root):
     env = isolated_env(root)
     ready = root / "ready.3mf"
-    ready.write_text("simulated 3mf content", encoding="utf-8")
+    ready.write_bytes(_sliced_3mf_bytes())
 
     status = json_stdout(run_cli(["--sim", "status", "--json"], env))
     if status.get("status") != "ok" or status.get("command") != "status":

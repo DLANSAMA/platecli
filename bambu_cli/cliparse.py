@@ -41,6 +41,17 @@ def positive_seconds(value):
     return seconds
 
 
+def positive_int(value):
+    """argparse type for a 1-based index such as a plate number."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"must be a positive whole number (got {value!r})") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be a positive whole number (got {value!r})")
+    return number
+
+
 class _SilentArgumentParser(argparse.ArgumentParser):
     """A parser whose error()/exit() never terminate the process.
 
@@ -194,6 +205,11 @@ def _add_job_arguments(parser):
         "--dry-run", action="store_true", help="No-side-effect validation; skip download/slice/upload/print"
     )
     parser.add_argument("--upload-only", action="store_true", help="Upload the printable but do not start the print")
+    parser.add_argument(
+        "--plate",
+        type=positive_int,
+        help="Plate of a multi-plate 3MF to print (default: for job/send, the only sliced plate or plate 1; for print, plate 1)",
+    )
     parser.add_argument("--name", help="Save downloaded URL as filename before slicing/upload")
     parser.add_argument(
         "--output",
@@ -390,6 +406,11 @@ def build_parser():
     p_print.add_argument("--timelapse", action="store_true", help="Enable timelapse")
     p_print.add_argument("--skip-bed-leveling", action="store_true", help="Skip bed leveling")
     p_print.add_argument("--skip-flow-cali", action="store_true", help="Skip flow calibration")
+    p_print.add_argument(
+        "--plate",
+        type=positive_int,
+        help="Plate of a multi-plate 3MF to print (default: for job/send, the only sliced plate or plate 1; for print, plate 1)",
+    )
 
     p_job = sub.add_parser(
         "job",

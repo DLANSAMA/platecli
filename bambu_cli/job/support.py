@@ -30,6 +30,7 @@ def _exit_code_from_error(exc, default=EXIT_COMMAND_ERROR):
 from bambu_cli.download import (
     _safe_remote_name,
 )
+from bambu_cli.fsutil import _portable_basename
 from bambu_cli.utils import emit_json
 
 
@@ -77,6 +78,44 @@ def _job_fail(args, summary, failed_step, exit_code, message):
     logger.error(message)
     _emit_job_failure(args, summary, failed_step, exit_code, message)
     abort("", exit_code=exit_code)
+
+
+def _choose_plate(args, summary, path):
+    """Pick the plate of a pre-sliced 3MF to print, or fail the job before upload.
+
+    The print payload names ``Metadata/plate_<n>.gcode``; it was always plate 1,
+    which the printer rejects when only another plate is sliced, and a 3MF with
+    no sliced plate at all was uploaded and sent to print anyway.
+    """
+    from bambu_cli.slicer.estimate import sliced_plates
+
+    name = _portable_basename(path)
+    requested = _namespace_get(args, "plate")
+    plates = sliced_plates(path)
+    if not plates:
+        _job_fail(
+            args,
+            summary,
+            "validate",
+            EXIT_FILE_ERROR,
+            f"{name} is not sliced: it contains no Metadata/plate_<n>.gcode. Export a sliced 3MF from "
+            "OrcaSlicer or Bambu Studio, or give job the model's STL/STEP to slice.",
+        )
+    listed = ", ".join(str(n) for n in plates)
+    if requested is not None:
+        if requested not in plates:
+            _job_fail(
+                args,
+                summary,
+                "validate",
+                EXIT_COMMAND_ERROR,
+                f"Plate {requested} is not sliced in {name}; sliced plates: {listed}.",
+            )
+        return requested
+    chosen = 1 if 1 in plates else plates[0]
+    if len(plates) > 1:
+        logger.warning(f"⚠️  {name} has sliced plates {listed}; printing plate {chosen}. Pass --plate to choose.")
+    return chosen
 
 
 def _validate_predicted_remote_name_or_fail(args, summary, remote_name, message_prefix):

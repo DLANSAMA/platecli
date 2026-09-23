@@ -63,6 +63,8 @@ def cmd_print(args, ctx=None):
             )
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
+    plate = getattr(args, "plate", None)
+    plate = plate if isinstance(plate, int) and plate >= 1 else 1
     payload = generate_print_payload(
         basename,
         use_ams=getattr(args, "use_ams", False),
@@ -70,6 +72,7 @@ def cmd_print(args, ctx=None):
         timelapse=getattr(args, "timelapse", False),
         bed_leveling=not getattr(args, "skip_bed_leveling", False),
         flow_cali=not getattr(args, "skip_flow_cali", False),
+        plate=plate,
     )
     from bambu_cli.protocols.mqtt import execute_print_command
 
@@ -83,6 +86,7 @@ def cmd_print(args, ctx=None):
                 file=basename,
                 printed=not dry_run,
                 dry_run=bool(dry_run),
+                plate=plate,
             )
         )
     return basename

@@ -77,6 +77,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   `*_timeout` value in config.json is ignored with a warning instead of
   crashing before the command runs, and `config validate` reports it under a
   new `timeouts` check.
+- The print command always named `Metadata/plate_1.gcode`, so a pre-sliced
+  3MF whose only sliced plate was another one failed on the printer, and a
+  3MF with no sliced plate at all was uploaded and sent to print. `job`/`send`
+  now read which plates are sliced: plate 1, or the only sliced plate, is
+  printed (with a warning when there are several); an unsliced 3MF is refused
+  before upload. `print`, `job` and `send` take `--plate N`, and the JSON
+  reports `plate`. Time estimates for a multi-plate 3MF are for the printed
+  plate, not the last one.
 
 ### Security
 
