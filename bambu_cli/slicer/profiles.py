@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 from functools import lru_cache
@@ -367,6 +368,28 @@ def _create_temp_profiles(
     return tmp_process, tmp_filament
 
 
+# OrcaSlicer's own test for an extruder reset in the layer-change G-code.
+_G92_E0_RE = re.compile(r"^[ \t]*[gG]92[ \t]*[eE](0(\.0*)?|\.0+)[ \t]*(;.*)?$", re.MULTILINE)
+
+
+def _ensure_layer_extruder_reset(machine: dict) -> None:
+    """Add ``G92 E0`` to the layer-change G-code when relative extrusion needs it.
+
+    OrcaSlicer refuses to slice with relative E unless a layer-change hook
+    resets the extruder. Bambu's X1/P1 profiles include the reset; the A1 and
+    A1 mini profiles rely on an exemption the OrcaSlicer CLI does not apply, so
+    every A1/A1 mini slice failed. With relative extrusion the reset only zeroes
+    a counter; nothing moves.
+    """
+    if str(machine.get("use_relative_e_distances", "1")).strip("[]'\" ") == "0":
+        return
+    hooks = f"{machine.get('before_layer_change_gcode') or ''}\n{machine.get('layer_change_gcode') or ''}"
+    if _G92_E0_RE.search(hooks):
+        return
+    layer = machine.get("layer_change_gcode") or ""
+    machine["layer_change_gcode"] = f"{layer.rstrip(chr(10))}\nG92 E0\n" if layer else "G92 E0\n"
+
+
 def _create_temp_machine(machine_path: str, profiles_dir: str) -> IO[str]:
     """Create a temp machine profile with its ``inherits`` chain flattened.
 
@@ -378,6 +401,7 @@ def _create_temp_machine(machine_path: str, profiles_dir: str) -> IO[str]:
     """
 
     resolved = _load_flattened_profile(machine_path)
+    _ensure_layer_extruder_reset(resolved)
     tmp_machine = tempfile.NamedTemporaryFile(  # noqa: SIM115 — handle outlives block; cleaned up by caller
         mode="w", suffix=".json", delete=False, prefix="mach_", encoding="utf-8"
     )

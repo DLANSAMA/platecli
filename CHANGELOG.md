@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Printer safety
 
+- **A1 and A1 mini can be sliced.** Every A1/A1 mini slice failed inside
+  OrcaSlicer ("Relative extruder addressing requires resetting the extruder
+  position at each layer"): Bambu's A1 profiles omit the per-layer `G92 E0`
+  reset and rely on an exemption OrcaSlicer's command line does not apply.
+  The machine profile handed to OrcaSlicer now appends `G92 E0` to the
+  layer-change G-code when no reset is present (a counter reset with relative
+  extrusion; nothing moves). X1/P1 profiles already carry it and are unchanged.
 - **No more slicing for a guessed printer.** An unrecognised `model` in
   config.json (including the A1 mini's own product name, "A1 mini") used to
   fall back to the P1P profile — a 256 mm bed — without a warning, as did a
