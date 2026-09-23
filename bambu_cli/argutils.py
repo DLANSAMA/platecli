@@ -38,5 +38,17 @@ def exit_code_from_system_exit(exc, default=EXIT_COMMAND_ERROR):
 def setup_args_provided(args):
     return any(
         namespace_get(args, attr) is not None
-        for attr in ("printer_ip", "serial", "access_code", "access_code_env", "access_code_file", "model", "nozzle")
+        for attr in (
+            "printer_ip",
+            "serial",
+            "access_code",
+            "access_code_env",
+            "access_code_file",
+            "model",
+            "nozzle",
+            # These alone used to start the interactive wizard, which ignored them.
+            "orca_slicer",
+            "profiles_dir",
+            "cert_fingerprint",
+        )
     )

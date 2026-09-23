@@ -172,7 +172,7 @@ profiles dir) is also probed, for running from a source tree.
 ### Overriding the paths
 
 The supported way is `plate setup` — it accepts both as flags and writes them to
-`config.json`:
+`config.json`, keeping every other value already there:
 
 ```bash
 plate setup \

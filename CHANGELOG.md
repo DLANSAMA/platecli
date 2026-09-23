@@ -118,6 +118,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   through the documented `gcode_file` command, which a community report says
   does not start custom files). `print` warns before sending one; the open
   question is listed in docs/live-printer-smoke.md.
+- `plate setup --<value>` now updates that value in an existing config, as the
+  manual and troubleshooting guide already described (`--printer-ip` after a
+  DHCP change, `--access-code-env` after rotating the LAN code,
+  `--profiles-dir`/`--orca-slicer`, `--cert-fingerprint` to re-pin). Before,
+  a partial non-interactive setup failed on "missing required values", and the
+  path and pin flags alone started the interactive wizard and ignored the
+  flag. Values not passed are kept; the access code, pin, address and model
+  only when `--serial` is unchanged.
 
 ### Security
 

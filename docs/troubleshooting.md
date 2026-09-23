@@ -509,7 +509,11 @@ always prints the path actually in use.
 
 There is no `plate config set`; `plate config` only supports `show` and
 `validate`. Change settings by re-running `plate setup` (it accepts every value
-as a flag for non-interactive use) or by editing `config.json` directly.
+as a flag for non-interactive use) or by editing `config.json` directly. With a
+config already present, `plate setup` updates only the values you pass and keeps
+the rest; the access code, certificate pin, address and model are kept only
+when `--serial` is unchanged, so a second printer never inherits the first
+one's pin or code.
 
 ## Missing dependency: paho-mqtt
 

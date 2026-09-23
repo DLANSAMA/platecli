@@ -100,6 +100,21 @@ def _prompt_printer_model(args, detected_model):
     abort("", exit_code=EXIT_CONFIG_ERROR)
 
 
+def _existing_setup_config():
+    """The current config.json as a dict, or {} when absent, unreadable or not an object."""
+    from bambu_cli.config import read_config_json
+
+    try:
+        data = read_config_json(_config_path())
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _same_path(first, second):
+    return bool(first and second) and os.path.abspath(_expand_path(first)) == os.path.abspath(_expand_path(second))
+
+
 def _cmd_setup_noninteractive(args):
     from bambu_cli.config import _DEFAULT_ORCA, _DEFAULT_PROFILES
 
@@ -123,6 +138,35 @@ def _cmd_setup_noninteractive(args):
             _setup_json_error(args, message, access_code_env=access_code_env)
             abort("", exit_code=EXIT_CONFIG_ERROR)
 
+    # Update mode: with a config already present, values not given on the
+    # command line are kept, so `plate setup --printer-ip <new-ip>` or
+    # `--access-code-env CODE` changes just that (as the docs describe). The
+    # printer-specific values -- address, model, nozzle, access code, pin -- are
+    # only inherited for the same printer (serial unchanged); a pin or code from
+    # another printer would fail closed or authenticate against the wrong one.
+    existing = _existing_setup_config() if _setup_args_provided(args) else {}
+    same_printer = bool(existing) and (
+        not serial or str(serial).strip().upper() == str(existing.get("serial", "")).strip().upper()
+    )
+    inherited = existing if same_printer else {}
+    rotating_configured_file = False
+    if same_printer:
+        ip = ip or existing.get("printer_ip")
+        serial = serial or existing.get("serial")
+        configured_file = existing.get("access_code_file")
+        if not access_code and not access_code_file:
+            if configured_file:
+                access_code_file = configured_file
+            elif existing.get("access_code"):
+                access_code = str(existing["access_code"])
+        elif access_code and not access_code_file and configured_file:
+            access_code_file = configured_file
+        # A new code for the file this printer already uses is a rotation, not a
+        # clobber of some unrelated secret.
+        rotating_configured_file = bool(access_code and _same_path(access_code_file, configured_file))
+        expanded_access_code_file = _validate_setup_access_code_file(args, access_code_file)
+    model_value = _namespace_get(args, "model") or inherited.get("model")
+
     missing = []
     if not ip:
         missing.append("--printer-ip")
@@ -130,7 +174,7 @@ def _cmd_setup_noninteractive(args):
         missing.append("--serial")
     if not access_code and not access_code_file:
         missing.append("--access-code, --access-code-env, or --access-code-file")
-    if not _namespace_get(args, "model"):
+    if not model_value:
         # No default: the model picks the machine profile, and a guessed one
         # slices G-code for another printer's bed.
         missing.append("--model")
@@ -187,14 +231,15 @@ def _cmd_setup_noninteractive(args):
         config = _build_setup_config(
             ip=ip,
             serial=serial,
-            model=_normalize_model(_namespace_get(args, "model")),
-            nozzle=_normalize_nozzle(_namespace_get(args, "nozzle")),
+            model=_normalize_model(model_value),
+            nozzle=_normalize_nozzle(_namespace_get(args, "nozzle") or inherited.get("nozzle")),
             access_code=access_code,
             access_code_file=access_code_file,
-            orca_slicer=_namespace_get(args, "orca_slicer") or _DEFAULT_ORCA,
-            profiles_dir=_namespace_get(args, "profiles_dir") or _DEFAULT_PROFILES,
-            cert_fingerprint=_namespace_get(args, "cert_fingerprint"),
-            insecure_tls=bool(_namespace_get(args, "insecure_tls", False)),
+            # Local install paths belong to this machine, not the printer.
+            orca_slicer=_namespace_get(args, "orca_slicer") or existing.get("orca_slicer") or _DEFAULT_ORCA,
+            profiles_dir=_namespace_get(args, "profiles_dir") or existing.get("profiles_dir") or _DEFAULT_PROFILES,
+            cert_fingerprint=_namespace_get(args, "cert_fingerprint") or inherited.get("cert_fingerprint"),
+            insecure_tls=bool(_namespace_get(args, "insecure_tls", False)) or inherited.get("insecure_tls") is True,
         )
     except ValueError as exc:
         message = str(exc)
@@ -204,7 +249,7 @@ def _cmd_setup_noninteractive(args):
     # Refuse to silently clobber an existing secret file when both --access-code
     # and --access-code-file are given (the existence check above is skipped in
     # that case). Fails closed on an unreadable existing file too.
-    if access_code and access_code_file and not _namespace_get(args, "force", False):
+    if access_code and access_code_file and not rotating_configured_file and not _namespace_get(args, "force", False):
         conflict = _access_code_file_overwrite_conflict(expanded_access_code_file, access_code)
         if conflict:
             message = f"{conflict} (pass --force to overwrite, or point --access-code-file at a new path)."
