@@ -53,6 +53,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   255/70, 220/55 and 270/90 °C. Expect different (Bambu-default) speeds and
   print-time estimates than before.
 
+### Fixed
+
+- `status --monitor` exited 0 with no output when the printer refused the
+  connection (wrong access code), so a script could not tell it from success.
+  It now fails with exit 2 (`failed_step: mqtt`) on a refused connection, on a
+  socket/TLS error (previously an "Unexpected error", exit 5), and when the
+  printer never answers within the MQTT timeout (previously it waited forever).
+
 ### Security
 
 - **`"camera_allow_streamer": "false"` no longer enables the unpinned camera

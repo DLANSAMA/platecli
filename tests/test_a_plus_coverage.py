@@ -58,6 +58,8 @@ def test_monitor_connect_rc_nonzero_stops():
         patch.object(mqtt_mod, "create_mqtt_client", return_value=client),
         patch.object(mqtt_mod, "_mqtt_connect"),
         patch("sys.stdout.isatty", return_value=False),
+        # A refused connection is an error now, not a silent exit 0.
+        pytest.raises(BambuError),
     ):
         mqtt_mod.monitor_status(args, printer)
     client.loop_stop.assert_called()
