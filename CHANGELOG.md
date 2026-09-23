@@ -98,6 +98,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `snapshot --json` via the Docker streamer reported `"docker_container":
   "bambu_camera"` whatever `camera_container_name` was set to; it now reports
   the container actually used.
+- `upload` (and `job`/`send`, which upload through it) refuses to replace the
+  file the printer is printing right now: an upload deletes the old file on
+  the printer first, and re-running a job on the same model mid-print would
+  pull the file out from under the running print. What the firmware does in
+  that case has not been verified on hardware; this check is the code-level
+  safeguard. It asks the printer for its current job first (exit 4 if that is
+  the same file); if the printer cannot be asked, the upload goes ahead.
 
 ### Security
 
