@@ -39,6 +39,17 @@ Destructive / motion opt-ins (explicit extra flags; clear console warning):
 | `BAMBU_LIVE_CLEANUP=1` | Deletes the uploaded file after the run (skipped if print started) |
 | `BAMBU_LIVE_GCODE_CONFIRM=1` | Sends a **harmless** `M105` with `--confirm` (temperature query only) |
 
+**Open hardware questions** (record the answer here when someone runs them):
+
+- Does `print <file>.gcode --confirm` start a plain `.gcode` on the printer? `print`
+  sends `project_file`, which names a plate inside a 3MF; the alternative is the
+  `gcode_file` command. Unverified as of 2026-09-23 — `print` warns when sending one.
+- Does firmware reject a sliced 3MF whose `printer_model` does not match the
+  printer? platecli now refuses unknown models and missing machine profiles
+  before slicing, so it should never produce one, but a hand-made file could.
+- An upload never replaces the file of the running print (platecli refuses), so
+  what the firmware does if that file is deleted mid-print stays untested.
+
 Anything that moves axes or starts a print is **off** unless you set the print
 confirm env. Prefer a free printer that is not mid-job.
 

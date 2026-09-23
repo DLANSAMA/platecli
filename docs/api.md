@@ -379,6 +379,13 @@ Without `--confirm` (schema: [`print.json`](schemas/print.json)):
 `--plate N` prints `Metadata/plate_N.gcode` of the 3MF (default plate 1); the
 success payload reports it as `plate`.
 
+**Plain `.gcode` files are not verified on hardware.** `print` starts every file
+with the `project_file` command, which names a plate inside a 3MF. Whether Bambu
+firmware starts a plain `.gcode` that way (or through the separate `gcode_file`
+command) has not been confirmed on a printer, so `print` warns before sending one.
+Prefer a sliced `.3mf`; an uploaded `.gcode` can always be started from the
+printer's screen.
+
 ### `delete`
 
 Without `--confirm` (schema: [`delete.json`](schemas/delete.json)):

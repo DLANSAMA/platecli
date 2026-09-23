@@ -105,6 +105,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   that case has not been verified on hardware; this check is the code-level
   safeguard. It asks the printer for its current job first (exit 4 if that is
   the same file); if the printer cannot be asked, the upload goes ahead.
+- Printing a plain `.gcode` file is now flagged as unverified: `print` sends
+  every file with `project_file`, which names a plate inside a 3MF, and it has
+  not been confirmed that Bambu firmware starts a plain `.gcode` that way (or
+  through the documented `gcode_file` command, which a community report says
+  does not start custom files). `print` warns before sending one; the open
+  question is listed in docs/live-printer-smoke.md.
 
 ### Security
 
