@@ -94,60 +94,56 @@ def _discover_process_profile(
     compatible_printer: str | None = None,
     profiles_dir: str | None = None,
 ) -> str | None:
-    """Discover a matching process profile."""
+    """Find the process profile for ``quality_arg`` on this printer.
+
+    A file belongs to the model when its name ends in ``@BBL <model_code>``
+    exactly (``"A1"`` must not match ``"... @BBL A1M"``), or when its
+    ``compatible_printers`` lists ``compatible_printer`` -- how the P1S, X1 and
+    X1E borrow the X1C profiles. Among the matches for the layer height the one
+    named with the requested quality word ("Standard", "Fine", ...) wins, then
+    the model's own profile, then the name; the old first-match-in-directory
+    order picked ``0.20mm Bambu Support W @BBL X1C`` (a support-material
+    profile) for every standard P1S/X1/X1E slice. Falls back to the 0.20 mm
+    standard profile; never borrows another model's profile.
+    """
     if profiles_dir is None:
         from bambu_cli.context import current_settings
 
         profiles_dir = current_settings().profiles_dir
-    layer_height = (
-        quality_arg
-        if quality_arg.startswith("0.")
-        else quality_map.get(quality_arg, f"0.20mm Standard @BBL {model_code}").split(" ")[0]
-    )
+    requested = quality_map.get(quality_arg, f"0.20mm Standard @BBL {model_code}")
+    layer_height = quality_arg if quality_arg.startswith("0.") else requested.split(" ")[0]
+    requested_parts = requested.split(" @BBL ")[0].split(" ", 1)
+    quality_word = requested_parts[1] if len(requested_parts) > 1 else None
     proc_dir = os.path.join(profiles_dir, "process")
-    if os.path.isdir(proc_dir):
-        files = os.listdir(proc_dir)
-        process_file = next(
-            (f for f in files if f.startswith(layer_height) and model_code in f and "nozzle" not in f), None
+    if not os.path.isdir(proc_dir):
+        return None
+    files = sorted(f for f in os.listdir(proc_dir) if f.endswith(".json") and "nozzle" not in f)
+
+    def owns(name: str) -> bool:
+        return name[: -len(".json")].endswith(f"@BBL {model_code}")
+
+    def usable(name: str) -> bool:
+        return owns(name) or bool(
+            compatible_printer and _process_profile_compatible(os.path.join(proc_dir, name), compatible_printer)
         )
-        if not process_file and compatible_printer:
-            process_file = next(
-                (
-                    f
-                    for f in files
-                    if f.startswith(layer_height)
-                    and "nozzle" not in f
-                    and _process_profile_compatible(os.path.join(proc_dir, f), compatible_printer)
-                ),
-                None,
-            )
-        if process_file:
-            logger.debug(f"Profile auto-discovered: {process_file}")
-            return os.path.join(proc_dir, process_file)
-        else:
-            # Fall back to standard 0.20mm for this model
-            process_file = next(
-                (f for f in files if f.startswith("0.20mm") and model_code in f and "nozzle" not in f), None
-            )
-            if not process_file and compatible_printer:
-                process_file = next(
-                    (
-                        f
-                        for f in files
-                        if f.startswith("0.20mm")
-                        and "nozzle" not in f
-                        and _process_profile_compatible(os.path.join(proc_dir, f), compatible_printer)
-                    ),
-                    None,
-                )
-            if process_file:
-                logger.warning(f"⚠️  Requested quality not found, using: {process_file}")
-                return os.path.join(proc_dir, process_file)
-            # No profile for this model at all. Borrowing another model's
-            # (the old "fall back to P1P") tuned speeds and accelerations for
-            # a different machine; report it instead.
-            logger.error(f"No slicer profiles for {model_code} found in {proc_dir}")
+
+    def choose(prefix: str, word: str | None) -> str | None:
+        matches = [f for f in files if f.startswith(prefix) and usable(f)]
+        if not matches:
             return None
+        return min(matches, key=lambda f: (not (word and f" {word} @BBL " in f), not owns(f), f))
+
+    process_file = choose(layer_height, quality_word)
+    if process_file:
+        logger.debug(f"Profile auto-discovered: {process_file}")
+        return os.path.join(proc_dir, process_file)
+    process_file = choose("0.20mm", "Standard")
+    if process_file:
+        logger.warning(f"⚠️  Requested quality not found, using: {process_file}")
+        return os.path.join(proc_dir, process_file)
+    # No profile for this model at all. Borrowing another model's tuned speeds
+    # and accelerations for a different machine is not an option; report it.
+    logger.error(f"No slicer profiles for {model_code} found in {proc_dir}")
     return None
 
 

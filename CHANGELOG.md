@@ -14,6 +14,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   The machine profile handed to OrcaSlicer now appends `G92 E0` to the
   layer-change G-code when no reset is present (a counter reset with relative
   extrusion; nothing moves). X1/P1 profiles already carry it and are unchanged.
+- **P1S, X1 and X1E slice with the Standard profile they asked for.** These
+  models have no process profiles of their own and borrow the X1C ones. The
+  search took the first file in directory order whose name merely contained
+  the model code, which with the real profiles was `0.20mm Bambu Support W @BBL
+  X1C` — a profile for printing with support material — for every standard
+  slice ("X1" also matched X1C/X1E files, "A1" A1 mini ones). It now requires
+  an exact `@BBL <model>` name or a `compatible_printers` entry and prefers the
+  requested quality ("Standard", "Fine", ...).
 - **No more slicing for a guessed printer.** An unrecognised `model` in
   config.json (including the A1 mini's own product name, "A1 mini") used to
   fall back to the P1P profile — a 256 mm bed — without a warning, as did a
