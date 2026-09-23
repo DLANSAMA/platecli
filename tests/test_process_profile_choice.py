@@ -62,8 +62,10 @@ def test_model_code_is_not_matched_as_a_substring(tmp_path):
 def test_real_profiles_give_standard_for_every_model():
     import os
 
-    real = "/home/dylanr/tools/squashfs-root/resources/profiles/BBL"
-    if not os.path.isdir(os.path.join(real, "process")):
-        pytest.skip("OrcaSlicer BBL profiles not installed here")
+    from bambu_cli.config import detect_profiles_dir
+
+    real = detect_profiles_dir()
+    if not real or not os.path.isdir(os.path.join(real, "process")):
+        pytest.skip("no OrcaSlicer BBL profiles installed on this machine")
     for code, printer in (("P1S", "Bambu Lab P1S"), ("X1", "Bambu Lab X1"), ("X1E", "Bambu Lab X1E")):
         assert _pick(real, code, printer) == "0.20mm Standard @BBL X1C", code
