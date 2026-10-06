@@ -57,14 +57,13 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 | `tui/` | Textual full-screen UI (`plate tui`), optional `[tui]` extra. A front-end over `interactive/core.py` — **not** an agent surface (see "human only" above) |
 | `tlspin.py` | The single `verify_cert_fingerprint` used by mqtt, ftps, and camera (fail-closed; B.5) |
 | `netsafety.py` | SSRF / private-IP guards for download targets |
-| `printables.py` | Printables model resolution (GraphQL + HTML fallback) |
 | `ams.py` | AMS tray parsing and material matching |
 | `utils.py` | `emit_json` / `emit_json_error` envelopes and shared output helpers |
 | `config.py` | Config load/apply, timeouts, fingerprints |
 | `context.py` | `Settings` / `RuntimeContext` process context |
 | `logging_utils.py` | Process logger proxy; tests use `set_logger` / patch `_BACKEND` |
 | `constants.py` | Exit codes, file-type tables, safety limits (immutable) |
-| `protocols/` | Low-level FTPS, MQTT, and camera clients used by `BambuPrinter` (`camera.py` moved here — it is a TLS transport sharing `tlspin`) |
+| `protocols/` | Low-level FTPS, MQTT, and camera clients used by `BambuPrinter` (`camera.py` lives here because it is a TLS transport sharing `tlspin`) |
 | `errors.py` | `BambuError` hierarchy + `abort()` (domain never calls `sys.exit`) |
 
 **Layer boundaries are enforced (blocking CI):** `scripts/check_layers.py` assigns every module a rank and rejects any import that goes *upward*, plus any import between the three sibling adapters. Deferred (function-local) imports count — they break the import cycle, not the dependency.
@@ -74,7 +73,7 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 50  commands/  interactive/  tui/         45  job/       40  download/  setup_cmd/
 35  printer.py                            30  protocols/ | slicer/ | printables/   <- MUST NOT import each other
 25  cliparse.py                           20  utils config context netsafety ams
-10  constants errors paths logging_utils argutils jsonio tlspin fsutil
+10  constants errors paths logging_utils argutils jsonio tlspin fsutil contracts
 ```
 
 The rule exists because directories alone never held it: `protocols/`, `slicer/` and `download/` were already separate packages and still drifted — `slicer/output.py` imported a **private FTPS helper** to delete a partial file, so a change to Bambu transport code silently changed slicer behavior. If you need a helper in two adapters, push it down to rank 10 (that is what `fsutil.py` is for); do not import sideways.
@@ -104,8 +103,8 @@ When adding tests, follow [docs/test-backlog.md](docs/test-backlog.md) and the q
 
 ### Known architecture debt (honest)
 
-- **`protocols/mqtt.py` is a facade** over `mqtt_tls` / `mqtt_cmd` / `mqtt_print` / `mqtt_monitor` / `mqtt_session`. The old ~880 LOC hotspot was split; keep new MQTT logic in those siblings, not the facade.
-- B.4 (cli extraction → paths/jsonio/argutils) and B.5 (single `verify_cert_fingerprint` in tlspin.py) both landed; see [docs/quality-roadmap.md](docs/quality-roadmap.md) for the current gap list.
+- **`protocols/mqtt.py` is a facade** over `mqtt_tls` / `mqtt_cmd` / `mqtt_print` / `mqtt_monitor` / `mqtt_session`. Keep new MQTT logic in those siblings, not the facade.
+- For the current gap list, see [docs/quality-roadmap.md](docs/quality-roadmap.md).
 
 ## Camera snapshots for agents
 
@@ -135,7 +134,7 @@ Published on PyPI as `platecli`; the installed command is `plate`.
 | Gate | Command / note |
 |------|----------------|
 | Default tests | `uv run python -m pytest tests/ -q -m "not live"` — never contacts a printer |
-| Coverage (CI) | `--cov-fail-under=90` (2026-09-16, PR #123: Linux 92.8% / Windows / macOS passing; matrix 3.10/3.12/3.14; A+ target **92%** — see roadmap) |
+| Coverage (CI) | `--cov-fail-under=90` (A+ target **92%** — see roadmap) |
 | Lint | `uvx ruff check bambu_cli` + `uvx ruff format --check bambu_cli` |
 | Types | `uvx mypy -p bambu_cli` |
 | Security lint | `uvx bandit -c pyproject.toml -r bambu_cli -ll` |
@@ -159,4 +158,4 @@ Full threat model: [SECURITY.md](SECURITY.md).
 - Prefer `access_code_file` over inline `access_code`.
 - Downloads block private/loopback targets unless `--allow-private-ips` (CLI-only, not sticky config).
 - Destructive/physical actions need `--confirm` and exit `5` without it: `print`, `stop`, `pause`, `resume`, `delete`, `gcode`. `job` / `send` without `--confirm` still uploads and exits `0` with `"status": "uploaded_not_printed"` — only the print step is withheld. `light` is deliberately exempt (no motion/thermal/material effect). `--confirm` is a deliberate-action gate, not an authorization boundary — anything that can run `plate` can pass it.
-- Camera Docker streamer (when used) publishes via `camera_port`, now loopback-only by default (`127.0.0.1:1985:1984`); the feed is unauthenticated, so only expose it on the LAN (`0.0.0.0:...`) deliberately (see SECURITY.md).
+- Camera Docker streamer (when used) publishes via `camera_port`, loopback-only by default (`127.0.0.1:1985:1984`); the feed is unauthenticated, so only expose it on the LAN (`0.0.0.0:...`) deliberately (see SECURITY.md).
