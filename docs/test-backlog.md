@@ -6,7 +6,7 @@
 This file is a short **remaining-gaps** list only. Refresh after each phase or audit.
 Do not treat historical “≥98% coverage” claims as current — see the snapshot below.
 
-## Snapshot (2026-09-16, PR #123; measured on Linux)
+## Snapshot (2026-09-16; measured on Linux)
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
