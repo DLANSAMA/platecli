@@ -216,3 +216,26 @@ def test_ftps_data_channel_malformed_pin_closes_socket():
         ftp.ntransfercmd("STOR /model/x.3mf")
 
     data_tls.close.assert_called_once()
+
+def test_ftps_data_channel_wrap_failure_closes_raw_socket():
+    """An error from wrap_socket itself must not leak the raw data socket."""
+    ftp = ftps_mod.ImplicitFTPS()
+    ftp.printer = _test_printer(cert_fingerprint=_FP, insecure_tls=False)
+    ftp.host = "192.168.1.1"
+    ftp._prot_p = True
+
+    control_tls = MagicMock(spec=ssl.SSLSocket)
+    control_tls.session = object()
+    control_ctx = MagicMock()
+    control_ctx.wrap_socket.side_effect = ValueError("check_hostname requires server_hostname")
+    control_tls.context = control_ctx
+    ftp.sock = control_tls
+
+    data_raw = MagicMock()
+    with (
+        patch.object(ftps_mod.ftplib.FTP, "ntransfercmd", return_value=(data_raw, 100)),
+        pytest.raises(ValueError),
+    ):
+        ftp.ntransfercmd("STOR /model/x.3mf")
+
+    data_raw.close.assert_called_once()

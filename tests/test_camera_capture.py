@@ -81,6 +81,23 @@ class TestGrabCameraFrameDirect(unittest.TestCase):
         # (not the bare socket) must be closed or the fd leaks.
         mock_tls.close.assert_called_once()
 
+    def test_pin_is_enforced_even_with_insecure_tls(self):
+        """insecure_tls used to skip a configured camera pin entirely."""
+        from bambu_cli.protocols.camera import _CameraPinMismatch, _grab_camera_frame_direct
+
+        create_connection, ssl_factory, mock_sock, mock_tls, mock_ctx = self._mock_net()
+        mock_tls.getpeercert.return_value = b"attacker_cert"
+        printer = _test_printer(
+            ip="192.168.1.100",
+            access_code="my_secret_code",
+            insecure_tls=True,
+            cert_fingerprint=hashlib.sha256(b"real_cert").hexdigest(),
+        )
+
+        with self.assertRaises(_CameraPinMismatch):
+            _grab_camera_frame_direct(printer, create_connection=create_connection, ssl_context_factory=ssl_factory)
+        mock_tls.sendall.assert_not_called()
+
     def test_grab_camera_frame_direct_with_pin(self):
         from bambu_cli.protocols.camera import _grab_camera_frame_direct
 
