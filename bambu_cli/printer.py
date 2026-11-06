@@ -143,9 +143,12 @@ class BambuPrinter:
         timeout: float | None = None,
         progress_callback=None,
         on_resume=None,
-        sleep=time.sleep,
+        sleep=None,
     ) -> bool:
         """Upload a file via FTPS as a verified state machine: (fresh|probe) -> (resume|restart) -> transfer -> verify."""
+        # Resolve the default at call time, not definition time, so a patched
+        # time.sleep takes effect (a default bound at import costs real seconds).
+        sleep = sleep or time.sleep
         if _has_command_injection_chars(remote_path):
             logger.error(f"Upload failed: unsafe remote path {remote_path!r}")
             return False

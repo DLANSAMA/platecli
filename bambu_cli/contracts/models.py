@@ -534,6 +534,9 @@ class JobError(Contract):
             "remote_name",
             "workdir",
             "next_command",
+            # null when the print command was sent but never acknowledged:
+            # the printer may be printing, so neither true nor false is known.
+            "printed",
         }
     )
 

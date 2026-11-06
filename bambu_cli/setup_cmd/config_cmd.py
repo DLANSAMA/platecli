@@ -25,6 +25,8 @@ CONFIG_CHECK_NAMES = {
     "serial",
     "printer-model",
     "timeouts",
+    "cert-fingerprint",
+    "camera-port",
     "access-code",
     "access-code-inline-conflict",
     "access-code-permissions",
@@ -63,7 +65,7 @@ def _cmd_config_show(args):
         # utf-8-sig via the canonical reader: a Windows-editor BOM must not make
         # `config show` reject the exact file every other command loads fine.
         config = read_config_json(config_path)
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         message = f"Could not read config: {_exception_for_message(exc)}"
         emit_json_error(
             args,

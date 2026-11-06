@@ -28,6 +28,7 @@ from bambu_cli.download.naming import (
     _sanitize_download_filename,
 )
 from bambu_cli.download.validation import (
+    _iri_to_uri,
     _known_unsupported_download_extension,
     _normalize_url_input,
     _reject_oversized_download,
@@ -214,7 +215,7 @@ def _cmd_download(
                 outpath = os.path.join(outdir, filename)
                 outpath = _reserve(outpath)
                 filename = _portable_basename(outpath)
-            req = urllib.request.Request(url, headers={**headers, "User-Agent": user_agent_for_url(url)})
+            req = urllib.request.Request(_iri_to_uri(url), headers={**headers, "User-Agent": user_agent_for_url(url)})
             with polite_open(safe_opener, req, timeout=DOWNLOAD_TIMEOUT) as resp:
                 final_url = _response_url(resp)
                 if final_url and final_url != url:
@@ -717,3 +718,9 @@ def _cmd_download(
         )
         safe_log_error(message)
         abort("", exit_code=EXIT_NETWORK_ERROR)
+    except BaseException:
+        # Ctrl-C (KeyboardInterrupt) skips every handler above. Still remove the
+        # partial transfer and the 0-byte placeholders, then let it propagate.
+        _remove_partial_file(partial_path)
+        _cleanup_reserved()
+        raise

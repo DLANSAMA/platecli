@@ -32,12 +32,16 @@ def positive_seconds(value):
     """
     import math
 
+    from bambu_cli.constants import MAX_TIMEOUT_SECONDS
+
     try:
         seconds = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise argparse.ArgumentTypeError(f"must be a positive number of seconds (got {value!r})") from None
     if not math.isfinite(seconds) or seconds <= 0:
         raise argparse.ArgumentTypeError(f"must be a positive number of seconds (got {value!r})")
+    if seconds > MAX_TIMEOUT_SECONDS:
+        raise argparse.ArgumentTypeError(f"must be at most {MAX_TIMEOUT_SECONDS} seconds (got {value!r})")
     return seconds
 
 
@@ -45,7 +49,7 @@ def positive_int(value):
     """argparse type for a 1-based index such as a plate number."""
     try:
         number = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise argparse.ArgumentTypeError(f"must be a positive whole number (got {value!r})") from None
     if number < 1:
         raise argparse.ArgumentTypeError(f"must be a positive whole number (got {value!r})")
@@ -106,6 +110,9 @@ class JsonArgumentParser(argparse.ArgumentParser):
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("conflict_handler", "resolve")
+        # An abbreviated --conf must not reach the --confirm gate: agent policies
+        # that look for the literal flag would be bypassed.
+        kwargs.setdefault("allow_abbrev", False)
         super().__init__(*args, **kwargs)
 
     def error(self, message):

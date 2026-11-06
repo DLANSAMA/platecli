@@ -70,6 +70,8 @@ DEFAULT_NETWORK_TIMEOUT = 15.0
 DOWNLOAD_TIMEOUT = 60.0
 SLICER_TIMEOUT = 120.0
 COMMAND_TIMEOUT = 5.0
+# Ceiling for user-supplied timeouts: larger values overflow socket/lock calls (Windows caps them far lower).
+MAX_TIMEOUT_SECONDS = 86400
 PRINT_ACK_TIMEOUT = 10.0
 UPLOAD_TIMEOUT = 300.0
 

@@ -18,6 +18,7 @@ from bambu_cli.protocols.mqtt_cmd import (
     _connect,
     _sleep,
 )
+from bambu_cli.textsafe import display_safe
 from bambu_cli.utils import get_sequence_id
 
 
@@ -27,7 +28,7 @@ def _status_event(p, event):
     def _int(value, default=0):
         try:
             return int(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return default
 
     return StatusEvent(
@@ -74,7 +75,9 @@ def monitor_status(args, printer):
     terminal_states = TERMINAL_GCODE_STATES
     received_terminal = threading.Event()
     show_progress_bar = not json_mode and sys.stdout.isatty()
-    client = _client_factory(None)(printer)
+    # The monitor keeps paho's auto-reconnect: it runs for the length of a
+    # print, and its only publish is a QoS-0 pushall, which paho never resends.
+    client = _client_factory(None)(printer, reconnect=True)
     userdata: dict = {}
     client.user_data_set(userdata)
 
@@ -126,16 +129,20 @@ def monitor_status(args, printer):
                             )
                             progress.start()
                             userdata["progress"] = progress
-                            userdata["task_id"] = progress.add_task(f"State: {state}", total=100, completed=pct)
+                            userdata["task_id"] = progress.add_task(
+                                display_safe(f"State: {state}"), total=100, completed=pct
+                            )
                         except ImportError:
                             userdata["progress"] = None
 
                     if userdata.get("progress"):
-                        userdata["progress"].update(userdata["task_id"], completed=pct, description=f"State: {state}")
+                        userdata["progress"].update(
+                            userdata["task_id"], completed=pct, description=display_safe(f"State: {state}")
+                        )
                     elif json_mode:
                         emit_json_line(_status_event(p, "update"))
                     else:
-                        logger.info(f"⏳ Status: State={state}, Progress={pct}%")
+                        logger.info(display_safe(f"⏳ Status: State={state}, Progress={pct}%"))
 
                     last_state[0] = state
                     last_pct[0] = pct
@@ -144,7 +151,7 @@ def monitor_status(args, printer):
                     if json_mode:
                         emit_json_line(_status_event(p, "terminal"))
                     else:
-                        logger.info(f"🏁 Reached terminal state: {state}")
+                        logger.info(display_safe(f"🏁 Reached terminal state: {state}"))
                     received_terminal.set()
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
             logger.debug(f"MQTT decode error: {e}")

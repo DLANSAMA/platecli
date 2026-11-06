@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import threading
 
 from bambu_cli.config import get_command_timeout
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
-from bambu_cli.protocols.mqtt_cmd import _client_factory, _connect, status_is_complete
+from bambu_cli.protocols.mqtt_cmd import _client_factory, _connect, decode_report, status_is_complete
 
 
 def _printer_error_hex(code: object) -> str | None:
@@ -16,6 +15,28 @@ def _printer_error_hex(code: object) -> str | None:
     if isinstance(code, bool) or not isinstance(code, int):
         return None
     return f"0x{code & 0xFFFFFFFF:08X}"
+
+
+def _abort_unconfirmed(basename, detail, exit_code):
+    """The print command went out but its acknowledgement never came.
+
+    The printer may well be printing, so the outcome is unknown, not "not
+    printed": an agent reading ``printed: false`` would retry and start a second
+    print. Report ``printed: null`` with ``sent: true`` and point at status.
+    """
+    from bambu_cli.utils import record_error_detail
+
+    message = (
+        f"The print command for {basename} was sent, but the printer did not acknowledge it {detail}. "
+        "It may already be printing; check `plate status` before printing again."
+    )
+    logger.error(message)
+    fields = {"file": basename, "printed": None, "sent": True, "acknowledged": False}
+    next_command = ["status", "--json"]
+    record_error_detail("print", exit_code, message, failed_step="print", next_command=next_command, **fields)
+    # The exception carries the fields too: the CLI builds the --json envelope
+    # and the job summary from the raised error, not from the recorded detail.
+    abort(message, exit_code=exit_code, failed_step="print", next_command=next_command, extra=fields, logged=True)
 
 
 def execute_print_command(
@@ -111,8 +132,8 @@ def execute_print_command(
 
     def on_message(client, userdata, msg):
         try:
-            data = json.loads(msg.payload.decode("utf-8"))
-            if "print" in data:
+            data = decode_report(msg)
+            if data is not None and isinstance(data.get("print"), dict):
                 p = data["print"]
                 is_ack = p.get("command") == "project_file"
                 if is_ack:
@@ -127,8 +148,6 @@ def execute_print_command(
                     if isinstance(result, str) and result.strip().lower() not in ("", "success"):
                         reject_reason[0] = str(p.get("reason") or result)
                     command_accepted.set()
-        except (UnicodeDecodeError, json.JSONDecodeError) as e:
-            logger.debug(f"MQTT decode error: {e}")
         except Exception as e:
             logger.warning(f"MQTT message handling error: {e}")
 
@@ -143,6 +162,8 @@ def execute_print_command(
         client.loop_start()
         accepted = command_accepted.wait(print_ack_timeout)
         if not accepted:
+            if published[0]:
+                _abort_unconfirmed(basename, f"within {print_ack_timeout:g}s", EXIT_TIMEOUT)
             message = f"Timed out waiting for printer to acknowledge print start for {basename}"
             logger.error(message)
             record_error_detail("print", EXIT_TIMEOUT, message, failed_step="print", file=basename, printed=False)
@@ -150,6 +171,8 @@ def execute_print_command(
     except BambuError:
         raise
     except Exception as e:
+        if published[0]:
+            _abort_unconfirmed(basename, f"({e})", EXIT_NETWORK_ERROR)
         message = f"Error: {e}"
         logger.error(message)
         record_error_detail("print", EXIT_NETWORK_ERROR, message, failed_step="print", file=basename, printed=False)

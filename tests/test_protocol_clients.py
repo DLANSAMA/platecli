@@ -224,7 +224,7 @@ class TestCreateMqttClient(unittest.TestCase):
         client = create_mqtt_client(printer, "test_client")
 
         # Use ANY for the version argument to avoid identity mismatches with module-level mocks
-        mock_mqtt_client.assert_called_once_with(ANY, "test_client")
+        mock_mqtt_client.assert_called_once_with(ANY, "test_client", reconnect_on_failure=False)
         mock_client_instance.username_pw_set.assert_called_once_with("bblp", "mock_access_code")
         mock_client_instance.tls_set.assert_called_once_with(cert_reqs=ssl.CERT_REQUIRED)
         mock_client_instance.tls_insecure_set.assert_not_called()
@@ -238,11 +238,29 @@ class TestCreateMqttClient(unittest.TestCase):
         printer = _test_printer(access_code="mock_access_code", insecure_tls=True)
         client = create_mqtt_client(printer)
 
-        mock_mqtt_client.assert_called_once_with(ANY, "")
+        mock_mqtt_client.assert_called_once_with(ANY, ANY, reconnect_on_failure=False)
+        client_id = mock_mqtt_client.call_args.args[1]
+        assert client_id.startswith("plate-") and len(client_id) <= 23
         mock_client_instance.username_pw_set.assert_called_once_with("bblp", "mock_access_code")
         mock_client_instance.tls_set.assert_called_once_with(cert_reqs=ssl.CERT_NONE)
         mock_client_instance.tls_insecure_set.assert_called_once_with(True)
         self.assertEqual(client, mock_client_instance)
+
+
+    @patch("bambu_cli.protocols.mqtt_tls.pinning_ssl_context")
+    @patch("bambu_cli.protocols.mqtt_tls.mqtt.Client")
+    def test_pin_wins_over_insecure_tls(self, mock_mqtt_client, mock_pinning):
+        """insecure_tls plus a pin used to skip the pin on MQTT while FTPS enforced it."""
+        mock_client_instance = MagicMock()
+        mock_mqtt_client.return_value = mock_client_instance
+        pin = "ab" * 32
+
+        printer = _test_printer(access_code="mock_access_code", insecure_tls=True, cert_fingerprint=pin)
+        create_mqtt_client(printer)
+
+        mock_pinning.assert_called_once_with(pin)
+        mock_client_instance.tls_set_context.assert_called_once_with(mock_pinning.return_value)
+        mock_client_instance.tls_set.assert_not_called()
 
 
 class TestMqttConnectTimeout(unittest.TestCase):

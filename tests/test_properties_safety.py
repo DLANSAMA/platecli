@@ -426,3 +426,10 @@ def test_prop_print_payload_ams_only_when_use_ams(basename: str, use_ams: bool, 
     assert data["print"]["url"].startswith("file:///sdcard/model/")
     assert "\n" not in data["print"]["url"]
     assert "\r" not in data["print"]["url"]
+
+@pytest.mark.parametrize("raw", ["1_0", "１", "+1", "0x1", "1e1", "1,,2", "١"])
+def test_ams_mapping_requires_ascii_digits(raw: str) -> None:
+    """int() alone reads "1_0" as slot 10 and a fullwidth digit as 1: a typo picked another tray."""
+    mapping, err = job_payload._parse_print_options(argparse.Namespace(use_ams=True, ams_mapping=raw))
+    assert mapping is None
+    assert err is not None and "mapping" in err.lower()

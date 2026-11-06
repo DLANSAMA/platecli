@@ -21,7 +21,7 @@ from typing import Any
 
 from bambu_cli.errors import PrinterStatusIncomplete
 from bambu_cli.logging_utils import logger
-from bambu_cli.protocols.mqtt_cmd import _REQUIRED_STATUS_KEYS, status_is_complete
+from bambu_cli.protocols.mqtt_cmd import _REQUIRED_STATUS_KEYS, decode_report, status_is_complete
 from bambu_cli.utils import get_sequence_id
 
 ClientFactory = Callable[[Any], Any]
@@ -140,12 +140,8 @@ class MqttSession:
         self._live = False
 
     def _on_message(self, client: Any, userdata: Any, msg: Any) -> None:
-        try:
-            data = json.loads(msg.payload.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError, AttributeError) as exc:
-            logger.debug(f"MQTT decode error: {exc}")
-            return
-        if not isinstance(data, dict):
+        data = decode_report(msg)
+        if data is None:
             return
         info = data.get("info")
         if isinstance(info, dict) and info.get("command") == "get_version" and "module" in info:

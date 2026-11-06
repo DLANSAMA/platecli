@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import ssl
 import threading
+from collections.abc import Iterable
 
 from bambu_cli.errors import PrinterStatusIncomplete
 from bambu_cli.logging_utils import logger
@@ -12,6 +13,49 @@ from bambu_cli.utils import get_sequence_id
 
 _REQUIRED_STATUS_KEYS = ("gcode_state", "mc_percent", "bed_temper", "nozzle_temper")
 TERMINAL_GCODE_STATES = frozenset({"FINISH", "FAILED", "STOP", "IDLE"})
+
+
+def decode_report(msg):
+    """Parse an MQTT payload into a dict, or None for anything else.
+
+    Runs on paho's network thread, where an escaping exception kills the loop
+    for good (a held session then never recovers). Besides malformed JSON this
+    covers what a spoofed or broken report can make ``json.loads`` raise: a
+    RecursionError for deeply nested arrays and a ValueError for an integer
+    past the digit limit. Non-object JSON (``5``, ``[1]``) is not a report.
+    """
+    try:
+        data = json.loads(msg.payload.decode("utf-8"))
+    except (ValueError, RecursionError, AttributeError, TypeError) as exc:
+        logger.debug(f"MQTT decode error: {type(exc).__name__}")
+        return None
+    if not isinstance(data, dict):
+        return None
+    if _nested_deeper_than(data, _MAX_REPORT_DEPTH):
+        # json.loads accepts a few thousand levels; the recursive walks that
+        # redact and emit JSON do not. Real reports are about six deep.
+        logger.debug("MQTT report dropped: nested too deeply")
+        return None
+    return data
+
+
+_MAX_REPORT_DEPTH = 32
+
+
+def _nested_deeper_than(value, limit):
+    stack = [(value, 1)]
+    while stack:
+        item, depth = stack.pop()
+        if isinstance(item, dict):
+            children: Iterable[object] = item.values()
+        elif isinstance(item, list):
+            children = item
+        else:
+            continue
+        if depth > limit:
+            return True
+        stack.extend((child, depth + 1) for child in children)
+    return False
 
 
 def _client_factory(client_factory):
@@ -233,12 +277,8 @@ def get_status(printer, timeout=None, retries=2, *, require_complete=True):
                 status_received.set()
 
         def on_message(client, userdata, msg, status_received=status_received):
-            try:
-                data = json.loads(msg.payload.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                logger.debug(f"MQTT decode error: {e}")
-                return
-            if not isinstance(data, dict) or not isinstance(data.get("print"), dict):
+            data = decode_report(msg)
+            if data is None or not isinstance(data.get("print"), dict):
                 return
             with merged_lock:
                 merged.update(data["print"])
@@ -323,9 +363,8 @@ def get_version(printer, timeout=5, retries=1):
                 received.set()
 
         def on_message(client, userdata, msg):
-            try:
-                data = json.loads(msg.payload.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
+            data = decode_report(msg)
+            if data is None:
                 return
             info = data.get("info")
             if isinstance(info, dict) and info.get("command") == "get_version" and "module" in info:

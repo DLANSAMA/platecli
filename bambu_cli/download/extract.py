@@ -122,7 +122,9 @@ def _extract_zip_model(zip_path, outdir, args, *, noncolliding_path=None):
                         if extracted > max_bytes:
                             raise ValueError(_archive_member_exceeded_limit_message(member_filename, max_bytes))
                         dst.write(chunk)
-            except Exception:
+            except BaseException:
+                # BaseException, not Exception: a Ctrl-C mid-extraction must not
+                # leave a .part file or a 0-byte placeholder behind either.
                 _cleanup_reservation()
                 raise
             size = os.path.getsize(partial_path)

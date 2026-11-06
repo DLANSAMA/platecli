@@ -85,7 +85,9 @@ class Prompts:
             return CANCELLED
 
     def print(self, message: str = "") -> None:  # pragma: no cover -- interactive prompt
-        self.console.print(message)
+        # Markup off: the text carries file names and errors, and "[remix]" or
+        # "x[/b]" must print literally rather than vanish or raise MarkupError.
+        self.console.print(message, markup=False, emoji=False)
 
 
 def is_cancelled(value: object) -> bool:

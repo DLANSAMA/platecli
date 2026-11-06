@@ -167,7 +167,10 @@ def iter_files(include_dist=False):
                     continue
                 rel = raw_rel.decode("utf-8", errors="replace")
                 path = ROOT / rel
-                if any(part in excluded_dirs for part in path.parts):
+                # Match on the repo-relative path: in a worktree under
+                # .claude/worktrees/ every absolute path contains ".claude", and
+                # matching on it skipped every file, so the smoke passed scanning nothing.
+                if any(part in excluded_dirs for part in Path(rel).parts):
                     continue
                 if path.is_symlink() or not path.is_file():
                     continue

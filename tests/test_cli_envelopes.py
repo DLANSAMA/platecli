@@ -10,6 +10,7 @@ import sys
 from contextlib import redirect_stdout, redirect_stderr
 
 from bambu_cli.errors import BambuError
+from tests.fake_3mf import minimal_3mf
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +138,7 @@ class TestUploadDryRunReason(unittest.TestCase):
         tmpdir = tempfile.mkdtemp()
         fpath = os.path.join(tmpdir, "x.gcode.3mf")
         with open(fpath, "wb") as fh:
-            fh.write(b"PK\x03\x04dummy")
+            fh.write(minimal_3mf())
 
         args = argparse.Namespace(file=fpath, dry_run=True, json=True, verbose=False)
 

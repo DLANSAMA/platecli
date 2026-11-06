@@ -46,6 +46,7 @@ from bambu_cli.context import RuntimeContext  # noqa: E402
 from bambu_cli.job import JobSteps, _run_job  # noqa: E402
 from bambu_cli.errors import BambuError
 from tests.json_contract_base import sliced_3mf_bytes
+from tests.fake_3mf import minimal_3mf
 
 
 def _json_path_field(path):
@@ -534,7 +535,7 @@ def test_dry_run_local_zip_member_slice_matches_predicate(tmp_path, member, woul
     """
     zpath = tmp_path / "bundle.zip"
     with zipfile.ZipFile(zpath, "w") as zf:
-        zf.writestr(member, b"content")
+        zf.writestr(member, minimal_3mf() if member.endswith(".3mf") else b"content")
     args = _parse(["job", str(zpath), "--dry-run", "--json"])
     _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
@@ -1179,7 +1180,7 @@ def test_zip_printer_ready_member_copies_ignored_flagged(tmp_path, capsys):
     copies_ignored, matching the non-ZIP printer-ready branch."""
     zpath = tmp_path / "bundle.zip"
     with zipfile.ZipFile(zpath, "w") as zf:
-        zf.writestr("plate.gcode.3mf", b"x" * 20)
+        zf.writestr("plate.gcode.3mf", minimal_3mf())
     args = _parse(["job", str(zpath), "--copies", "3", "--dry-run", "--json"])
     with _capture_bambu_warnings() as records:
         _run_job(_ctx(), args, default_steps())
@@ -1245,3 +1246,31 @@ def test_dry_run_output_dir_writability_uses_real_probe(tmp_path, capsys, monkey
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
+
+
+def test_unacknowledged_print_start_leaves_printed_unknown(tmp_path, capsys):
+    """A sent-but-unacknowledged print is "printed: null", never "false".
+
+    "false" tells an agent to run the print again; the printer may already be
+    printing the first one.
+    """
+    from bambu_cli.constants import EXIT_TIMEOUT
+    from bambu_cli.protocols import mqtt_print
+
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(sliced_3mf_bytes())
+    args = _parse(["job", str(ready), "--confirm", "--json"])
+
+    def unacknowledged_print(_args):
+        mqtt_print._abort_unconfirmed("model.3mf", "within 30s", EXIT_TIMEOUT)
+
+    steps = default_steps(upload=fake_upload("model.3mf"), print_=unacknowledged_print)
+    with pytest.raises((SystemExit, BambuError)):
+        _run_job(_ctx(), args, steps)
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "print"
+    assert payload["uploaded"] is True
+    assert payload["printed"] is None
+    assert payload["print_error"]["sent"] is True
+    assert "check `plate status` before printing again" in payload["error"]
+    assert payload["next_command"] == ["status", "--json"]

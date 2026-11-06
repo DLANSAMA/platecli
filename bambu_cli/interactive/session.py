@@ -34,8 +34,9 @@ from bambu_cli.constants import (
     EXIT_COMMAND_ERROR,
     EXIT_CONFIG_ERROR,
     EXIT_FILE_ERROR,
+    EXIT_PRINTER_ERROR,
 )
-from bambu_cli.errors import abort
+from bambu_cli.errors import BambuError, abort
 from bambu_cli.interactive.core import MATERIAL_CHOICES as _MATERIAL_CHOICES
 from bambu_cli.interactive.core import MATERIAL_GUIDANCE as _MATERIAL_GUIDANCE
 from bambu_cli.interactive.core import QUALITY_CHOICES as _QUALITY_CHOICES
@@ -43,6 +44,7 @@ from bambu_cli.interactive.core import QUALITY_GUIDANCE as _QUALITY_GUIDANCE
 from bambu_cli.interactive.core import SUPPORTED_SOURCE_EXTS as _SUPPORTED_SOURCE_EXTS  # noqa: F401
 from bambu_cli.interactive.core import GoSteps as GoSteps
 from bambu_cli.interactive.core import WizardState as WizardState
+from bambu_cli.interactive.core import ams_change_problem as _ams_change_problem
 from bambu_cli.interactive.core import build_job_namespace as _build_job_namespace
 from bambu_cli.interactive.core import cleanup_workdir as _cleanup_workdir
 from bambu_cli.interactive.core import decline_message as _decline_message
@@ -57,6 +59,7 @@ from bambu_cli.interactive.core import slicer_preflight_problem as _slicer_prefl
 from bambu_cli.interactive.core import under_workdir as _under_workdir  # noqa: F401
 from bambu_cli.interactive.core import validate_source as _validate_source
 from bambu_cli.interactive.prompts import Prompts, is_cancelled
+from bambu_cli.textsafe import display_safe
 
 __all__ = [
     "GoDeps",
@@ -173,7 +176,7 @@ def _step_source(args: argparse.Namespace, deps: GoDeps, state: WizardState) -> 
         if source is not None:
             state.source = source
             return
-        prompts.print(error or "Invalid source.")
+        prompts.print(display_safe(error) or "Invalid source.")
         if attempt < _MAX_URL_ATTEMPTS - 1:
             prompts.print(f"Try again ({_MAX_URL_ATTEMPTS - attempt - 1} attempts left).")
 
@@ -269,8 +272,10 @@ def _step_prepare(args: argparse.Namespace, deps: GoDeps, state: WizardState) ->
 
 def _render_preview(prompts: Any, state: WizardState, model_path: str) -> None:
     prompts.print("")
-    for label, value in _preview_rows(state, model_path):
-        prompts.print(f"{label:<11}{value}")
+    rows = _preview_rows(state, model_path)
+    width = max(len(label) for label, _ in rows) + 2
+    for label, value in rows:
+        prompts.print(f"{label:<{width}}{value}")
     prompts.print("")
 
 
@@ -279,12 +284,27 @@ def _render_preview(prompts: Any, state: WizardState, model_path: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _kept_note(state: WizardState) -> str:
+    return _decline_message(state).replace("Nothing sent. ", "", 1).replace("Nothing sent.", "")
+
+
 def _run_print(args: argparse.Namespace, deps: GoDeps, state: WizardState, *, confirm: bool) -> None:
     """Drive cmd_job on the sliced/printer-ready file (upload, optionally print)."""
+    if confirm:
+        problem = _ams_change_problem(deps.get_steps().get_ams_material(), args, state)
+        if problem is not None:
+            deps.get_prompts().print(f"{problem} {_kept_note(state)}".strip())
+            abort(problem, exit_code=EXIT_PRINTER_ERROR, failed_step="ams", logged=True)
     job_ns = _build_job_namespace(state, args, confirm=confirm)
     utils._LAST_ERROR_PAYLOAD = None
     utils._LAST_DOWNLOAD_PAYLOAD = None
-    deps.get_steps().get_job()(job_ns)
+    try:
+        deps.get_steps().get_job()(job_ns)
+    except BambuError:
+        # The slice succeeded; losing it to a flaky upload would waste the
+        # minutes it took, so keep it exactly as a decline does.
+        deps.get_prompts().print(f"Upload or print failed. {_kept_note(state)}".strip())
+        raise
 
 
 def _step_confirm_print(args: argparse.Namespace, deps: GoDeps, state: WizardState) -> None:

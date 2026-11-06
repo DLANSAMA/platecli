@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from typing import NoReturn
 
@@ -96,11 +97,13 @@ def _display_path(path):
 def _compact_all_strings(val):
     if isinstance(val, dict):
         return {k: _compact_all_strings(v) for k, v in val.items()}
-    if isinstance(val, list):
+    if isinstance(val, (list, tuple)):
         return [_compact_all_strings(v) for v in val]
     if isinstance(val, str):
         redacted = _redact_url_credentials(val)
         return redacted if redacted != val else _display_path(val)
+    if isinstance(val, float) and not math.isfinite(val):
+        return None
     return val
 
 
@@ -117,10 +120,13 @@ def _json_display_paths(value):
             else:
                 result[key] = _json_display_paths(item)
         return result
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_json_display_paths(item) for item in value]
     if isinstance(value, str):
         return _redact_url_credentials(value)
+    if isinstance(value, float) and not math.isfinite(value):
+        # NaN/Infinity are not valid JSON; a spoofed report must not emit them.
+        return None
     return value
 
 
@@ -140,8 +146,11 @@ def _as_payload(data):
 
 def emit_json(data):
     global _JSON_EMITTED
+    # Serialize before marking the envelope emitted: if dumping ever raised, the
+    # caller must still be able to print an error envelope.
+    text = json.dumps(_json_display_paths(_as_payload(data)), indent=2, allow_nan=False)
     _JSON_EMITTED = True
-    print(json.dumps(_json_display_paths(_as_payload(data)), indent=2))
+    print(text)
 
 
 def emit_json_line(data):
@@ -152,8 +161,9 @@ def emit_json_line(data):
     document at the end.
     """
     global _JSON_EMITTED
+    text = json.dumps(_json_display_paths(_as_payload(data)), separators=(",", ":"), allow_nan=False)
     _JSON_EMITTED = True
-    print(json.dumps(_json_display_paths(_as_payload(data)), separators=(",", ":")), flush=True)
+    print(text, flush=True)
 
 
 def _namespace_get(args, key, default=None):

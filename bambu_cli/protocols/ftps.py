@@ -120,7 +120,17 @@ class ImplicitFTPS(ftplib.FTP_TLS):
         secure = getattr(self, "_secure_data", False) or getattr(self, "_prot_p", False)
         if secure and isinstance(self.sock, ssl.SSLSocket):
             session = self.sock.session
-            conn = self.sock.context.wrap_socket(conn, server_hostname=self.host, session=session)
+            try:
+                conn = self.sock.context.wrap_socket(conn, server_hostname=self.host, session=session)
+            except BaseException:
+                # ssl closes the descriptor itself when the handshake fails, but
+                # not for errors raised before it takes ownership (a socket-type
+                # or hostname check). Closing a socket ssl already detached is a no-op.
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+                raise
             printer = self.printer
             pin = printer.cert_fingerprint if printer is not None else None
             if pin:

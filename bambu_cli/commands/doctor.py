@@ -88,17 +88,16 @@ def cmd_doctor(args, ctx=None):
         emit_json(payload)
 
     cap_path = _namespace_get(args, "output")
-    if not cap_path:
-        fd, cap_path = tempfile.mkstemp(prefix="printer_capabilities_", suffix=".json")
-        os.close(fd)
-    cap_path = _expand_path(cap_path)
-    if cap_path.startswith("-"):
+    if cap_path:
+        cap_path = _expand_path(cap_path)
+    if cap_path and cap_path.startswith("-"):
         message = f"Invalid output path: {_path_for_message(cap_path)}"
         logger.error(message)
         emit_doctor_failure("validate", EXIT_FILE_ERROR, message)
         abort("", exit_code=EXIT_FILE_ERROR)
     try:
-        _ensure_parent_dir(cap_path)
+        if cap_path:
+            _ensure_parent_dir(cap_path)
     except BambuError as exc:
         emit_doctor_failure(
             "validate",
@@ -223,6 +222,10 @@ def cmd_doctor(args, ctx=None):
         },
     }
 
+    if not cap_path:
+        # Created only now so a run that fails earlier leaves nothing behind.
+        fd, cap_path = tempfile.mkstemp(prefix="printer_capabilities_", suffix=".json")
+        os.close(fd)
     try:
         with open(cap_path, "w", encoding="utf-8") as f:
             json.dump(capabilities, f, indent=2)

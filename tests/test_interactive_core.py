@@ -455,7 +455,8 @@ def test_preview_rows_gain_an_overrides_line_only_when_set(tmp_path):
     _install_ready_settings(tmp_path)
     sliced = _sliced_3mf(tmp_path)
     plain = core.WizardState(printable_path=sliced, sliced=True)
-    assert [label for label, _ in core.preview_rows(plain, sliced)] == ["Model", "Printer", "Material", "Estimate"]
+    labels = [label for label, _ in core.preview_rows(plain, sliced)]
+    assert labels == ["Model", "Printer", "Material", "Feed", "Temperatures", "Estimate"]
 
     tuned = core.WizardState(printable_path=sliced, sliced=True)
     tuned.overrides = core.SliceOverrides(fields={"walls": 5})
@@ -466,3 +467,89 @@ def test_preview_rows_gain_an_overrides_line_only_when_set(tmp_path):
     presliced = core.WizardState(printable_path=sliced, sliced=False)
     presliced.overrides = core.SliceOverrides(fields={"walls": 5})
     assert "Overrides" not in dict(core.preview_rows(presliced, sliced))
+
+
+# ---------------------------------------------------------------------------
+# Feed and Temperatures rows; the AMS re-read before printing (2026-11-05 audit, S-2)
+# ---------------------------------------------------------------------------
+
+
+def _with_plate_gcode(path, gcode):
+    with zipfile.ZipFile(path, "a") as zf:
+        zf.writestr("Metadata/plate_1.gcode", gcode)
+    return path
+
+
+def test_feed_row_names_the_ams_slot_only_when_it_feeds(tmp_path):
+    _install_ready_settings(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+    fed = core.WizardState(
+        material="PETG", detected_ams_material="PETG", detected_ams_slot=6, printable_path=sliced, sliced=True
+    )
+    assert dict(core.preview_rows(fed, sliced))["Feed"] == "AMS1·2 (PETG)"
+    changed = core.WizardState(
+        material="ABS", detected_ams_material="PETG", detected_ams_slot=6, printable_path=sliced, sliced=True
+    )
+    assert dict(core.preview_rows(changed, sliced))["Feed"] == "External spool"
+    no_slot = core.WizardState(material="PETG", detected_ams_material="PETG", printable_path=sliced, sliced=True)
+    assert dict(core.preview_rows(no_slot, sliced))["Feed"] == "External spool"
+
+
+def test_temperatures_row_shows_the_hottest_targets_in_the_gcode(tmp_path):
+    _install_ready_settings(tmp_path)
+    sliced = _with_plate_gcode(
+        _sliced_3mf(tmp_path),
+        "M140 S55 ; bed\nM104 S215\nM190 S60\nM109 S220 ; wait\nM104 S0\n; M104 S999 in a comment\n",
+    )
+    state = core.WizardState(printable_path=sliced, sliced=True)
+    assert dict(core.preview_rows(state, sliced))["Temperatures"] == "nozzle up to 220 °C  ·  bed up to 60 °C"
+
+
+def test_temperatures_row_for_a_plain_gcode_file_and_for_none(tmp_path):
+    _install_ready_settings(tmp_path)
+    gcode = tmp_path / "part.gcode"
+    gcode.write_text("G28\nM104 T1 S230\n", encoding="utf-8")
+    state = core.WizardState(printable_path=str(gcode), sliced=False)
+    assert dict(core.preview_rows(state, str(gcode)))["Temperatures"] == "nozzle up to 230 °C"
+    sliced = _sliced_3mf(tmp_path)
+    state = core.WizardState(printable_path=sliced, sliced=True)
+    assert dict(core.preview_rows(state, sliced))["Temperatures"] == "not set in the G-code"
+
+
+def _reader(material, slot):
+    def detector(args, on_active_slot=None):
+        if slot is not None:
+            on_active_slot(slot)
+        return material
+
+    return detector
+
+
+def _fed_state():
+    return core.WizardState(material="PETG", detected_ams_material="PETG", detected_ams_slot=2)
+
+
+def test_ams_change_problem_is_none_when_nothing_changed():
+    assert core.ams_change_problem(_reader("PETG", 2), argparse.Namespace(), _fed_state()) is None
+
+
+def test_ams_change_problem_does_not_read_when_not_feeding_from_the_ams():
+    def must_not_run(*_a):
+        raise AssertionError("read the AMS for an external-spool print")
+
+    state = core.WizardState(material="ABS", detected_ams_material="PETG", detected_ams_slot=2)
+    assert core.ams_change_problem(must_not_run, argparse.Namespace(), state) is None
+
+
+@pytest.mark.parametrize(
+    ("material", "slot", "expected"),
+    [
+        ("PLA", 2, "it had PETG in AMS0·2, now PLA in AMS0·2"),
+        ("PETG", 3, "now PETG in AMS0·3"),
+        (None, None, "Could not confirm that PETG in AMS0·2"),
+    ],
+)
+def test_ams_change_problem_names_what_changed(material, slot, expected):
+    problem = core.ams_change_problem(_reader(material, slot), argparse.Namespace(), _fed_state())
+    assert problem is not None and expected in problem
+    assert "not started" in problem

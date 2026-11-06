@@ -6,6 +6,8 @@ normalizes it into a compact form an agent can use to reason about what
 filament is loaded where and to build a correct ``--ams-mapping`` argument.
 """
 
+import math
+
 # Bambu firmware reports two sentinel values in ``tray_now`` that are not AMS
 # slot indices. They are distinct states and must not be conflated: 254 means
 # the printer is feeding from the external spool (vt_tray), 255 means nothing
@@ -17,15 +19,22 @@ NOTHING_LOADED_TRAY_ID = 255
 def _to_int(value, default=None):
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
 def _to_float(value, default=None):
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
         return default
+    # NaN/Infinity from a spoofed report are unknown, not a reading.
+    return result if math.isfinite(result) else default
+
+
+def _tray_type(raw):
+    """Filament type as a non-empty string, else None (any other JSON type is junk)."""
+    return raw if isinstance(raw, str) and raw else None
 
 
 def _normalize_color(raw):
@@ -94,7 +103,7 @@ def parse_ams(status):
         # _to_int returns `default` for missing AND unparseable input, so the
         # default alone covers every case -- no None check needed after it.
         vt_slot = _to_int(vt_tray_raw.get("id"), default=EXTERNAL_SPOOL_TRAY_ID)
-        vt_type = vt_tray_raw.get("tray_type") or None
+        vt_type = _tray_type(vt_tray_raw.get("tray_type"))
         vt_color = _normalize_color(vt_tray_raw.get("tray_color"))
         vt_remain = _to_int(vt_tray_raw.get("remain"))
         # 254 and 255 are BOTH sentinels, but they do not mean the same thing:
@@ -130,11 +139,12 @@ def parse_ams(status):
                 continue
             unit_id = _to_int(unit_raw.get("id"), default=0) or 0
             trays = []
-            for tray_raw in unit_raw.get("tray") or []:
+            tray_list = unit_raw.get("tray")
+            for tray_raw in tray_list if isinstance(tray_list, list) else []:
                 if not isinstance(tray_raw, dict):
                     continue
                 slot = _to_int(tray_raw.get("id"), default=0) or 0
-                ftype = tray_raw.get("tray_type") or None
+                ftype = _tray_type(tray_raw.get("tray_type"))
                 absolute = unit_id * 4 + slot
                 trays.append(
                     {

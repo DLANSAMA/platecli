@@ -15,11 +15,13 @@ from bambu_cli.download.naming import (
 )
 from bambu_cli.errors import abort
 from bambu_cli.fsutil import _portable_basename
+from bambu_cli.gcode_limits import file_heater_problem
 from bambu_cli.logging_utils import logger
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.slicer import _directory_input_message, _is_directory_input
+from bambu_cli.textsafe import display_safe
 from bambu_cli.utils import emit_json
 
 # gcode_state values for which the printer is using its current file.
@@ -38,20 +40,30 @@ def _print_name_key(name):
 def _printing_this_file(printer, filename):
     """True when the printer reports an active print of ``filename``.
 
+    ``None`` when it reports an active print without naming the file: deltas
+    can add up to a "complete" report with neither ``gcode_file`` nor
+    ``subtask_name``, and "not this file" cannot be told apart from that.
+
     ``upload_file`` deletes the remote file before storing the new one, so an
     upload with the name of the running print pulls the file out from under
     the printer (what the firmware does then is unverified). Best effort: a
     status query that fails returns False and the upload goes ahead.
+
+    ``require_complete=True``: mid-print the printer streams deltas that carry
+    neither ``gcode_state`` nor the file name, and the first message to arrive
+    is often one of them; reading only that let the guard pass while printing.
     """
     try:
-        data = printer.status(retries=0, require_complete=False)
+        data = printer.status(retries=0, require_complete=True)
     except Exception as exc:  # noqa: BLE001 -- a probe must never block the upload
         logger.debug(f"Could not check the printer's current job before upload: {exc}")
         return False
     if not isinstance(data, dict) or str(data.get("gcode_state") or "").upper() not in _ACTIVE_GCODE_STATES:
         return False
-    target = _print_name_key(filename)
-    return target in {_print_name_key(data.get("subtask_name")), _print_name_key(data.get("gcode_file"))}
+    names = {_print_name_key(data.get("subtask_name")), _print_name_key(data.get("gcode_file"))} - {""}
+    if not names:
+        return None
+    return _print_name_key(filename) in names
 
 
 def cmd_upload(args, ctx=None):
@@ -118,6 +130,17 @@ def cmd_upload(args, ctx=None):
             failed_step="validate",
             extra={"file": filepath, "remote_name": filename, "bytes": filesize},
         )
+    heater = file_heater_problem(filepath)
+    if heater:
+        # A pre-sliced 3MF from a download or another slicer carries G-code
+        # platecli never generated; hold it to the limits slicing obeys.
+        message = f"Refusing to upload {filename}: {heater}"
+        abort(
+            message,
+            exit_code=EXIT_FILE_ERROR,
+            failed_step="validate",
+            extra={"file": filepath, "remote_name": filename},
+        )
     if getattr(args, "dry_run", False):
         logger.info(f"🔍 Dry Run: Validating printer connectivity for {filename}...")
         printer = ctx.printer()
@@ -166,9 +189,15 @@ def cmd_upload(args, ctx=None):
         return filename
 
     printer = ctx.printer()
-    if _printing_this_file(printer, filename):
+    printing = _printing_this_file(printer, filename)
+    if printing is not False:
+        what = (
+            f"is printing {filename}"
+            if printing
+            else f"is printing but did not say which file, so it may be {filename}"
+        )
         abort(
-            f"The printer is printing {filename} right now; uploading would replace that file mid-print. "
+            f"The printer {what} right now; uploading would replace that file mid-print. "
             "Wait for the print to finish, or upload under a different name.",
             exit_code=EXIT_PRINTER_ERROR,
             failed_step="upload",
@@ -273,7 +302,9 @@ def cmd_files(args, ctx=None):
             return
         logger.info("📁 Files on printer:")
         for f in files:
-            logger.info(f"   {f}")
+            # Names come from the printer's FTP listing; never let one write
+            # terminal control sequences (OSC 52 clipboard, screen clears).
+            logger.info(f"   {display_safe(f)}")
     except Exception as e:
         message = f"Error listing files: {e}"
         abort(

@@ -62,7 +62,7 @@ def _known_setting_keys(profiles_dir: str, kind: str) -> dict[str, Any]:
     command for the exact same directories (static over execution lifetime).
     """
     result: dict[str, Any] = {}
-    for path in sorted(glob.glob(os.path.join(profiles_dir, kind, "*.json"))):
+    for path in sorted(glob.glob(os.path.join(glob.escape(os.path.join(profiles_dir, kind)), "*.json"))):
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -226,7 +226,10 @@ def _temperature_values(value: Any) -> list[float] | None:
         if isinstance(item, bool):
             return None
         if isinstance(item, (int, float)):
-            out.append(float(item))
+            try:
+                out.append(float(item))
+            except OverflowError:
+                return None
             continue
         if not isinstance(item, str):
             return None
@@ -234,7 +237,10 @@ def _temperature_values(value: Any) -> list[float] | None:
             token = token.strip()
             if not _PLAIN_NUMBER_RE.fullmatch(token):
                 return None
-            out.append(float(token))
+            try:
+                out.append(float(token))
+            except OverflowError:
+                return None
     return out or None
 
 

@@ -887,3 +887,86 @@ def test_help_epilog_advertises_go(capsys):
     out = capsys.readouterr().out
     assert "plate go" in out
     assert "walks you through printing from a URL" in out
+
+
+# ---------------------------------------------------------------------------
+# The AMS is read again right before the print starts (2026-11-05 audit, S-2)
+# ---------------------------------------------------------------------------
+
+
+def _ams_readings(*readings):
+    """An ams_material seam reporting each ``(material, slot)`` in turn, then the last again."""
+    calls = {"n": 0}
+
+    def detector(args, on_active_slot=None):
+        material, slot = readings[min(calls["n"], len(readings) - 1)]
+        calls["n"] += 1
+        if slot is not None:
+            on_active_slot(slot)
+        return material
+
+    detector.calls = calls
+    return detector
+
+
+def _go_with_ams(tmp_path, detector, start=True):
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    job = Recorder(return_value=None)
+    steps = GoSteps(
+        download=Recorder(return_value=stl),
+        slice=Recorder(return_value=_sliced_3mf(tmp_path)),
+        job=job,
+        ams_material=detector,
+    )
+    answers = [stl, True, "PETG", "standard", False, start] + ([] if start else [True])
+    prompts = ScriptedPrompts(answers)
+    return job, prompts, lambda: cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
+
+
+def test_print_is_refused_when_the_ams_changed_after_prepare(tmp_path):
+    job, prompts, run = _go_with_ams(tmp_path, _ams_readings(("PETG", 1), ("PLA", 1)))
+    with pytest.raises(BambuError) as ei:
+        run()
+    assert ei.value.exit_code == 4
+    assert job.calls == [], "the print was sent although the AMS no longer matched"
+    assert "it had PETG in AMS0·1, now PLA in AMS0·1" in str(ei.value)
+    assert any("The print was not started" in m and "kept at" in m for m in prompts.printed)
+
+
+def test_print_is_refused_when_the_ams_cannot_be_read_again(tmp_path):
+    job, _prompts, run = _go_with_ams(tmp_path, _ams_readings(("PETG", 1), (None, None)))
+    with pytest.raises(BambuError) as ei:
+        run()
+    assert job.calls == []
+    assert "Could not confirm that PETG in AMS0·1" in str(ei.value)
+
+
+def test_print_goes_ahead_when_the_ams_is_unchanged(tmp_path):
+    detector = _ams_readings(("PETG", 1))
+    job, _prompts, run = _go_with_ams(tmp_path, detector)
+    run()
+    assert detector.calls["n"] == 2
+    assert job.calls[0].confirm is True
+    assert job.calls[0].ams_mapping == "1"
+
+
+def test_upload_only_skips_the_second_ams_read(tmp_path):
+    detector = _ams_readings(("PETG", 1), (None, None))
+    job, _prompts, run = _go_with_ams(tmp_path, detector, start=False)
+    run()
+    assert detector.calls["n"] == 1
+    assert job.calls[0].confirm is False
+
+
+def test_preview_labels_never_run_into_their_values(tmp_path):
+    """"Temperatures" is longer than the old fixed 11-column label field."""
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    steps = GoSteps(download=Recorder(return_value=stl), slice=Recorder(return_value=_sliced_3mf(tmp_path)), job=Recorder())
+    prompts = ScriptedPrompts([stl, True, "PLA", "standard", False, False, False])
+    cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
+    rows = [m for m in prompts.printed if m.startswith(("Model", "Feed", "Temperatures", "Estimate"))]
+    assert len(rows) == 4
+    assert all(line.split(" ", 1)[0] in ("Model", "Feed", "Temperatures", "Estimate") for line in rows)
+    assert len({len(line) - len(line.split(" ", 1)[1].lstrip()) for line in rows}) == 1, "values are not aligned"

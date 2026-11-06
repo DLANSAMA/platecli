@@ -77,12 +77,14 @@ def _grab_camera_frame_direct(
         tls = ctx.wrap_socket(sock, server_hostname=printer.ip)
         tls.settimeout(timeout)
 
-        if not printer.insecure_tls and printer.cert_fingerprint:
+        # A configured pin is enforced even when insecure_tls is set, as on
+        # MQTT and FTPS: the user named the exact certificate to trust.
+        if printer.cert_fingerprint:
             from bambu_cli.tlspin import verify_cert_fingerprint
 
             der = tls.getpeercert(binary_form=True)
             verify_cert_fingerprint(der, printer.cert_fingerprint, exc_factory=_CameraPinMismatch)
-        elif not printer.insecure_tls and not printer.cert_fingerprint:
+        elif not printer.insecure_tls:
             raise ssl.SSLError(
                 "No cert_fingerprint pinned for camera connection; run 'plate setup' to pin one, or set insecure_tls to bypass (not recommended)"
             )

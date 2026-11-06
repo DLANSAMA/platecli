@@ -19,6 +19,7 @@ from bambu_cli.errors import abort
 from bambu_cli.fsutil import _has_command_injection_chars, _portable_basename
 from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import logger
+from bambu_cli.textsafe import has_unsafe_display_chars
 
 
 def _name_for_message(value):
@@ -100,7 +101,11 @@ def _sanitize_download_filename(filename):
     each of which the printer-side check then rejected.
     """
     filename = _portable_basename(filename)
-    filename = re.sub(r'[\x00-\x1f\x7f<>:"/\\|?*]', "_", filename).strip(" .")
+    # C0/C1 controls, DEL and bidi-format characters too: _safe_remote_name
+    # refuses them, and this repairer's output must always pass that check.
+    filename = re.sub(
+        r'[\x00-\x1f\x7f-\x9f<>:"/\\|?*\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]', "_", filename
+    ).strip(" .")
     if filename in (".", "..") or not filename:
         return "model.stl"
     if _reserved_device_stem(filename):
@@ -154,7 +159,9 @@ def _safe_remote_name(filename):
         return None
     if filename != _portable_basename(filename):
         return None
-    if _has_command_injection_chars(filename):
+    if _has_command_injection_chars(filename) or has_unsafe_display_chars(filename):
+        # Beyond CR/LF/NUL: ESC, C1 and bidi controls in a name end up in
+        # terminal output (logs, `plate files`) and can disguise the name.
         return None
     if any(c in filename for c in '<>:"/\\|?*\x7f'):
         return None

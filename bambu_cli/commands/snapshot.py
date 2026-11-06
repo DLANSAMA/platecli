@@ -245,7 +245,7 @@ def cmd_snapshot(
         message = f"Camera TLS certificate does not match pinned fingerprint: {_exc}"
         emit_json_error(args, "snapshot", EXIT_NETWORK_ERROR, message, failed_step="grab", output=outpath)
     except ssl.SSLError as _exc:
-        if not printer.insecure_tls and printer.cert_fingerprint:
+        if printer.cert_fingerprint:
             message = (
                 "Camera TLS error with a cert pin configured "
                 f"(refusing to fall back to the unverified Docker streamer): {_exc}"
@@ -288,6 +288,12 @@ def cmd_snapshot(
 
     if not streamer_is_allowed(ctx.settings, args):
         message = _streamer_refused_message(ctx.settings, _fallback_reason)
+        emit_json_error(args, "snapshot", EXIT_NETWORK_ERROR, message, failed_step="grab", output=outpath)
+
+    if ctx.simulation:
+        # The simulated printer has no access code; the streamer would read the
+        # real one and contact the real printer.
+        message = "Simulation mode has no camera: the Docker streamer is not available under --sim."
         emit_json_error(args, "snapshot", EXIT_NETWORK_ERROR, message, failed_step="grab", output=outpath)
 
     streamer_url = ctx.settings.camera_stream_url

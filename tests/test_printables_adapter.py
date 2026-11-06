@@ -238,6 +238,21 @@ def test_ok_link_with_no_url_is_a_contract_change(_log):
     assert result.ok is False
     assert result.reason == "printables_contract_changed"
 
+@pytest.mark.parametrize(
+    "output",
+    [{"link": 123}, {"link": ["https://files.example/a.stl"]}, {"link": {"url": "x"}}, ["https://files.example/a.stl"]],
+)
+@patch("bambu_cli.logging_utils._BACKEND")
+def test_ok_link_that_is_not_a_string_is_a_contract_change(_log, output):
+    """A non-string link used to come back as success and crash the downloader."""
+    adapter, _ = _adapter(
+        _model(stls=[{"name": "part1.stl", "fileSize": 1024, "id": "file_123"}]),
+        {"data": {"getDownloadLink": {"ok": True, "output": output}}},
+    )
+    result = adapter.resolve(MODEL_URL)
+    assert result.ok is False
+    assert result.reason == "printables_contract_changed"
+
 # --- containment: the reason this package exists -----------------------------
 
 # Every payload here is something Printables could plausibly start returning.

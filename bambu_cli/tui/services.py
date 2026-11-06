@@ -13,6 +13,8 @@ import argparse
 from dataclasses import dataclass, field
 from typing import Any
 
+from bambu_cli.textsafe import display_safe
+
 
 @dataclass
 class StatusSnapshot:
@@ -108,7 +110,7 @@ def status_lines(snapshot: StatusSnapshot) -> list[tuple[str, str]]:
     strings. On a failed snapshot returns a single explanatory row.
     """
     if not snapshot.ok:
-        return [("State", snapshot.error or "Printer unreachable.")]
+        return [("State", display_safe(snapshot.error) or "Printer unreachable.")]
 
     raw = snapshot.raw
 
@@ -122,7 +124,7 @@ def status_lines(snapshot: StatusSnapshot) -> list[tuple[str, str]]:
         return f"{cur}°C"
 
     rows: list[tuple[str, str]] = [
-        ("State", str(raw.get("gcode_state", "UNKNOWN"))),
+        ("State", display_safe(raw.get("gcode_state", "UNKNOWN"))),
         ("Progress", f"{raw.get('mc_percent', 0)}%"),
         ("Nozzle", _temp("nozzle_temper", "nozzle_target_temper")),
         ("Bed", _temp("bed_temper", "bed_target_temper")),
@@ -132,9 +134,9 @@ def status_lines(snapshot: StatusSnapshot) -> list[tuple[str, str]]:
     if layer is not None or total_layer is not None:
         rows.append(("Layer", f"{layer or 0} / {total_layer or 0}"))
     if raw.get("wifi_signal"):
-        rows.append(("Wi-Fi", str(raw.get("wifi_signal"))))
+        rows.append(("Wi-Fi", display_safe(raw.get("wifi_signal"))))
     if raw.get("gcode_file"):
-        rows.append(("File", str(raw.get("gcode_file"))))
+        rows.append(("File", display_safe(raw.get("gcode_file"))))
     return rows
 
 
@@ -160,7 +162,7 @@ def ams_tray_rows(snapshot: StatusSnapshot) -> list[dict[str, Any]]:
                     "unit": unit_id,
                     "slot": slot,
                     "label": f"AMS{unit_id}·{slot}",
-                    "type": ftype,
+                    "type": display_safe(ftype),
                     "color": tray.get("color"),
                     "remain": remain_label,
                     "active": bool(tray.get("active")),
@@ -330,17 +332,17 @@ class MonitorService:
 def job_progress_lines(snapshot: StatusSnapshot) -> list[tuple[str, str]]:
     """Return ``(label, value)`` rows for the job-progress widget (pure)."""
     if not snapshot.ok:
-        return [("Status", snapshot.error or "Printer unreachable.")]
+        return [("Status", display_safe(snapshot.error) or "Printer unreachable.")]
 
     raw = snapshot.raw
     rows: list[tuple[str, str]] = [
-        ("State", str(raw.get("gcode_state", "UNKNOWN"))),
+        ("State", display_safe(raw.get("gcode_state", "UNKNOWN"))),
         ("Progress", f"{raw.get('mc_percent', 0)}%"),
         ("Layer", f"{raw.get('layer_num') or 0} / {raw.get('total_layer_num') or 0}"),
         ("Remaining", format_remaining(raw.get("mc_remaining_time"))),
     ]
     if raw.get("gcode_file"):
-        rows.append(("File", str(raw.get("gcode_file"))))
+        rows.append(("File", display_safe(raw.get("gcode_file"))))
     return rows
 
 
@@ -348,7 +350,7 @@ def format_remaining(minutes: Any) -> str:
     """Render ``mc_remaining_time`` (minutes) as ``1h 05m`` / ``42m`` / ``—``."""
     try:
         total = int(minutes)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return "—"
     if total < 0:
         return "—"
@@ -364,6 +366,6 @@ def progress_percent(snapshot: StatusSnapshot) -> int:
         return 0
     try:
         value = int(snapshot.raw.get("mc_percent", 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
     return max(0, min(100, value))

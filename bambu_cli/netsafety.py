@@ -382,7 +382,7 @@ def _retry_after_seconds(err) -> float:
     raw = headers.get("Retry-After") if headers else None
     try:
         seconds = float(str(raw).strip())
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return MIN_HOST_REQUEST_INTERVAL
     return max(0.0, min(seconds, MAX_RETRY_AFTER_WAIT))
 

@@ -218,9 +218,12 @@ def get_download_link(file_id, model_id, file_type, file_name, headers, opener):
         raise PrintablesContractChanged("Printables returned an unexpected getDownloadLink payload.")
 
     if link_payload.get("ok"):
-        link = (link_payload.get("output") or {}).get("link")
-        if link:
+        output = link_payload.get("output") or {}
+        link = output.get("link") if isinstance(output, dict) else None
+        if isinstance(link, str) and link:
             return link, file_name
+        if link:
+            raise PrintablesContractChanged("Printables returned a download link that is not a string.")
         raise PrintablesContractChanged("Printables reported success but returned no download link.")
 
     errs = link_payload.get("errors") or []

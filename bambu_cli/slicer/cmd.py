@@ -28,6 +28,7 @@ from bambu_cli.slicer.options import (
 from bambu_cli.slicer.orca import _build_orcaslicer_cmd, _run_orcaslicer
 from bambu_cli.slicer.output import _finalize_slice, _output_snapshot
 from bambu_cli.slicer.profiles import (
+    _available_layer_heights,
     _create_temp_machine,
     _create_temp_profiles,
     _default_bed_type,
@@ -37,6 +38,22 @@ from bambu_cli.slicer.profiles import (
 )
 from bambu_cli.slicer.step_convert import _convert_step_to_stl
 from bambu_cli.utils import _ensure_output_dir, emit_json_error
+
+
+def _produced_is_accepted(result, produced: str) -> bool:
+    """True when the work-dir file is a result ``_finalize_slice`` would accept."""
+    from bambu_cli.slicer.output import SliceOutcome, _classify_slice_result, _is_valid_sliced_3mf
+
+    size = os.path.getsize(produced)
+    outcome = _classify_slice_result(
+        returncode=result.returncode if result is not None else -1,
+        stdout_stderr=((result.stdout or "") + (result.stderr or "")) if result is not None else "",
+        fresh=True,
+        file_exists=True,
+        file_size=size,
+        is_valid_3mf=_is_valid_sliced_3mf(produced) if size > 0 else False,
+    )
+    return outcome in (SliceOutcome.SUCCESS, SliceOutcome.BENIGN_GL_WARNING)
 
 
 def _list_settings(args: argparse.Namespace, settings) -> str:
@@ -180,6 +197,9 @@ def cmd_slice(
             )
         layer = quality_map.get(requested_quality, f"0.20mm Standard @BBL {model_code}")
         process_file = f"{layer}.json"
+        # An unmapped layer height must resolve to a profile of that height; the
+        # Standard file existing must not satisfy it.
+        numeric_quality = requested_quality not in quality_map and str(requested_quality).startswith("0.")
 
         outdir = _expand_path(args.output) if args.output else os.path.dirname(os.path.abspath(source_filepath))
         if outdir.startswith("-"):
@@ -216,16 +236,23 @@ def cmd_slice(
         requested_filament = str(requested_filament_name).lower()
 
         if os.path.isdir(filament_dir):
-            files = os.listdir(filament_dir)
-            for f in files:
-                if requested_filament in f.lower() and "@base" in f:
-                    filament = os.path.join(filament_dir, f)
-                    break
-            if not filament:
-                for f in files:
-                    if requested_filament in f.lower():
-                        filament = os.path.join(filament_dir, f)
-                        break
+            files = sorted(f for f in os.listdir(filament_dir) if requested_filament in f.lower())
+            base_files = [f for f in files if "@base" in f]
+            candidates = base_files or files
+            exact_stems = {requested_filament, f"bambu {requested_filament}"}
+
+            def _filament_rank(name: str) -> tuple[bool, int, str]:
+                stem = name[: -len(".json")] if name.endswith(".json") else name
+                stem = stem.lower().replace(" @base", "").strip()
+                return (stem not in exact_stems, len(name), name)
+
+            if candidates:
+                best = min(candidates, key=_filament_rank)
+                filament = os.path.join(filament_dir, best)
+                if len(candidates) > 1:
+                    logger.info(
+                        f"Filament '{requested_filament_name}' matched {len(candidates)} profiles; using {best}"
+                    )
 
         if not filament or not os.path.exists(filament):
             logger.warning(
@@ -277,7 +304,7 @@ def cmd_slice(
                 detected_profiles_dir=detected_profiles,
             )
 
-        if not os.path.exists(process):
+        if numeric_quality or not os.path.exists(process):
             compatible_printer = f"{full_model_name} {settings.nozzle_size} nozzle"
             discovered_process = _discover_process_profile(
                 args.quality,
@@ -285,7 +312,21 @@ def cmd_slice(
                 model_code=model_code,
                 compatible_printer=compatible_printer,
                 profiles_dir=settings.profiles_dir,
+                fallback=not numeric_quality,
             )
+            if not discovered_process and numeric_quality:
+                heights = _available_layer_heights(settings.profiles_dir, model_code, compatible_printer)
+                emit_json_error(
+                    args,
+                    "slice",
+                    EXIT_COMMAND_ERROR,
+                    f"No {requested_quality} mm process profile for {full_model_name}. "
+                    f"Available layer heights: {', '.join(heights) if heights else 'none found'}.",
+                    failed_step="validate",
+                    file=filepath,
+                    quality=str(requested_quality),
+                    available_layer_heights=heights,
+                )
             if not discovered_process:
                 hint, detected_profiles = _profiles_dir_diagnostic(settings.profiles_dir)
                 if hint:
@@ -302,6 +343,8 @@ def cmd_slice(
                 )
             assert discovered_process is not None  # for type checkers; emit_json_error is NoReturn above
             process = discovered_process
+            if numeric_quality:
+                layer = os.path.basename(process)[: -len(".json")]
 
         for path, name in [(machine, "machine"), (filament, "filament")]:
             if not os.path.exists(path):
@@ -432,8 +475,14 @@ def cmd_slice(
         produced = os.path.join(work_dir, outfile)
         if os.path.isfile(produced):
             # Only a file OrcaSlicer actually wrote replaces outpath, so
-            # _finalize_slice's freshness check still catches a stale one.
-            os.replace(produced, outpath)
+            # _finalize_slice's freshness check still catches a stale one. A
+            # failed run must not overwrite an earlier good output; with none
+            # to protect, the file moves anyway so _finalize_slice can report
+            # exactly what was wrong with it.
+            if os.path.exists(outpath) and not _produced_is_accepted(result, produced):
+                os.unlink(produced)
+            else:
+                os.replace(produced, outpath)
     finally:
         if work_dir is not None:
             shutil.rmtree(work_dir, ignore_errors=True)

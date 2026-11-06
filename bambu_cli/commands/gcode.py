@@ -8,6 +8,7 @@ from bambu_cli.context import RuntimeContext
 from bambu_cli.contracts import Gcode
 from bambu_cli.download.naming import _has_command_injection_chars
 from bambu_cli.errors import CommandUnconfirmed, abort
+from bambu_cli.gcode_limits import heater_problem as _heater_problem
 from bambu_cli.logging_utils import logger
 from bambu_cli.utils import emit_json, get_sequence_id
 
@@ -23,6 +24,14 @@ def cmd_gcode(args, ctx=None):
     if not gcode.strip() or _has_command_injection_chars(gcode):
         abort(
             "Invalid G-code: must be non-empty and must not contain control characters (CR/LF/NUL).",
+            exit_code=EXIT_COMMAND_ERROR,
+            failed_step="validate",
+            extra={"gcode": gcode, "sent": False},
+        )
+    problem = _heater_problem(gcode)
+    if problem:
+        abort(
+            f"Invalid G-code: {problem}",
             exit_code=EXIT_COMMAND_ERROR,
             failed_step="validate",
             extra={"gcode": gcode, "sent": False},

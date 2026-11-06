@@ -418,3 +418,92 @@ def test_confirm_summary_survives_a_markup_shaped_value():
     text = renderable_text(_summary_table(rows))  # raises MarkupError against str cells
     assert "a[/b]c.gcode" in text
     assert "[0.98]" in text
+
+
+# ---------------------------------------------------------------------------
+# The AMS is read again when "Start print" is pressed (2026-11-05 audit, S-2):
+# the slot captured while choosing the material can be minutes old by then.
+
+
+def _changing_detector(*readings):
+    """A detector that reports each ``(material, slot)`` in turn, then repeats the last."""
+    calls = {"n": 0}
+
+    def detector(args, on_active_slot=None):
+        material, slot = readings[min(calls["n"], len(readings) - 1)]
+        calls["n"] += 1
+        if slot is not None:
+            on_active_slot(slot)
+        return material
+
+    detector.calls = calls
+    return detector
+
+
+@pytest.mark.parametrize(
+    ("second", "expected"),
+    [
+        (("PLA", 2), "now PLA in AMS0·2"),
+        (("PETG", 5), "now PETG in AMS1·1"),
+        ((None, None), "Could not confirm that PETG in AMS0·2"),
+    ],
+)
+async def test_start_print_is_refused_when_the_ams_changed(tmp_path, second, expected):
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    job = Recorder()
+    steps = GoSteps(download=Recorder(), slice=_slicer_into_workdir(tmp_path), job=job)
+    detector = _changing_detector(("PETG", 2), second)
+
+    app = PlateApp(_args(), _deps(steps, ams_detector=detector))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = await _prepare_to_preview(pilot, stl)
+        modal = await _open_modal(pilot, screen)
+        assert "AMS0·2 (PETG)" in _text(modal.query_one("#confirm-summary", Static))
+        await _press_button(pilot, modal, "#confirm-print")
+        status = _text(modal.query_one("#confirm-status", Static))
+        assert isinstance(pilot.app.screen, ConfirmModal)
+        assert modal.query_one("#confirm-upload").disabled is False
+        await _press_button(pilot, modal, "#confirm-cancel")
+
+    assert job.calls == [], "the print was sent although the AMS no longer matched"
+    assert expected in status
+    assert "not started" in status
+
+
+async def test_start_print_goes_ahead_when_the_ams_is_unchanged(tmp_path):
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    job = Recorder()
+    steps = GoSteps(download=Recorder(), slice=_slicer_into_workdir(tmp_path), job=job)
+    detector = _changing_detector(("PETG", 2))
+
+    app = PlateApp(_args(), _deps(steps, ams_detector=detector))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = await _prepare_to_preview(pilot, stl)
+        modal = await _open_modal(pilot, screen)
+        await _press_button(pilot, modal, "#confirm-print")
+
+    assert detector.calls["n"] == 2, "the AMS was not read again before printing"
+    assert [ns.confirm for ns in job.calls] == [True]
+    assert job.calls[0].ams_mapping == "2"
+
+
+async def test_upload_only_does_not_read_the_ams_again(tmp_path):
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    job = Recorder()
+    steps = GoSteps(download=Recorder(), slice=_slicer_into_workdir(tmp_path), job=job)
+    detector = _changing_detector(("PETG", 2), (None, None))
+
+    app = PlateApp(_args(), _deps(steps, ams_detector=detector))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = await _prepare_to_preview(pilot, stl)
+        modal = await _open_modal(pilot, screen)
+        await _press_button(pilot, modal, "#confirm-upload")
+
+    assert detector.calls["n"] == 1
+    assert [ns.confirm for ns in job.calls] == [False]

@@ -9,6 +9,7 @@ import sys
 
 from bambu_cli.config import _access_code_value_problem, load_config
 from bambu_cli.constants import EXIT_CONFIG_ERROR, EXIT_SUCCESS
+from bambu_cli.context import insecure_tls_reading
 from bambu_cli.errors import abort
 from bambu_cli.logging_utils import logger
 
@@ -93,6 +94,27 @@ def _timeouts_check(cfg):
     return _preflight_result("ok", "timeouts", "Configured timeouts are valid.")
 
 
+def _cert_fingerprint_check(cfg):
+    """Error when a present ``cert_fingerprint`` cannot work as a pin."""
+    from bambu_cli.tlspin import fingerprint_config_problem
+
+    problem = fingerprint_config_problem(cfg.get("cert_fingerprint"))
+    if problem:
+        return _preflight_result("error", "cert-fingerprint", f"config.json {problem}.")
+    return _preflight_result("ok", "cert-fingerprint", "Certificate pin is valid or not set.")
+
+
+def _camera_port_check(cfg):
+    """Error when ``camera_port`` is neither a docker port spec nor a 1-65535 integer."""
+    from bambu_cli.context import camera_port_problem
+
+    if "camera_port" in cfg:
+        problem = camera_port_problem(cfg["camera_port"])
+        if problem:
+            return _preflight_result("error", "camera-port", f"config.json 'camera_port': {problem}.")
+    return _preflight_result("ok", "camera-port", "camera_port is valid or not set.")
+
+
 def collect_preflight_checks():
     """Collect local install/config checks without contacting the printer."""
     from bambu_cli.context import current_config, current_settings
@@ -133,19 +155,30 @@ def collect_preflight_checks():
         if config_permissions:
             checks.append(config_permissions)
         if "insecure_tls" in cfg and not isinstance(cfg["insecure_tls"], bool):
-            # A non-boolean insecure_tls (e.g. the string "false") is ignored and
-            # TLS validation stays ON (fail-closed); flag it so the user is not
-            # confused about whether they disabled it.
+            # Say what the runtime actually does, using the same reading it uses.
+            reading = insecure_tls_reading(cfg["insecure_tls"])
+            if reading is None:
+                outcome = "it is ignored and TLS certificate validation stays ENABLED"
+            elif reading:
+                outcome = "it is honoured as true and TLS certificate validation is DISABLED"
+            else:
+                outcome = "it is read as false and TLS certificate validation stays ENABLED"
             checks.append(
                 _preflight_result(
                     "warning",
                     "insecure-tls",
                     f"config.json 'insecure_tls' is not a JSON boolean ({cfg['insecure_tls']!r}); "
-                    "it is ignored and TLS certificate validation stays ENABLED. Use true/false.",
+                    f"{outcome}. Use true/false.",
                 )
             )
         printer_ip = cfg.get("printer_ip")
-        if _looks_like_placeholder(printer_ip, {"0.0.0.0", "192.168.0.XXX", "PRINTER_IP"}):
+        if printer_ip is not None and not isinstance(printer_ip, str):
+            checks.append(
+                _preflight_result(
+                    "error", "printer-ip", "config.json 'printer_ip' must be a string address or hostname."
+                )
+            )
+        elif _looks_like_placeholder(printer_ip, {"0.0.0.0", "192.168.0.XXX", "PRINTER_IP"}):
             checks.append(
                 _preflight_result("error", "printer-ip", "Config must contain a real printer_ip or hostname.")
             )
@@ -160,10 +193,14 @@ def collect_preflight_checks():
 
         checks.append(_printer_model_check(cfg))
         checks.append(_timeouts_check(cfg))
+        checks.append(_cert_fingerprint_check(cfg))
+        checks.append(_camera_port_check(cfg))
 
         access_code = cfg.get("access_code")
         has_inline_code = bool(access_code)
         access_file = cfg.get("access_code_file")
+        if access_file is not None and not isinstance(access_file, str):
+            access_file = None  # not a path: treated as unset, as at runtime
         if access_file:
             expanded = _expand_path(access_file)
             if os.path.exists(expanded):
@@ -202,6 +239,12 @@ def collect_preflight_checks():
                         "error", "access-code", f"Access code file not found: {_display_path(access_file)}"
                     )
                 )
+        elif "access_code" in cfg and not isinstance(access_code, str):
+            checks.append(
+                _preflight_result(
+                    "error", "access-code", "config.json 'access_code' must be a string (or use access_code_file)."
+                )
+            )
         elif has_inline_code and _access_code_value_problem(access_code):
             checks.append(_preflight_result("error", "access-code", _access_code_value_problem(access_code)))
         elif has_inline_code:

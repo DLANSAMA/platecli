@@ -1,5 +1,6 @@
 from tests.bambu_test_base import *  # noqa: F401,F403
 from bambu_cli.errors import BambuError
+from tests.fake_3mf import minimal_3mf
 
 
 class TestBambuDoctor(unittest.TestCase):
@@ -273,7 +274,7 @@ class TestBambuSimulation(unittest.TestCase):
             # verification against it — reflect actual byte counts.
             local_path = os.path.join(os.getcwd(), "test.3mf")
             with open(local_path, "wb") as f:
-                f.write(b"x" * 1024)
+                f.write(minimal_3mf(pad=1024))
             try:
                 cmd_upload(args)
             finally:
