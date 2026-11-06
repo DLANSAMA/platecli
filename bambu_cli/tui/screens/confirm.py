@@ -89,9 +89,9 @@ class ConfirmModal(ModalScreen[ConfirmOutcome]):
             Static(_summary_table(self._rows), id="confirm-summary"),
             Static(str(self._state.printable_path or ""), id="confirm-path", markup=False),
             Horizontal(
-                Button("Start print", id="confirm-print", variant="primary"),
-                Button("Upload only", id="confirm-upload"),
-                Button("Cancel", id="confirm-cancel"),
+                Button("Start print", id="confirm-print", variant="primary", compact=True),
+                Button("Upload only", id="confirm-upload", compact=True),
+                Button("Cancel", id="confirm-cancel", compact=True),
                 id="confirm-buttons",
             ),
             Static("", id="confirm-status", markup=False),

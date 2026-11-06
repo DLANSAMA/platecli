@@ -22,3 +22,7 @@ Noticed but not chosen, one line each, oldest first: `- date · where · what ·
 - 2026-11-05 · bambu_cli/gcode_limits.py · the pre-sliced scan has no cap on total decompressed size: a highly compressible 3MF can take minutes to scan (memory stays bounded) · (review of the S-1 fix)
 - 2026-11-05 · bambu_cli/gcode_limits.py · whether Bambu firmware ends a G-code line at a bare CR is unconfirmed; the scanner treats CR as a break, the safe reading · (review of the S-1 fix)
 - 2026-11-06 · main checkout, branch `fix/audit-round3` · 4 local commits (`13cb15c`..`a04ac04`, 2026-11-05) add 223 coverage test files and were never pushed; decide whether to land them as a PR · (seen while cutting 0.6.0)
+- 2026-11-06 · bambu_cli/commands/status.py:93 · `plate status` still prints trays as "Unit 0 / Slot 0" while the TUI and `plate go` now say A1–A4; align the human output (JSON unchanged) · (T-1)
+- 2026-11-06 · bambu_cli/ams.py:40 · `_normalize_color` drops the alpha, so Bambu's `00000000` (no colour) paints a black swatch in the TUI; telling it apart changes `status --json` · (review of T-1)
+- 2026-11-06 · bambu_cli/tui · a plate thumbnail on the dashboard and prepare preview needs an image extra and terminal graphics support; left out of T-1 · (T-1)
+- 2026-11-06 · bambu_cli/tui/screens/prepare.py · at 80x24 the stacked prepare form still scrolls (automatically) to reach its result; a shorter material picker would let both fit · (T-1)

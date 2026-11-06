@@ -111,7 +111,7 @@ plate tui    # or: plate tui --sim to explore it without a printer
 shell's Python does not reach a `pipx` / `uv tool` environment. Already installed
 without it? `pipx install --force 'platecli[tui]'` (or `pipx inject platecli textual`).</sub>
 
-`plate tui` is a live view of your printer: state, temperatures, layer and progress, and the AMS trays, on one screen that keeps updating — plus a job monitor that follows a running print to completion. You can start a print from it too, through the same prepare-and-confirm flow the wizard uses, so you never have to leave the screen.
+`plate tui` is a live view of your printer on one screen that keeps updating. It shows the job in large type (percent, time left and the clock time it should finish, layer, and which tray is feeding), the nozzle and bed with their recent history, and the AMS trays in each filament's own colour. There is also a job monitor that follows a running print to completion. You can start a print from it too, through the same prepare-and-confirm flow the wizard uses, so you never have to leave the screen.
 
 It is a front-end, not new machinery: it slices and builds the `job` request through the same shared code `plate go` runs, so the two cannot drift. Every safety rule holds — a print only ever starts from the confirm dialog, cancelling keeps the sliced file, and leaving the monitor never stops a print. Textual is an optional extra and never a runtime dependency, so `plate go` keeps working with nothing extra installed on SSH, dumb terminals, and with screen readers.
 
