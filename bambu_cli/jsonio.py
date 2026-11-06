@@ -38,12 +38,45 @@ def looks_like_schemeless_credential_url(value):
         return False
 
 
+def _strip_through_last_at(text):
+    """Conservative scrub for URL text the parser cannot read.
+
+    Drops everything between the scheme separator and the last ``@``, which is
+    where a browser-style reader would put the userinfo. Over-redacting an
+    already-invalid URL loses nothing; echoing a password does.
+    """
+    sep = text.find("://")
+    start = sep + 3 if sep >= 0 else (2 if text.startswith("//") else 0)
+    at = text.rfind("@")
+    if at < start:
+        return text
+    return text[:start] + text[at + 1 :]
+
+
+def _port_is_invalid(parsed):
+    try:
+        _ = parsed.port
+    except ValueError:
+        return True
+    return False
+
+
 def redact_url_credentials(value):
     """Return URL text with any userinfo removed before logging or JSON output."""
     text = str(value or "")
     if "@" not in text:
         return value
-    parsed = urlparse(text)
+    try:
+        parsed = urlparse(text)
+    except ValueError:
+        # e.g. an unbalanced IPv6 bracket after the userinfo: user:pw@[x/a.stl
+        return _strip_through_last_at(text)
+    after_netloc = text[text.find(parsed.netloc) + len(parsed.netloc) :] if parsed.netloc else ""
+    if parsed.netloc and _port_is_invalid(parsed) and "@" in after_netloc:
+        # A password holding "/", "?" or "#" (user:pa/ss@host) makes the parser
+        # read "user" as the host and the password as the port, so there is no
+        # userinfo to strip and the secret would be echoed as-is.
+        return _strip_through_last_at(text)
     if "://" not in text and looks_like_schemeless_credential_url(text):
         redacted = redact_url_credentials(f"https://{text}")
         prefix = "https://"

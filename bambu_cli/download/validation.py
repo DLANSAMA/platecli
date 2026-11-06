@@ -2,7 +2,7 @@
 
 import os
 import re
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse, urlsplit, urlunsplit
 
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import (
@@ -22,9 +22,52 @@ from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import safe_log_error
 from bambu_cli.paths import expand_path as _expand_path
 
+_SCHEME_PREFIX = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+
+
+def _safe_urlparse(value):
+    """``urlparse`` that returns None instead of raising on a malformed URL.
+
+    ``urlparse`` raises ``ValueError`` for an unbalanced IPv6 bracket such as
+    ``http://[::1/x.stl``; callers report that as an invalid URL rather than
+    letting it escape as an unexpected error with a traceback.
+    """
+    try:
+        return urlparse(value)
+    except ValueError:
+        return None
+
+
+# RFC 3986 reserved and unreserved characters, plus "%" so existing escapes
+# survive: quoting with this safe set only touches non-ASCII and unsafe bytes.
+_URI_SAFE = "!#$%&'()*+,/:;=?@[]~"
+
+
+def _iri_to_uri(url):
+    """Percent-encode non-ASCII in the path, query and fragment.
+
+    A URL pasted from a browser address bar can hold raw Unicode
+    (``/files/модель.stl``); http.client sends the request line as ASCII and
+    would fail with an opaque ``'ascii' codec can't encode`` error.
+    """
+    if url.isascii():
+        return url
+    parts = urlsplit(url)
+    return urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            quote(parts.path, safe=_URI_SAFE),
+            quote(parts.query, safe=_URI_SAFE),
+            quote(parts.fragment, safe=_URI_SAFE),
+        )
+    )
+
 
 def _looks_like_url(value):
-    parsed = urlparse(value)
+    parsed = _safe_urlparse(value)
+    if parsed is None:
+        return bool(_SCHEME_PREFIX.match(value))
     return bool(parsed.scheme and "://" in value)
 
 
@@ -48,8 +91,8 @@ def _normalize_url_input(value):
 def _is_http_url(value):
     if any(ord(c) < 32 or ord(c) == 127 or c.isspace() for c in (value or "")):
         return False
-    parsed = urlparse(value)
-    return parsed.scheme.lower() in ("http", "https") and bool(parsed.netloc)
+    parsed = _safe_urlparse(value)
+    return parsed is not None and parsed.scheme.lower() in ("http", "https") and bool(parsed.netloc)
 
 
 def _validate_http_url_or_exit(value):
@@ -57,7 +100,11 @@ def _validate_http_url_or_exit(value):
         message = "Invalid URL: contains whitespace or control characters"
         safe_log_error(message)
         abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
-    parsed = urlparse(value)
+    parsed = _safe_urlparse(value)
+    if parsed is None:
+        message = "Invalid URL: malformed host"
+        safe_log_error(message)
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
     if parsed.scheme.lower() not in ("http", "https"):
         message = f"Invalid URL scheme: {parsed.scheme or 'none'}"
         safe_log_error(message)
@@ -68,6 +115,16 @@ def _validate_http_url_or_exit(value):
         abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
     if parsed.username is not None or parsed.password is not None:
         message = "Invalid URL: embedded credentials are not supported"
+        safe_log_error(message)
+        abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
+    try:
+        _ = parsed.port
+    except ValueError:
+        # Usually a password holding "/", "?" or "#" (user:pa/ss@host): the
+        # parser then reads the password as the port. The message must not
+        # echo it, and http.client's own "nonnumeric port: '<secret>'" must
+        # never be reached.
+        message = "Invalid URL: the port is not a number (a password in the URL is not supported)"
         safe_log_error(message)
         abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
 
@@ -138,9 +195,22 @@ def _known_unsupported_content_type(content_type):
     return None
 
 
+def _names_a_model_file(url):
+    """True when the URL path ends in a supported model or print extension."""
+    parsed = _safe_urlparse(url or "")
+    if parsed is None:
+        return False
+    return _file_extension(_portable_basename(unquote(parsed.path))) in DOWNLOADABLE_EXTENSIONS
+
+
 def _reject_unsupported_content_type(args, source_url, normalized_source, url, content_type):
     media_type = _known_unsupported_content_type(content_type)
     if not media_type:
+        return
+    # ASCII STL, OBJ, STEP and G-code are text, and many hosts (GitHub raw among
+    # them) serve every file as text/plain. When the URL itself names a model
+    # file, text/plain says nothing about whether it is one.
+    if media_type == "text/plain" and _names_a_model_file(url):
         return
     message = f"Download URL returned unsupported content type '{media_type}', not a model file."
     abort(
