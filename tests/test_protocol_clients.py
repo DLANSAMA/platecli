@@ -238,7 +238,9 @@ class TestCreateMqttClient(unittest.TestCase):
         printer = _test_printer(access_code="mock_access_code", insecure_tls=True)
         client = create_mqtt_client(printer)
 
-        mock_mqtt_client.assert_called_once_with(ANY, "", reconnect_on_failure=False)
+        mock_mqtt_client.assert_called_once_with(ANY, ANY, reconnect_on_failure=False)
+        client_id = mock_mqtt_client.call_args.args[1]
+        assert client_id.startswith("plate-") and len(client_id) <= 23
         mock_client_instance.username_pw_set.assert_called_once_with("bblp", "mock_access_code")
         mock_client_instance.tls_set.assert_called_once_with(cert_reqs=ssl.CERT_NONE)
         mock_client_instance.tls_insecure_set.assert_called_once_with(True)

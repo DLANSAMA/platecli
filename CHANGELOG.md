@@ -22,12 +22,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - **Raw G-code is held to the heater limits.** `plate gcode "M104 S400"` went
   straight to the printer. `M104`/`M109` above 350 °C and `M140`/`M190` above
   150 °C are now refused before anything is sent, as is a temperature that
-  is not a plain number (`S4e2`, `S0x190`, non-ASCII digits).
+  is not a plain number (`S4e2`, `S0x190`, non-ASCII digits), including after
+  a tool number (`M104 T0 S400`).
 - `--ams-mapping` accepts ASCII digits only; `٣` and other Unicode digits that
   `int()` reads were passed through as slot numbers.
 - The upload guard that refuses to overwrite the file being printed now waits
-  for a full status report: a partial first report without `gcode_file` read
-  as "not printing this file" and let the upload through.
+  for a full status report, and a print whose report names no file blocks the
+  upload too: a partial report without `gcode_file` read as "not printing this
+  file" and let the upload through.
 - `slice --quality 0.28` (a height with no named profile) now needs a 0.28 mm
   process profile and lists the available heights when there is none; it used
   to slice the Standard profile without saying so. A failed OrcaSlicer run no
@@ -194,16 +196,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   With both `cert_fingerprint` and `insecure_tls` set, MQTT and the camera
   skipped the pin and accepted any certificate. A pin is now always checked.
 - **Untrusted names cannot drive the terminal.** File names from the printer's
-  FTP listing, MQTT report fields (`gcode_file`, AMS tray types, error text),
-  mDNS names and prompt text could carry ESC sequences (clear the screen,
+  FTP listing, MQTT report fields (`gcode_file`, AMS tray types, error text)
+  in `status`, `status --monitor` and the TUI, mDNS names and prompt text could carry ESC sequences (clear the screen,
   write the clipboard with OSC 52) or bidi overrides that make one name read
   as another. They are shown with control and bidi characters replaced, and
   names with them are refused for upload (download renaming replaces them).
 - A hostile or corrupt MQTT report (deeply nested JSON, an over-long integer,
-  non-object JSON) is ignored instead of killing the client's network thread,
-  which left a held session reporting stale state.
-- A URL password holding `/`, `?` or `#` (`user:pa/ss@host`) is now redacted;
-  the parser read the password as a port, so it was echoed in errors and JSON.
+  non-object JSON, `1e999`) is ignored instead of killing the client's network
+  thread, which left a held session reporting stale state, or stopping
+  `status --monitor` from ever seeing the end of the print.
+- A URL password holding `/`, `?` or `#` (`user:pa/ss@host`, `user:12/ss@host`)
+  is now redacted and the URL refused: the parser read it as a host and port,
+  so the password was echoed in errors and JSON, and with a digit prefix the
+  request went to host `user` with the password in its path. `https:///user:pw@host`
+  and similar host-less forms are redacted too.
 
 - **`"camera_allow_streamer": "false"` no longer enables the unpinned camera
   streamer.** The key was read with `bool()`, so any non-empty string —

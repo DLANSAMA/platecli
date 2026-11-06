@@ -39,7 +39,8 @@ def _heater_problem(gcode):
     heater = None
     for match in _WORD.finditer(gcode):
         letter, value = match.group(1).upper(), match.group(2)
-        if letter in ("G", "M", "T"):
+        # T is a parameter here, not a new command: "M104 T0 S3000" heats tool 0.
+        if letter in ("G", "M"):
             heater = None
             if letter == "M" and _PLAIN_TEMPERATURE.fullmatch(value):
                 heater = _HEATERS.get(int(float(value)))

@@ -18,6 +18,7 @@ from bambu_cli.download.naming import _file_extension
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.fsutil import _portable_basename
 from bambu_cli.jsonio import looks_like_schemeless_credential_url as _looks_like_schemeless_credential_url
+from bambu_cli.jsonio import looks_like_split_userinfo as _looks_like_split_userinfo
 from bambu_cli.jsonio import redact_url_credentials as _redact_url_credentials
 from bambu_cli.logging_utils import safe_log_error
 from bambu_cli.paths import expand_path as _expand_path
@@ -113,7 +114,9 @@ def _validate_http_url_or_exit(value):
         message = "Invalid URL: missing host"
         safe_log_error(message)
         abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
-    if parsed.username is not None or parsed.password is not None:
+    if parsed.username is not None or parsed.password is not None or _looks_like_split_userinfo(value, parsed):
+        # The second form is user:1234/pw@host: it parses as host "user", so the
+        # request would carry the password in its path to whatever "user" resolves to.
         message = "Invalid URL: embedded credentials are not supported"
         safe_log_error(message)
         abort(message, exit_code=EXIT_COMMAND_ERROR, failed_step="validate")
@@ -230,7 +233,7 @@ def _max_download_mb_error(args):
     max_download_mb = _namespace_get(args, "max_download_mb", DEFAULT_MAX_DOWNLOAD_MB)
     try:
         max_download_mb = int(max_download_mb)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         max_download_mb = 0
     if max_download_mb <= 0:
         return "--max-download-mb must be a positive integer"

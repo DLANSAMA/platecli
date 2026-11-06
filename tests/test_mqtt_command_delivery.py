@@ -275,3 +275,105 @@ def test_the_raised_error_carries_the_unconfirmed_fields():
     assert envelope["next_command"] == ["status", "--json"]
     assert "was sent, but the printer did not acknowledge it" in envelope["error"]
     assert exc.logged, "the line is already logged; the CLI must not print it twice"
+
+
+# --- the status monitor still rides out a dropped connection ---------------------
+
+
+def _publish_packet(topic, payload):
+    body = len(topic).to_bytes(2, "big") + topic + payload
+    length, encoded = len(body), b""
+    while True:
+        byte, length = length % 128, length // 128
+        encoded += bytes([byte | (128 if length else 0)])
+        if not length:
+            return b"\x30" + encoded + body
+
+
+class _DropOnceBroker:
+    """First connection: a RUNNING report, then a hang-up. Later ones: FINISH."""
+
+    def __init__(self):
+        self.connections = 0
+        self.client_ids = []
+        self._server = socket.socket()
+        self._server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server.bind(("127.0.0.1", 0))
+        self._server.listen(5)
+        self._server.settimeout(0.2)
+        self.port = self._server.getsockname()[1]
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+        self._thread.start()
+
+    def _report(self, state, pct):
+        return _publish_packet(b"device/SER/report", f'{{"print": {{"gcode_state": "{state}", "mc_percent": {pct}}}}}'.encode())
+
+    def _serve(self):
+        while not self._stop.is_set():
+            try:
+                conn, _ = self._server.accept()
+            except OSError:
+                continue
+            self.connections += 1
+            first = self.connections == 1
+            with conn:
+                conn.settimeout(3)
+                try:
+                    while True:
+                        packet = _read_packet(conn)
+                        if packet is None:
+                            break
+                        kind, body = packet[0] >> 4, packet[1]
+                        if kind == 1:  # CONNECT: protocol name, level, flags, keepalive, then the client id
+                            id_len = int.from_bytes(body[10:12], "big")
+                            self.client_ids.append(body[12 : 12 + id_len].decode())
+                            conn.sendall(b"\x20\x02\x00\x00")
+                        elif kind == 8:  # SUBSCRIBE -> SUBACK, then a report
+                            conn.sendall(bytes([0x90, 3, body[0], body[1], 0]))
+                            conn.sendall(self._report("RUNNING", 10) if first else self._report("FINISH", 100))
+                            if first:
+                                break  # hang up mid-print
+                        elif kind == 14:
+                            break
+                except OSError:
+                    pass
+
+    def close(self):
+        self._stop.set()
+        self._thread.join(timeout=5)
+        self._server.close()
+
+
+def test_status_monitor_reconnects_after_a_drop(real_paho, monkeypatch, capsys):
+    """The monitor relied on paho's auto-reconnect; turning it off for commands hung it."""
+    from bambu_cli.protocols import mqtt as mqtt_facade
+    from bambu_cli.protocols.mqtt_monitor import monitor_status
+
+    broker = _DropOnceBroker()
+    monkeypatch.setattr(
+        mqtt_facade,
+        "create_mqtt_client",
+        lambda _printer, client_id="", reconnect=False: mqtt_tls._paho_client(client_id, reconnect=reconnect),
+    )
+    done = []
+    worker = threading.Thread(
+        target=lambda: (monitor_status(types.SimpleNamespace(json=True), _printer(broker.port)), done.append(True)),
+        daemon=True,
+    )
+    try:
+        worker.start()
+        worker.join(15)
+    finally:
+        broker.close()
+    assert done, "the monitor never saw FINISH after the connection dropped"
+    assert broker.connections >= 2
+    assert all(cid.startswith("plate-") for cid in broker.client_ids), broker.client_ids
+    assert '"terminal"' in capsys.readouterr().out
+
+
+def test_decode_report_drops_reports_nested_past_what_the_json_walkers_handle():
+    deep = b'{"a":' * 5000 + b"1" + b"}" * 5000
+    assert decode_report(types.SimpleNamespace(payload=deep)) is None
+    real = b'{"print": {"ams": {"ams": [{"tray": [{"id": "0", "tray_type": "PLA"}]}]}}}'
+    assert decode_report(types.SimpleNamespace(payload=real))["print"]["ams"]["ams"][0]["tray"][0]["id"] == "0"

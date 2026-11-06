@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import ssl
 import threading
+from collections.abc import Iterable
 
 from bambu_cli.errors import PrinterStatusIncomplete
 from bambu_cli.logging_utils import logger
@@ -28,7 +29,33 @@ def decode_report(msg):
     except (ValueError, RecursionError, AttributeError, TypeError) as exc:
         logger.debug(f"MQTT decode error: {type(exc).__name__}")
         return None
-    return data if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return None
+    if _nested_deeper_than(data, _MAX_REPORT_DEPTH):
+        # json.loads accepts a few thousand levels; the recursive walks that
+        # redact and emit JSON do not. Real reports are about six deep.
+        logger.debug("MQTT report dropped: nested too deeply")
+        return None
+    return data
+
+
+_MAX_REPORT_DEPTH = 32
+
+
+def _nested_deeper_than(value, limit):
+    stack = [(value, 1)]
+    while stack:
+        item, depth = stack.pop()
+        if isinstance(item, dict):
+            children: Iterable[object] = item.values()
+        elif isinstance(item, list):
+            children = item
+        else:
+            continue
+        if depth > limit:
+            return True
+        stack.extend((child, depth + 1) for child in children)
+    return False
 
 
 def _client_factory(client_factory):

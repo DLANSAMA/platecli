@@ -39,6 +39,10 @@ def _print_name_key(name):
 def _printing_this_file(printer, filename):
     """True when the printer reports an active print of ``filename``.
 
+    ``None`` when it reports an active print without naming the file: deltas
+    can add up to a "complete" report with neither ``gcode_file`` nor
+    ``subtask_name``, and "not this file" cannot be told apart from that.
+
     ``upload_file`` deletes the remote file before storing the new one, so an
     upload with the name of the running print pulls the file out from under
     the printer (what the firmware does then is unverified). Best effort: a
@@ -55,8 +59,10 @@ def _printing_this_file(printer, filename):
         return False
     if not isinstance(data, dict) or str(data.get("gcode_state") or "").upper() not in _ACTIVE_GCODE_STATES:
         return False
-    target = _print_name_key(filename)
-    return target in {_print_name_key(data.get("subtask_name")), _print_name_key(data.get("gcode_file"))}
+    names = {_print_name_key(data.get("subtask_name")), _print_name_key(data.get("gcode_file"))} - {""}
+    if not names:
+        return None
+    return _print_name_key(filename) in names
 
 
 def cmd_upload(args, ctx=None):
@@ -171,9 +177,15 @@ def cmd_upload(args, ctx=None):
         return filename
 
     printer = ctx.printer()
-    if _printing_this_file(printer, filename):
+    printing = _printing_this_file(printer, filename)
+    if printing is not False:
+        what = (
+            f"is printing {filename}"
+            if printing
+            else f"is printing but did not say which file, so it may be {filename}"
+        )
         abort(
-            f"The printer is printing {filename} right now; uploading would replace that file mid-print. "
+            f"The printer {what} right now; uploading would replace that file mid-print. "
             "Wait for the print to finish, or upload under a different name.",
             exit_code=EXIT_PRINTER_ERROR,
             failed_step="upload",

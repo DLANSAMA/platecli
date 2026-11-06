@@ -51,6 +51,9 @@ def _upload(tmp_path, printer, name="model.3mf"):
         {"gcode_state": "PAUSE", "subtask_name": "model"},
         {"gcode_state": "PREPARE", "gcode_file": "/sdcard/model/model.3mf"},
         {"gcode_state": "RUNNING", "gcode_file": "model.3mf"},
+        # Printing, but the report names no file: it may be this one.
+        {"gcode_state": "RUNNING", "mc_percent": 4, "bed_temper": 60, "nozzle_temper": 220},
+        {"gcode_state": "PAUSE", "subtask_name": "", "gcode_file": None},
     ],
 )
 def test_refuses_to_replace_the_file_being_printed(tmp_path, status):

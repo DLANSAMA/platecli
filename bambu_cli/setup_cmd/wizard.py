@@ -41,7 +41,7 @@ def _service_info_address(info):
     if callable(parsed_addresses):
         try:
             addresses = list(parsed_addresses())
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             addresses = []
         if addresses:
             return addresses[0]

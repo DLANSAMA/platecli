@@ -36,7 +36,7 @@ def positive_seconds(value):
 
     try:
         seconds = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise argparse.ArgumentTypeError(f"must be a positive number of seconds (got {value!r})") from None
     if not math.isfinite(seconds) or seconds <= 0:
         raise argparse.ArgumentTypeError(f"must be a positive number of seconds (got {value!r})")
@@ -49,7 +49,7 @@ def positive_int(value):
     """argparse type for a 1-based index such as a plate number."""
     try:
         number = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise argparse.ArgumentTypeError(f"must be a positive whole number (got {value!r})") from None
     if number < 1:
         raise argparse.ArgumentTypeError(f"must be a positive whole number (got {value!r})")

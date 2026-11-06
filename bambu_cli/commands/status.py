@@ -7,6 +7,7 @@ from bambu_cli.context import RuntimeContext
 from bambu_cli.contracts import PrinterState, Status
 from bambu_cli.errors import PrinterConnectionError
 from bambu_cli.logging_utils import logger
+from bambu_cli.textsafe import display_safe
 from bambu_cli.utils import emit_json
 
 _PRINTER_STATE_FIELDS = {f.name for f in dataclasses.fields(PrinterState)}
@@ -26,6 +27,11 @@ def _status_payload(data, ams):
         printer.update(extras)
         payload["printer"] = printer
     return payload
+
+
+def _show(line):
+    """Log one human status line; every value in it came from the printer."""
+    logger.info(display_safe(line))
 
 
 def cmd_status(args, ctx=None):
@@ -71,32 +77,32 @@ def cmd_status(args, ctx=None):
     wifi = str(data.get("wifi_signal", "?")).replace("dBm", "")
 
     logger.info("🖨️  Bambu Printer Status")
-    logger.info(f"   State: {state}")
+    _show(f"   State: {state}")
     if state == "RUNNING":
         hrs, mins = divmod(remaining, 60)
-        logger.info(f"   File: {filename}")
-        logger.info(f"   Progress: {pct}% | Layer {layer}/{total_layers}")
-        logger.info(f"   Time left: {hrs}h {mins}m")
-    logger.info(f"   Bed: {bed_temp}°C / {bed_target}°C")
-    logger.info(f"   Nozzle: {nozzle_temp}°C / {nozzle_target}°C")
-    logger.info(f"   Fan: {fan} | WiFi: {wifi}dBm")
+        _show(f"   File: {filename}")
+        _show(f"   Progress: {pct}% | Layer {layer}/{total_layers}")
+        _show(f"   Time left: {hrs}h {mins}m")
+    _show(f"   Bed: {bed_temp}°C / {bed_target}°C")
+    _show(f"   Nozzle: {nozzle_temp}°C / {nozzle_target}°C")
+    _show(f"   Fan: {fan} | WiFi: {wifi}dBm")
 
     if ams:
         if ams.get("units"):
             logger.info("   AMS:")
             for unit in ams["units"]:
-                logger.info(f"     Unit {unit['id']} (humidity {unit['humidity']}, {unit['temp']}°C)")
+                _show(f"     Unit {unit['id']} (humidity {unit['humidity']}, {unit['temp']}°C)")
                 for tray in unit["trays"]:
                     marker = "▶ " if tray["active"] else "  "
                     if tray["empty"]:
-                        logger.info(f"       {marker}Slot {tray['slot']}: empty")
+                        _show(f"       {marker}Slot {tray['slot']}: empty")
                     else:
                         color = f" #{tray['color']}" if tray["color"] else ""
                         remain = f" | {tray['remain']}%" if tray["remain"] is not None else ""
-                        logger.info(f"       {marker}Slot {tray['slot']}: {tray['type']}{color}{remain}")
+                        _show(f"       {marker}Slot {tray['slot']}: {tray['type']}{color}{remain}")
         ext_tray = ams.get("external_tray")
         if ext_tray and not ext_tray.get("empty"):
             marker = "▶ " if ext_tray.get("active") else "  "
             color = f" #{ext_tray['color']}" if ext_tray.get("color") else ""
             remain = f" | {ext_tray['remain']}%" if ext_tray.get("remain") is not None else ""
-            logger.info(f"   External Spool: {marker}{ext_tray.get('type')}{color}{remain}")
+            _show(f"   External Spool: {marker}{ext_tray.get('type')}{color}{remain}")

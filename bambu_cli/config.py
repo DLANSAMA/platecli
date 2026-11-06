@@ -548,7 +548,7 @@ def config_timeout_problem(value):
         return f"{value!r} is not a number of seconds"
     try:
         seconds = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return f"{value!r} is not a number of seconds"
     if not math.isfinite(seconds) or seconds <= 0:
         return f"{value!r} must be a positive number of seconds"

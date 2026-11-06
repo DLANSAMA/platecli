@@ -14,3 +14,8 @@ Noticed but not chosen, one line each, oldest first: `- date · where · what ·
 - 2026-11-05 · bambu_cli/setup_cmd/config_cmd.py · human-mode `config show` can print camera_stream_url with credentials · (audit round 4)
 - 2026-11-05 · bambu_cli/commands/files.py · `cmd_files` builds its printer with `get_printer()` instead of `ctx.printer()` like the other commands · (audit round 4)
 - 2026-11-05 · bambu_cli/tlspin.py · a blank `cert_fingerprint` means "no pin" at connect time; `config validate`/`preflight` flag it, but commands that skip those checks run unpinned without a warning · (audit round 4)
+- 2026-11-05 · bambu_cli/commands/gcode.py · `M141`/`M191` (chamber) and Marlin's `M104 B` (autotemp max) are not held to a limit; there is no chamber constant to check against · (review of the round-4 fixes)
+- 2026-11-05 · bambu_cli/commands/gcode.py · `M104 S220 ; Set nozzle` is refused ("Unreadable nozzle temperature 'Set'") because comments are scanned; safe direction, but a false refusal · (review of the round-4 fixes)
+- 2026-11-05 · bambu_cli/jsonio.py · a password with two or more delimiters after a digit prefix (`user:12/pa/ss@host`) still parses as a path and is not redacted · (review of the round-4 fixes)
+- 2026-11-05 · bambu_cli/commands/files.py · `"cert_fingerprint": 5` makes `files` fail as `failed_step: ftps`, exit 2, where `status` gives the config error, exit 1 · (review of the round-4 fixes)
+- 2026-11-05 · bambu_cli/commands/doctor.py · the capabilities file is written with `json.dump` defaults, so a NaN in a report would make it invalid JSON (unverified) · (review of the round-4 fixes)

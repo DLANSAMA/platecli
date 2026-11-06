@@ -10,6 +10,7 @@ no-op and the pin is a straight ``tlspin`` call.
 
 from __future__ import annotations
 
+import secrets
 import socket
 import ssl
 
@@ -125,28 +126,33 @@ def probe_cert_fingerprint(host, port=990, timeout=5):
         return fingerprint_sha256(tls.getpeercert(binary_form=True))
 
 
-def _paho_client(client_id=""):
-    """A paho client that never reconnects on its own.
+def _paho_client(client_id="", *, reconnect=False):
+    """A paho client that, by default, never reconnects on its own.
 
     paho keeps an unacknowledged QoS-1 PUBLISH and resends it (DUP set) when
     its network loop reconnects after a drop, so a command that reached the
-    printer just before the connection died would run twice. Every caller
-    already owns reconnection: one-shot commands retry with a fresh client
-    only while nothing was published, and ``MqttSession.ensure_connected``
-    builds a new client (with an empty in-flight queue) after a drop.
+    printer just before the connection died would run twice. Command callers
+    own reconnection: one-shot commands retry with a fresh client only while
+    nothing was published, and ``MqttSession.ensure_connected`` builds a new
+    client (with an empty in-flight queue) after a drop. ``reconnect=True`` is
+    for the status monitor, which publishes only an idempotent QoS-0 pushall.
+
+    The client ID is never empty: paho's fallback for a broker that rejects an
+    empty ID is a reconnect, which ``reconnect=False`` also switches off.
     """
+    client_id = client_id or f"plate-{secrets.token_hex(8)}"
     try:
-        return mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id, reconnect_on_failure=False)
+        return mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id, reconnect_on_failure=reconnect)
     except AttributeError:
-        return mqtt.Client(client_id, reconnect_on_failure=False)
+        return mqtt.Client(client_id, reconnect_on_failure=reconnect)
 
 
-def create_mqtt_client(printer, client_id=""):
+def create_mqtt_client(printer, client_id="", *, reconnect=False):
     if printer.simulation_mode:
         return _SimMqttClient()
 
     _require_mqtt()
-    client = _paho_client(client_id)
+    client = _paho_client(client_id, reconnect=reconnect)
     client.username_pw_set("bblp", printer.access_code)
 
     # A configured pin wins over insecure_tls: the user named the exact
@@ -169,7 +175,7 @@ def _mqtt_port(printer):
         return 8883
     try:
         port = int(raw)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 8883
     if port < 1 or port > 65535:
         return 8883

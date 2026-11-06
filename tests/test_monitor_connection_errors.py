@@ -55,7 +55,7 @@ def _printer(timeout=0.2):
 
 def _run(client, *, connect=lambda p, c: None, timeout=0.2):
     with (
-        mock.patch.object(mqtt_monitor, "_client_factory", lambda f: lambda printer: client),
+        mock.patch.object(mqtt_monitor, "_client_factory", lambda f: lambda printer, **_kw: client),
         mock.patch.object(mqtt_monitor, "_connect", connect),
     ):
         return mqtt_monitor.monitor_status(argparse.Namespace(json=True), _printer(timeout))

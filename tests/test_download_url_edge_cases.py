@@ -50,7 +50,7 @@ def test_password_with_a_delimiter_is_refused_without_echoing_it(sep):
     assert excinfo.value.exit_code == EXIT_COMMAND_ERROR
     emitted = json.dumps(excinfo.value.to_error_payload("download"))
     assert SECRET not in emitted
-    assert "port is not a number" in emitted
+    assert "embedded credentials are not supported" in emitted
 
 
 def test_an_at_sign_in_an_ordinary_path_is_left_alone():
@@ -133,3 +133,57 @@ def test_ctrl_c_mid_download_leaves_nothing_behind(tmp_path):
 
     assert reads["n"] > 2, "the interrupt never fired mid-transfer"
     assert list(tmp_path.iterdir()) == [], "Ctrl-C left a partial or placeholder file"
+
+
+# A password that starts with digits and holds "/", "?" or "#" parses cleanly as
+# host:port, so the port check above does not see it.
+_SPLIT_USERINFO = [
+    "https://bob:1234/hunter2@files.invalid/x.stl",
+    "https://bob:123?hunter2@files.invalid/x.stl",
+    "https://bob:80#hunter2@files.invalid/x.stl",
+    "https://bob:/hunter2@files.invalid/x.stl",
+]
+
+
+@pytest.mark.parametrize("url", _SPLIT_USERINFO)
+def test_digit_prefixed_password_with_a_delimiter_is_redacted(url):
+    assert "hunter2" not in redact_url_credentials(url)
+
+
+@pytest.mark.parametrize("url", _SPLIT_USERINFO)
+def test_digit_prefixed_password_with_a_delimiter_is_refused(url):
+    with pytest.raises(BambuError) as excinfo:
+        V._validate_http_url_or_exit(url)
+    assert excinfo.value.exit_code == EXIT_COMMAND_ERROR
+    assert "hunter2" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("url", ["https:///bob:hunter2@files.invalid/x.stl", "https:/bob:hunter2@h/x", "https:\\\\bob:hunter2@h/x"])
+def test_userinfo_without_a_parsed_host_is_redacted(url):
+    assert "hunter2" not in redact_url_credentials(url)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "https://host:8443/@scope/pkg.stl",
+        "https://medium.com/@user/model.stl",
+        "https://host:8080/download?user=a@b.com",
+        "C:\\Users\\bob@corp\\model.stl",
+        "0.20mm Standard @BBL X1C",
+        "/home/u/a@b.stl",
+    ],
+)
+def test_ordinary_text_with_an_at_sign_is_left_alone(text):
+    assert redact_url_credentials(text) == text
+
+
+@pytest.mark.parametrize("url", ["https://host:8443/@scope/pkg.stl", "https://host:8080/download?user=a@b.com"])
+def test_urls_with_a_port_and_an_at_sign_in_the_path_still_validate(url):
+    V._validate_http_url_or_exit(url)
+
+
+def test_a_non_numeric_port_without_credentials_is_still_named():
+    with pytest.raises(BambuError) as excinfo:
+        V._validate_http_url_or_exit("https://host.example:abc/x.stl")
+    assert "port is not a number" in str(excinfo.value)

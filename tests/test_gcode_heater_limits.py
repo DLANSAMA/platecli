@@ -50,6 +50,11 @@ class _Ctx:
         "M104 S250T0",
         "M104 S-5",
         "M104 S٩٩٩",  # Arabic-Indic digits
+        "M104 T0 S3000",  # a tool number before the temperature
+        "M109 T1 R9999",
+        "M140 T0 S200",
+        "M190 T0 S900",
+        "M104 S200 T1 S9999",
     ],
 )
 def test_out_of_range_or_unreadable_heater_values_are_refused_before_sending(gcode):
@@ -63,7 +68,7 @@ def test_out_of_range_or_unreadable_heater_values_are_refused_before_sending(gco
 
 @pytest.mark.parametrize(
     "gcode",
-    ["M104 S220", "M104 S350", "M190 S60", "M140 S150", "M109 S0", "G28", "M106 S255", "M104 S200 M106 S255", "M141 S40"],
+    ["M104 S220", "M104 S350", "M190 S60", "M140 S150", "M109 S0", "G28", "M106 S255", "M104 S200 M106 S255", "M141 S40", "M104 T0 S220", "T1"],
 )
 def test_ordinary_g_code_still_passes(gcode):
     assert _heater_problem(gcode) is None

@@ -350,7 +350,7 @@ def format_remaining(minutes: Any) -> str:
     """Render ``mc_remaining_time`` (minutes) as ``1h 05m`` / ``42m`` / ``—``."""
     try:
         total = int(minutes)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return "—"
     if total < 0:
         return "—"
@@ -366,6 +366,6 @@ def progress_percent(snapshot: StatusSnapshot) -> int:
         return 0
     try:
         value = int(snapshot.raw.get("mc_percent", 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
     return max(0, min(100, value))
