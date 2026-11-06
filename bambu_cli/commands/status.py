@@ -60,7 +60,7 @@ def cmd_status(args, ctx=None):
     total_layers = data.get("total_layer_num", 0)
     try:
         remaining = int(data.get("mc_remaining_time", 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         remaining = 0
     filename = data.get("gcode_file", "")
     bed_temp = data.get("bed_temper", "?")
