@@ -5,9 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-06
+
 ### Printer safety
 
-- **A printer command is sent at most once.** When the connection dropped
+- **A dropped connection no longer resends a command.** When the connection dropped
   after a command reached the printer but before its acknowledgement came
   back, the MQTT client reconnected by itself and resent it: a `gcode` move,
   `stop` or `light` ran twice while the command reported success. Automatic
@@ -1135,7 +1137,8 @@ Initial development version: LAN-mode printer control (MQTT/FTPS), one-shot `job
 ### Removed
 - `requirements.txt`, which duplicated the `dependencies` already declared in `pyproject.toml`. Install with `uv pip install -e .` (or `pip install platecli`) instead.
 
-[Unreleased]: https://github.com/DLANSAMA/platecli/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/DLANSAMA/platecli/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/DLANSAMA/platecli/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/DLANSAMA/platecli/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/DLANSAMA/platecli/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/DLANSAMA/platecli/compare/v0.3.0...v0.4.0
