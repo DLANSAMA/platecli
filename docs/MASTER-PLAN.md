@@ -10,7 +10,7 @@ The work we chose, in order. **No task from the user? Take the top 🤖 box unde
 
 ## Waiting on you 🧑
 
-- [ ] **D-1 · Merge the audit-round4 PR** · P1 · 🧑
+- [ ] **D-1 · Merge the audit-round4 PR (#153)** · P1 · 🧑
   Branch `fix/audit-round4`: at-most-once MQTT delivery, pin precedence, heater limits for raw G-code, terminal-escape hardening, config value checks. Needs the 6 CI checks green.
 - [ ] **D-2 · Dependabot PRs #150 (actions) and #152 (python deps)** · P2 · 🧑
   Open since 2026-10-26 and 2026-11-02. *Done when:* merged or closed.
