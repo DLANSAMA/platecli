@@ -9,6 +9,8 @@
   ruleset's required checks to match, or PRs will block forever waiting on a check that no
   longer reports.
 - The commit you are about to tag is **green on CI** (`gh run list --branch main --limit 1`).
+  A run whose test jobs were skipped because "this merge was already tested" counts: the
+  same tree passed the required checks on the PR. The tag push re-runs the matrix anyway.
   Tags must only ever point at green commits: `release.yml` re-runs the full CI matrix
   via `uses: ./.github/workflows/ci.yml` before build/publish, so a red commit fails the
   release rather than shipping — but do not rely on that as your first line of defence.

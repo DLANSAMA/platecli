@@ -4,7 +4,7 @@
 **Current measurement:** 2026-08-04 — **50.7%**, floor raised 40 → **48** (re-run before changing the floor again)  
 **Tool:** mutmut 3.6.0  
 **Reproduce:** `./scripts/run_mutation_baseline.sh`  
-**CI:** `.github/workflows/mutation.yml` — `workflow_dispatch` + nightly `schedule` only  
+**CI:** `.github/workflows/mutation.yml` — `workflow_dispatch` + nightly `schedule` only; the nightly run is skipped when `main` has not changed since the last green baseline  
   (**not** on every `pull_request`; full runs are minutes-long and would slow PR feedback)
 
 Related: [quality-roadmap.md](quality-roadmap.md), [test-backlog.md](test-backlog.md).

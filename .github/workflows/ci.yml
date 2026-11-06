@@ -5,7 +5,11 @@ name: CI
 on:
   push:
     branches: [main]
+  # ready_for_review is listed because draft PRs skip the test matrix: it runs
+  # once, when the PR is marked ready, not on every push while it is a draft.
+  # Lint still runs on drafts (see the lint job).
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   # Weekly drift detector: firmware, the Printables GraphQL API, OrcaSlicer
   # flags and new CVEs (pip-audit) all move without a commit in this repo.
   schedule:
@@ -23,14 +27,61 @@ permissions:
   contents: read
 
 jobs:
+  # A squash merge whose tree is byte-identical to the PR head it came from
+  # was already tested: the ruleset only lets a PR merge once all six required
+  # checks passed on that head. Re-running the matrix on main would test the
+  # same files again. Any other push (a merge onto a main that moved, a commit
+  # without "(#N)") is tested. Only branch pushes are checked; release.yml
+  # calls this workflow from a tag push, and the release gate always runs.
+  # Uses git alone (contents: read), since release.yml grants nothing more.
+  merged:
+    name: Skip if this merge was already tested
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      already-tested: ${{ steps.compare.outputs.already-tested }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: compare
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          pr=$(printf '%s\n' "$MESSAGE" | head -n 1 | sed -nE 's/.*\(#([0-9]+)\)$/\1/p')
+          if [ -z "$pr" ]; then
+            echo "No (#N) in the commit subject: testing."
+            exit 0
+          fi
+          if ! git fetch --no-tags --depth=1 origin "refs/pull/$pr/head"; then
+            echo "Could not fetch PR #$pr: testing."
+            exit 0
+          fi
+          merged_tree=$(git rev-parse 'HEAD^{tree}') || merged_tree=""
+          tested_tree=$(git rev-parse 'FETCH_HEAD^{tree}') || tested_tree=""
+          if [ -n "$merged_tree" ] && [ "$merged_tree" = "$tested_tree" ]; then
+            echo "Same tree as PR #$pr's head, which passed the required checks: skipping."
+            echo "already-tested=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tree differs from PR #$pr's head (main moved under it): testing."
+          fi
+
   test:
     name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    needs: merged
+    # Runs unless the PR is a draft or the merge was already tested. A failed
+    # or skipped "merged" job leaves the output empty, which means test. A
+    # skipped matrix job reports its unexpanded name, so a draft never shows
+    # the six required check names as passed.
+    if: >-
+      ${{ !cancelled()
+          && !(github.event_name == 'pull_request' && github.event.pull_request.draft)
+          && needs.merged.outputs.already-tested != 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # Full Python coverage on cheap Linux runners; one smoke job each on
-        # macOS (10x minute multiplier) and Windows (2x) at the newest Python.
+        # Full Python coverage on Linux; one job each on macOS and Windows at
+        # the newest Python. Those runners start slower (and bill at 10x / 2x
+        # if the repo is ever private; public-repo runners are free).
         os: [ubuntu-latest]
         python-version: ["3.10", "3.12", "3.14"]
         include:
@@ -132,6 +183,11 @@ jobs:
 
   lint:
     name: Lint (ruff + bandit)
+    needs: merged
+    # Not skipped on drafts: a skipped job reports success under this fixed
+    # name, which is a required check, and could sit beside a real failure on
+    # the same commit. Lint is one quick Linux job; the matrix is the cost.
+    if: ${{ !cancelled() && needs.merged.outputs.already-tested != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

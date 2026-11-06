@@ -5,7 +5,7 @@ name: Mutation baseline
 on:
   workflow_dispatch:
   schedule:
-    # 06:15 UTC daily
+    # 06:15 UTC daily; the "changed" job skips the run when main has not moved.
     - cron: "15 6 * * *"
 
 concurrency:
@@ -16,8 +16,43 @@ permissions:
   contents: read
 
 jobs:
+  # The nightly run re-tests main only when main changed since the last green
+  # baseline: the same commit gives the same score, so most nights there is
+  # nothing to do. A manual run always runs. A failed baseline keeps running
+  # nightly until one passes.
+  changed:
+    name: Main changed since the last green baseline
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last=$(gh run list --workflow mutation.yml --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""') || last=""
+          if [ -n "$last" ] && [ "$last" = "$SHA" ]; then
+            echo "main is still $SHA, which already has a green baseline: skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "main is $SHA; last green baseline was ${last:-unknown}: running."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   mutation:
     name: Safety-module mutation baseline
+    needs: changed
+    # A failed "changed" job leaves the output empty, which means run.
+    if: ${{ !cancelled() && needs.changed.outputs.run != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
