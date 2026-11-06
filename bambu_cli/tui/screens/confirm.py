@@ -43,7 +43,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Static
 
 from bambu_cli.errors import BambuError
-from bambu_cli.interactive.core import build_job_namespace, cleanup_workdir, decline_message
+from bambu_cli.interactive.core import ams_change_problem, build_job_namespace, cleanup_workdir, decline_message
 
 # Outcome kinds handed back to the prepare screen.
 PRINTED = "printed"
@@ -164,6 +164,9 @@ class ConfirmModal(ModalScreen[ConfirmOutcome]):
         # worker prints; a future one that does must not rely on stdout.
         buffer = io.StringIO()
         try:
+            problem = ams_change_problem(self._deps.get_ams_detector(), self._args, self._state) if confirm else None
+            if problem is not None:
+                raise BambuError(problem)
             job_ns = build_job_namespace(self._state, self._args, confirm=confirm)
             with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
                 self._deps.get_steps().get_job()(job_ns)

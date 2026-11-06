@@ -15,7 +15,7 @@ import zlib
 
 from bambu_cli.constants import MAX_BED_TEMP_C, MAX_NOZZLE_TEMP_C
 
-__all__ = ["file_heater_problem", "heater_problem"]
+__all__ = ["file_heater_problem", "heater_problem", "peak_heater_targets"]
 
 # One G-code word: a letter and the numeric text right after it.
 _WORD = re.compile(r"([A-Za-z])[ \t]*([-+]?[0-9.]*)", re.ASCII)
@@ -109,6 +109,54 @@ def file_heater_problem(path):
             if problem:
                 return problem
     return None
+
+
+def _heater_codes(path):
+    """The code part of every heater-command line in ``path``'s G-code."""
+    name = str(path).lower()
+    if name.endswith(".gcode"):
+        with open(path, "rb") as fh:
+            yield from _codes(fh)
+    elif name.endswith(".3mf"):
+        with zipfile.ZipFile(path) as archive:
+            for member in archive.namelist():
+                if member.lower().endswith(".gcode"):
+                    with archive.open(member) as fh:
+                        yield from _codes(fh)
+
+
+def _codes(lines):
+    for raw in lines:
+        if _HEATER_LINE.match(raw):
+            yield raw.split(b";", 1)[0].decode("utf-8", errors="replace").strip()
+
+
+def _targets(code):
+    heater = None
+    for match in _WORD.finditer(code):
+        letter, value = match.group(1).upper(), match.group(2)
+        if letter in ("G", "M"):
+            heater = None
+            if letter == "M" and _PLAIN_TEMPERATURE.fullmatch(value):
+                heater = _HEATERS.get(int(float(value)))
+        elif heater is not None and letter in ("S", "R") and _PLAIN_TEMPERATURE.fullmatch(value):
+            yield heater[0], float(value)
+
+
+def peak_heater_targets(path):
+    """The highest nozzle and bed targets ``path``'s G-code sets: ``{"nozzle": 220.0, ...}``.
+
+    For a confirmation screen, so the person approving a print sees what the
+    file will actually heat to. ``{}`` when nothing is set or it cannot be read.
+    """
+    peaks: dict[str, float] = {}
+    try:
+        for code in _heater_codes(path):
+            for label, value in _targets(code):
+                peaks[label] = max(value, peaks.get(label, value))
+    except (OSError, EOFError, RuntimeError, NotImplementedError, zipfile.BadZipFile, zlib.error):
+        return {}
+    return peaks
 
 
 def _basename(path):

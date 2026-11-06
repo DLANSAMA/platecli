@@ -29,6 +29,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   temperatures it carried. `upload`, `job` and `send` (and `job --dry-run`) now
   read every plate's G-code and refuse a nozzle above 350 °C or a bed above
   150 °C, naming the plate and line. G-code that cannot be read is refused.
+- **Guided mode re-reads the AMS before it starts a print.** `plate go` and the
+  TUI read the loaded filament when the material is chosen; slicing can take
+  minutes, and a spool swapped in that time was fed at the temperatures sliced
+  for the old one. Start print now reads the AMS again and refuses, with
+  nothing sent, if the material or slot changed or cannot be read (upload only
+  is unaffected). The summary before confirming gains a Feed row (`AMS0·2
+  (PETG)` or External spool) and a Temperatures row with the hottest nozzle
+  and bed targets in the file's G-code.
 - `--ams-mapping` accepts ASCII digits only; `٣` and other Unicode digits that
   `int()` reads were passed through as slot numbers.
 - The upload guard that refuses to overwrite the file being printed now waits

@@ -34,6 +34,7 @@ from bambu_cli.constants import (
     EXIT_COMMAND_ERROR,
     EXIT_CONFIG_ERROR,
     EXIT_FILE_ERROR,
+    EXIT_PRINTER_ERROR,
 )
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.interactive.core import MATERIAL_CHOICES as _MATERIAL_CHOICES
@@ -43,6 +44,7 @@ from bambu_cli.interactive.core import QUALITY_GUIDANCE as _QUALITY_GUIDANCE
 from bambu_cli.interactive.core import SUPPORTED_SOURCE_EXTS as _SUPPORTED_SOURCE_EXTS  # noqa: F401
 from bambu_cli.interactive.core import GoSteps as GoSteps
 from bambu_cli.interactive.core import WizardState as WizardState
+from bambu_cli.interactive.core import ams_change_problem as _ams_change_problem
 from bambu_cli.interactive.core import build_job_namespace as _build_job_namespace
 from bambu_cli.interactive.core import cleanup_workdir as _cleanup_workdir
 from bambu_cli.interactive.core import decline_message as _decline_message
@@ -286,6 +288,11 @@ def _kept_note(state: WizardState) -> str:
 
 def _run_print(args: argparse.Namespace, deps: GoDeps, state: WizardState, *, confirm: bool) -> None:
     """Drive cmd_job on the sliced/printer-ready file (upload, optionally print)."""
+    if confirm:
+        problem = _ams_change_problem(deps.get_steps().get_ams_material(), args, state)
+        if problem is not None:
+            deps.get_prompts().print(f"{problem} {_kept_note(state)}".strip())
+            abort(problem, exit_code=EXIT_PRINTER_ERROR, failed_step="ams", logged=True)
     job_ns = _build_job_namespace(state, args, confirm=confirm)
     utils._LAST_ERROR_PAYLOAD = None
     utils._LAST_DOWNLOAD_PAYLOAD = None

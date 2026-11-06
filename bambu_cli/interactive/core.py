@@ -503,9 +503,11 @@ def run_prepare_pipeline(steps: Any, state: WizardState, workdir: str) -> str:
 def preview_rows(state: WizardState, model_path: str) -> list[tuple[str, str]]:
     """Return the ``(label, value)`` rows of the pre-print preview.
 
-    Pure formatting over the state plus the current settings — both front-ends
-    render the same four rows, including the pre-sliced caveat that stops us
-    implying the chosen material was applied to a file we did not slice.
+    Formatting over the state plus the current settings — both front-ends
+    render the same rows, including the pre-sliced caveat that stops us
+    implying the chosen material was applied to a file we did not slice. Feed
+    and Temperatures say what the print will actually do (which spool, how hot
+    the G-code heats), so the person confirming sees it before anything moves.
     """
     from bambu_cli.config import MODEL_MAPPING
     from bambu_cli.context import current_settings
@@ -542,10 +544,11 @@ def preview_rows(state: WizardState, model_path: str) -> list[tuple[str, str]]:
         ("Model", name),
         ("Printer", f"{full_name}, {settings.nozzle_size}mm nozzle"),
         ("Material", material_line),
+        ("Feed", _feed_line(state)),
+        ("Temperatures", _temperatures_line(state.printable_path or model_path)),
         ("Estimate", estimate_line),
     ]
-    # Only when something was actually overridden: the wizard never sets any, so
-    # its preview keeps exactly the four lines it has always printed.
+    # Only when something was actually overridden.
     if state.sliced and not state.overrides.is_empty():
         rows.append(("Overrides", state.overrides.summary()))
     return rows
@@ -554,6 +557,67 @@ def preview_rows(state: WizardState, model_path: str) -> list[tuple[str, str]]:
 # ---------------------------------------------------------------------------
 # Job namespace
 # ---------------------------------------------------------------------------
+
+
+def ams_slot_label(slot: int) -> str:
+    """``AMS0·2`` for absolute tray 2: the label the TUI's AMS panel shows."""
+    return f"AMS{slot // 4}·{slot % 4}"
+
+
+def ams_feed_slot(state: WizardState) -> int | None:
+    """The absolute AMS tray the print will feed from, or None for the external spool.
+
+    The AMS feeds only when detection found a firm active slot and the user kept
+    the detected material: then that slot holds exactly what was sliced for.
+    """
+    if (
+        state.detected_ams_material is not None
+        and state.detected_ams_slot is not None
+        and state.material == state.detected_ams_material
+    ):
+        return state.detected_ams_slot
+    return None
+
+
+def ams_change_problem(detector: Callable[..., Any], args: argparse.Namespace, state: WizardState) -> str | None:
+    """Re-read the AMS right before a print that feeds from it; why not to start, or None.
+
+    The slot is detected when the material is chosen, and slicing can take
+    minutes. A spool swapped or reloaded in between would otherwise be fed at
+    the temperatures sliced for the old filament. A read that fails cannot
+    confirm the slot, so it also stops the print (upload only still works).
+    """
+    slot = ams_feed_slot(state)
+    if slot is None:
+        return None
+    material, now_slot = detect_ams_material(detector, args)
+    if material == state.detected_ams_material and now_slot == slot:
+        return None
+    was = f"{state.detected_ams_material} in {ams_slot_label(slot)}"
+    if material is None or now_slot is None:
+        return (
+            f"Could not confirm that {was} is still the loaded filament, so the print was not started. "
+            "Check the AMS and try again, or upload only."
+        )
+    return (
+        f"The AMS changed since this file was prepared: it had {was}, now {material} in "
+        f"{ams_slot_label(now_slot)}. The print was not started; prepare the file again for the loaded filament."
+    )
+
+
+def _feed_line(state: WizardState) -> str:
+    slot = ams_feed_slot(state)
+    if slot is None:
+        return "External spool"
+    return f"{ams_slot_label(slot)} ({state.detected_ams_material})"
+
+
+def _temperatures_line(path: str) -> str:
+    from bambu_cli.gcode_limits import peak_heater_targets
+
+    peaks = peak_heater_targets(path)
+    parts = [f"{label} up to {peaks[label]:g} °C" for label in ("nozzle", "bed") if label in peaks]
+    return "  ·  ".join(parts) if parts else "not set in the G-code"
 
 
 def build_job_namespace(state: WizardState, args: argparse.Namespace, *, confirm: bool) -> argparse.Namespace:
@@ -582,13 +646,10 @@ def build_job_namespace(state: WizardState, args: argparse.Namespace, *, confirm
     # refuses to let firmware pick a default tray), so we supply the detected
     # active slot. If detection failed, the user picked a different material, or
     # we have no firm active slot, keep the conservative external-spool default.
-    if (
-        state.detected_ams_material is not None
-        and state.detected_ams_slot is not None
-        and state.material == state.detected_ams_material
-    ):
+    feed_slot = ams_feed_slot(state)
+    if feed_slot is not None:
         job_ns.use_ams = True
-        job_ns.ams_mapping = str(state.detected_ams_slot)
+        job_ns.ams_mapping = str(feed_slot)
     # Carry global request flags (sim / verbose) through so the same simulated
     # printer path runs end to end.
     if bool(getattr(args, "sim", False)):
