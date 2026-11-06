@@ -7,6 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Printer safety
 
+- **A printer command is sent at most once.** When the connection dropped
+  after a command reached the printer but before its acknowledgement came
+  back, the MQTT client reconnected by itself and resent it: a `gcode` move,
+  `stop` or `light` ran twice while the command reported success. Automatic
+  reconnect is off; the command is reported as sent but unconfirmed
+  (`sent: true`, `acknowledged: false`) and is never resent.
+- **An unacknowledged print start is no longer reported as "not printed".**
+  When the print command was published but the printer never confirmed it,
+  `print` and `job` said `printed: false`, which invites a retry and a second
+  print. They now report `printed: null` with `sent: true`, say the printer
+  may already be printing, and point at `plate status`. The fields are on the
+  `--json` error envelope too (before, it carried only "Command failed").
+- **Raw G-code is held to the heater limits.** `plate gcode "M104 S400"` went
+  straight to the printer. `M104`/`M109` above 350 °C and `M140`/`M190` above
+  150 °C are now refused before anything is sent, as is a temperature that
+  is not a plain number (`S4e2`, `S0x190`, non-ASCII digits).
+- `--ams-mapping` accepts ASCII digits only; `٣` and other Unicode digits that
+  `int()` reads were passed through as slot numbers.
+- The upload guard that refuses to overwrite the file being printed now waits
+  for a full status report: a partial first report without `gcode_file` read
+  as "not printing this file" and let the upload through.
+- `slice --quality 0.28` (a height with no named profile) now needs a 0.28 mm
+  process profile and lists the available heights when there is none; it used
+  to slice the Standard profile without saying so. A failed OrcaSlicer run no
+  longer replaces an earlier good output file.
+
 - **A1 and A1 mini can be sliced.** Every A1/A1 mini slice failed inside
   OrcaSlicer ("Relative extruder addressing requires resetting the extruder
   position at each layer"): Bambu's A1 profiles omit the per-layer `G92 E0`
@@ -72,6 +98,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   print-time estimates than before.
 
 ### Fixed
+
+- `download` accepts URLs with non-ASCII paths (pasted from a browser), and
+  ASCII STL/OBJ/G-code served as `text/plain` when the URL names a model file.
+  Ctrl-C during a download or ZIP extraction removes the partial file. A
+  malformed IPv6 host is a clean "Invalid URL" instead of a traceback.
+- Printables: a download link that is not a string is reported as an API
+  change instead of crashing.
+- Config values of the wrong type (a number for `access_code`,
+  `cert_fingerprint` or `printer_ip`, a non-object `config.json`) give a
+  config error or fall back cleanly instead of a traceback; `camera_port` is
+  validated, and `preflight` reports `cert-fingerprint` and `camera-port`
+  checks. Timeouts are capped at 24 hours.
+- Option abbreviations are off: `--conf` no longer silently means `--confirm`.
+- JSON output never contains `NaN` or `Infinity` (invalid JSON): non-finite
+  numbers from a printer report become `null`. Over-long AMS numbers no longer
+  crash `status`.
+- `doctor` no longer leaves an empty temporary file behind when its checks
+  stop early; `snapshot --sim` refuses the Docker streamer instead of trying it.
+- Slicing: filament profile choice is deterministic (exact name, then
+  shortest) and logged; profile directories with `[` or `*` in the path work;
+  an absurd temperature override is a validation error, not a traceback.
+- Interactive mode: prompts no longer interpret `[...]` as markup, and a failed
+  upload or print says so before returning to the menu.
+- A failed TLS data-channel setup closes its socket instead of leaking it.
 
 - `status --monitor` exited 0 with no output when the printer refused the
   connection (wrong access code), so a script could not tell it from success.
@@ -139,6 +189,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   only when `--serial` is unchanged.
 
 ### Security
+
+- **`insecure_tls` no longer switches off a configured certificate pin.**
+  With both `cert_fingerprint` and `insecure_tls` set, MQTT and the camera
+  skipped the pin and accepted any certificate. A pin is now always checked.
+- **Untrusted names cannot drive the terminal.** File names from the printer's
+  FTP listing, MQTT report fields (`gcode_file`, AMS tray types, error text),
+  mDNS names and prompt text could carry ESC sequences (clear the screen,
+  write the clipboard with OSC 52) or bidi overrides that make one name read
+  as another. They are shown with control and bidi characters replaced, and
+  names with them are refused for upload (download renaming replaces them).
+- A hostile or corrupt MQTT report (deeply nested JSON, an over-long integer,
+  non-object JSON) is ignored instead of killing the client's network thread,
+  which left a held session reporting stale state.
+- A URL password holding `/`, `?` or `#` (`user:pa/ss@host`) is now redacted;
+  the parser read the password as a port, so it was echoed in errors and JSON.
 
 - **`"camera_allow_streamer": "false"` no longer enables the unpinned camera
   streamer.** The key was read with `bool()`, so any non-empty string —
