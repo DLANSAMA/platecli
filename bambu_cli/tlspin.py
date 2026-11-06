@@ -29,6 +29,8 @@ import re
 import ssl
 from collections.abc import Callable
 
+from bambu_cli.errors import ConfigError
+
 # A normalized SHA-256 fingerprint: exactly 64 lowercase hex chars, no separators.
 _HEX64_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 
@@ -37,11 +39,36 @@ def normalize_fingerprint(fp: str | None) -> str | None:
     """Normalize a SHA-256 fingerprint to lowercase, separator-free hex.
 
     Strips ``:`` and ASCII spaces and lowercases, so ``AA:BB``, ``aa bb`` and
-    ``aabb`` compare equal. Returns ``None`` for ``None``/empty input.
+    ``aabb`` compare equal. Returns ``None`` for ``None``/empty input. A
+    non-string (a hand-edited ``"cert_fingerprint": 5``) is a config error, not
+    an ``AttributeError`` traceback.
     """
+    if fp is None:
+        return None
+    if not isinstance(fp, str):
+        raise ConfigError(f"config 'cert_fingerprint' must be a string, not {type(fp).__name__}")
     if not fp:
         return None
     return fp.lower().replace(":", "").replace(" ", "")
+
+
+def fingerprint_config_problem(value: object) -> str | None:
+    """Why a configured ``cert_fingerprint`` cannot work as a pin, or None.
+
+    ``None`` (key absent/null) is "no pin" and fine; a present value that is blank,
+    not a string, or not 64 hex chars would otherwise silently mean "no pin" or
+    fail only at connect time.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return f"'cert_fingerprint' must be a string, not {type(value).__name__}"
+    normalized = normalize_fingerprint(value)
+    if not normalized:
+        return "'cert_fingerprint' is blank, which means no pin; remove it or set the printer's SHA-256"
+    if not _HEX64_RE.match(normalized):
+        return "'cert_fingerprint' is not a 64-hex-character SHA-256"
+    return None
 
 
 def fingerprint_sha256(der_cert: bytes | None) -> str | None:

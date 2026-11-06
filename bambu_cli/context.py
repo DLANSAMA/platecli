@@ -68,6 +68,15 @@ def _coerce_config_bool(key: str, value: Any, *, default: bool, unreadable: bool
     return unreadable
 
 
+def insecure_tls_reading(value: Any) -> bool | None:
+    """How ``insecure_tls`` is read: True/False for a clear value, None when unreadable."""
+    if value is True or value is False:
+        return bool(value)
+    if isinstance(value, str) and value.strip().lower() in _TRUE_WORDS | _FALSE_WORDS:
+        return value.strip().lower() in _TRUE_WORDS
+    return None
+
+
 def _coerce_insecure_tls(value: Any) -> bool:
     """Strictly resolve the ``insecure_tls`` opt-out, failing CLOSED.
 
@@ -77,10 +86,9 @@ def _coerce_insecure_tls(value: Any) -> bool:
     believes it is off. So only a clear true enables it; anything unreadable
     keeps validation on (and warns).
     """
-    if value is True or value is False:
-        return bool(value)
-    if isinstance(value, str) and value.strip().lower() in _TRUE_WORDS | _FALSE_WORDS:
-        return value.strip().lower() in _TRUE_WORDS
+    reading = insecure_tls_reading(value)
+    if reading is not None:
+        return reading
     from bambu_cli.logging_utils import logger
 
     logger.warning(
@@ -89,6 +97,27 @@ def _coerce_insecure_tls(value: Any) -> bool:
         "(insecure_tls: true) to disable it deliberately."
     )
     return False
+
+
+def camera_port_problem(value: Any) -> str | None:
+    """Why ``value`` is not a usable ``camera_port`` (docker ``-p`` string or 1-65535 int), or None."""
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return f"{value!r} must be a port number (1-65535) or a docker port spec such as 127.0.0.1:1985:1984"
+    if isinstance(value, int) and not 1 <= value <= 65535:
+        return f"{value!r} is outside 1-65535"
+    return None
+
+
+def normalize_camera_port(value: Any, default: str) -> str:
+    """A docker ``-p`` spec for ``value``; an int becomes a loopback-only mapping to the streamer's port 1984.
+
+    An unusable value gives ``default`` rather than failing the whole config load.
+    """
+    if camera_port_problem(value):
+        return default
+    if isinstance(value, int):
+        return f"127.0.0.1:{value}:1984"
+    return str(value)
 
 
 def _normalize_fingerprint(fp: str | None) -> str | None:
@@ -157,12 +186,13 @@ class Settings:
         except ImportError:  # pragma: no cover -- config is always importable
             printer_model = str(raw_model).strip().upper()
         nozzle_size = str(cfg.get("nozzle", cfg.get("nozzle_size", "0.4")))
-        camera_port = cfg.get("camera_port", default_camera_port)
+        camera_port = normalize_camera_port(cfg.get("camera_port", default_camera_port), default_camera_port)
         host_port = _stream_host_port(camera_port)
         camera_stream_url = cfg.get("camera_stream_url", f"http://localhost:{host_port}/api/frame.jpeg?src=p1s")
 
         return cls(
-            printer_ip=cfg.get("printer_ip", "0.0.0.0"),
+            # A non-string address keeps the placeholder; `config validate` reports it.
+            printer_ip=cfg["printer_ip"] if isinstance(cfg.get("printer_ip"), str) else "0.0.0.0",
             serial=cfg.get("serial", "UNKNOWN"),
             username=cfg.get("username", "bblp"),
             mqtt_port=cfg.get("mqtt_port", 8883),

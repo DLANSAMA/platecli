@@ -40,13 +40,16 @@ def read_config_json(path):
     command reject the exact file every other command loads fine.
 
     Mirrors ``load_config``'s ``utf-8-sig`` read. Raises ``FileNotFoundError``,
-    ``OSError``, or ``json.JSONDecodeError`` to the caller — it does not enforce
+    ``OSError``, or ``ValueError`` (bad JSON, bad UTF-8, or a non-object document) to the caller — it does not enforce
     permissions or apply the config; use ``load_config`` for that.
     """
     from bambu_cli.paths import expand_path as _expand_path
 
     with open(_expand_path(path), encoding="utf-8-sig") as f:
-        return json.load(f)
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError("config.json must contain a JSON object")
+    return data
 
 
 def load_config(exit_on_fail=True):
@@ -456,22 +459,28 @@ def load_access_code():
     # old inline-wins precedence meant a user who rotated the code in the file
     # kept authenticating with a stale inline copy, silently. Warn loudly so the
     # conflict is visible, then defer to the file branch below.
-    if "access_code" in cfg and not cfg.get("access_code_file"):
+    # A non-string access_code_file (null, a number) counts as not set.
+    code_file = cfg.get("access_code_file") if isinstance(cfg.get("access_code_file"), str) else None
+    if "access_code" in cfg and not code_file:
         _warn_inline_access_code_once()
-        access_code = str(cfg["access_code"]).strip()
+        if not isinstance(cfg["access_code"], str):
+            # str(None) is "None", which would be sent to the printer as the password.
+            logger.error(f"config 'access_code' must be a string, not {type(cfg['access_code']).__name__}.")
+            abort("", exit_code=EXIT_CONFIG_ERROR)
+        access_code = cfg["access_code"].strip()
         problem = _access_code_value_problem(access_code)
         if problem:
             logger.error(problem)
             abort("", exit_code=EXIT_CONFIG_ERROR)
         return access_code
-    if "access_code_file" in cfg:
+    if code_file is not None:
         if "access_code" in cfg:
             logger.warning(
                 "⚠️  config.json has BOTH an inline access_code and an access_code_file; "
                 "using the file and ignoring the stale inline value "
                 "(run: plate setup --migrate-access-code to remove the inline key)."
             )
-        path = _expand_path(cfg["access_code_file"])
+        path = _expand_path(code_file)
         _enforce_secret_file_permissions(path, _display_path(path))
         try:
             # utf-8-sig: a hand-created secret file may carry a BOM that .strip()
@@ -533,6 +542,8 @@ def config_timeout_problem(value):
     """Why ``value`` is not a usable timeout (positive, finite seconds), or None."""
     import math
 
+    from bambu_cli.constants import MAX_TIMEOUT_SECONDS
+
     if isinstance(value, bool):
         return f"{value!r} is not a number of seconds"
     try:
@@ -541,6 +552,8 @@ def config_timeout_problem(value):
         return f"{value!r} is not a number of seconds"
     if not math.isfinite(seconds) or seconds <= 0:
         return f"{value!r} must be a positive number of seconds"
+    if seconds > MAX_TIMEOUT_SECONDS:
+        return f"{value!r} is above the {MAX_TIMEOUT_SECONDS}-second limit"
     return None
 
 

@@ -1,6 +1,5 @@
 """Migrate an inline access_code from config.json into a separate secret file."""
 
-import json
 import os
 
 from bambu_cli.argutils import namespace_get as _namespace_get
@@ -186,7 +185,7 @@ def _cmd_migrate_access_code(args):
         logger.error(message)
         _setup_json_error(args, message)
         abort("", exit_code=EXIT_CONFIG_ERROR)
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         message = f"Could not migrate access code: {_exception_for_message(exc)}"
         logger.error(message)
         _setup_json_error(args, message)
