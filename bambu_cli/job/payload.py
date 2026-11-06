@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from urllib.parse import quote
 
 from bambu_cli.argutils import namespace_get as _namespace_get
@@ -77,15 +78,14 @@ def _parse_print_options(args):
         return None, None
     if not use_ams:
         return None, "--ams-mapping requires --use-ams"
-    try:
-        clean_mapping = raw_mapping.strip("[]")
-        mapping = [int(x.strip()) for x in clean_mapping.split(",")]
-    except ValueError:
-        return None, "Invalid AMS mapping format. Use comma-separated integers like '0' or '0,1,2'"
-    if not mapping:
-        return None, "Invalid AMS mapping format. Use comma-separated integers like '0' or '0,1,2'"
-    if any(slot < 0 for slot in mapping):
+    parts = [x.strip() for x in str(raw_mapping).strip("[]").split(",")]
+    if any(re.fullmatch(r"-[0-9]+", part) for part in parts):
         return None, "Invalid AMS mapping format. Slot indexes must be zero or positive integers like '0' or '0,1,2'"
+    # ASCII digits only: int() alone reads "1_0" as 10 and a fullwidth "１" as 1,
+    # so a typo would silently select a different tray (and material).
+    if not all(re.fullmatch(r"[0-9]+", part) for part in parts):
+        return None, "Invalid AMS mapping format. Use comma-separated integers like '0' or '0,1,2'"
+    mapping = [int(part) for part in parts]
     if any(slot > MAX_AMS_SLOT_INDEX for slot in mapping):
         return (
             None,
