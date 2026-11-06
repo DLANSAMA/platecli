@@ -163,7 +163,7 @@ The numbers in the badges are measured on this repo, not aspirational:
 | **Coverage** | **93.5%** line+branch across the package; CI fails the build below **90%** |
 | **Platforms** | Linux, macOS, and Windows in CI, on Python 3.10 / 3.12 / 3.14 |
 | **Blocking gates** | `ruff`, `ruff format`, `mypy` (whole package, `check_untyped_defs`), `bandit`, `pip-audit`, plus layer-boundary and JSON-schema-drift checks |
-| **Mutation testing** | Nightly, scoped to the safety-critical modules (download validation, SSRF guards, slicer options, job payload) |
+| **Mutation testing** | Nightly whenever `main` has changed, scoped to the safety-critical modules (download validation, SSRF guards, slicer options, job payload) |
 | **Packaging** | Every CI run installs the built wheel *and* the sdist and runs the CLI from them |
 
 Coverage is deliberately honest — `except Exception` / `pass` / `continue` are **not**

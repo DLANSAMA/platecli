@@ -52,7 +52,7 @@ that CI's clean checkout does not have — expected locally, not a failure to ch
   `-m "not live"` never runs it. See [docs/live-printer-smoke.md](docs/live-printer-smoke.md).
   Never run against a printer mid-print; print start needs `BAMBU_LIVE_PRINT_CONFIRM`.
 - **Mutation baseline** (safety modules): `./scripts/run_mutation_baseline.sh` —
-  [docs/mutation-baseline.md](docs/mutation-baseline.md). Nightly CI only, not every PR.
+  [docs/mutation-baseline.md](docs/mutation-baseline.md). Nightly CI only (when `main` has changed), not every PR.
 - CI enforces a "no test-awareness in production code" rule: production modules must not
   branch on `Mock` / `unittest in sys.modules`. Prefer injecting collaborators over
   patching module globals. Domain code raises `BambuError` / `abort`; `sys.exit` only in
@@ -135,6 +135,18 @@ scoreboard for what is actually ticked.
   `docs/schemas/*.json`**, it is generated and CI diffs it.
 - Follow `docs/quality-roadmap.md` and `docs/test-backlog.md` when adding tests.
 - Do not add Claude-Session or similar trailers to commits or PRs.
+
+## Pull requests and CI
+
+- **Open a PR as a draft while you are still pushing to it** (`gh pr create --draft`).
+  A draft runs only the lint job; the test matrix (Linux, macOS, Windows) runs once when the
+  PR is marked ready (`gh pr ready`), so intermediate pushes don't each start it. A draft
+  cannot be merged, so nothing lands untested.
+- After a squash merge, CI on `main` runs only if the merged files differ from the PR's
+  last tested commit, which happens when `main` moved while the PR was open. A tag push
+  (a release) always runs the full matrix.
+- The weekly scheduled run still tests `main` with nothing changed, to catch firmware,
+  OrcaSlicer, Printables and CVE drift.
 
 ## Releases (maintainers)
 
