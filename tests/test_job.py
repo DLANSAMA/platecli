@@ -46,6 +46,7 @@ from bambu_cli.context import RuntimeContext  # noqa: E402
 from bambu_cli.job import JobSteps, _run_job  # noqa: E402
 from bambu_cli.errors import BambuError
 from tests.json_contract_base import sliced_3mf_bytes
+from tests.fake_3mf import minimal_3mf
 
 
 def _json_path_field(path):
@@ -534,7 +535,7 @@ def test_dry_run_local_zip_member_slice_matches_predicate(tmp_path, member, woul
     """
     zpath = tmp_path / "bundle.zip"
     with zipfile.ZipFile(zpath, "w") as zf:
-        zf.writestr(member, b"content")
+        zf.writestr(member, minimal_3mf() if member.endswith(".3mf") else b"content")
     args = _parse(["job", str(zpath), "--dry-run", "--json"])
     _run_job(_ctx(), args, default_steps())
     payload = _read_json(capsys)
@@ -1179,7 +1180,7 @@ def test_zip_printer_ready_member_copies_ignored_flagged(tmp_path, capsys):
     copies_ignored, matching the non-ZIP printer-ready branch."""
     zpath = tmp_path / "bundle.zip"
     with zipfile.ZipFile(zpath, "w") as zf:
-        zf.writestr("plate.gcode.3mf", b"x" * 20)
+        zf.writestr("plate.gcode.3mf", minimal_3mf())
     args = _parse(["job", str(zpath), "--copies", "3", "--dry-run", "--json"])
     with _capture_bambu_warnings() as records:
         _run_job(_ctx(), args, default_steps())

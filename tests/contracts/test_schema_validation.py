@@ -15,6 +15,7 @@ from bambu_cli import bambu  # noqa: E402
 from bambu_cli.cli import main  # noqa: E402
 from bambu_cli import utils  # noqa: E402
 from bambu_cli.constants import VERSION  # noqa: E402
+from tests.fake_3mf import minimal_3mf
 
 pytestmark = pytest.mark.contract
 
@@ -355,7 +356,7 @@ def test_upload_matches_schema(monkeypatch, tmp_path, capsys):
     config_path = tmp_path / "config" / "cfg.json"
     _write_valid_config(config_path)
     model = tmp_path / "probe.gcode.3mf"
-    model.write_bytes(b"probe payload")
+    model.write_bytes(minimal_3mf())
     monkeypatch.setattr(sys, "argv", ["plate", "--sim", "upload", str(model), "--json"])
     monkeypatch.setattr("bambu_cli.config.CONFIG_PATH", str(config_path))
     monkeypatch.setattr("bambu_cli.cli.setup_logging", lambda *a, **k: None)

@@ -616,6 +616,8 @@ def _temperatures_line(path: str) -> str:
     from bambu_cli.gcode_limits import peak_heater_targets
 
     peaks = peak_heater_targets(path)
+    if peaks is None:
+        return "could not read the G-code"
     parts = [f"{label} up to {peaks[label]:g} °C" for label in ("nozzle", "bed") if label in peaks]
     return "  ·  ".join(parts) if parts else "not set in the G-code"
 

@@ -272,8 +272,10 @@ def _step_prepare(args: argparse.Namespace, deps: GoDeps, state: WizardState) ->
 
 def _render_preview(prompts: Any, state: WizardState, model_path: str) -> None:
     prompts.print("")
-    for label, value in _preview_rows(state, model_path):
-        prompts.print(f"{label:<11}{value}")
+    rows = _preview_rows(state, model_path)
+    width = max(len(label) for label, _ in rows) + 2
+    for label, value in rows:
+        prompts.print(f"{label:<{width}}{value}")
     prompts.print("")
 
 

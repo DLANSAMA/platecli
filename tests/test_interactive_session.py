@@ -957,3 +957,16 @@ def test_upload_only_skips_the_second_ams_read(tmp_path):
     run()
     assert detector.calls["n"] == 1
     assert job.calls[0].confirm is False
+
+
+def test_preview_labels_never_run_into_their_values(tmp_path):
+    """"Temperatures" is longer than the old fixed 11-column label field."""
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    steps = GoSteps(download=Recorder(return_value=stl), slice=Recorder(return_value=_sliced_3mf(tmp_path)), job=Recorder())
+    prompts = ScriptedPrompts([stl, True, "PLA", "standard", False, False, False])
+    cmd_go(_args(), GoDeps(prompts=prompts, steps=steps))
+    rows = [m for m in prompts.printed if m.startswith(("Model", "Feed", "Temperatures", "Estimate"))]
+    assert len(rows) == 4
+    assert all(line.split(" ", 1)[0] in ("Model", "Feed", "Temperatures", "Estimate") for line in rows)
+    assert len({len(line) - len(line.split(" ", 1)[1].lstrip()) for line in rows}) == 1, "values are not aligned"

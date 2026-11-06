@@ -37,7 +37,7 @@ from bambu_cli.download import (
     _validate_http_url_or_exit,
 )
 from bambu_cli.errors import BambuError
-from bambu_cli.gcode_limits import file_heater_problem
+from bambu_cli.gcode_limits import file_heater_problem, zip_member_heater_problem
 from bambu_cli.job.payload import _parse_print_options, _print_next_command
 from bambu_cli.job.predict import (
     _ext_would_slice,
@@ -334,6 +334,16 @@ def _run_job(ctx, args, steps=None):
                         "extract",
                         EXIT_FILE_ERROR,
                         f"Refusing to dry-run an empty ZIP member: {member_filename}",
+                    )
+                # The real run's upload refuses a hot member; the dry run must say so too.
+                heater = zip_member_heater_problem(source_path, info)
+                if heater:
+                    _job_fail(
+                        args,
+                        summary,
+                        "validate",
+                        EXIT_FILE_ERROR,
+                        f"Refusing to upload {os.path.basename(member_filename)}: {heater}",
                     )
                 logger.info(
                     "🔍 Dry Run: ZIP archive contains a supported file; skipping extraction, slicing, upload, and print."

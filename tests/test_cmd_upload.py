@@ -210,6 +210,11 @@ class TestBambuUploadRetry(unittest.TestCase):
 
         mock_exists.return_value = True
         mock_getsize.return_value = 2048
+        # open() is mocked and test.3mf is not on disk; the heater scan is
+        # covered by test_presliced_heater_limits.py, so pass it here.
+        heater_scan = patch("bambu_cli.commands.files.file_heater_problem", return_value=None)
+        heater_scan.start()
+        self.addCleanup(heater_scan.stop)
 
         mock_ftp = MagicMock()
         # Fail once, then succeed

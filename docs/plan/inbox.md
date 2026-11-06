@@ -19,3 +19,5 @@ Noticed but not chosen, one line each, oldest first: `- date · where · what ·
 - 2026-11-05 · bambu_cli/jsonio.py · a password with two or more delimiters after a digit prefix (`user:12/pa/ss@host`) still parses as a path and is not redacted · (review of the round-4 fixes)
 - 2026-11-05 · bambu_cli/commands/files.py · `"cert_fingerprint": 5` makes `files` fail as `failed_step: ftps`, exit 2, where `status` gives the config error, exit 1 · (review of the round-4 fixes)
 - 2026-11-05 · bambu_cli/commands/doctor.py · the capabilities file is written with `json.dump` defaults, so a NaN in a report would make it invalid JSON (unverified) · (review of the round-4 fixes)
+- 2026-11-05 · bambu_cli/gcode_limits.py · the pre-sliced scan has no cap on total decompressed size: a highly compressible 3MF can take minutes to scan (memory stays bounded) · (review of the S-1 fix)
+- 2026-11-05 · bambu_cli/gcode_limits.py · whether Bambu firmware ends a G-code line at a bare CR is unconfirmed; the scanner treats CR as a break, the safe reading · (review of the S-1 fix)

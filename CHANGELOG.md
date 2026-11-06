@@ -28,7 +28,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   third-party sliced 3MF (or `.gcode`) went to the printer with whatever
   temperatures it carried. `upload`, `job` and `send` (and `job --dry-run`) now
   read every plate's G-code and refuse a nozzle above 350 °C or a bed above
-  150 °C, naming the plate and line. G-code that cannot be read is refused.
+  150 °C, naming the plate and line. Every line ending (LF, CR, CRLF) and
+  every archive entry counts, duplicate names included; G-code or a 3MF that
+  cannot be read is refused, and so is a line over 1 MiB.
 - **Guided mode re-reads the AMS before it starts a print.** `plate go` and the
   TUI read the loaded filament when the material is chosen; slicing can take
   minutes, and a spool swapped in that time was fed at the temperatures sliced

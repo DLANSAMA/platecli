@@ -15,6 +15,7 @@ import pytest
 
 from bambu_cli.constants import EXIT_PRINTER_ERROR
 from bambu_cli.errors import BambuError
+from tests.fake_3mf import minimal_3mf
 
 
 class _Printer:
@@ -39,7 +40,7 @@ def _upload(tmp_path, printer, name="model.3mf"):
     from bambu_cli.commands.files import cmd_upload
 
     path = tmp_path / name
-    path.write_bytes(b"PK\x03\x04 sliced")
+    path.write_bytes(minimal_3mf())
     args = argparse.Namespace(file=str(path), dry_run=False, json=False, progress=False)
     return cmd_upload(args, ctx=argparse.Namespace(printer=lambda: printer))
 
