@@ -21,3 +21,4 @@ Noticed but not chosen, one line each, oldest first: `- date · where · what ·
 - 2026-11-05 · bambu_cli/commands/doctor.py · the capabilities file is written with `json.dump` defaults, so a NaN in a report would make it invalid JSON (unverified) · (review of the round-4 fixes)
 - 2026-11-05 · bambu_cli/gcode_limits.py · the pre-sliced scan has no cap on total decompressed size: a highly compressible 3MF can take minutes to scan (memory stays bounded) · (review of the S-1 fix)
 - 2026-11-05 · bambu_cli/gcode_limits.py · whether Bambu firmware ends a G-code line at a bare CR is unconfirmed; the scanner treats CR as a break, the safe reading · (review of the S-1 fix)
+- 2026-11-06 · main checkout, branch `fix/audit-round3` · 4 local commits (`13cb15c`..`a04ac04`, 2026-11-05) add 223 coverage test files and were never pushed; decide whether to land them as a PR · (seen while cutting 0.6.0)
