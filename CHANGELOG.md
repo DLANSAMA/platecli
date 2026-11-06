@@ -24,6 +24,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   150 °C are now refused before anything is sent, as is a temperature that
   is not a plain number (`S4e2`, `S0x190`, non-ASCII digits), including after
   a tool number (`M104 T0 S400`).
+- **Pre-sliced files are held to the heater limits too.** A downloaded or
+  third-party sliced 3MF (or `.gcode`) went to the printer with whatever
+  temperatures it carried. `upload`, `job` and `send` (and `job --dry-run`) now
+  read every plate's G-code and refuse a nozzle above 350 °C or a bed above
+  150 °C, naming the plate and line. G-code that cannot be read is refused.
 - `--ams-mapping` accepts ASCII digits only; `٣` and other Unicode digits that
   `int()` reads were passed through as slot numbers.
 - The upload guard that refuses to overwrite the file being printed now waits

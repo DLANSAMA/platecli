@@ -43,6 +43,7 @@ RANKS: dict[str, int] = {
     "tlspin": 10,
     "fsutil": 10,
     "textsafe": 10,
+    "gcode_limits": 10,
     # Typed --json payload shapes. Pure data: stdlib only, imports nothing from
     # the package, and generates docs/schemas/. Any layer may build one.
     "contracts": 10,

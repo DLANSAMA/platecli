@@ -37,6 +37,7 @@ from bambu_cli.download import (
     _validate_http_url_or_exit,
 )
 from bambu_cli.errors import BambuError
+from bambu_cli.gcode_limits import file_heater_problem
 from bambu_cli.job.payload import _parse_print_options, _print_next_command
 from bambu_cli.job.predict import (
     _ext_would_slice,
@@ -487,6 +488,16 @@ def _run_job(ctx, args, steps=None):
                         "validate",
                         EXIT_FILE_ERROR,
                         f"Refusing to dry-run an empty printer-ready file: {_path_for_message(source_path)}",
+                    )
+                heater = file_heater_problem(source_path)
+                if heater:
+                    # The real run's upload refuses this file; the dry run must say so.
+                    _job_fail(
+                        args,
+                        summary,
+                        "validate",
+                        EXIT_FILE_ERROR,
+                        f"Refusing to upload {os.path.basename(source_path)}: {heater}",
                     )
                 logger.info("🔍 Dry Run: printer-ready file is valid; skipping upload and print.")
                 summary["status"] = "dry_run_local_skipped"

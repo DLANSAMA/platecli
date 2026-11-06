@@ -15,6 +15,7 @@ from bambu_cli.download.naming import (
 )
 from bambu_cli.errors import abort
 from bambu_cli.fsutil import _portable_basename
+from bambu_cli.gcode_limits import file_heater_problem
 from bambu_cli.logging_utils import logger
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
@@ -128,6 +129,17 @@ def cmd_upload(args, ctx=None):
             exit_code=EXIT_FILE_ERROR,
             failed_step="validate",
             extra={"file": filepath, "remote_name": filename, "bytes": filesize},
+        )
+    heater = file_heater_problem(filepath)
+    if heater:
+        # A pre-sliced 3MF from a download or another slicer carries G-code
+        # platecli never generated; hold it to the limits slicing obeys.
+        message = f"Refusing to upload {filename}: {heater}"
+        abort(
+            message,
+            exit_code=EXIT_FILE_ERROR,
+            failed_step="validate",
+            extra={"file": filepath, "remote_name": filename},
         )
     if getattr(args, "dry_run", False):
         logger.info(f"🔍 Dry Run: Validating printer connectivity for {filename}...")

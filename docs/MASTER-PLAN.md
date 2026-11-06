@@ -23,9 +23,6 @@ The work we chose, in order. **No task from the user? Take the top 🤖 box unde
 
 ## Next
 
-- [ ] **S-1 · Pre-sliced 3MF G-code skips the heater limits** · P1 · 🤖
-  `job`/`print` of a downloaded pre-sliced 3MF sends its embedded `plate_<n>.gcode` unchecked; `plate gcode` now refuses M104/M109 > 350 °C and M140/M190 > 150 °C (`commands/gcode.py` `_heater_problem`), seen 2026-11-05.
-  *Done when:* the plate's G-code is scanned with the same check before upload, and a test pins it.
 - [ ] **S-2 · TUI confirm may use a stale AMS slot** · P1 · 🤖
   Reported by the 2026-11-05 audit, not yet reproduced; the confirm screen also shows no temperatures or slot.
   *Done when:* reproduced or ruled out; if real, the slot is read at confirm time and shown with nozzle/bed temps; a pilot test pins it.
@@ -41,4 +38,4 @@ The work we chose, in order. **No task from the user? Take the top 🤖 box unde
 - [ ] **L-4 · Re-record the hero GIF with `plate job`** · P2 · both
   The README hero shows `status`/`slice`, not the command the pitch rests on. Recording starts a real print: 🧑 says yes and is at the printer.
 
-**Highest ids given:** D-3 · L-4 · S-3 · retired: —
+**Highest ids given:** D-3 · L-4 · S-3 · retired: S-1
