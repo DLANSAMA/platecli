@@ -93,8 +93,12 @@ def _discover_process_profile(
     model_code: str = "P1P",
     compatible_printer: str | None = None,
     profiles_dir: str | None = None,
+    fallback: bool = True,
 ) -> str | None:
     """Find the process profile for ``quality_arg`` on this printer.
+
+    With ``fallback=False`` a layer height with no profile returns ``None``
+    instead of borrowing the 0.20 mm standard one.
 
     A file belongs to the model when its name ends in ``@BBL <model_code>``
     exactly (``"A1"`` must not match ``"... @BBL A1M"``), or when its
@@ -112,6 +116,12 @@ def _discover_process_profile(
         profiles_dir = current_settings().profiles_dir
     requested = quality_map.get(quality_arg, f"0.20mm Standard @BBL {model_code}")
     layer_height = quality_arg if quality_arg.startswith("0.") else requested.split(" ")[0]
+    if not fallback:
+        try:
+            # "0.1" must mean 0.10mm, not the prefix of 0.12mm.
+            layer_height = f"{float(quality_arg):.2f}mm"
+        except ValueError:
+            pass
     requested_parts = requested.split(" @BBL ")[0].split(" ", 1)
     quality_word = requested_parts[1] if len(requested_parts) > 1 else None
     proc_dir = os.path.join(profiles_dir, "process")
@@ -137,6 +147,8 @@ def _discover_process_profile(
     if process_file:
         logger.debug(f"Profile auto-discovered: {process_file}")
         return os.path.join(proc_dir, process_file)
+    if not fallback:
+        return None
     process_file = choose("0.20mm", "Standard")
     if process_file:
         logger.warning(f"⚠️  Requested quality not found, using: {process_file}")
@@ -145,6 +157,25 @@ def _discover_process_profile(
     # and accelerations for a different machine is not an option; report it.
     logger.error(f"No slicer profiles for {model_code} found in {proc_dir}")
     return None
+
+
+def _available_layer_heights(profiles_dir: str, model_code: str, compatible_printer: str | None) -> list[str]:
+    """Layer heights (e.g. ``0.12``) that have a process profile for this printer."""
+    proc_dir = os.path.join(profiles_dir, "process")
+    if not os.path.isdir(proc_dir):
+        return []
+    heights: set[str] = set()
+    for name in os.listdir(proc_dir):
+        if not name.endswith(".json") or "nozzle" in name:
+            continue
+        match = re.match(r"(\d+\.\d+)mm", name)
+        if not match:
+            continue
+        if name[: -len(".json")].endswith(f"@BBL {model_code}") or (
+            compatible_printer and _process_profile_compatible(os.path.join(proc_dir, name), compatible_printer)
+        ):
+            heights.add(match.group(1))
+    return sorted(heights)
 
 
 def _load_flattened_profile(path: str) -> dict:
