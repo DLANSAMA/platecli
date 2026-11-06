@@ -14,6 +14,23 @@ _REQUIRED_STATUS_KEYS = ("gcode_state", "mc_percent", "bed_temper", "nozzle_temp
 TERMINAL_GCODE_STATES = frozenset({"FINISH", "FAILED", "STOP", "IDLE"})
 
 
+def decode_report(msg):
+    """Parse an MQTT payload into a dict, or None for anything else.
+
+    Runs on paho's network thread, where an escaping exception kills the loop
+    for good (a held session then never recovers). Besides malformed JSON this
+    covers what a spoofed or broken report can make ``json.loads`` raise: a
+    RecursionError for deeply nested arrays and a ValueError for an integer
+    past the digit limit. Non-object JSON (``5``, ``[1]``) is not a report.
+    """
+    try:
+        data = json.loads(msg.payload.decode("utf-8"))
+    except (ValueError, RecursionError, AttributeError, TypeError) as exc:
+        logger.debug(f"MQTT decode error: {type(exc).__name__}")
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _client_factory(client_factory):
     if client_factory is not None:
         return client_factory
@@ -233,12 +250,8 @@ def get_status(printer, timeout=None, retries=2, *, require_complete=True):
                 status_received.set()
 
         def on_message(client, userdata, msg, status_received=status_received):
-            try:
-                data = json.loads(msg.payload.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                logger.debug(f"MQTT decode error: {e}")
-                return
-            if not isinstance(data, dict) or not isinstance(data.get("print"), dict):
+            data = decode_report(msg)
+            if data is None or not isinstance(data.get("print"), dict):
                 return
             with merged_lock:
                 merged.update(data["print"])
@@ -323,9 +336,8 @@ def get_version(printer, timeout=5, retries=1):
                 received.set()
 
         def on_message(client, userdata, msg):
-            try:
-                data = json.loads(msg.payload.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
+            data = decode_report(msg)
+            if data is None:
                 return
             info = data.get("info")
             if isinstance(info, dict) and info.get("command") == "get_version" and "module" in info:

@@ -125,22 +125,37 @@ def probe_cert_fingerprint(host, port=990, timeout=5):
         return fingerprint_sha256(tls.getpeercert(binary_form=True))
 
 
+def _paho_client(client_id=""):
+    """A paho client that never reconnects on its own.
+
+    paho keeps an unacknowledged QoS-1 PUBLISH and resends it (DUP set) when
+    its network loop reconnects after a drop, so a command that reached the
+    printer just before the connection died would run twice. Every caller
+    already owns reconnection: one-shot commands retry with a fresh client
+    only while nothing was published, and ``MqttSession.ensure_connected``
+    builds a new client (with an empty in-flight queue) after a drop.
+    """
+    try:
+        return mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id, reconnect_on_failure=False)
+    except AttributeError:
+        return mqtt.Client(client_id, reconnect_on_failure=False)
+
+
 def create_mqtt_client(printer, client_id=""):
     if printer.simulation_mode:
         return _SimMqttClient()
 
     _require_mqtt()
-    try:
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id)
-    except AttributeError:
-        client = mqtt.Client(client_id)
+    client = _paho_client(client_id)
     client.username_pw_set("bblp", printer.access_code)
 
-    if printer.insecure_tls:
-        client.tls_set(cert_reqs=ssl.CERT_NONE)
-        client.tls_insecure_set(True)
-    elif printer.cert_fingerprint:
+    # A configured pin wins over insecure_tls: the user named the exact
+    # certificate to trust, and FTPS already enforces it in that case.
+    if printer.cert_fingerprint:
         client.tls_set_context(pinning_ssl_context(printer.cert_fingerprint))
+        client.tls_insecure_set(True)
+    elif printer.insecure_tls:
+        client.tls_set(cert_reqs=ssl.CERT_NONE)
         client.tls_insecure_set(True)
     else:
         client.tls_set(cert_reqs=ssl.CERT_REQUIRED)

@@ -571,6 +571,10 @@ def _run_job(ctx, args, steps=None):
             )
         except BambuError as exc:
             detail = _last_error_for("print", ctx, exc)
+            if detail and detail.get("sent") is True:
+                # The print command went out unacknowledged: it may be printing,
+                # so "printed: false" would invite a retry and a second print.
+                summary["printed"] = None
             summary["next_command"] = ["status", "--json"]
             summary["recovery_hint"] = (
                 "Upload succeeded but print start was not confirmed. Check printer status before retrying."

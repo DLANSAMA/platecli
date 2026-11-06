@@ -1245,3 +1245,31 @@ def test_dry_run_output_dir_writability_uses_real_probe(tmp_path, capsys, monkey
     assert getattr(excinfo.value, "exit_code", getattr(excinfo.value, "code", None)) == EXIT_FILE_ERROR
     payload = _read_json(capsys)
     assert payload["failed_step"] == "validate"
+
+
+def test_unacknowledged_print_start_leaves_printed_unknown(tmp_path, capsys):
+    """A sent-but-unacknowledged print is "printed: null", never "false".
+
+    "false" tells an agent to run the print again; the printer may already be
+    printing the first one.
+    """
+    from bambu_cli.constants import EXIT_TIMEOUT
+    from bambu_cli.protocols import mqtt_print
+
+    ready = tmp_path / "model.3mf"
+    ready.write_bytes(sliced_3mf_bytes())
+    args = _parse(["job", str(ready), "--confirm", "--json"])
+
+    def unacknowledged_print(_args):
+        mqtt_print._abort_unconfirmed("model.3mf", "within 30s", EXIT_TIMEOUT)
+
+    steps = default_steps(upload=fake_upload("model.3mf"), print_=unacknowledged_print)
+    with pytest.raises((SystemExit, BambuError)):
+        _run_job(_ctx(), args, steps)
+    payload = _read_json(capsys)
+    assert payload["failed_step"] == "print"
+    assert payload["uploaded"] is True
+    assert payload["printed"] is None
+    assert payload["print_error"]["sent"] is True
+    assert "check `plate status` before printing again" in payload["error"]
+    assert payload["next_command"] == ["status", "--json"]
