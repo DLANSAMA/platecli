@@ -34,6 +34,7 @@ from bambu_cli.errors import BambuError, abort
 from bambu_cli.interactive.presets import parse_args_or_abort, preset_to_job_args
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.slicer.estimate import format_estimate, read_3mf_estimate
+from bambu_cli.textsafe import display_safe
 
 MATERIAL_CHOICES = ["PLA", "PETG", "ABS", "TPU"]
 MATERIAL_GUIDANCE = {
@@ -516,7 +517,7 @@ def preview_rows(state: WizardState, model_path: str) -> list[tuple[str, str]]:
     full_name = model_info.get("full_name", settings.printer_model or "printer")
     quality_layer = QUALITY_LAYER_HEIGHTS.get(state.quality, "")
 
-    name = _portable_basename(model_path)
+    name = display_safe(_portable_basename(model_path))
     ext = _file_extension(model_path)
 
     if ext == ".gcode":
@@ -655,6 +656,7 @@ def decline_message(state: WizardState) -> str:
     """
     kept = preserve_printable(state)
     if kept:
+        kept = display_safe(kept)
         label = "File kept at" if not state.sliced else "Sliced file kept at"
         return f"Nothing sent. {label} {kept}"
     return "Nothing sent."

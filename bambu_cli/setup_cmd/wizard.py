@@ -31,6 +31,7 @@ from bambu_cli.setup_cmd.common import (
     _validate_setup_access_code_file,
     _write_setup_config,
 )
+from bambu_cli.textsafe import display_safe
 from bambu_cli.utils import emit_json
 
 
@@ -371,16 +372,16 @@ def _cmd_setup_interactive(args):
                     try:
                         ip = _service_info_address(info)
                     except ValueError as e:
-                        logger.warning(f"⚠️  Skipping {name}: {e}")
+                        logger.warning(f"⚠️  Skipping {display_safe(name)}: {e}")
                         return
                     service_key = (name, ip)
                     with discovery_lock:
                         if service_key in seen_services:
-                            logger.debug(f"Ignoring duplicate mDNS service: {name} at {ip}")
+                            logger.debug(f"Ignoring duplicate mDNS service: {display_safe(name)} at {ip}")
                             return
                         seen_services.add(service_key)
                         discovered.append({"name": name, "ip": ip, "info": info})
-                    logger.info(f"   ✨ Found: {name} at {ip}")
+                    logger.info(f"   ✨ Found: {display_safe(name)} at {ip}")
 
             def update_service(self, zc, type_, name):
                 pass
@@ -432,7 +433,7 @@ def _cmd_setup_interactive(args):
         if len(discovered) > 1:
             logger.info("\nSelect a printer:")
             for i, d in enumerate(discovered):
-                logger.info(f"  [{i}] {d['name']} ({d['ip']})")
+                logger.info(f"  [{i}] {display_safe(d['name'])} ({d['ip']})")
             choice = _prompt_text("Choice: ", args)
             try:
                 idx = int(choice)
@@ -457,7 +458,7 @@ def _cmd_setup_interactive(args):
             f"⚠️  Printer discovered via unauthenticated mDNS. Verify that the reported IP "
             f"({selected['ip']}) belongs to your actual printer to protect your access code!"
         )
-        logger.info(f"\nConfiguring {selected['name']}...")
+        logger.info(f"\nConfiguring {display_safe(selected['name'])}...")
     else:
         logger.info("\nConfiguring manual printer...")
     access_code = _prompt_interactive_access_code(args)
