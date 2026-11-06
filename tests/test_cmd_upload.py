@@ -7,6 +7,15 @@ from tests.bambu_test_base import *  # noqa: F401,F403
 
 
 class TestBambuCmdUploadEdgeCases(unittest.TestCase):
+    def _cwd_with_test_gcode(self):
+        """Run in a temp dir holding a real test.gcode: upload reads it to check its temperatures."""
+        workdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, workdir, True)
+        with open(os.path.join(workdir, "test.gcode"), "w", encoding="utf-8") as fh:
+            fh.write("G28\nM104 S220\nM140 S60\n")
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(workdir)
+
     @patch("bambu_cli.logging_utils._BACKEND")
     @patch("sys.exit")
     def test_cmd_upload_invalid_filepath(self, mock_exit, mock_logger):
@@ -42,6 +51,8 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
     def test_cmd_upload_dry_run_success(self, mock_logger, mock_get_printer, mock_getsize, mock_exists):
         from bambu_cli.commands import cmd_upload
 
+        self._cwd_with_test_gcode()
+
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
         args = MagicMock()
@@ -69,6 +80,8 @@ class TestBambuCmdUploadEdgeCases(unittest.TestCase):
     @patch("sys.exit")
     def test_cmd_upload_dry_run_fail(self, mock_exit, mock_logger, mock_get_printer, mock_getsize, mock_exists):
         from bambu_cli.commands import cmd_upload
+
+        self._cwd_with_test_gcode()
 
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
