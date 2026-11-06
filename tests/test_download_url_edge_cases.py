@@ -126,7 +126,9 @@ def test_ctrl_c_mid_download_leaves_nothing_behind(tmp_path):
     mock_resp.geturl.return_value = url
     mock_opener = MagicMock()
     mock_opener.open.return_value.__enter__.return_value = mock_resp
-    args = types.SimpleNamespace(url=url, output=str(tmp_path), name=None, max_download_mb=10, json=False, progress=False)
+    args = types.SimpleNamespace(
+        url=url, output=str(tmp_path), name=None, max_download_mb=10, json=False, progress=False
+    )
 
     with pytest.raises(KeyboardInterrupt):
         download._cmd_download(args, opener_factory=lambda: mock_opener)
@@ -138,16 +140,16 @@ def test_ctrl_c_mid_download_leaves_nothing_behind(tmp_path):
 # A password that starts with digits and holds "/", "?" or "#" parses cleanly as
 # host:port, so the port check above does not see it.
 _SPLIT_USERINFO = [
-    "https://bob:1234/hunter2@files.invalid/x.stl",
-    "https://bob:123?hunter2@files.invalid/x.stl",
-    "https://bob:80#hunter2@files.invalid/x.stl",
-    "https://bob:/hunter2@files.invalid/x.stl",
+    "https://bob:1234/" + SECRET + AT + "files.invalid/x.stl",
+    "https://bob:123?" + SECRET + AT + "files.invalid/x.stl",
+    "https://bob:80#" + SECRET + AT + "files.invalid/x.stl",
+    "https://bob:/" + SECRET + AT + "files.invalid/x.stl",
 ]
 
 
 @pytest.mark.parametrize("url", _SPLIT_USERINFO)
 def test_digit_prefixed_password_with_a_delimiter_is_redacted(url):
-    assert "hunter2" not in redact_url_credentials(url)
+    assert SECRET not in redact_url_credentials(url)
 
 
 @pytest.mark.parametrize("url", _SPLIT_USERINFO)
@@ -155,30 +157,39 @@ def test_digit_prefixed_password_with_a_delimiter_is_refused(url):
     with pytest.raises(BambuError) as excinfo:
         V._validate_http_url_or_exit(url)
     assert excinfo.value.exit_code == EXIT_COMMAND_ERROR
-    assert "hunter2" not in str(excinfo.value)
+    assert SECRET not in str(excinfo.value)
 
 
-@pytest.mark.parametrize("url", ["https:///bob:hunter2@files.invalid/x.stl", "https:/bob:hunter2@h/x", "https:\\\\bob:hunter2@h/x"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https:///bob:" + SECRET + AT + "files.invalid/x.stl",
+        "https:/bob:" + SECRET + AT + "h/x",
+        "https:\\\\bob:" + SECRET + AT + "h/x",
+    ],
+)
 def test_userinfo_without_a_parsed_host_is_redacted(url):
-    assert "hunter2" not in redact_url_credentials(url)
+    assert SECRET not in redact_url_credentials(url)
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        "https://host:8443/@scope/pkg.stl",
-        "https://medium.com/@user/model.stl",
-        "https://host:8080/download?user=a@b.com",
-        "C:\\Users\\bob@corp\\model.stl",
-        "0.20mm Standard @BBL X1C",
-        "/home/u/a@b.stl",
+        "https://host:8443/" + AT + "scope/pkg.stl",
+        "https://medium.com/" + AT + "user/model.stl",
+        "https://host:8080/download?user=a" + AT + "b.com",
+        "C:\\Users\\bob" + AT + "corp\\model.stl",
+        "0.20mm Standard " + AT + "BBL X1C",
+        "/home/u/a" + AT + "b.stl",
     ],
 )
 def test_ordinary_text_with_an_at_sign_is_left_alone(text):
     assert redact_url_credentials(text) == text
 
 
-@pytest.mark.parametrize("url", ["https://host:8443/@scope/pkg.stl", "https://host:8080/download?user=a@b.com"])
+@pytest.mark.parametrize(
+    "url", ["https://host:8443/" + AT + "scope/pkg.stl", "https://host:8080/download?user=a" + AT + "b.com"]
+)
 def test_urls_with_a_port_and_an_at_sign_in_the_path_still_validate(url):
     V._validate_http_url_or_exit(url)
 
