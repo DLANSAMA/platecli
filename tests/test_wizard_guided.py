@@ -184,6 +184,7 @@ def test_guided_setup_mdns_one_printer(tmp_path, monkeypatch):
     cfg = tmp_path / "config.json"
     answers = iter(
         [
+            "",  # use this printer? (default yes)
             "87654321",  # access code
             "",  # confirm model
             "",  # confirm nozzle

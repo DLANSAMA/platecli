@@ -11,7 +11,7 @@ The work we chose, in order. **No task from the user? Take the top 🤖 box unde
 ## Waiting on you 🧑
 
 - [ ] **D-1 · Merge the audit-round4 PR (#153)** · P1 · 🧑
-  Branch `fix/audit-round4`: at-most-once MQTT delivery, pin precedence, heater limits for raw and pre-sliced G-code, AMS re-read before a guided print, terminal-escape hardening, config value checks. Needs the 6 CI checks green.
+  Branch `fix/audit-round4`: at-most-once MQTT delivery, pin precedence, heater limits for raw and pre-sliced G-code, AMS re-read before a guided print, confirmed mDNS results, terminal-escape hardening, config value checks. Needs the 6 CI checks green.
 - [ ] **D-2 · Dependabot PRs #150 (actions) and #152 (python deps)** · P2 · 🧑
   Open since 2026-10-26 and 2026-11-02. *Done when:* merged or closed.
 - [ ] **D-3 · Keep `"bambu"` in the PyPI keywords?** · P2 · 🧑
@@ -23,9 +23,6 @@ The work we chose, in order. **No task from the user? Take the top 🤖 box unde
 
 ## Next
 
-- [ ] **S-3 · Setup takes a lone mDNS result without asking** · P2 · 🤖
-  The wizard auto-selects a single discovered printer and does not sanity-check its IP (private range, not 0.0.0.0).
-  *Done when:* a single result is shown and confirmed, a public or unspecified IP is flagged, and a test pins both.
 - [ ] **L-3 · Check that 0.5.1 installs from PyPI** · P2 · 🤖
   Never verified after the 2026-08-28 publish. Clean venv, `pip install platecli==0.5.1`, `plate --version`, `plate --sim status`.
   *Done when:* the result is recorded in `docs/plan/done.md`.
@@ -35,4 +32,4 @@ The work we chose, in order. **No task from the user? Take the top 🤖 box unde
 - [ ] **L-4 · Re-record the hero GIF with `plate job`** · P2 · both
   The README hero shows `status`/`slice`, not the command the pitch rests on. Recording starts a real print: 🧑 says yes and is at the printer.
 
-**Highest ids given:** D-3 · L-4 · S-3 · retired: S-1, S-2
+**Highest ids given:** D-3 · L-4 · S-3 · retired: S-1, S-2, S-3

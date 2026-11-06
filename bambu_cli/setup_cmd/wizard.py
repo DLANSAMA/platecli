@@ -1,5 +1,6 @@
 """The `setup` command: guided/non-interactive config creation and mDNS discovery."""
 
+import ipaddress
 import os
 import re
 import socket
@@ -56,6 +57,66 @@ def _service_info_address(info):
             continue
 
     raise ValueError("service did not advertise a usable IP address")
+
+
+def _discovered_address_problem(ip):
+    """``(usable, why)`` for an address a printer on this network would not have, or None.
+
+    mDNS is unauthenticated: anything on the LAN can answer, and the access
+    code is sent to whatever address is configured. An address no printer can
+    have (unspecified, multicast) is unusable; one a printer here would not
+    have (this computer, the public internet) needs the user's explicit yes.
+    """
+    try:
+        addr = ipaddress.ip_address(str(ip).split("%", 1)[0])
+    except ValueError:
+        return False, f"{display_safe(str(ip))} is not an IP address"
+    if addr.is_unspecified or addr.is_multicast:
+        return False, f"{ip} cannot be a printer's address"
+    if addr.is_loopback:
+        return True, f"{ip} is this computer, not a printer"
+    if addr.is_private or addr.is_link_local:
+        return None
+    return True, f"{ip} is not a local network address"
+
+
+def _choose_discovered(args, discovered):
+    """The discovered printer the user confirms, or None to enter one by hand.
+
+    A lone result is shown and confirmed rather than taken: on a network with
+    a spoofed answer it is the only thing between the access code and a
+    stranger. Choosing one of several by number is the confirmation, unless
+    its address is flagged.
+    """
+    several = len(discovered) > 1
+    logger.info("\nSelect a printer:" if several else "\nFound one printer:")
+    for i, d in enumerate(discovered):
+        prefix = f"  [{i}] " if several else "  "
+        logger.info(f"{prefix}{display_safe(d['name'])} ({d['ip']})")
+        flagged = _discovered_address_problem(d["ip"])
+        if flagged:
+            logger.warning(f"      ⚠️  {flagged[1]}")
+    if several:
+        choice = _prompt_text("Choice: ", args)
+        try:
+            idx = int(choice)
+        except ValueError:
+            logger.error(f"Invalid input: '{display_safe(choice)}'. Enter a number.")
+            abort("", exit_code=EXIT_COMMAND_ERROR)
+        if idx < 0 or idx >= len(discovered):
+            logger.error(f"Invalid selection: {display_safe(choice)}. Must be 0-{len(discovered) - 1}.")
+            abort("", exit_code=EXIT_COMMAND_ERROR)
+        selected = discovered[idx]
+    else:
+        selected = discovered[0]
+    flagged = _discovered_address_problem(selected["ip"])
+    if flagged:
+        answer = _prompt_text(f"{flagged[1]}. Use it anyway? [y/N]: ", args).strip().lower()
+        return selected if answer in ("y", "yes") else None
+    if several:
+        return selected
+    answer = _prompt_text("Use this printer? [Y/n]: ", args).strip().lower()
+    return selected if answer in ("", "y", "yes") else None
 
 
 def _parse_mdns_printer_identity(name):
@@ -374,6 +435,10 @@ def _cmd_setup_interactive(args):
                     except ValueError as e:
                         logger.warning(f"⚠️  Skipping {display_safe(name)}: {e}")
                         return
+                    unusable = _discovered_address_problem(ip)
+                    if unusable and not unusable[0]:
+                        logger.warning(f"⚠️  Skipping {display_safe(name)}: {unusable[1]}")
+                        return
                     service_key = (name, ip)
                     with discovery_lock:
                         if service_key in seen_services:
@@ -414,7 +479,15 @@ def _cmd_setup_interactive(args):
                 except Exception:
                     pass
 
-    if use_manual:
+    selected = None
+    if not use_manual:
+        if not discovered:
+            logger.error("No printers found. Ensure printer is on the same network.")
+            abort("", exit_code=EXIT_NETWORK_ERROR)
+        selected = _choose_discovered(args, discovered)
+        use_manual = selected is None
+
+    if selected is None:
         ip = _prompt_text("Enter Printer IP Address (e.g. 192.168.1.50): ", args)
         if not ip:
             logger.error("IP Address is required.")
@@ -424,31 +497,9 @@ def _cmd_setup_interactive(args):
             logger.error("Serial Number is required.")
             abort("", exit_code=EXIT_CONFIG_ERROR)
         detected_model = None
+        logger.info("\nConfiguring manual printer...")
     else:
-        if not discovered:
-            logger.error("No printers found. Ensure printer is on the same network.")
-            abort("", exit_code=EXIT_NETWORK_ERROR)
-
-        # Simple selection if multiple
-        if len(discovered) > 1:
-            logger.info("\nSelect a printer:")
-            for i, d in enumerate(discovered):
-                logger.info(f"  [{i}] {display_safe(d['name'])} ({d['ip']})")
-            choice = _prompt_text("Choice: ", args)
-            try:
-                idx = int(choice)
-                if idx < 0 or idx >= len(discovered):
-                    logger.error(f"Invalid selection: {choice}. Must be 0-{len(discovered) - 1}.")
-                    abort("", exit_code=EXIT_COMMAND_ERROR)
-                selected = discovered[idx]
-            except ValueError:
-                logger.error(f"Invalid input: '{choice}'. Enter a number.")
-                abort("", exit_code=EXIT_COMMAND_ERROR)
-        else:
-            selected = discovered[0]
-
         ip = selected["ip"]
-    if not use_manual:
         # Extract serial/model from names like
         # "BBLP-P1P-SN123._bblp._tcp.local." without saving "P1P-SN123"
         # as the MQTT serial.
@@ -459,8 +510,6 @@ def _cmd_setup_interactive(args):
             f"({selected['ip']}) belongs to your actual printer to protect your access code!"
         )
         logger.info(f"\nConfiguring {display_safe(selected['name'])}...")
-    else:
-        logger.info("\nConfiguring manual printer...")
     access_code = _prompt_interactive_access_code(args)
 
     # Guided prompt for model & nozzle

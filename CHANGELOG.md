@@ -37,6 +37,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   is unaffected). The summary before confirming gains a Feed row (`AMS0·2
   (PETG)` or External spool) and a Temperatures row with the hottest nozzle
   and bed targets in the file's G-code.
+- **Setup asks before using the one printer mDNS found.** Discovery is
+  unauthenticated and the access code goes to the configured address, yet a
+  lone result was taken without a question. It is now shown and confirmed
+  (no falls back to typing the address). An address no printer can have
+  (`0.0.0.0`, multicast) is skipped, and one a LAN printer would not have
+  (a public address, this computer) is flagged and needs an explicit yes.
 - `--ams-mapping` accepts ASCII digits only; `٣` and other Unicode digits that
   `int()` reads were passed through as slot numbers.
 - The upload guard that refuses to overwrite the file being printed now waits
