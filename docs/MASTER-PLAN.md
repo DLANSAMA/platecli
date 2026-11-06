@@ -12,13 +12,8 @@ The work we chose, in order. **No task from the user? Take the top 🤖 box unde
 
 - [ ] **D-2 · Dependabot PRs #150 (actions) and #152 (python deps)** · P2 · 🧑
   Open since 2026-10-26 and 2026-11-02. *Done when:* merged or closed.
-- [ ] **D-3 · Keep `"bambu"` in the PyPI keywords?** · P2 · 🧑
-  Unruled since 2026-07-25; recommendation was keep (nominative search term, not a name).
-- [ ] **L-1 · Post to r/BambuLab** · P1 · both · after L-2
+- [ ] **L-1 · Post to r/BambuLab** · P1 · both
   🤖 rewrites the held copy to lead with `plate tui`/`plate go`; 🧑 posts (Tue–Thu, 10–11 EDT).
-- [ ] **L-2 · Cut 0.6.0** · P1 · both
-  Release PR on `release/0.6.0` (2026-11-06) sets 0.6.0 and dates the changelog. 🧑 merges it and approves the `v0.6.0` tag push (it publishes to PyPI).
-  Then 🤖: `pip install platecli==0.6.0` and `'platecli[tui]==0.6.0'` in a clean venv (`plate --version`, `plate --sim status`), then the `0.7.0.dev0` bump PR (`docs/releasing.md` steps 4 and 6).
 
 ## Next
 
@@ -29,4 +24,4 @@ The work we chose, in order. **No task from the user? Take the top 🤖 box unde
 
 Nothing chosen yet; new findings go in `docs/plan/inbox.md`.
 
-**Highest ids given:** D-3 · L-4 · S-3 · retired: D-1, L-3, S-1, S-2, S-3
+**Highest ids given:** D-3 · L-4 · S-3 · retired: D-1, D-3, L-2, L-3, S-1, S-2, S-3
