@@ -29,7 +29,7 @@ from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Button, Checkbox, Footer, Header, Input, Label, RadioButton, RadioSet, Static
+from textual.widgets import Button, Checkbox, Footer, Input, Label, RadioButton, RadioSet, Static
 
 from bambu_cli.interactive.core import (
     DETECTED_AMS_TAG,
@@ -44,6 +44,7 @@ from bambu_cli.interactive.core import (
 )
 from bambu_cli.tui.services import PrepareResult
 from bambu_cli.tui.widgets.summary import summary_grid
+from bambu_cli.tui.widgets.topbar import TopBar
 
 _SETUP_HINT = "Run 'plate setup' in a terminal, then start the TUI again."
 # What the results column says before there is a result. An empty bordered box
@@ -78,7 +79,7 @@ class PreflightErrorScreen(Screen):
         self._problem = problem
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield TopBar("New print", id="topbar")
         with VerticalScroll(id="preflight-body"):
             yield Static("Not ready to prepare a print", id="preflight-title")
             yield Static(self._problem, id="preflight-problem", markup=False)
@@ -97,8 +98,6 @@ class PreflightErrorScreen(Screen):
 
 class PrepareScreen(Screen):
     """Collect a source + presets, then download/slice and show the preview."""
-
-    SUB_TITLE = "prepare a print"
 
     # F1 rather than "?" for help here: the source box has focus most of the
     # time and a text input rightly swallows a printable "?".
@@ -137,7 +136,7 @@ class PrepareScreen(Screen):
     # --- composition --------------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield TopBar("New print", id="topbar")
         with VerticalScroll(id="prepare-body"), Horizontal(id="prepare-columns"):
             # Left: everything the user fills in. Right: everything the run
             # produces — so the estimate and "Start print…" land beside the form
@@ -166,6 +165,7 @@ class PrepareScreen(Screen):
                         for name in MATERIAL_CHOICES
                     ],
                     id="material-set",
+                    compact=True,
                 )
                 yield Label("Quality", classes="prepare-group")
                 yield RadioSet(
@@ -178,11 +178,14 @@ class PrepareScreen(Screen):
                         for name in QUALITY_CHOICES
                     ],
                     id="quality-set",
+                    compact=True,
                 )
-                yield Checkbox("Supports (big overhangs)", id="supports-check")
+                yield Checkbox("Supports (big overhangs)", id="supports-check", compact=True)
+                # compact: a bordered button is three rows, and the form has to
+                # fit an 80x24 terminal with the result below it.
                 with Horizontal(id="prepare-actions"):
-                    yield Button("Prepare", id="prepare-button", variant="primary")
-                    yield Button("Settings…", id="settings-button")
+                    yield Button("Prepare", id="prepare-button", variant="primary", compact=True)
+                    yield Button("Settings…", id="settings-button", compact=True)
                 # Beside the button it annotates ("Overrides: …", or why the
                 # settings door is shut) rather than in the results column,
                 # where it read as part of the preview.
@@ -190,7 +193,7 @@ class PrepareScreen(Screen):
             with VerticalScroll(id="prepare-output"):
                 yield Static(_RESULTS_PLACEHOLDER, id="prepare-status", markup=False)
                 yield Static("", id="preview", markup=False)
-                yield Button("Start print…", id="print-button", disabled=True)
+                yield Button("Start print…", id="print-button", disabled=True, variant="primary", compact=True)
         yield Footer()
 
     # --- responsive layout --------------------------------------------------

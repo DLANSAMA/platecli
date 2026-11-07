@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- **`plate tui` has a new look.** It has its own dark theme, with a light one
+  in the command palette (`ctrl+p`). A one-line bar at the top names the
+  printer and says its state in words ("Printing", "Paused", "Offline"), not
+  firmware names. The dashboard now has three parts:
+  - The job, in large type: percent done, time left and the clock time it
+    should finish, the layer, and which tray is feeding.
+  - The nozzle and bed, each with its recent temperature history.
+  - The AMS as tray cards in each filament's own colour.
+
+  One AMS fits an 80x24 terminal with nothing scrolled off. The monitor uses
+  the same job panel. Prepare and confirm use compact buttons. A summary
+  value now wraps only between its `·` parts, so "Supports: no" stays on one
+  line. The help overlay fits one screen in two columns.
+- **AMS slots are named the way Bambu Studio and the printer name them: A1–A4,
+  then B1–B4.** This applies in the TUI, and in `plate go`'s AMS-changed
+  messages and Feed row (`AMS A3 (PETG)`), which said `AMS0·2` before.
+  `plate status` and the JSON output are unchanged.
 - `bambu_cli.logging_utils.patched_logger` is removed: it imported `unittest.mock` in the shipped package. `set_logger` / `reset_logger` still swap the logger backend. CI now rejects any `unittest`, `pytest` or `mock` import in `bambu_cli/`.
 
 ## [0.6.0] - 2026-11-06

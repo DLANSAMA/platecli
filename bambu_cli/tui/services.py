@@ -10,7 +10,11 @@ unit-tested without a Textual pilot. The screens call these from thread workers
 from __future__ import annotations
 
 import argparse
+import math
+import re
+from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Any
 
 from bambu_cli.textsafe import display_safe
@@ -100,76 +104,500 @@ def _prepare_error(exc: Exception) -> str:
     return f"Preparing the model failed ({type(exc).__name__})."
 
 
-# --- View-model helpers (pure; unit-tested without a pilot) -----------------
+# --- View models (pure; unit-tested without a pilot) -------------------------
+#
+# Everything the dashboard and monitor draw is decided here, from a snapshot,
+# so the widgets only lay strings and numbers out. Printer-supplied strings pass
+# through ``display_safe`` on the way in, and the widgets render them as
+# ``Text`` (never as markup), so a filament called "PLA [matte]" or a file
+# called "a[/b]c.gcode" is shown verbatim and cannot break a render.
 
 
-def status_lines(snapshot: StatusSnapshot) -> list[tuple[str, str]]:
-    """Return ``(label, value)`` rows describing the printer status panel.
+@dataclass(frozen=True)
+class StateBadge:
+    """A printer state in words, plus the tone the view colours it with.
 
-    Pure formatting over a snapshot — no I/O — so the widget only has to render
-    strings. On a failed snapshot returns a single explanatory row.
+    Tones: ``active`` (printing), ``paused``, ``done``, ``error``, ``busy``
+    (getting ready) and ``idle``.
+    """
+
+    label: str
+    tone: str
+
+
+_STATE_BADGES: dict[str, StateBadge] = {
+    "RUNNING": StateBadge("Printing", "active"),
+    "PAUSE": StateBadge("Paused", "paused"),
+    "PREPARE": StateBadge("Preparing", "busy"),
+    "SLICING": StateBadge("Slicing", "busy"),
+    "INIT": StateBadge("Starting up", "busy"),
+    "FINISH": StateBadge("Finished", "done"),
+    "FAILED": StateBadge("Failed", "error"),
+    "STOP": StateBadge("Stopped", "idle"),
+    "IDLE": StateBadge("Idle", "idle"),
+    "OFFLINE": StateBadge("Offline", "error"),
+}
+_OFFLINE = StateBadge("Offline", "error")
+# States with a job percentage worth drawing. PREPARE reports 0% while it heats
+# and levels, which would read as a stalled print.
+_PROGRESS_STATES = frozenset({"RUNNING", "PAUSE", "FINISH", "FAILED"})
+
+
+def _state_key(snapshot: StatusSnapshot) -> str:
+    return str(snapshot.raw.get("gcode_state") or "").strip().upper()
+
+
+def state_badge(snapshot: StatusSnapshot) -> StateBadge:
+    """``RUNNING`` -> ``Printing`` and so on; a failed fetch is ``Offline``.
+
+    An unrecognised state is shown title-cased rather than hidden, so a new
+    firmware state is still visible, just not coloured.
     """
     if not snapshot.ok:
-        return [("State", display_safe(snapshot.error) or "Printer unreachable.")]
+        return _OFFLINE
+    key = _state_key(snapshot)
+    if key in _STATE_BADGES:
+        return _STATE_BADGES[key]
+    return StateBadge(display_safe(key.title())[:24] or "Unknown", "idle")
+
+
+def _number(value: Any) -> float | None:
+    """A finite float, or None for anything else (a spoofed NaN included)."""
+    if isinstance(value, bool):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def _whole(value: Any) -> int | None:
+    number = _number(value)
+    return None if number is None else int(number)
+
+
+def _within(value: float | None, low: float, high: float) -> float | None:
+    """``value`` if it is a plausible reading, else None (a spoofed 1e308 is not one)."""
+    return value if value is not None and low <= value <= high else None
+
+
+# Readings outside these are reports nobody should be shown: no FDM heater
+# reaches 1000 °C, and no print runs ten thousand hours or layers.
+_TEMP_RANGE = (-50.0, 1000.0)
+_MAX_LAYERS = 1_000_000
+
+
+def format_remaining(minutes: Any) -> str:
+    """Render ``mc_remaining_time`` (minutes) as ``1h 05m`` / ``42m`` / ``—``."""
+    try:
+        total = int(minutes)
+    except (TypeError, ValueError, OverflowError):
+        return "—"
+    if total < 0:
+        return "—"
+    hours, mins = divmod(total, 60)
+    if hours:
+        return f"{hours}h {mins:02d}m"
+    return f"{mins}m"
+
+
+# Longer than this is a bogus report, not a real print; it gets no clock time.
+_MAX_ETA_MINUTES = 14 * 24 * 60
+# A running print reporting 0 minutes left is finishing only from here on.
+_FINISHING_PERCENT = 90
+
+
+def eta_clock(minutes: Any, now: datetime) -> str | None:
+    """The wall-clock time a print ends, ``17:55``, or None when unknown.
+
+    A finish on another day says which (``Tue 09:10``), so an overnight print
+    is not mistaken for one ending this afternoon.
+    """
+    total = _whole(minutes)
+    if total is None or total <= 0 or total > _MAX_ETA_MINUTES:
+        return None
+    done = now + timedelta(minutes=total)
+    if done.date() == now.date():
+        return done.strftime("%H:%M")
+    return done.strftime("%a %H:%M")
+
+
+def progress_percent(snapshot: StatusSnapshot) -> int:
+    """Clamped 0-100 completion percentage for the progress bar."""
+    if not snapshot.ok:
+        return 0
+    value = _whole(snapshot.raw.get("mc_percent", 0))
+    if value is None:
+        return 0
+    return max(0, min(100, value))
+
+
+_JOB_SUFFIXES = (".gcode.3mf", ".3mf", ".gcode")
+
+
+def job_name(snapshot: StatusSnapshot) -> str:
+    """The job's name: ``subtask_name``, else ``benchy`` for ``/sdcard/benchy.gcode.3mf``.
+
+    ``subtask_name`` is a name and is shown whole; ``gcode_file`` is a path on
+    the printer, so only its last part is the job. ``""`` when neither is set.
+    """
+    if not snapshot.ok:
+        return ""
+    raw = snapshot.raw
+    name = display_safe(raw.get("subtask_name") or "").strip()
+    if not name:
+        name = display_safe(raw.get("gcode_file") or "").strip()
+        name = name.replace("\\", "/").rsplit("/", 1)[-1]
+    lowered = name.lower()
+    for suffix in _JOB_SUFFIXES:
+        if lowered.endswith(suffix) and len(name) > len(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
+# A real reading is "-48dBm"; anything much longer would push the state badge
+# off an 80-column top bar.
+_MAX_WIFI_CHARS = 12
+
+
+def wifi_text(snapshot: StatusSnapshot) -> str | None:
+    """``Wi-Fi -48 dBm`` from ``wifi_signal``, or None when not reported."""
+    if not snapshot.ok:
+        return None
+    signal = display_safe(snapshot.raw.get("wifi_signal") or "").strip()
+    if not signal:
+        return None
+    if len(signal) > _MAX_WIFI_CHARS:
+        signal = signal[: _MAX_WIFI_CHARS - 1] + "…"
+    if signal.endswith("dBm") and not signal.endswith(" dBm"):
+        signal = signal[:-3] + " dBm"
+    return f"Wi-Fi {signal}"
+
+
+# --- AMS -----------------------------------------------------------------------
+
+_HEX6 = re.compile(r"[0-9A-Fa-f]{6}")
+_DARK_INK = "#0D1117"
+_LIGHT_INK = "#F5F7FA"
+
+
+def swatch_colors(color: Any) -> tuple[str, str] | None:
+    """``("#0A6AC8", ink)`` for a reported filament colour, or None if it is not one.
+
+    ``ink`` is the text colour that stays readable on that swatch: dark on a
+    light filament, light on a dark one (WCAG relative luminance, so yellow gets
+    dark text and blue gets light text).
+    """
+    if not isinstance(color, str):
+        return None
+    hexpart = color.strip().lstrip("#")[:6]
+    if not _HEX6.fullmatch(hexpart):
+        return None
+
+    def channel(offset: int) -> float:
+        value = int(hexpart[offset : offset + 2], 16) / 255
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+
+    luminance = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
+    # Above this, black text has the better contrast ratio; below it, white does.
+    ink = _DARK_INK if luminance > 0.179 else _LIGHT_INK
+    return f"#{hexpart.upper()}", ink
+
+
+@dataclass(frozen=True)
+class TrayView:
+    """One AMS tray (or the external spool), ready to draw."""
+
+    label: str
+    material: str
+    swatch: str | None
+    ink: str
+    remain: int | None
+    active: bool
+    empty: bool
+    external: bool = False
+
+
+@dataclass(frozen=True)
+class AmsUnitView:
+    """One AMS unit: its title, its sensor line, and its trays in slot order."""
+
+    title: str
+    detail: str
+    trays: tuple[TrayView, ...]
+
+
+@dataclass(frozen=True)
+class AmsView:
+    units: tuple[AmsUnitView, ...]
+    external: TrayView | None
+
+    @property
+    def trays(self) -> tuple[TrayView, ...]:
+        external = (self.external,) if self.external is not None else ()
+        return tuple(tray for unit in self.units for tray in unit.trays) + external
+
+
+def _remain(value: Any) -> int | None:
+    """0-100, or None when the printer cannot measure it (it reports -1 then)."""
+    number = _whole(value)
+    if number is None or number < 0:
+        return None
+    return min(number, 100)
+
+
+def _tray_view(tray: dict[str, Any], label: str, *, external: bool = False) -> TrayView:
+    empty = bool(tray.get("empty"))
+    colors = None if empty else swatch_colors(tray.get("color"))
+    return TrayView(
+        label=label,
+        material="" if empty else (display_safe(tray.get("type")).strip() or "?"),
+        swatch=colors[0] if colors else None,
+        ink=colors[1] if colors else _LIGHT_INK,
+        remain=None if empty else _remain(tray.get("remain")),
+        active=bool(tray.get("active")),
+        empty=empty,
+        external=external,
+    )
+
+
+def _unit_detail(unit: dict[str, Any]) -> str:
+    """``humidity 4 · 27 °C``. The humidity level is shown as reported, not judged."""
+    parts = []
+    humidity = _whole(unit.get("humidity"))
+    if humidity is not None:
+        parts.append(f"humidity {humidity}")
+    temp = _number(unit.get("temp"))
+    # An AMS lite has no temperature sensor and reports 0.
+    if temp is not None and temp > 0:
+        parts.append(f"{temp:.0f} °C")
+    return " · ".join(parts)
+
+
+def ams_view(snapshot: StatusSnapshot) -> AmsView | None:
+    """The AMS units and external spool, or None when there is nothing to show."""
+    if not snapshot.ok or not snapshot.ams:
+        return None
+    from bambu_cli.ams import tray_label
+
+    units = []
+    # parse_ams only emits dicts, but this runs on the UI thread: a malformed
+    # entry is skipped rather than allowed to raise mid-refresh.
+    for unit in snapshot.ams.get("units") or []:
+        if not isinstance(unit, dict):
+            continue
+        unit_id = unit.get("id", 0)
+        trays = tuple(
+            _tray_view(tray, tray_label(unit_id, tray.get("slot", 0)))
+            for tray in unit.get("trays") or []
+            if isinstance(tray, dict)
+        )
+        letter = tray_label(unit_id, 0)[:-1]
+        title = f"AMS {letter}" if len(letter) == 1 else f"AMS {unit_id}"
+        units.append(AmsUnitView(title=title, detail=_unit_detail(unit), trays=trays))
+    raw_external = snapshot.ams.get("external_tray")
+    external = _tray_view(raw_external, "Ext", external=True) if isinstance(raw_external, dict) else None
+    if not units and external is None:
+        return None
+    return AmsView(units=tuple(units), external=external)
+
+
+def feed_text(snapshot: StatusSnapshot) -> str | None:
+    """``PETG from A2``: what the active tray holds, or None when none is active."""
+    view = ams_view(snapshot)
+    if view is None:
+        return None
+    for tray in view.trays:
+        if tray.active and not tray.empty:
+            where = "the external spool" if tray.external else tray.label
+            return f"{tray.material} from {where}"
+    return None
+
+
+# --- Temperatures ------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TempView:
+    """A heater's reading and target, in words."""
+
+    current: float | None
+    target: float | None
+
+    @property
+    def value(self) -> str:
+        return "—" if self.current is None else f"{self.current:.0f} °C"
+
+    @property
+    def changing(self) -> str | None:
+        """``heating`` / ``cooling`` while more than a few degrees off target, else None."""
+        if not self.target or self.current is None:
+            return None
+        if self.current < self.target - _TEMP_SETTLED:
+            return "heating"
+        if self.current > self.target + _TEMP_SETTLED:
+            return "cooling"
+        return None
+
+    @property
+    def caption(self) -> str:
+        """``heating to 220 °C`` / ``target 220 °C`` / ``heater off``."""
+        if not self.target:
+            return "heater off"
+        target = f"{self.target:.0f} °C"
+        changing = self.changing
+        return f"{changing} to {target}" if changing else f"target {target}"
+
+
+# Within this many degrees of the target a heater counts as there.
+_TEMP_SETTLED = 3.0
+HEATERS = (
+    ("nozzle", "Nozzle", "nozzle_temper", "nozzle_target_temper", 300.0),
+    ("bed", "Bed", "bed_temper", "bed_target_temper", 120.0),
+)
+
+
+def temp_view(snapshot: StatusSnapshot, current_key: str, target_key: str) -> TempView:
+    if not snapshot.ok:
+        return TempView(None, None)
+    target = _within(_number(snapshot.raw.get(target_key)), *_TEMP_RANGE)
+    current = _within(_number(snapshot.raw.get(current_key)), *_TEMP_RANGE)
+    return TempView(current, target if target and target > 0 else None)
+
+
+class TempHistory:
+    """The last ``size`` readings of each heater, oldest first, for the sparklines.
+
+    A failed fetch adds nothing, so a dropped connection leaves a gap in time,
+    not a fake drop to zero.
+    """
+
+    def __init__(self, size: int = 120) -> None:
+        self._series: dict[str, deque[float]] = {key: deque(maxlen=size) for key, *_ in HEATERS}
+
+    def add(self, snapshot: StatusSnapshot) -> None:
+        if not snapshot.ok:
+            return
+        for key, _title, current_key, _target_key, _scale in HEATERS:
+            # Bounded like temp_view: one spoofed 1e308 would otherwise set the
+            # sparkline's scale for the next ``size`` samples and flatten it.
+            value = _within(_number(snapshot.raw.get(current_key)), *_TEMP_RANGE)
+            if value is not None:
+                self._series[key].append(value)
+
+    def series(self, key: str) -> list[float]:
+        return list(self._series.get(key, ()))
+
+
+# --- The job hero --------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class JobView:
+    """What the job panel says about the printer right now.
+
+    ``percent`` is None when there is no progress worth drawing (idle, getting
+    ready, offline); the panel then shows ``lines`` alone, the first as a
+    headline. Otherwise it draws the percentage big and ``lines`` beside it.
+    """
+
+    badge: StateBadge
+    name: str
+    percent: int | None
+    lines: tuple[str, ...]
+
+
+def _layer_count(value: Any) -> int | None:
+    count = _whole(value)
+    return count if count is not None and 0 <= count <= _MAX_LAYERS else None
+
+
+def _layer_text(raw: dict[str, Any]) -> str | None:
+    layer = _layer_count(raw.get("layer_num"))
+    total = _layer_count(raw.get("total_layer_num"))
+    if not layer and not total:
+        return None
+    if total:
+        return f"Layer {layer or 0} of {total}"
+    return f"Layer {layer}"
+
+
+def job_view(snapshot: StatusSnapshot, now: datetime) -> JobView:
+    """Turn a snapshot into the job panel's percent and lines (pure; ``now`` injected)."""
+    badge = state_badge(snapshot)
+    if not snapshot.ok:
+        reason = display_safe(snapshot.error).strip() or "No status came back."
+        return JobView(badge, "", None, ("Can't reach the printer", reason))
 
     raw = snapshot.raw
+    key = _state_key(snapshot)
+    name = job_name(snapshot)
+    feed = feed_text(snapshot)
+    layer = _layer_text(raw)
 
-    def _temp(cur_key: str, target_key: str) -> str:
-        cur = raw.get(cur_key)
-        target = raw.get(target_key)
-        if cur is None:
-            return "—"
-        if target:
-            return f"{cur}°C → {target}°C"
-        return f"{cur}°C"
+    if key in _PROGRESS_STATES:
+        remaining = _whole(raw.get("mc_remaining_time"))
+        if remaining is not None and not 0 <= remaining <= _MAX_ETA_MINUTES:
+            remaining = None
+        if key == "RUNNING":
+            if remaining is None:
+                first = "Time left unknown"
+            elif remaining == 0:
+                # The printer also reports 0 minutes before its estimate is in,
+                # at the start of a print; only near the end does 0 mean done.
+                first = "Finishing up" if progress_percent(snapshot) >= _FINISHING_PERCENT else "Time left unknown"
+            else:
+                eta = eta_clock(remaining, now)
+                first = f"{format_remaining(remaining)} left" + (f" · done about {eta}" if eta else "")
+        elif key == "PAUSE":
+            left = f" · {format_remaining(remaining)} left" if remaining and remaining > 0 else ""
+            first = f"Paused{left}"
+        elif key == "FINISH":
+            first = "Finished"
+        else:
+            first = "This print failed"
+        lines = [first]
+        if layer:
+            lines.append(layer)
+        if key == "FAILED":
+            lines.append("The printer's screen says why")
+        elif feed:
+            lines.append(feed)
+        return JobView(badge, name, progress_percent(snapshot), tuple(lines))
 
-    rows: list[tuple[str, str]] = [
-        ("State", display_safe(raw.get("gcode_state", "UNKNOWN"))),
-        ("Progress", f"{raw.get('mc_percent', 0)}%"),
-        ("Nozzle", _temp("nozzle_temper", "nozzle_target_temper")),
-        ("Bed", _temp("bed_temper", "bed_target_temper")),
-    ]
-    layer = raw.get("layer_num")
-    total_layer = raw.get("total_layer_num")
-    if layer is not None or total_layer is not None:
-        rows.append(("Layer", f"{layer or 0} / {total_layer or 0}"))
-    if raw.get("wifi_signal"):
-        rows.append(("Wi-Fi", display_safe(raw.get("wifi_signal"))))
-    if raw.get("gcode_file"):
-        rows.append(("File", display_safe(raw.get("gcode_file"))))
-    return rows
+    if badge.tone == "busy":
+        headline = {"SLICING": "Slicing on the printer", "INIT": "The printer is starting up"}.get(
+            key, "Getting ready to print"
+        )
+        return JobView(badge, name, None, (headline, name or "Heating and checking the bed"))
+
+    if key not in _STATE_BADGES:
+        # A missing or new firmware state is not "ready": say what is known.
+        headline = f"Printer state: {badge.label}" if key else "Waiting for the printer's state"
+        return JobView(badge, "", None, (headline,))
+
+    # An idle printer still reports the last job's file; naming the panel after
+    # it would read as if that job were running.
+    headline = "Print stopped" if key == "STOP" else "Ready for a print"
+    detail = f"Loaded: {feed}" if feed else "Nothing loaded in the AMS"
+    if snapshot.ams is None:
+        detail = ""
+    return JobView(badge, "", None, (headline, detail) if detail else (headline,))
 
 
-def ams_tray_rows(snapshot: StatusSnapshot) -> list[dict[str, Any]]:
-    """Flatten the AMS units/trays into view-ready rows, or ``[]`` when absent.
+def printer_descriptor() -> str:
+    """``P1S · 192.168.1.23``, ``Simulated P1S``, or ``P1S · not set up``."""
+    from bambu_cli.context import current_settings, current_simulation
 
-    Each row: ``{"unit": int, "slot": int, "label": str, "type": str,
-    "color": str|None, "remain": str, "active": bool, "empty": bool}``.
-    """
-    if not snapshot.ok or not snapshot.ams:
-        return []
-    rows: list[dict[str, Any]] = []
-    for unit in snapshot.ams.get("units", []):
-        unit_id = unit.get("id", 0)
-        for tray in unit.get("trays", []):
-            slot = tray.get("slot", 0)
-            empty = bool(tray.get("empty"))
-            ftype = tray.get("type") or ("empty" if empty else "?")
-            remain = tray.get("remain")
-            remain_label = "—" if remain is None or remain < 0 else f"{remain}%"
-            rows.append(
-                {
-                    "unit": unit_id,
-                    "slot": slot,
-                    "label": f"AMS{unit_id}·{slot}",
-                    "type": display_safe(ftype),
-                    "color": tray.get("color"),
-                    "remain": remain_label,
-                    "active": bool(tray.get("active")),
-                    "empty": empty,
-                }
-            )
-    return rows
+    settings = current_settings()
+    model = display_safe(settings.printer_model).strip() or "Printer"
+    if current_simulation():
+        return f"Simulated {model}"
+    ip = display_safe(settings.printer_ip).strip()
+    if not ip or ip == "0.0.0.0":
+        return f"{model} · not set up"
+    return f"{model} · {ip}"
 
 
 # --- Prepare pipeline -------------------------------------------------------
@@ -327,45 +755,3 @@ class MonitorService:
         if not snapshot.ok:
             return False
         return snapshot.gcode_state in terminal_gcode_states()
-
-
-def job_progress_lines(snapshot: StatusSnapshot) -> list[tuple[str, str]]:
-    """Return ``(label, value)`` rows for the job-progress widget (pure)."""
-    if not snapshot.ok:
-        return [("Status", display_safe(snapshot.error) or "Printer unreachable.")]
-
-    raw = snapshot.raw
-    rows: list[tuple[str, str]] = [
-        ("State", display_safe(raw.get("gcode_state", "UNKNOWN"))),
-        ("Progress", f"{raw.get('mc_percent', 0)}%"),
-        ("Layer", f"{raw.get('layer_num') or 0} / {raw.get('total_layer_num') or 0}"),
-        ("Remaining", format_remaining(raw.get("mc_remaining_time"))),
-    ]
-    if raw.get("gcode_file"):
-        rows.append(("File", display_safe(raw.get("gcode_file"))))
-    return rows
-
-
-def format_remaining(minutes: Any) -> str:
-    """Render ``mc_remaining_time`` (minutes) as ``1h 05m`` / ``42m`` / ``—``."""
-    try:
-        total = int(minutes)
-    except (TypeError, ValueError, OverflowError):
-        return "—"
-    if total < 0:
-        return "—"
-    hours, mins = divmod(total, 60)
-    if hours:
-        return f"{hours}h {mins:02d}m"
-    return f"{mins}m"
-
-
-def progress_percent(snapshot: StatusSnapshot) -> int:
-    """Clamped 0-100 completion percentage for the progress bar."""
-    if not snapshot.ok:
-        return 0
-    try:
-        value = int(snapshot.raw.get("mc_percent", 0))
-    except (TypeError, ValueError, OverflowError):
-        return 0
-    return max(0, min(100, value))

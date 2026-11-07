@@ -553,21 +553,24 @@ async def test_narrow_terminal_stacks_the_columns(tmp_path):
         material = screen.query_one("#material-set")
         assert "(detected in AMS)" in str(screen.query_one("#material-abs", RadioButton).label)
         assert material.outer_size.width <= 80
-        assert material.outer_size.height == len(("PLA", "PETG", "ABS", "TPU")) + 2  # + border
+        # compact: one row per material and no border, so the form and its
+        # result share an 80x24 screen.
+        assert material.outer_size.height == len(("PLA", "PETG", "ABS", "TPU"))
 
 async def test_detected_material_label_survives_the_form_scrollbar(tmp_path):
     """A short terminal must not truncate WHICH material was detected.
 
-    The form is taller than a 25-row terminal, so #prepare-inputs grows a
+    The form is taller than a 14-row terminal, so #prepare-inputs grows a
     vertical scrollbar — and a Textual scrollbar takes real cells rather than
-    overlaying. With the column at 60 that left the RadioSet 54 cells against a
+    overlaying. (It was 25 rows before the controls went compact; 14 keeps the
+    scrollbar this test needs.) With the column at 60 that left the RadioSet 54 cells against a
     53-cell button, then 52 once the scrollbar appeared, so the label rendered
     as "…(detected in AMS" with the closing paren shaved off. Found by
     recording the TUI and looking at the frames; no assertion had caught it.
     """
     _install_ready_settings(tmp_path)
     app = PlateApp(_args(), _deps(ams_detector=lambda args: "PLA"))
-    async with app.run_test(size=(122, 25)) as pilot:
+    async with app.run_test(size=(122, 14)) as pilot:
         await _settle(pilot)
         screen = await _open_prepare(pilot)
 
@@ -746,7 +749,11 @@ async def test_form_groups_are_one_width_that_fills_the_column(tmp_path):
         assert set(widths.values()) == {column}, widths
 
 async def test_narrow_terminal_scrolls_a_failure_into_view(tmp_path):
-    """Stacked, a failure lands below the fold too — and looks like nothing ran."""
+    """Stacked, a failure lands below the fold too — and looks like nothing ran.
+
+    80x18, not 80x24: the compact form leaves the status line on screen at 24
+    rows, and this test needs it below the fold.
+    """
     from bambu_cli.errors import BambuError
 
     _install_ready_settings(tmp_path)
@@ -754,7 +761,7 @@ async def test_narrow_terminal_scrolls_a_failure_into_view(tmp_path):
     steps = GoSteps(download=Recorder(), slice=Recorder(raises=BambuError("slicer failed: disk on fire", exit_code=4)))
 
     app = PlateApp(_args(), _deps(steps))
-    async with app.run_test(size=_NARROW) as pilot:
+    async with app.run_test(size=(80, 18)) as pilot:
         await _settle(pilot)
         screen = await _open_prepare(pilot)
         status = screen.query_one("#prepare-status", Static)

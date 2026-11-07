@@ -13,7 +13,7 @@
 <!-- Tests/coverage are hand-updated static badges (no coverage service wired up).
      Re-measure and edit both after any release:
      uv run python -m pytest tests/ -q -m "not live" --cov=bambu_cli --cov-report=term -->
-[![Tests](https://img.shields.io/badge/tests-2239%20passing-brightgreen)](#tested-and-hardened)
+[![Tests](https://img.shields.io/badge/tests-2309%20passing-brightgreen)](#tested-and-hardened)
 [![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)](#tested-and-hardened)
 
 [Install](#install) · [Print something](#print-something) · [Try it without a printer](#try-it-in-30-seconds) · [Quality](#tested-and-hardened) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) · [For AI agents](#built-for-ai-agents)
@@ -111,7 +111,7 @@ plate tui    # or: plate tui --sim to explore it without a printer
 shell's Python does not reach a `pipx` / `uv tool` environment. Already installed
 without it? `pipx install --force 'platecli[tui]'` (or `pipx inject platecli textual`).</sub>
 
-`plate tui` is a live view of your printer: state, temperatures, layer and progress, and the AMS trays, on one screen that keeps updating — plus a job monitor that follows a running print to completion. You can start a print from it too, through the same prepare-and-confirm flow the wizard uses, so you never have to leave the screen.
+`plate tui` is a live view of your printer on one screen that keeps updating. It shows the job in large type (percent, time left and the clock time it should finish, layer, and which tray is feeding), the nozzle and bed with their recent history, and the AMS trays in each filament's own colour. There is also a job monitor that follows a running print to completion. You can start a print from it too, through the same prepare-and-confirm flow the wizard uses, so you never have to leave the screen.
 
 It is a front-end, not new machinery: it slices and builds the `job` request through the same shared code `plate go` runs, so the two cannot drift. Every safety rule holds — a print only ever starts from the confirm dialog, cancelling keeps the sliced file, and leaving the monitor never stops a print. Textual is an optional extra and never a runtime dependency, so `plate go` keeps working with nothing extra installed on SSH, dumb terminals, and with screen readers.
 
@@ -160,7 +160,7 @@ The numbers in the badges are measured on this repo, not aspirational:
 | | |
 |---|---|
 | **Tests** | 2,217 passing (`pytest -m "not live"`, v0.6.0) — unit, contract, property-based (Hypothesis), and Textual pilot tests |
-| **Coverage** | **93.8%** line+branch across the package; CI fails the build below **90%** |
+| **Coverage** | **94.1%** line+branch across the package; CI fails the build below **90%** |
 | **Platforms** | Linux, macOS, and Windows in CI, on Python 3.10 / 3.12 / 3.14 |
 | **Blocking gates** | `ruff`, `ruff format`, `mypy` (whole package, `check_untyped_defs`), `bandit`, `pip-audit`, plus layer-boundary and JSON-schema-drift checks |
 | **Mutation testing** | Nightly whenever `main` has changed, scoped to the safety-critical modules (download validation, SSRF guards, slicer options, job payload) |
