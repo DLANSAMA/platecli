@@ -1,7 +1,7 @@
 """Process-wide logger used by production modules.
 
-``LoggerProxy`` always delegates to a replaceable backend so tests can install
-a ``MagicMock`` (via ``set_logger`` / the ``mock_bambu_logger`` fixture) without
+``LoggerProxy`` always delegates to a replaceable backend. A caller (a test, an
+embedding application) installs its own logger with ``set_logger`` without
 patching ``bambu_cli.bambu.logger`` or each consumer module's import binding.
 """
 
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from contextlib import contextmanager
 from typing import Any
 
 _BACKEND: Any = logging.getLogger("bambu")
@@ -31,7 +30,7 @@ logger = LoggerProxy()
 
 
 def set_logger(backend: Any) -> None:
-    """Replace the process logger backend (tests pass a ``MagicMock``)."""
+    """Replace the process logger backend with any object that has the logging methods."""
     global _BACKEND
     _BACKEND = backend
 
@@ -40,20 +39,6 @@ def reset_logger() -> None:
     """Restore the default ``logging.getLogger("bambu")`` backend."""
     global _BACKEND
     _BACKEND = logging.getLogger("bambu")
-
-
-@contextmanager
-def patched_logger(backend: Any | None = None):
-    """Context manager that installs ``backend`` (default: ``MagicMock``) for the block."""
-    from unittest.mock import MagicMock
-
-    mock = backend if backend is not None else MagicMock()
-    prev = _BACKEND
-    set_logger(mock)
-    try:
-        yield mock
-    finally:
-        set_logger(prev)
 
 
 def safe_log_error(message: Any, **kwargs: Any) -> None:

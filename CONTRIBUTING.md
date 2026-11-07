@@ -54,7 +54,8 @@ that CI's clean checkout does not have — expected locally, not a failure to ch
 - **Mutation baseline** (safety modules): `./scripts/run_mutation_baseline.sh` —
   [docs/mutation-baseline.md](docs/mutation-baseline.md). Nightly CI only (when `main` has changed), not every PR.
 - CI enforces a "no test-awareness in production code" rule: production modules must not
-  branch on `Mock` / `unittest in sys.modules`. Prefer injecting collaborators over
+  branch on `Mock` / `unittest in sys.modules` or import `unittest` / `pytest` / `mock`
+  (`tests/test_production_purity.py` checks the same on the AST). Prefer injecting collaborators over
   patching module globals. Domain code raises `BambuError` / `abort`; `sys.exit` only in
   `bambu_cli/cli.py`.
 
