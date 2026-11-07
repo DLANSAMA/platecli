@@ -36,3 +36,45 @@ def widget_text(widget, *, width: int = 200) -> str:
     if payload is None:
         payload = getattr(widget, "renderable", None)
     return renderable_text(payload, width=width)
+
+
+def tree_text(widget, *, width: int = 200) -> str:
+    """Every piece of text ``widget`` and its shown descendants put on screen.
+
+    Static content, Digits values, border titles and subtitles, and widgets that
+    draw themselves (an AMS tray card). A hidden widget and everything under it
+    is skipped, so "not shown" assertions mean what they say.
+    """
+    from rich.text import Text
+    from textual.content import Content
+    from textual.widget import Widget
+    from textual.widgets import Digits, Static
+
+    parts: list[str] = []
+
+    def plain(title) -> str:
+        # Textual keeps a border title as markup (a Text title arrives escaped,
+        # "model \\[remix]"); what reaches the screen is its plain text.
+        if hasattr(title, "plain"):
+            return title.plain
+        return Content.from_markup(str(title)).plain
+
+    def visit(node) -> None:
+        if not node.display:
+            return
+        for title in (node.border_title, node.border_subtitle):
+            if title:
+                parts.append(plain(title))
+        if isinstance(node, Digits):
+            parts.append(node.value)
+        elif isinstance(node, Static):
+            parts.append(widget_text(node, width=width))
+        elif type(node).render is not Widget.render:
+            drawn = node.render()
+            if isinstance(drawn, (str, Text)):
+                parts.append(renderable_text(drawn, width=width))
+        for child in node.children:
+            visit(child)
+
+    visit(widget)
+    return "\n".join(part for part in parts if part)

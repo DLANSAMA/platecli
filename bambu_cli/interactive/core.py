@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from bambu_cli import utils
+from bambu_cli.ams import tray_label
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
     DEFAULT_MAX_DOWNLOAD_MB,
@@ -560,8 +561,9 @@ def preview_rows(state: WizardState, model_path: str) -> list[tuple[str, str]]:
 
 
 def ams_slot_label(slot: int) -> str:
-    """``AMS0·2`` for absolute tray 2: the label the TUI's AMS panel shows."""
-    return f"AMS{slot // 4}·{slot % 4}"
+    """``AMS A3`` for absolute tray 2: the tray name the printer, Bambu Studio and the TUI use."""
+    unit, index = divmod(slot, 4)
+    return f"AMS {tray_label(unit, index)}"
 
 
 def ams_feed_slot(state: WizardState) -> int | None:

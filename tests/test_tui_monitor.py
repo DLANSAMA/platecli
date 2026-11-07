@@ -28,8 +28,8 @@ from bambu_cli.tui.screens.dashboard import DashboardScreen  # noqa: E402
 from bambu_cli.tui.screens.monitor import MonitorScreen  # noqa: E402
 from bambu_cli.tui.screens.prepare import PrepareScreen  # noqa: E402
 from bambu_cli.tui.services import MonitorService, StatusSnapshot  # noqa: E402
-from bambu_cli.tui.widgets.job_progress import JobProgress  # noqa: E402
-from tests.tui_text import widget_text  # noqa: E402
+from bambu_cli.tui.widgets.job_hero import JobHero  # noqa: E402
+from tests.tui_text import tree_text, widget_text  # noqa: E402
 
 def _snap(state, percent, layer=0, total=100, remaining=0):
     return StatusSnapshot(
@@ -168,20 +168,25 @@ def test_monitor_service_is_terminal():
     # declaring a print finished because MQTT hiccuped.
     assert service.is_terminal(StatusSnapshot(ok=False, error="timeout")) is False
 
-def test_job_progress_lines_and_formatting():
-    from bambu_cli.tui.services import format_remaining, job_progress_lines, progress_percent
+def test_job_view_and_formatting():
+    from datetime import datetime
 
-    rows = dict(job_progress_lines(_snap("RUNNING", 42, layer=21, total=100, remaining=95)))
-    assert rows["State"] == "RUNNING"
-    assert rows["Progress"] == "42%"
-    assert rows["Layer"] == "21 / 100"
-    assert rows["Remaining"] == "1h 35m"
+    from bambu_cli.tui.services import format_remaining, job_view, progress_percent
+
+    now = datetime(2026, 11, 6, 12, 0)
+    view = job_view(_snap("RUNNING", 42, layer=21, total=100, remaining=95), now)
+    assert view.badge.label == "Printing"
+    assert view.percent == 42
+    assert view.lines[0] == "1h 35m left · done about 13:35"
+    assert view.lines[1] == "Layer 21 of 100"
     assert format_remaining(None) == "—"
     assert format_remaining(-1) == "—"
     assert format_remaining(7) == "7m"
     assert progress_percent(_snap("RUNNING", 200)) == 100
     assert progress_percent(StatusSnapshot(ok=False, error="x")) == 0
-    assert dict(job_progress_lines(StatusSnapshot(ok=False, error="boom")))["Status"] == "boom"
+    offline = job_view(StatusSnapshot(ok=False, error="boom"), now)
+    assert offline.percent is None
+    assert offline.lines == ("Can't reach the printer", "boom")
 
 # --- pilot -----------------------------------------------------------------
 
@@ -211,10 +216,10 @@ async def test_monitor_progresses_and_stops_on_terminal_state(tmp_path):
         # Deliberately NOT waiting on the worker here: a monitor that never
         # stops polling must fail this test, not hang it.
         await _wait_until(lambda: screen.finished, pilot)
-        text = _text(screen.query_one("#job-progress", JobProgress))
-        assert "FINISH" in text
+        text = tree_text(screen.query_one("#job-progress", JobHero))
+        assert "Finished" in text
         assert "100%" in text
-        assert "Reached terminal state: FINISH" in _text(screen.query_one("#monitor-hint", Static))
+        assert "Finished: this job is over" in _text(screen.query_one("#monitor-hint", Static))
         # Polling STOPPED at the terminal state: no further fetches happen even
         # after many more poll intervals' worth of wall time.
         settled = provider.calls
@@ -315,7 +320,7 @@ async def test_full_sim_end_to_end_dashboard_to_finish(tmp_path):
         monitor = app.screen
         assert isinstance(monitor, MonitorScreen)
         assert monitor.finished is True
-        assert "FINISH" in _text(monitor.query_one("#job-progress", JobProgress))
+        assert "Finished" in tree_text(monitor.query_one("#job-progress", JobHero))
 
         await pilot.press("escape")
         await _settle(pilot)
