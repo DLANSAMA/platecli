@@ -60,15 +60,15 @@ items are **accepted 1.0 residuals** in [SECURITY.md](../SECURITY.md), not open 
 | Correctness / bugs | **A+** | No known dead flags; property tests on filenames/SSRF/ZIP/temps in `tests/test_properties_safety.py` |
 | Typing | **A** | Full-package mypy + `check_untyped_defs`. A+ (`mypy --strict`) is **1521** errors — not this release |
 | Error model | **A+** | `sys.exit` only in `cli.py`; `emit_json_error` is `NoReturn`; domain uses `abort` / `BambuError` |
-| Tests | **A+** | **2226** non-live tests passing (2026-11-07, local Linux; 1 skipped, 1 live deselected). A column cleared. Measured **93.6%** branch coverage over 9436 statements; A+ threshold met |
+| Tests | **A+** | **2239** non-live tests passing (2026-11-07, local Linux; 1 skipped, 1 live deselected). A column cleared. Measured **93.8%** branch coverage over 9436 statements; A+ threshold met. `protocols/ftps.py` and `netsafety.py` are at 100% (`tests/test_transport_edges.py`) |
 | CI / release | **A** | `--cov-fail-under=90` (floor raised 86→90 with comfortable margin). A+ is fail-under 92 |
 | Docs / governance | **A+** | Roadmap + backlog match this measurement; stability policy + support matrix in `docs/api.md`; docs-consistency pins floor / % / count |
 | Product polish | **A−** | Support matrix + hermetic Orca stub; still **Beta / pre-1.0** (no Production/Stable, no v1.0.0 tag). A+ is the §5 checklist |
 
-**Overall:** **A** — none below A−. **Not A+ across the board.** Remaining: CI floor 92 (needs a fresh Windows reading and more `ftps.py` / `netsafety.py` coverage first, see the per-module targets in §3.1), Typing strict, Product `v1.0.0` tag.
+**Overall:** **A** — none below A−. **Not A+ across the board.** Remaining: CI floor 92 (needs a fresh Windows reading first; the `ftps.py` / `netsafety.py` per-module targets in §3.1 are now met), Typing strict, Product `v1.0.0` tag.
 
-**Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26) → **86** (2026-08-13) → **90** (2026-09-16; measured 92.8% then, 93.6% on 2026-11-07).
-Measured branch total is **93.6%** on local Linux (2026-11-07); the floor is set
+**Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26) → **86** (2026-08-13) → **90** (2026-09-16; measured 92.8% then, 93.8% on 2026-11-07).
+Measured branch total is **93.8%** on local Linux (2026-11-07); the floor is set
 at the multi-OS minimum so the matrix does not flake while still denying points
 of silent rot vs the old 79 gate.
 

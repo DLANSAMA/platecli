@@ -10,8 +10,8 @@ Do not treat historical “≥98% coverage” claims as current — see the snap
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **2226** passing (measured 2026-11-07 on Linux; 1 skipped, 1 live test deselected) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **93.6%** branch coverage over 9436 statements (local Linux, 2026-11-07; Windows / macOS were passing on the last CI matrix); prior CI matrix on `5b08720` was 88.8–89.3%; **floor 90** | **≥92%** total; optional module floors |
+| Non-live tests collected | **2239** passing (measured 2026-11-07 on Linux; 1 skipped, 1 live test deselected) | ≥550 with zero known flakes ✅ size |
+| Line/branch coverage (CI) | **93.8%** branch coverage over 9436 statements (local Linux, 2026-11-07; Windows / macOS were passing on the last CI matrix); prior CI matrix on `5b08720` was 88.8–89.3%; **floor 90** | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
 | `@mockable` / test-awareness | **0** (CI greps plus `tests/test_production_purity.py`, which also rejects `unittest` / `pytest` / `Mock` imports) | keep |

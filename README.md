@@ -13,7 +13,7 @@
 <!-- Tests/coverage are hand-updated static badges (no coverage service wired up).
      Re-measure and edit both after any release:
      uv run python -m pytest tests/ -q -m "not live" --cov=bambu_cli --cov-report=term -->
-[![Tests](https://img.shields.io/badge/tests-2226%20passing-brightgreen)](#tested-and-hardened)
+[![Tests](https://img.shields.io/badge/tests-2239%20passing-brightgreen)](#tested-and-hardened)
 [![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)](#tested-and-hardened)
 
 [Install](#install) · [Print something](#print-something) · [Try it without a printer](#try-it-in-30-seconds) · [Quality](#tested-and-hardened) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) · [For AI agents](#built-for-ai-agents)
@@ -160,7 +160,7 @@ The numbers in the badges are measured on this repo, not aspirational:
 | | |
 |---|---|
 | **Tests** | 2,217 passing (`pytest -m "not live"`, v0.6.0) — unit, contract, property-based (Hypothesis), and Textual pilot tests |
-| **Coverage** | **93.6%** line+branch across the package; CI fails the build below **90%** |
+| **Coverage** | **93.8%** line+branch across the package; CI fails the build below **90%** |
 | **Platforms** | Linux, macOS, and Windows in CI, on Python 3.10 / 3.12 / 3.14 |
 | **Blocking gates** | `ruff`, `ruff format`, `mypy` (whole package, `check_untyped_defs`), `bandit`, `pip-audit`, plus layer-boundary and JSON-schema-drift checks |
 | **Mutation testing** | Nightly whenever `main` has changed, scoped to the safety-critical modules (download validation, SSRF guards, slicer options, job payload) |
