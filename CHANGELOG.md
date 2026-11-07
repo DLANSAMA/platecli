@@ -5,6 +5,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Changed
+
+- `bambu_cli.logging_utils.patched_logger` is removed: it imported `unittest.mock` in the shipped package. `set_logger` / `reset_logger` still swap the logger backend. CI now rejects any `unittest`, `pytest` or `mock` import in `bambu_cli/`.
+
 ## [0.6.0] - 2026-11-06
 
 ### Printer safety
