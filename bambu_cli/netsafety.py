@@ -313,9 +313,8 @@ def _default_user_agent() -> str:
 def _host_of(url) -> str:
     """Best-effort lowercase hostname. Never raises.
 
-    Defensive on purpose: callers pass ``req.full_url``, and the test suite
-    patches ``urllib.request.Request`` with a MagicMock whose ``full_url`` is
-    not a string. ``urlparse`` on such a value raises ``TypeError``. Returning
+    Defensive on purpose: callers pass ``req.full_url``, which is not always a
+    string, and ``urlparse`` on a non-string raises ``TypeError``. Returning
     "" means "no host policy, no throttling", which is the safe degradation.
     """
     try:
