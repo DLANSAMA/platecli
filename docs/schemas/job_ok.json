@@ -44,6 +44,10 @@
     "plate": {
       "description": "Plate of a pre-sliced 3MF chosen for printing.",
       "type": "integer"
+    },
+    "plan_fingerprint": {
+      "description": "SHA-256 of the canonical plan (printer, source, local file content, slice and print options). Pass it to --expect-plan on the real run to refuse if anything changed since review.",
+      "type": "string"
     }
   },
   "additionalProperties": true

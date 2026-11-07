@@ -319,6 +319,15 @@ Validate includes `checks[]`, `ok`, `errors`, `warnings`, `exit_code`, and `stri
 Success / dry-run: [`job_ok.json`](schemas/job_ok.json).  
 Failure: [`job_error.json`](schemas/job_error.json).
 
+Every `job` / `send` envelope (dry-run, success and failure) carries `plan_fingerprint`:
+a SHA-256 of the printer serial and model, the source, the content of a local source
+file, and every slicing and print-start option (not `--confirm`, `--dry-run`, `--json`,
+`--output` or `--threads`). Review a `--dry-run`, then pass its value to
+`--expect-plan` on the real run. If the plan differs, the run exits `5`
+(`failed_step: validate`) before anything is downloaded, sliced, uploaded or printed.
+A URL source is bound to the URL, not to the bytes it serves later. The fingerprint
+shows that a run is the one that was reviewed; it does not show that a person reviewed it.
+
 Print start requires `--confirm`. Without it, download → slice → upload still runs and the command exits `0` with `"status": "uploaded_not_printed"`; only the print step is withheld.
 
 For a pre-sliced 3MF, `job` reads which plates carry G-code and prints plate 1,

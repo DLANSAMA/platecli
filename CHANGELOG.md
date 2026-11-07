@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Agent safety
+
+- **`job`/`send` now report a `plan_fingerprint` and can enforce it.** Every `job`/`send`
+  envelope, dry-run included, carries a SHA-256 of what the run is about to do: the
+  printer, the source, the content of a local source file, and every slicing and
+  print-start option. Run `--dry-run`, review it, then pass the fingerprint back as
+  `--expect-plan`; if anything changed the run exits `5` before it downloads, slices,
+  uploads or prints. It proves the run is the one that was reviewed, not that a person
+  reviewed it, and a URL source is bound to the URL, not the bytes it serves later.
+
 ## [0.6.0] - 2026-11-06
 
 ### Printer safety
