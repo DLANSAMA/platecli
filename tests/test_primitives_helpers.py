@@ -3,14 +3,28 @@
 from __future__ import annotations
 
 from argparse import Namespace
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 from bambu_cli.argutils import exit_code_from_system_exit, namespace_get, setup_args_provided
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_SUCCESS
 from bambu_cli.errors import BambuError
 from bambu_cli.job.support import _exit_code_from_error, _last_error_for
-from bambu_cli.logging_utils import patched_logger, reset_logger, set_logger
+from bambu_cli.logging_utils import reset_logger, set_logger
 from bambu_cli.paths import display_path, exception_for_message, expand_path, path_for_message
+
+
+@contextmanager
+def patched_logger(backend):
+    """Install ``backend`` as the process logger for the block, then restore it."""
+    from bambu_cli import logging_utils
+
+    prev = logging_utils._BACKEND
+    set_logger(backend)
+    try:
+        yield backend
+    finally:
+        set_logger(prev)
 
 
 def test_namespace_get_reads_vars_and_falls_back_on_typeerror():

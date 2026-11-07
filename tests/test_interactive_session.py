@@ -930,7 +930,7 @@ def test_print_is_refused_when_the_ams_changed_after_prepare(tmp_path):
         run()
     assert ei.value.exit_code == 4
     assert job.calls == [], "the print was sent although the AMS no longer matched"
-    assert "it had PETG in AMS0·1, now PLA in AMS0·1" in str(ei.value)
+    assert "it had PETG in AMS A2, now PLA in AMS A2" in str(ei.value)
     assert any("The print was not started" in m and "kept at" in m for m in prompts.printed)
 
 
@@ -939,7 +939,7 @@ def test_print_is_refused_when_the_ams_cannot_be_read_again(tmp_path):
     with pytest.raises(BambuError) as ei:
         run()
     assert job.calls == []
-    assert "Could not confirm that PETG in AMS0·1" in str(ei.value)
+    assert "Could not confirm that PETG in AMS A2" in str(ei.value)
 
 
 def test_print_goes_ahead_when_the_ams_is_unchanged(tmp_path):

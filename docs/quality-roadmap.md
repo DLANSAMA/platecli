@@ -15,13 +15,13 @@ Historical baseline (do not read as current), from the audit + full
 `pytest --cov=bambu_cli` on 2026-07-08: **368 tests**, **78%** line coverage
 (1105 / 4973 stmts missed), **130** `sys.exit` sites in `bambu_cli/`, **7**
 `@mockable` sites (def + 6 uses), **1** `BambuError` raise in production.
-The "Baseline" column below is that snapshot. **Current measured (2026-08-13,
-PR #119): 1499 passed / 1 live deselected, 90.99% branch coverage over 8368
-statements (local Linux).** Full CI matrix: Linux 90.99% / Windows 90.68% (still
-the binding leg) / macOS passing, on the 3.10 / 3.12 / 3.14 matrix (Python 3.9
-was dropped in #115). The prior `5b08720` matrix (run `31044588411`, 2026-08-05)
-measured 88.8–89.3%; CI runs a clean checkout, so its numbers differ slightly
-from a local run — do not reconcile one to the other.
+The "Baseline" column below is that snapshot. The current local measurement is in
+the "Scoreboard (current)" table below. The last full CI-matrix measurement
+(2026-08-13, PR #119) was Linux 90.99% / Windows 90.68% (the binding leg) /
+macOS passing, on the 3.10 / 3.12 / 3.14 matrix (Python 3.9 was dropped in
+#115). CI runs a clean checkout, so its numbers differ slightly from a local
+run — do not reconcile one to the other. Windows has not been re-measured
+since, so raising the CI floor waits on a fresh matrix reading.
 
 | Area | Baseline | Gate to A | Gate to A+ | Primary evidence |
 |------|----------|-----------|------------|------------------|
@@ -43,7 +43,7 @@ from a local run — do not reconcile one to the other.
 Updated **2026-09-16** (Road to A+ Perfection; test/coverage
 numbers measured on Linux). Foundational phases
 (0/A/B) are done. Phase C **typing is done** (full package + `check_untyped_defs`);
-coverage floor **90** (target 92). Phase D's schema work is **complete** — every
+coverage floor **92**. Phase D's schema work is **complete** — every
 `--json` subcommand has a schema, and the schemas are now *generated* from
 `bambu_cli/contracts/` (`scripts/gen_schemas.py --check` is blocking in CI); what
 remains in D is the 1.0 prep itself, not the contracts. The camera Docker bind default and camera pin
@@ -60,15 +60,15 @@ items are **accepted 1.0 residuals** in [SECURITY.md](../SECURITY.md), not open 
 | Correctness / bugs | **A+** | No known dead flags; property tests on filenames/SSRF/ZIP/temps in `tests/test_properties_safety.py` |
 | Typing | **A** | Full-package mypy + `check_untyped_defs`. A+ (`mypy --strict`) is **1521** errors — not this release |
 | Error model | **A+** | `sys.exit` only in `cli.py`; `emit_json_error` is `NoReturn`; domain uses `abort` / `BambuError` |
-| Tests | **A+** | **2217** non-live tests passing (2026-11-05, local Linux; 1 skipped, 1 live deselected). A column cleared. Measured **93.5%** branch coverage over 9446 statements; A+ threshold met |
-| CI / release | **A** | `--cov-fail-under=90` (floor raised 86→90 with comfortable margin). A+ is fail-under 92 |
+| Tests | **A+** | **2309** non-live tests passing (2026-11-07, local Linux; 1 skipped, 1 live deselected). A column cleared. Measured **94.1%** branch coverage over 9914 statements; A+ threshold met. `protocols/ftps.py` and `netsafety.py` are at 100% (`tests/test_transport_edges.py`) |
+| CI / release | **A+** | `--cov-fail-under=92` (raised 90→92 on 2026-11-07; the full matrix passed it: Linux 3.10/3.12/3.14, Windows, macOS; Linux measured 94.1%). Blocking audit, one test runner, single-sourced version |
 | Docs / governance | **A+** | Roadmap + backlog match this measurement; stability policy + support matrix in `docs/api.md`; docs-consistency pins floor / % / count |
 | Product polish | **A−** | Support matrix + hermetic Orca stub; still **Beta / pre-1.0** (no Production/Stable, no v1.0.0 tag). A+ is the §5 checklist |
 
-**Overall:** **A** — none below A−. **Not A+ across the board.** Remaining: coverage 91.0→92, CI floor 92, Typing strict, Product `v1.0.0` tag.
+**Overall:** **A** — none below A−. **Not A+ across the board.** Remaining: Typing strict, Product `v1.0.0` tag.
 
-**Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26) → **86** (2026-08-13) → **90** (2026-09-16; measured 92.8%).
-Measured branch total is **92.8%** on local Linux; the floor is set
+**Coverage floor history:** 79 (honest post-Phase-1 gate) → **81** (2026-07-09) → **83** (2026-07-26) → **86** (2026-08-13) → **90** (2026-09-16; measured 92.8%) → **92** (2026-11-07; measured 94.1% on Linux).
+Measured branch total is **94.1%** on local Linux (2026-11-07); the floor is set
 at the multi-OS minimum so the matrix does not flake while still denying points
 of silent rot vs the old 79 gate.
 

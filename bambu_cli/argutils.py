@@ -16,7 +16,7 @@ __all__ = [
 
 
 def namespace_get(args, name, default=None):
-    """Read argparse.Namespace values without treating MagicMock attributes as set."""
+    """Read a value from an argparse.Namespace; ``default`` for anything without a ``__dict__``."""
     try:
         return vars(args).get(name, default)
     except TypeError:

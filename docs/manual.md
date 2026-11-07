@@ -253,11 +253,11 @@ Without the extra, `plate tui` exits `1` (config error) with the install command
 
 | Screen | What it does |
 |--------|--------------|
-| **Dashboard** | Live printer state, temperatures, layer/progress, and the AMS trays (active tray highlighted). Refreshes on `r` and every 10 s while it is the active screen. An unreachable printer renders inline — the app never crashes on it. |
+| **Dashboard** | The printer's state in words in the top bar (*Printing*, *Paused*, *Offline*…). The job panel shows the percent done in large type, time left and the clock time it should finish, the layer, and which tray is feeding. Nozzle and bed cards show the reading, what the heater is doing (*heating to 220 °C*, *heater off*) and the last few minutes of history. The AMS shows tray cards in each filament's reported colour, named A1–A4 / B1–B4 like Bambu Studio, with the active tray marked ▶ and how much is left. Refreshes on `r` and every 10 s while it is the active screen. An unreachable printer renders inline, and the app never crashes on it. |
 | **Prepare** (`n`) | Source box (URL or local path, validated as you submit), material and quality presets with guidance, and a supports checkbox. The AMS-detected filament is pre-selected and tagged *(detected in AMS)* — unless you already picked something, in which case a slow AMS read never overrides you. "Prepare" downloads and slices in the background and shows the same preview the wizard prints (model, printer, material line, time/filament estimate). If the printer or OrcaSlicer is not configured, this screen is replaced by a message pointing at `plate setup` — the TUI never embeds setup. |
 | **Settings** (`s` from prepare) | Advanced slice settings — the named `slice` flags grouped by Quality / Strength / Supports / Adhesion / Filament / Speed / Plate. Flags with a fixed set of options are dropdowns. Below the form, **Add an override** takes any other setting as a name, a bucket (*process* or *filament*, matching `--set` / `--set-filament`) and a value — run `plate slice --list-settings` to see what your profiles accept. Pending overrides are listed; click one to edit it, or remove it. A blank field keeps the profile default, exactly like leaving a flag off. Unsafe values are refused inline by the same checks the CLI runs. Disabled for pre-sliced sources, which are printed as-is. |
 | **Confirm** | Start print / Upload only / Cancel. |
-| **Monitor** (`m`) | Follows a running job — percent, layer, remaining time — until it reaches a terminal state (`FINISH` / `FAILED` / `STOP` / `IDLE`, the same set `plate status --monitor` uses). |
+| **Monitor** (`m`) | Follows a running job with the dashboard's job panel and heater cards, polling faster, until the job reaches a terminal state (`FINISH` / `FAILED` / `STOP` / `IDLE`, the same set `plate status --monitor` uses). |
 | **Help** (`?` or `F1`) | The key reference, always available. |
 
 ### Keys
@@ -271,6 +271,7 @@ Without the extra, `plate tui` exits `1` (config error) with the install command
 | `s` | Advanced slice settings (from the prepare screen) |
 | `Esc` | Back — from prepare, from the confirm dialog, or from the monitor |
 | `q` / `Ctrl-Q` | Quit (refused while an upload or print-start is in flight) |
+| `Ctrl-P` | Command palette; *Change theme* switches to the light `platecli-light` theme for the rest of the session |
 
 Each screen's footer lists only the keys that do something there; the help overlay lists all of them.
 

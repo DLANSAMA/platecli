@@ -6,21 +6,21 @@
 This file is a short **remaining-gaps** list only. Refresh after each phase or audit.
 Do not treat historical “≥98% coverage” claims as current — see the snapshot below.
 
-## Snapshot (2026-09-16; measured on Linux)
+## Snapshot (2026-11-07; measured on Linux)
 
 | Metric | Current (honest) | A+ / 1.0 target |
 |--------|------------------|-----------------|
-| Non-live tests collected | **2217** passing (measured 2026-11-05 on Linux; 1 skipped, 1 live test deselected) | ≥550 with zero known flakes ✅ size |
-| Line/branch coverage (CI) | **92.8%** branch coverage over 8396 statements (local Linux, 2026-09-16; Windows / macOS passing on CI); prior CI matrix on `5b08720` was 88.8–89.3%; **floor 90** | **≥92%** total; optional module floors |
+| Non-live tests collected | **2309** passing (measured 2026-11-07 on Linux; 1 skipped, 1 live test deselected) | ≥550 with zero known flakes ✅ size |
+| Line/branch coverage (CI) | **94.1%** branch coverage over 9914 statements (local Linux, 2026-11-07; Windows / macOS were passing on the last CI matrix); prior CI matrix on `5b08720` was 88.8–89.3%; **floor 92** | **≥92%** total; optional module floors |
 | Typing | Full package mypy + `check_untyped_defs` | keep; optional full `strict` later |
 | Error model | `sys.exit` only in `cli.py` | keep |
-| `@mockable` / test-awareness | **0** (CI greps) | keep |
+| `@mockable` / test-awareness | **0** (CI greps plus `tests/test_production_purity.py`, which also rejects `unittest` / `pytest` / `Mock` imports) | keep |
 | JSON schemas | **27** files under `docs/schemas/`, **generated** from `bambu_cli/contracts/`; coverage is derived from `build_parser()`, so a new subcommand cannot ship schema-less | monitor goldens; field-level api.md ↔ schema sync |
 | Mutation baseline | Pure safety modules; score **50.7%** measured 2026-08-04, CI floor raised 40 → **48** | the C.4 re-run happened and **disproved** the prediction: `slicer/output.py` stayed at 21.8% while its line coverage went 79.8% → 92.7%. See [mutation-baseline.md](mutation-baseline.md); raising that row needs a production refactor, not more tests |
 | Live printer | Documented opt-in harness | manual pre-release (optional scheduled lab) |
 | Product version | pre-1.0 Beta (single-sourced from `pyproject.toml`) | **v1.0.0** when roadmap §5 is complete |
 
-CI evidence: `.github/workflows/ci.yml` (`--cov-fail-under=90`, blocking ruff/mypy/bandit/pip-audit/purity greps).
+CI evidence: `.github/workflows/ci.yml` (`--cov-fail-under=92`, blocking ruff/mypy/bandit/pip-audit/purity greps).
 
 ## Ground rules for new tests
 

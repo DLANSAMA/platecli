@@ -443,9 +443,9 @@ def _changing_detector(*readings):
 @pytest.mark.parametrize(
     ("second", "expected"),
     [
-        (("PLA", 2), "now PLA in AMS0·2"),
-        (("PETG", 5), "now PETG in AMS1·1"),
-        ((None, None), "Could not confirm that PETG in AMS0·2"),
+        (("PLA", 2), "now PLA in AMS A3"),
+        (("PETG", 5), "now PETG in AMS B2"),
+        ((None, None), "Could not confirm that PETG in AMS A3"),
     ],
 )
 async def test_start_print_is_refused_when_the_ams_changed(tmp_path, second, expected):
@@ -460,7 +460,7 @@ async def test_start_print_is_refused_when_the_ams_changed(tmp_path, second, exp
         await _settle(pilot)
         screen = await _prepare_to_preview(pilot, stl)
         modal = await _open_modal(pilot, screen)
-        assert "AMS0·2 (PETG)" in _text(modal.query_one("#confirm-summary", Static))
+        assert "AMS A3 (PETG)" in _text(modal.query_one("#confirm-summary", Static))
         await _press_button(pilot, modal, "#confirm-print")
         status = _text(modal.query_one("#confirm-status", Static))
         assert isinstance(pilot.app.screen, ConfirmModal)

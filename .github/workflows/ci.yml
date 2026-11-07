@@ -125,7 +125,7 @@ jobs:
       - name: Pytest with coverage
         run: |
           uv pip install '.[test]'
-          python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=90
+          python -W error::ResourceWarning -m pytest tests/ -m "not live" --cov=bambu_cli --cov-report=term-missing --cov-fail-under=92
       - name: Syntax smoke
         # Auto-discovers bambu_cli/**/*.py (see scripts/syntax_smoke.py).
         run: python scripts/syntax_smoke.py
@@ -210,7 +210,7 @@ jobs:
         run: uvx mypy@2.3.0 -p bambu_cli
       - name: no test-awareness in production code (blocking)
         run: |
-          if grep -rnE 'isinstance\([^)]*\bMock\b|["'"'"']unittest["'"'"'] in sys\.modules' bambu_cli/; then
+          if grep -rnE 'isinstance\([^)]*\bMock\b|["'"'"']unittest["'"'"'] in sys\.modules|^\s*(import|from)\s+(unittest|pytest|mock)\b' bambu_cli/; then
             echo "::error::Test-awareness branch found in production code (see docs/test-backlog.md ground rules)."
             exit 1
           fi

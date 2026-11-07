@@ -28,7 +28,7 @@ from bambu_cli.tui.screens.help import HELP_ROWS, HelpScreen, help_text  # noqa:
 from bambu_cli.tui.screens.monitor import MonitorScreen  # noqa: E402
 from bambu_cli.tui.screens.prepare import PreflightErrorScreen, PrepareScreen  # noqa: E402
 from bambu_cli.tui.services import StatusSnapshot  # noqa: E402
-from tests.tui_text import widget_text  # noqa: E402
+from tests.tui_text import tree_text, widget_text  # noqa: E402
 
 _SMALL = (80, 24)
 
@@ -351,8 +351,14 @@ async def test_main_flow_at_80x24(tmp_path):
     async with app.run_test(size=_SMALL) as pilot:
         await _settle(pilot)
         assert app.size.width == 80 and app.size.height == 24
-        assert "RUNNING" in _text(app.screen.query_one("#status-panel"))
-        assert "PLA" in _text(app.screen.query_one("#ams-panel"))
+        assert "Printing" in tree_text(app.screen.query_one("#topbar"))
+        assert "50%" in tree_text(app.screen.query_one("#job-hero"))
+        assert "PLA" in tree_text(app.screen.query_one("#ams-panel"))
+        # One AMS unit fits with nothing scrolled off: the job, both heaters
+        # and the trays all end above the footer.
+        footer_top = app.screen.size.height - 1
+        for part in ("#job-hero", "#temps", "#ams-panel"):
+            assert app.screen.query_one(part).region.bottom <= footer_top, part
 
         await pilot.press("question_mark")
         await _settle(pilot)
@@ -728,8 +734,8 @@ def test_status_service_holds_one_printer_and_releases_mqtt():
     service.close()
     assert printer.releases == 1
 
-def test_status_lines_show_targets_and_file():
-    from bambu_cli.tui.services import status_lines
+def test_heater_views_show_targets_and_the_job_name():
+    from bambu_cli.tui.services import job_name, temp_view
 
     snapshot = StatusSnapshot(
         ok=True,
@@ -738,24 +744,29 @@ def test_status_lines_show_targets_and_file():
             "mc_percent": 12,
             "nozzle_temper": 210,
             "nozzle_target_temper": 220,
-            "bed_temper": 55,
+            "bed_temper": 59,
             "bed_target_temper": 60,
             "gcode_file": "cube.gcode.3mf",
         },
     )
-    rows = dict(status_lines(snapshot))
-    assert rows["Nozzle"] == "210°C → 220°C"
-    assert rows["Bed"] == "55°C → 60°C"
-    assert rows["File"] == "cube.gcode.3mf"
+    nozzle = temp_view(snapshot, "nozzle_temper", "nozzle_target_temper")
+    assert (nozzle.value, nozzle.caption) == ("210 °C", "heating to 220 °C")
+    bed = temp_view(snapshot, "bed_temper", "bed_target_temper")
+    assert (bed.value, bed.caption) == ("59 °C", "target 60 °C")
+    assert job_name(snapshot) == "cube"
 
-def test_job_progress_names_the_file_and_survives_junk():
-    from bambu_cli.tui.services import job_progress_lines, progress_percent
+def test_job_view_names_the_job_and_survives_junk():
+    from datetime import datetime
+
+    from bambu_cli.tui.services import job_view, progress_percent
 
     snapshot = StatusSnapshot(
         ok=True,
-        raw={"gcode_state": "RUNNING", "mc_percent": "n/a", "gcode_file": "cube.gcode.3mf"},
+        raw={"gcode_state": "RUNNING", "mc_percent": "n/a", "mc_remaining_time": "soon", "gcode_file": "cube.gcode.3mf"},
     )
-    assert dict(job_progress_lines(snapshot))["File"] == "cube.gcode.3mf"
+    view = job_view(snapshot, datetime(2026, 11, 6, 12, 0))
+    assert view.name == "cube"
+    assert view.lines[0] == "Time left unknown"
     assert progress_percent(snapshot) == 0  # a non-numeric percent is not a crash
 
 def test_pipeline_and_monitor_services_build_their_own_collaborators():
@@ -1046,25 +1057,31 @@ async def test_upload_only_outcome_lands_from_under_an_overlay(tmp_path):
     finally:
         gate.set()
 
-async def test_dashboard_shows_the_progress_bar_only_while_a_job_runs(tmp_path):
-    """A 0% bar on an idle printer reads as a stalled print, so it stays hidden."""
-    from bambu_cli.tui.widgets.job_progress import JobProgress
+async def test_dashboard_shows_the_progress_bar_only_when_there_is_a_job(tmp_path):
+    """A 0% bar on an idle or heating printer reads as a stalled print, so it stays hidden."""
+    from bambu_cli.tui.widgets.job_hero import WideBar
 
     _install_ready_settings(tmp_path)
-    provider = ScriptedStatus([_snap("IDLE", 0), _snap("RUNNING", 42), _snap("FINISH", 100)])
+    provider = ScriptedStatus([_snap("IDLE", 0), _snap("RUNNING", 42), _snap("PREPARE", 0), _snap("FINISH", 100)])
     app = PlateApp(_args(), _deps(status_provider=provider))
     async with app.run_test() as pilot:
         await _settle(pilot)
-        bar = app.screen.query_one("#dash-progress", JobProgress)
+        bar = app.screen.query_one("#job-hero .hero-bar", WideBar)
         assert bar.display is False  # IDLE
 
         await pilot.press("r")
         await _settle(pilot)
         assert bar.display is True  # RUNNING
+        assert bar.percent == 42
 
         await pilot.press("r")
         await _settle(pilot)
-        assert bar.display is False  # FINISH is not an active state
+        assert bar.display is False  # PREPARE: heating, no progress yet
+
+        await pilot.press("r")
+        await _settle(pilot)
+        assert bar.display is True  # FINISH shows the full bar
+        assert bar.percent == 100
 
 async def test_confirm_modal_says_what_it_is_about_to_print(tmp_path):
     """The riskiest dialog in the app must show more than a temp path."""
