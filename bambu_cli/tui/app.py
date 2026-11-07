@@ -28,6 +28,7 @@ from bambu_cli.tui.screens.dashboard import DashboardScreen
 from bambu_cli.tui.screens.help import HelpScreen
 from bambu_cli.tui.screens.monitor import MonitorScreen
 from bambu_cli.tui.screens.prepare import PreflightErrorScreen, PrepareScreen
+from bambu_cli.tui.theme import DEFAULT_THEME, THEMES
 
 _CSS_PATH = Path(__file__).with_name("styles.tcss")
 
@@ -37,7 +38,6 @@ class PlateApp(App):
 
     CSS_PATH = _CSS_PATH
     TITLE = "platecli"
-    SUB_TITLE = "printer dashboard"
 
     # App-level bindings stay ACTIVE everywhere but are not shown in the Footer:
     # each screen advertises the subset that actually does something there (a
@@ -53,6 +53,9 @@ class PlateApp(App):
 
     def __init__(self, args: argparse.Namespace, deps: TuiDeps | None = None) -> None:
         super().__init__()
+        for theme in THEMES:
+            self.register_theme(theme)
+        self.theme = DEFAULT_THEME
         self._args = args
         self._deps = deps if deps is not None else TuiDeps()
         # True while an upload / print-start worker is running: quitting then

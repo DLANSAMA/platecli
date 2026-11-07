@@ -19,9 +19,7 @@ from bambu_cli.context import RuntimeContext, Settings  # noqa: E402
 from bambu_cli.tui.app import PlateApp  # noqa: E402
 from bambu_cli.tui.deps import TuiDeps  # noqa: E402
 from bambu_cli.tui.services import StatusService, StatusSnapshot  # noqa: E402
-from bambu_cli.tui.widgets.ams_panel import AmsPanel  # noqa: E402
-from bambu_cli.tui.widgets.status_panel import StatusPanel  # noqa: E402
-from tests.tui_text import widget_text  # noqa: E402
+from tests.tui_text import tree_text  # noqa: E402
 
 # A representative IDLE snapshot with a populated AMS, shaped like parse_ams output.
 _IDLE_SNAPSHOT = StatusSnapshot(
@@ -71,17 +69,12 @@ def _args(**kwargs):
     return argparse.Namespace(**base)
 
 def _all_text(app):
-    """Concatenate the rendered text of the two dashboard panels.
+    """Everything the dashboard shows: top bar, job panel, heaters, AMS.
 
     Textual 8's ``App.query`` does not descend into the active screen;
-    query the screen itself.
+    walk the screen itself.
     """
-    parts = []
-    screen = app.screen
-    for widget_type in (StatusPanel, AmsPanel):
-        for widget in screen.query(widget_type):
-            parts.append(widget_text(widget))
-    return "\n".join(parts)
+    return tree_text(app.screen)
 
 @pytest.fixture(autouse=True)
 def _reset_context():
@@ -95,7 +88,9 @@ async def test_dashboard_renders_status_and_ams():
     async with app.run_test() as pilot:
         await pilot.pause()
         text = _all_text(app)
-    assert "IDLE" in text
+    # The state in words (never the raw firmware name), and every loaded tray.
+    assert "Idle" in text
+    assert "IDLE" not in text
     assert "PLA" in text
     assert "PETG" in text
     assert "TPU" in text
@@ -150,18 +145,20 @@ async def test_dashboard_against_sim_transport():
         await pilot.pause()
         text = _all_text(app)
     # The sim MQTT payload reports IDLE with a PLA/PETG/TPU AMS.
-    assert "IDLE" in text
+    assert "Idle" in text
+    assert "Simulated" in text
     assert "PLA" in text
 
 # --- printer-supplied text is data, never Rich markup ----------------------
 #
-# Every cell in these two panels carries strings the *printer* chose: the name
-# of the file it is running, the filament type in a tray. A ``str`` cell in a
-# Rich table is markup-parsed, which both eats content ("model [remix].stl"
-# renders as "model .stl") and can raise ``MarkupError`` mid-render on a name
-# shaped like a closing tag. Passing ``Text`` is what stops both.
+# The job panel and the tray cards carry strings the *printer* chose: the name
+# of the job it is running, the filament type in a tray. A ``str`` handed to a
+# Static or a border title is markup-parsed, which both eats content
+# ("model [remix].stl" renders as "model .stl") and can raise ``MarkupError``
+# mid-render on a name shaped like a closing tag. Passing ``Text`` (or
+# ``markup=False``) is what stops both.
 
-def _bracketed_file_snapshot(name):
+def _bracketed_file_snapshot(name, key="gcode_file"):
     return StatusSnapshot(
         ok=True,
         raw={
@@ -169,7 +166,7 @@ def _bracketed_file_snapshot(name):
             "mc_percent": 42,
             "nozzle_temper": 220,
             "bed_temper": 60,
-            "gcode_file": name,
+            key: name,
         },
         ams={"units": []},
     )
@@ -200,14 +197,24 @@ async def test_status_panel_renders_a_bracketed_filename_verbatim():
         text = _all_text(app)
     assert "model [remix].stl" in text
 
-async def test_status_panel_survives_a_markup_shaped_filename():
+async def test_status_panel_survives_a_markup_shaped_job_name():
     """A closing-tag shape must not blow the render up (MarkupError)."""
-    provider = FakeStatusProvider([_bracketed_file_snapshot("a[/b]c.gcode")])
+    provider = FakeStatusProvider([_bracketed_file_snapshot("a[/b]c", key="subtask_name")])
     app = PlateApp(_args(), TuiDeps(status_provider=provider))
     async with app.run_test() as pilot:
         await pilot.pause()
-        text = _all_text(app)  # raises rich.errors.MarkupError against a str cell
-    assert "a[/b]c.gcode" in text
+        text = _all_text(app)  # raises rich.errors.MarkupError against a str title
+    assert "a[/b]c" in text
+
+
+async def test_a_markup_shaped_file_path_shows_its_last_part():
+    """gcode_file is a path on the printer: the job is its last part, still verbatim."""
+    provider = FakeStatusProvider([_bracketed_file_snapshot("/sdcard/x[/b]c [remix].gcode.3mf")])
+    app = PlateApp(_args(), TuiDeps(status_provider=provider))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        text = _all_text(app)
+    assert "b]c [remix]" in text
 
 async def test_ams_panel_renders_a_bracketed_filament_type_verbatim():
     provider = FakeStatusProvider([_tray_type_snapshot("PLA [matte]")])

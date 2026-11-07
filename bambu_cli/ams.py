@@ -16,6 +16,20 @@ EXTERNAL_SPOOL_TRAY_ID = 254
 NOTHING_LOADED_TRAY_ID = 255
 
 
+def tray_label(unit_id, slot):
+    """The name Bambu Studio and the printer's screen give a tray: ``A1``-``A4``, ``B1``...
+
+    Units are lettered from A and trays numbered from 1, so unit 1 slot 2 is
+    ``B3``. A unit id past Z (the AMS HT reports ids from 128) has no letter, so
+    it falls back to the raw numbers, ``128·1``, rather than inventing one.
+    """
+    unit = _to_int(unit_id, default=0) or 0
+    index = _to_int(slot, default=0) or 0
+    if 0 <= unit < 26:
+        return f"{chr(ord('A') + unit)}{index + 1}"
+    return f"{unit}·{index + 1}"
+
+
 def _to_int(value, default=None):
     try:
         return int(value)

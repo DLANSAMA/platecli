@@ -1,4 +1,4 @@
-"""Read-only printer dashboard: status panel + AMS panel, live refresh.
+"""Read-only printer dashboard: the job, the heaters and the AMS, live.
 
 The blocking ``StatusService.fetch`` (``printer.status()`` waits on a
 ``threading.Event``) runs in a Textual *thread* worker so the UI never freezes;
@@ -10,34 +10,35 @@ while this screen is active (disarmed on suspend, re-armed on resume) and
 cancelled on unmount — a leaked timer would trip the ``-W error::ResourceWarning``
 CI mode.
 
-A failed fetch is an ordinary ``StatusSnapshot(ok=False)`` value: the panels
-render an inline "unreachable" state and the app keeps running.
+A failed fetch is an ordinary ``StatusSnapshot(ok=False)`` value: the job
+panel says the printer cannot be reached, and the app keeps running. Every word
+and number on screen comes from a pure helper in ``tui.services``; the heater
+history is a ``TempHistory`` this screen owns, so it starts empty each launch.
 """
 
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from typing import Any
 
+from rich.text import Text
 from textual.app import ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Footer
 
-from bambu_cli.tui.services import StatusSnapshot
-from bambu_cli.tui.widgets.ams_panel import AmsPanel
-from bambu_cli.tui.widgets.job_progress import JobProgress
-from bambu_cli.tui.widgets.status_panel import StatusPanel
+from bambu_cli.tui.services import HEATERS, StatusSnapshot, TempHistory, ams_view, job_view, temp_view, wifi_text
+from bambu_cli.tui.widgets.ams_strip import AmsStrip
+from bambu_cli.tui.widgets.job_hero import JobHero
+from bambu_cli.tui.widgets.temps import TempCard
+from bambu_cli.tui.widgets.topbar import TopBar
 
 _REFRESH_INTERVAL = 10.0
-# States where a progress bar means something. Deliberately not derived from
-# TERMINAL_GCODE_STATES: "not terminal" includes states like PREPARE where a
-# percentage is meaningless.
-_ACTIVE_STATES = frozenset({"RUNNING", "PAUSE"})
 
 
 class DashboardScreen(Screen):
-    """Default screen: printer status (left) and AMS trays (right)."""
+    """Default screen: the job, the two heaters, then the AMS trays."""
 
     BINDINGS = [
         ("r", "refresh", "Refresh"),
@@ -53,17 +54,18 @@ class DashboardScreen(Screen):
         self._status_provider = status_provider
         self._timer: Any = None
         self._fetching = False
+        self._history = TempHistory()
+        # Injected by tests that pin the ETA clock; the real screen asks the OS.
+        self.clock = datetime.now
 
     def compose(self) -> ComposeResult:
-        yield Header()
-        with Horizontal(id="dashboard-body"):
-            yield StatusPanel(id="status-panel")
-            yield AmsPanel(id="ams-panel")
-        # The bar the monitor already uses, surfaced here while a job is live.
-        # Hidden at rest: an idle printer has no progress to draw, and a 0%%
-        # bar sitting on the dashboard reads as a stalled print.
-        yield JobProgress(id="dash-progress", compact=True)
-        yield Static("", id="dashboard-hint")
+        yield TopBar("Dashboard", id="topbar")
+        with VerticalScroll(id="dashboard-body"):
+            yield JobHero(id="job-hero")
+            with Horizontal(id="temps"):
+                for key, title, *_ in HEATERS:
+                    yield TempCard(title, id=f"temp-{key}")
+            yield AmsStrip(id="ams-panel")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -103,7 +105,7 @@ class DashboardScreen(Screen):
         if self._fetching:
             return
         self._fetching = True
-        self.query_one("#dashboard-hint", Static).update("Refreshing…")
+        self.query_one("#job-hero", JobHero).border_subtitle = "refreshing…"
         # thread=True: fetch blocks on MQTT; exit_on_error=False keeps a worker
         # exception from tearing down the app (the service already never raises,
         # but this is belt-and-braces for the safety-critical "never crash").
@@ -122,15 +124,14 @@ class DashboardScreen(Screen):
 
     def _apply_snapshot(self, snapshot: StatusSnapshot) -> None:
         self._fetching = False
-        self.query_one("#status-panel", StatusPanel).update_snapshot(snapshot)
-        self.query_one("#ams-panel", AmsPanel).update_snapshot(snapshot)
-        progress = self.query_one("#dash-progress", JobProgress)
-        running = snapshot.ok and str(snapshot.raw.get("gcode_state", "")).upper() in _ACTIVE_STATES
-        progress.display = running
-        if running:
-            progress.update_snapshot(snapshot)
-        hint = self.query_one("#dashboard-hint", Static)
-        if snapshot.ok:
-            hint.update("Press r to refresh · q to quit")
-        else:
-            hint.update("Printer unreachable · press r to retry · q to quit")
+        now = self.clock()
+        self._history.add(snapshot)
+        view = job_view(snapshot, now)
+        self.query_one("#topbar", TopBar).show_status(view.badge, wifi_text(snapshot))
+        hero = self.query_one("#job-hero", JobHero)
+        hero.show(view)
+        hero.border_subtitle = Text(f"updated {now:%H:%M:%S}" if snapshot.ok else "press r to retry")
+        for key, _title, current_key, target_key, scale in HEATERS:
+            card = self.query_one(f"#temp-{key}", TempCard)
+            card.show(temp_view(snapshot, current_key, target_key), self._history.series(key), scale)
+        self.query_one("#ams-panel", AmsStrip).show(ams_view(snapshot), reachable=snapshot.ok)

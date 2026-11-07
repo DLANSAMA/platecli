@@ -39,7 +39,6 @@ from textual.screen import Screen
 from textual.widgets import (
     Button,
     Footer,
-    Header,
     Input,
     Label,
     OptionList,
@@ -57,16 +56,13 @@ from bambu_cli.tui.settings_model import (
     collect_field_overrides,
     fields_by_group,
 )
+from bambu_cli.tui.widgets.topbar import TopBar
 
 _NO_OVERRIDE_PROMPT = "(profile default)"
 
 
 class SettingsScreen(Screen[SliceOverrides | None]):
     """Collect advanced slice overrides; dismisses with them, or None on cancel."""
-
-    # Header watches screen.sub_title; without this every screen claimed to be
-    # the printer dashboard.
-    SUB_TITLE = "advanced slice settings"
 
     BINDINGS = [
         ("escape", "cancel", "Cancel"),
@@ -89,7 +85,7 @@ class SettingsScreen(Screen[SliceOverrides | None]):
     # --- composition --------------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield TopBar("Slice settings", id="topbar")
         with VerticalScroll(id="settings-body"):
             yield Static(
                 "Blank fields keep the profile default — exactly like leaving a slice flag off.",

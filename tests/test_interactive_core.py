@@ -486,7 +486,7 @@ def test_feed_row_names_the_ams_slot_only_when_it_feeds(tmp_path):
     fed = core.WizardState(
         material="PETG", detected_ams_material="PETG", detected_ams_slot=6, printable_path=sliced, sliced=True
     )
-    assert dict(core.preview_rows(fed, sliced))["Feed"] == "AMS1·2 (PETG)"
+    assert dict(core.preview_rows(fed, sliced))["Feed"] == "AMS B3 (PETG)"
     changed = core.WizardState(
         material="ABS", detected_ams_material="PETG", detected_ams_slot=6, printable_path=sliced, sliced=True
     )
@@ -544,9 +544,9 @@ def test_ams_change_problem_does_not_read_when_not_feeding_from_the_ams():
 @pytest.mark.parametrize(
     ("material", "slot", "expected"),
     [
-        ("PLA", 2, "it had PETG in AMS0·2, now PLA in AMS0·2"),
-        ("PETG", 3, "now PETG in AMS0·3"),
-        (None, None, "Could not confirm that PETG in AMS0·2"),
+        ("PLA", 2, "it had PETG in AMS A3, now PLA in AMS A3"),
+        ("PETG", 3, "now PETG in AMS A4"),
+        (None, None, "Could not confirm that PETG in AMS A3"),
     ],
 )
 def test_ams_change_problem_names_what_changed(material, slot, expected):
