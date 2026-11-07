@@ -160,7 +160,7 @@ The numbers in the badges are measured on this repo, not aspirational:
 | | |
 |---|---|
 | **Tests** | 2,217 passing (`pytest -m "not live"`, v0.6.0) — unit, contract, property-based (Hypothesis), and Textual pilot tests |
-| **Coverage** | **94.1%** line+branch across the package; CI fails the build below **90%** |
+| **Coverage** | **94.1%** line+branch across the package; CI fails the build below **92%** |
 | **Platforms** | Linux, macOS, and Windows in CI, on Python 3.10 / 3.12 / 3.14 |
 | **Blocking gates** | `ruff`, `ruff format`, `mypy` (whole package, `check_untyped_defs`), `bandit`, `pip-audit`, plus layer-boundary and JSON-schema-drift checks |
 | **Mutation testing** | Nightly whenever `main` has changed, scoped to the safety-critical modules (download validation, SSRF guards, slicer options, job payload) |

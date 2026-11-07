@@ -111,14 +111,14 @@ def _parse_doc_cov_floor(text: str) -> int | None:
 
     Matches patterns like 'floor 83', 'floor **83**', '--cov-fail-under=83'.
     Returns the first small-ish integer found after 'floor' (ignores mutation
-    floor 40 or coverage-target 92 by picking the smallest value ≥ 50).
+    floor 40 or 48 by taking the first value in the 50-99 band).
     """
     # Match 'floor' optionally followed by bold markers, then digits
     for m in re.finditer(r"floor\s+\*{0,2}(\d+)\*{0,2}", text):
         val = int(m.group(1))
-        # Skip mutation baseline floor (40%) and target (92); the CI floor is the
-        # only value in the 50-90 band
-        if 50 <= val <= 90:
+        # Skip the mutation baseline floor (40-48); the CI floor is the only
+        # value in the 50-99 band
+        if 50 <= val <= 99:
             return val
     return None
 

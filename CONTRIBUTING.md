@@ -26,7 +26,7 @@ uv run python -m pytest tests/ -q -m "not live"
 
 # Match CI hardness (ResourceWarning as error + coverage floor)
 uv run python -W error::ResourceWarning -m pytest tests/ -m "not live" \
-  --cov=bambu_cli --cov-report=term-missing --cov-fail-under=90
+  --cov=bambu_cli --cov-report=term-missing --cov-fail-under=92
 
 # Smokes used in CI — all of them (see the "lint" job in .github/workflows/ci.yml).
 # These are NOT part of pytest; a green suite says nothing about them.
@@ -116,13 +116,13 @@ Agent/runtime rules: **[AGENTS.md](AGENTS.md)** (ships in sdist).
 Threat model: **[SECURITY.md](SECURITY.md)** (ships in sdist).  
 JSON contracts: **[docs/api.md](docs/api.md)** + **[docs/schemas/](docs/schemas/)** (ship in sdist).
 
-As of 2026-08-13: overall **A** (no scoreboard row below A−). The 2026-07 audit's four
+As of 2026-11-07: overall **A** (no scoreboard row below A−). The 2026-07 audit's four
 architecture/contract gaps have since closed — the domain→`cli` helper extraction
 (B.4), the single-sourced TLS pin verification (B.5), the remaining JSON schemas
 (now *generated* from `bambu_cli/contracts/`, one per `--json` subcommand), and the
-camera bind/pin-fallback hardenings. Main gaps to A+ / 1.0 are now coverage
-(90.99% Linux / 90.68% Windows measured on CI, CI floor **86**, target 92) and the camera
-residuals still listed in SECURITY.md. Do not read "A−/A" as "A+" — see the
+camera bind/pin-fallback hardenings. Main gaps to A+ / 1.0 are now strict typing,
+the camera residuals still listed in SECURITY.md, and the v1.0.0 tag itself
+(coverage is 94.1% on Linux and the CI floor is **92**). Do not read "A−/A" as "A+" — see the
 scoreboard for what is actually ticked.
 
 ## Code conventions
