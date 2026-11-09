@@ -21,7 +21,7 @@ from typing import Any
 
 from bambu_cli.errors import PrinterStatusIncomplete
 from bambu_cli.logging_utils import logger
-from bambu_cli.protocols.mqtt_cmd import _REQUIRED_STATUS_KEYS, decode_report, status_is_complete
+from bambu_cli.protocols.mqtt_cmd import _REQUIRED_STATUS_KEYS, _teardown_mqtt_client, decode_report, status_is_complete
 from bambu_cli.utils import get_sequence_id
 
 ClientFactory = Callable[[Any], Any]
@@ -91,14 +91,7 @@ class MqttSession:
             self._print_state = {}
         if client is None:
             return
-        try:
-            client.loop_stop()
-        except Exception:
-            pass
-        try:
-            client.disconnect()
-        except Exception:
-            pass
+        _teardown_mqtt_client(client)
 
     def _bind_callbacks(self, client: Any) -> None:
         client.on_connect = self._on_connect

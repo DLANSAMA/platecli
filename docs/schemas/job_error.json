@@ -124,6 +124,9 @@
     },
     "copies_ignored": {
       "type": "boolean"
+    },
+    "plan_fingerprint": {
+      "type": "string"
     }
   },
   "additionalProperties": true

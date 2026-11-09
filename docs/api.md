@@ -319,6 +319,15 @@ Validate includes `checks[]`, `ok`, `errors`, `warnings`, `exit_code`, and `stri
 Success / dry-run: [`job_ok.json`](schemas/job_ok.json).  
 Failure: [`job_error.json`](schemas/job_error.json).
 
+Every `job` / `send` envelope (dry-run, success and failure) carries `plan_fingerprint`:
+a SHA-256 of the printer serial and model, the source, the content of a local source
+file, and every slicing and print-start option (not `--confirm`, `--dry-run`, `--json`,
+`--output` or `--threads`). Review a `--dry-run`, then pass its value to
+`--expect-plan` on the real run. If the plan differs, the run exits `5`
+(`failed_step: validate`) before anything is downloaded, sliced, uploaded or printed.
+A URL source is bound to the URL, not to the bytes it serves later. The fingerprint
+shows that a run is the one that was reviewed; it does not show that a person reviewed it.
+
 Print start requires `--confirm`. Without it, download → slice → upload still runs and the command exits `0` with `"status": "uploaded_not_printed"`; only the print step is withheld.
 
 For a pre-sliced 3MF, `job` reads which plates carry G-code and prints plate 1,
@@ -449,7 +458,7 @@ best-effort — same LAN protocols, not claimed hardware-verified.
 | OS | Linux (CI), macOS (CI), Windows (CI) | All three are first-class; Windows is the binding coverage leg |
 | Python | 3.10, 3.12, 3.14 (CI) | Requires Python ≥ 3.10; 3.11/3.13 expected to work, not in the matrix |
 | Printers | P1 series (P1P / P1S) on real hardware | X1 / X1C / X1E / A1 / A1 mini speak the same MQTT/FTPS LAN API; treat as unverified. `plate snapshot` is direct on P1/A1; X1 cameras need the opt-in Docker streamer |
-| Firmware | whatever the maintainer's P1 is running | A Bambu firmware update can break MQTT/FTPS without warning — run `plate doctor` after upgrades |
+| Firmware | P1P on 01.09.01.00: `doctor` and `status` read it over MQTT and FTPS (checked 2026-11-09). A one-time `light` on/off was applied by the printer with no authorization message. Print start and motion were not re-checked on this firmware | A Bambu firmware update can break MQTT/FTPS without warning — run `plate doctor` after upgrades. Bambu's [January 2025 authorization update](https://blog.bambulab.com/firmware-update-introducing-new-authorization-control-system-2) restricts some LAN control (print start, motion, temperature) on firmware that enforces it; X1 came first and P/A series "at a future date". Which firmware enforces it on your printer is unverified here |
 | OrcaSlicer | hermetic stub in CI; real Orca on the maintainer's machine | Install via the platform command `plate` prints when it is missing |
 
 Status is **Beta, pre-1.0**. Do not treat this matrix as a 1.0 support promise.

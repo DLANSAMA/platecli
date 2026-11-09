@@ -511,6 +511,13 @@ class JobOk(Contract):
     dry_run: bool | None = None
     copies_ignored: bool | None = None
     plate: int | None = spec(default=None, description="Plate of a pre-sliced 3MF chosen for printing.")
+    plan_fingerprint: str | None = spec(
+        default=None,
+        description=(
+            "SHA-256 of the canonical plan (printer, source, local file content, slice and print options). "
+            "Pass it to --expect-plan on the real run to refuse if anything changed since review."
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -566,6 +573,7 @@ class JobError(Contract):
     would_upload: bool | None = None
     would_print: bool | None = None
     copies_ignored: bool | None = None
+    plan_fingerprint: str | None = None
 
 
 @dataclass(frozen=True)
