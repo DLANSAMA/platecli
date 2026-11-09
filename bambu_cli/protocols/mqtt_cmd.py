@@ -81,13 +81,21 @@ def _sleep(sleep):
 
 
 def _teardown_mqtt_client(client):
-    """Stop the paho loop and drop the socket. Safe if connect/loop never started."""
+    """Drop the connection, then stop the paho loop. Safe if connect/loop never started.
+
+    The order matters. ``loop_stop()`` joins paho's network thread, and that thread
+    only exits once its send queue and its list of unacknowledged QoS 1 publishes are
+    empty, or the connection is gone. Stopping the loop first therefore blocks forever
+    when the printer applied a command but never acknowledged it: the caller's own wait
+    expires, teardown hangs, and nothing is printed or returned, although the printer
+    has already acted. ``disconnect()`` first ends the connection, so the thread exits.
+    """
     try:
-        client.loop_stop()
+        client.disconnect()
     except Exception:
         pass
     try:
-        client.disconnect()
+        client.loop_stop()
     except Exception:
         pass
 

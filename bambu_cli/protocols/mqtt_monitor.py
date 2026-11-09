@@ -17,6 +17,7 @@ from bambu_cli.protocols.mqtt_cmd import (
     _client_factory,
     _connect,
     _sleep,
+    _teardown_mqtt_client,
 )
 from bambu_cli.textsafe import display_safe
 from bambu_cli.utils import get_sequence_id
@@ -190,14 +191,7 @@ def monitor_status(args, printer):
                 userdata["progress"].stop()
             except Exception:
                 pass
-        try:
-            client.loop_stop()
-        except Exception:
-            pass
-        try:
-            client.disconnect()
-        except Exception:
-            pass
+        _teardown_mqtt_client(client)
     if refused_rc[0] is not None:
         # Exit 0 with no events here used to be indistinguishable from success.
         raise PrinterConnectionError(
