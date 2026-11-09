@@ -449,7 +449,7 @@ best-effort — same LAN protocols, not claimed hardware-verified.
 | OS | Linux (CI), macOS (CI), Windows (CI) | All three are first-class; Windows is the binding coverage leg |
 | Python | 3.10, 3.12, 3.14 (CI) | Requires Python ≥ 3.10; 3.11/3.13 expected to work, not in the matrix |
 | Printers | P1 series (P1P / P1S) on real hardware | X1 / X1C / X1E / A1 / A1 mini speak the same MQTT/FTPS LAN API; treat as unverified. `plate snapshot` is direct on P1/A1; X1 cameras need the opt-in Docker streamer |
-| Firmware | whatever the maintainer's P1 is running | A Bambu firmware update can break MQTT/FTPS without warning — run `plate doctor` after upgrades |
+| Firmware | P1P on 01.09.01.00: `doctor` and `status` read it over MQTT and FTPS (checked 2026-11-09). Print start and printer control were not re-checked on this firmware | A Bambu firmware update can break MQTT/FTPS without warning — run `plate doctor` after upgrades. Bambu's [January 2025 authorization update](https://blog.bambulab.com/firmware-update-introducing-new-authorization-control-system-2) restricts some LAN control (print start, motion, temperature) on firmware that enforces it; X1 came first and P/A series "at a future date". Which firmware enforces it on your printer is unverified here |
 | OrcaSlicer | hermetic stub in CI; real Orca on the maintainer's machine | Install via the platform command `plate` prints when it is missing |
 
 Status is **Beta, pre-1.0**. Do not treat this matrix as a 1.0 support promise.
