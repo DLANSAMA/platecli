@@ -85,6 +85,10 @@ and (b) explicit model downloads you request. Key properties:
   only the print step is withheld. `--confirm` is a deliberate-action gate against
   accidents, not an authorization boundary: the CLI cannot distinguish a human's flag
   from an agent's. Agents must not invent confirm flags without user approval.
+  `job` / `send --expect-plan <plan_fingerprint>` narrows the gap: it refuses (exit `5`)
+  unless the run matches the `--dry-run` that was reviewed. It does not make the gate
+  an authorization boundary, because anything that can run `plate` can run the dry run
+  and read its fingerprint.
 - **In the interactive front-ends the gate is a dialog, not the flag.** `plate go`
   (wizard) and `plate tui` (full-screen UI) never require the user to type
   `--confirm`; the equivalent deliberate action is an explicit confirmation step —

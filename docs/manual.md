@@ -414,6 +414,15 @@ plate --sim status --json
 plate job <url> --json --confirm
 ```
 
+To make sure the run is the one you reviewed, review a dry run and pass its fingerprint back:
+
+```bash
+plate job model.3mf --dry-run --json          # note "plan_fingerprint" in the output
+plate job model.3mf --json --confirm --expect-plan <plan_fingerprint>
+```
+
+If the file, the printer or any slicing or print option changed in between, the second command exits `5` before it downloads, slices, uploads or prints. A URL is bound to the URL, not to what it serves later.
+
 ## Features in depth
 
 - **Jobs & URL support** — Use `job` when an agent or user gives either a website URL or a local file path. It handles everything in one shot.

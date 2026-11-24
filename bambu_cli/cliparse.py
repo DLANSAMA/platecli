@@ -211,6 +211,14 @@ def _add_job_arguments(parser):
     parser.add_argument(
         "--dry-run", action="store_true", help="No-side-effect validation; skip download/slice/upload/print"
     )
+    parser.add_argument(
+        "--expect-plan",
+        metavar="FINGERPRINT",
+        help=(
+            "Run only if this job's plan_fingerprint (from a reviewed --dry-run) matches; otherwise exit 5 "
+            "before anything is downloaded, sliced, uploaded or printed"
+        ),
+    )
     parser.add_argument("--upload-only", action="store_true", help="Upload the printable but do not start the print")
     parser.add_argument(
         "--plate",

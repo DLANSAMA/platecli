@@ -39,6 +39,7 @@ from bambu_cli.download import (
 from bambu_cli.errors import BambuError
 from bambu_cli.gcode_limits import file_heater_problem, zip_member_heater_problem
 from bambu_cli.job.payload import _parse_print_options, _print_next_command
+from bambu_cli.job.plan import plan_fingerprint
 from bambu_cli.job.predict import (
     _ext_would_slice,
     _predicted_download_slice_extension,
@@ -160,6 +161,19 @@ def _run_job(ctx, args, steps=None):
             summary,
             predicted_remote_name,
             "Predicted printer filename is unsafe",
+        )
+
+    summary["plan_fingerprint"] = plan_fingerprint(ctx, args, source)
+    expected_plan = _namespace_get(args, "expect_plan")
+    if expected_plan is not None and str(expected_plan).strip().lower() != summary["plan_fingerprint"]:
+        _job_fail(
+            args,
+            summary,
+            "validate",
+            EXIT_COMMAND_ERROR,
+            "The plan changed since it was reviewed: nothing was downloaded, sliced, uploaded or printed. "
+            f"Expected plan {str(expected_plan).strip().lower()}, this run is plan {summary['plan_fingerprint']}. "
+            "Re-run with --dry-run, review it, and pass the new plan_fingerprint to --expect-plan.",
         )
 
     workdir = None

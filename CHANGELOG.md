@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Agent safety
+
+- **`job`/`send` now report a `plan_fingerprint` and can enforce it.** Every `job`/`send`
+  envelope, dry-run included, carries a SHA-256 of what the run is about to do: the
+  printer, the source, the content of a local source file, and every slicing and
+  print-start option. Run `--dry-run`, review it, then pass the fingerprint back as
+  `--expect-plan`; if anything changed the run exits `5` before it downloads, slices,
+  uploads or prints. It proves the run is the one that was reviewed, not that a person
+  reviewed it, and a URL source is bound to the URL, not the bytes it serves later.
+
+### Fixed
+
+- **A command the printer did not acknowledge no longer hangs forever.** On a P1P with
+  firmware 01.09.01.00, `plate light on` was applied by the printer but never
+  acknowledged. The wait timed out, then closing the MQTT connection blocked for good:
+  the command printed nothing and never returned, so a script or an agent waited
+  indefinitely on a command that had worked. The client now drops the connection before
+  it stops paho's network thread, which is what lets that thread exit. The same fix
+  covers `print`, `status`, the live monitor and the TUI's held connection, which closed
+  their connections the same way. A command with no acknowledgement now ends in about
+  five seconds with the existing "sent, not acknowledged" result.
+
 ### Changed
 
 - **`plate tui` has a new look.** It has its own dark theme, with a light one

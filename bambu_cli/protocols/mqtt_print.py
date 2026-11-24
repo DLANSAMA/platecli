@@ -7,7 +7,13 @@ import threading
 from bambu_cli.config import get_command_timeout
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.logging_utils import logger
-from bambu_cli.protocols.mqtt_cmd import _client_factory, _connect, decode_report, status_is_complete
+from bambu_cli.protocols.mqtt_cmd import (
+    _client_factory,
+    _connect,
+    _teardown_mqtt_client,
+    decode_report,
+    status_is_complete,
+)
 
 
 def _printer_error_hex(code: object) -> str | None:
@@ -178,14 +184,7 @@ def execute_print_command(
         record_error_detail("print", EXIT_NETWORK_ERROR, message, failed_step="print", file=basename, printed=False)
         abort("", exit_code=EXIT_NETWORK_ERROR)
     finally:
-        try:
-            client.loop_stop()
-        except Exception:
-            pass
-        try:
-            client.disconnect()
-        except Exception:
-            pass
+        _teardown_mqtt_client(client)
 
     if connect_failed[0]:
         message = f"Failed to connect to printer to start print for {basename} (check LAN access code)"
