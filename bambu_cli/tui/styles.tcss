@@ -513,3 +513,66 @@ HelpScreen {
     height: auto;
     color: $text-muted;
 }
+
+/* --- orientation screen ------------------------------------------------- */
+
+#orient-body {
+    height: 1fr;
+}
+
+/* The picture takes what the side panel leaves; one cell is two pixels. */
+#orient-view {
+    border: round $primary;
+    border-title-color: $secondary;
+    border-title-style: bold;
+}
+
+#orient-side {
+    width: 40;
+    height: 100%;
+    padding: 0 1;
+}
+
+#orient-facts {
+    height: auto;
+}
+
+#orient-faces {
+    height: auto;
+    padding: 1 0;
+}
+
+#orient-keys {
+    height: auto;
+    color: $text-muted;
+}
+
+#orient-summary {
+    height: auto;
+    color: $text-muted;
+}
+
+#orient-summary.warning {
+    color: $warning;
+}
+
+/* The sliced pose in the prepare results: hidden until a slice reports one. */
+#pose-view {
+    display: none;
+    height: 8;
+    width: 100%;
+    margin: 1 0 0 0;
+}
+
+#pose-view.shown {
+    display: block;
+}
+
+#pose-line {
+    height: auto;
+    color: $text-muted;
+}
+
+#pose-line.warning {
+    color: $warning;
+}

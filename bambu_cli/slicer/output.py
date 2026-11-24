@@ -122,6 +122,7 @@ def _finalize_slice(
     filepath: str,
     step_converted: bool,
     pre_snapshot: tuple[bool, float, int] | None = None,
+    orientation: dict | None = None,
 ) -> str:
     """Evaluate the OrcaSlicer result, emit success/error output, and return the .3mf path."""
     _fresh = _was_written_this_run(outpath, pre_snapshot)
@@ -188,7 +189,7 @@ def _finalize_slice(
             )
         logger.info(f"✅ Sliced: {_path_for_message(outpath)} ({file_size // 1024}KB)")
         if bool(_namespace_get(args, "json", False)):
-            from bambu_cli.contracts import Slice
+            from bambu_cli.contracts import Orientation, Slice
 
             emit_json(
                 Slice(
@@ -199,6 +200,7 @@ def _finalize_slice(
                     filename=os.path.basename(outpath),
                     bytes=file_size,
                     step_converted=step_converted,
+                    orientation=Orientation.from_summary(orientation),
                 )
             )
         return outpath

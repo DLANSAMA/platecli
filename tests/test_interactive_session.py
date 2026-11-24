@@ -970,3 +970,62 @@ def test_preview_labels_never_run_into_their_values(tmp_path):
     assert len(rows) == 4
     assert all(line.split(" ", 1)[0] in ("Model", "Feed", "Temperatures", "Estimate") for line in rows)
     assert len({len(line) - len(line.split(" ", 1)[1].lstrip()) for line in rows}) == 1, "values are not aligned"
+
+
+# ---------------------------------------------------------------------------
+# Orientation flags
+# ---------------------------------------------------------------------------
+
+
+def test_orientation_flags_reach_the_slice(tmp_path):
+    from bambu_cli.cliparse import build_parser
+
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+    slicer = Recorder(return_value=sliced)
+    steps = GoSteps(download=Recorder(), slice=slicer, job=Recorder(return_value=sliced))
+    prompts = ScriptedPrompts([True, "PLA", "standard", False, True])
+    args = build_parser().parse_args(["go", stl, "--face", "2", "--rotate", "z=15"])
+    cmd_go(args, GoDeps(prompts=prompts, steps=steps))
+    slice_ns = slicer.calls[0]
+    assert slice_ns.face == 2 and slice_ns.orient is None and slice_ns.rotate == [("z", 15.0)]
+    # A person at the wizard sees the pose drawn while it slices.
+    assert slice_ns.orient_preview is True
+
+
+def test_orient_keep_reaches_the_slice(tmp_path):
+    from bambu_cli.cliparse import build_parser
+
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+    slicer = Recorder(return_value=sliced)
+    steps = GoSteps(download=Recorder(), slice=slicer, job=Recorder(return_value=sliced))
+    prompts = ScriptedPrompts([True, "PLA", "standard", False, True])
+    cmd_go(build_parser().parse_args(["go", stl, "--orient", "keep"]), GoDeps(prompts=prompts, steps=steps))
+    assert slicer.calls[0].orient == "keep"
+
+
+def test_no_orientation_flags_slice_the_default(tmp_path):
+    _install_ready_settings(tmp_path)
+    stl = _make_stl(tmp_path)
+    sliced = _sliced_3mf(tmp_path)
+    slicer = Recorder(return_value=sliced)
+    steps = GoSteps(download=Recorder(), slice=slicer, job=Recorder(return_value=sliced))
+    prompts = ScriptedPrompts([True, "PLA", "standard", False, True])
+    cmd_go(_args(source=stl), GoDeps(prompts=prompts, steps=steps))
+    assert getattr(slicer.calls[0], "orient", None) is None and getattr(slicer.calls[0], "face", None) is None
+
+
+def test_face_with_orient_fails_before_any_prompt(tmp_path):
+    from bambu_cli.cliparse import build_parser
+
+    _install_ready_settings(tmp_path)
+    prompts = ScriptedPrompts([])
+    steps = GoSteps(download=Recorder(), slice=Recorder(), job=Recorder())
+    args = build_parser().parse_args(["go", _make_stl(tmp_path), "--face", "1", "--orient", "keep"])
+    with pytest.raises(BambuError) as caught:
+        cmd_go(args, GoDeps(prompts=prompts, steps=steps))
+    assert caught.value.failed_step == "validate"
+    assert steps.slice.calls == []

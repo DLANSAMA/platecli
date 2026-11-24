@@ -217,7 +217,7 @@ def collect_preflight_checks():
                             "ok",
                             "access-code",
                             "Access code file exists and contains a non-placeholder value.",
-                            access_file,
+                            {"access_code_file": access_file},
                         )
                     )
                     access_permissions = _file_permission_check(expanded, "access-code-permissions")

@@ -27,4 +27,4 @@ The work we chose, in order. **No task from the user? Take the top 🤖 box unde
 
 Nothing chosen yet; new findings go in `docs/plan/inbox.md`.
 
-**Highest ids given:** D-3 · L-4 · S-3 · T-1 · retired: D-1, D-3, L-2, L-3, S-1, S-2, S-3
+**Highest ids given:** D-3 · L-4 · O-2 · S-3 · T-1 · retired: D-1, D-3, L-2, L-3, O-1, O-2, S-1, S-2, S-3

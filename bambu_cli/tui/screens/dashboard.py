@@ -124,6 +124,8 @@ class DashboardScreen(Screen):
 
     def _apply_snapshot(self, snapshot: StatusSnapshot) -> None:
         self._fetching = False
+        if not self.is_mounted:
+            return
         now = self.clock()
         self._history.add(snapshot)
         view = job_view(snapshot, now)

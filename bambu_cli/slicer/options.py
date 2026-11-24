@@ -8,6 +8,7 @@ import argparse
 import difflib
 import glob
 import json
+import math
 import os
 import re
 import stat
@@ -368,6 +369,11 @@ def _directory_input_message(path: str) -> str:
     return f"Path is a directory, not a file: {_path_for_message(path)}"
 
 
+def _is_finite_number(value: Any) -> bool:
+    """Return True if *value* is a finite int/float (and not a bool)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _validate_slice_options(args: argparse.Namespace) -> str | None:
     from bambu_cli.argutils import namespace_get as _namespace_get
     from bambu_cli.constants import (
@@ -378,42 +384,106 @@ def _validate_slice_options(args: argparse.Namespace) -> str | None:
     )
 
     copies = getattr(args, "copies", 1)
-    if isinstance(copies, int) and copies < 1:
+    if (
+        isinstance(copies, (int, float))
+        and not isinstance(copies, bool)
+        and (not _is_finite_number(copies) or copies < 1)
+    ):
         return f"--copies must be a positive integer (got {copies})"
     infill = getattr(args, "infill", 15)
-    if isinstance(infill, int) and not (0 <= infill <= 100):
+    if (
+        isinstance(infill, (int, float))
+        and not isinstance(infill, bool)
+        and (not _is_finite_number(infill) or not (0 <= infill <= 100))
+    ):
         return f"--infill must be between 0 and 100 (got {infill})"
     nozzle_temp = getattr(args, "nozzle_temp", None)
-    if isinstance(nozzle_temp, int) and not (MIN_NOZZLE_TEMP_C <= nozzle_temp <= MAX_NOZZLE_TEMP_C):
+    if (
+        isinstance(nozzle_temp, (int, float))
+        and not isinstance(nozzle_temp, bool)
+        and (not _is_finite_number(nozzle_temp) or not (MIN_NOZZLE_TEMP_C <= nozzle_temp <= MAX_NOZZLE_TEMP_C))
+    ):
         return f"--nozzle-temp must be between {MIN_NOZZLE_TEMP_C} and {MAX_NOZZLE_TEMP_C} °C (got {nozzle_temp})"
     bed_temp = getattr(args, "bed_temp", None)
-    if isinstance(bed_temp, int) and not (MIN_BED_TEMP_C <= bed_temp <= MAX_BED_TEMP_C):
+    if (
+        isinstance(bed_temp, (int, float))
+        and not isinstance(bed_temp, bool)
+        and (not _is_finite_number(bed_temp) or not (MIN_BED_TEMP_C <= bed_temp <= MAX_BED_TEMP_C))
+    ):
         return f"--bed-temp must be between {MIN_BED_TEMP_C} and {MAX_BED_TEMP_C} °C (got {bed_temp})"
     wall_type = _namespace_get(args, "wall_type", None)
     if wall_type and wall_type not in ("normal", "classic", "archaic"):
         return "--wall-type must be one of: normal, classic"
 
     layer_height = _namespace_get(args, "layer_height", None)
-    if isinstance(layer_height, (int, float)) and not (0 < layer_height <= 1.0):
+    if (
+        isinstance(layer_height, (int, float))
+        and not isinstance(layer_height, bool)
+        and (not _is_finite_number(layer_height) or not (0 < layer_height <= 1.0))
+    ):
         return f"--layer-height must be between 0 and 1.0 mm (got {layer_height})"
     brim = _namespace_get(args, "brim", None)
-    if isinstance(brim, (int, float)) and brim < 0:
+    if isinstance(brim, (int, float)) and not isinstance(brim, bool) and (not _is_finite_number(brim) or brim < 0):
         return f"--brim must be >= 0 mm (got {brim})"
     speed = _namespace_get(args, "speed", None)
-    if isinstance(speed, (int, float)) and speed <= 0:
+    if isinstance(speed, (int, float)) and not isinstance(speed, bool) and (not _is_finite_number(speed) or speed <= 0):
         return f"--speed must be a positive mm/s value (got {speed})"
     first_layer_height = _namespace_get(args, "first_layer_height", None)
-    if isinstance(first_layer_height, (int, float)) and not (0 < first_layer_height <= 1.0):
+    if (
+        isinstance(first_layer_height, (int, float))
+        and not isinstance(first_layer_height, bool)
+        and (not _is_finite_number(first_layer_height) or not (0 < first_layer_height <= 1.0))
+    ):
         return f"--first-layer-height must be between 0 and 1.0 mm (got {first_layer_height})"
     support_threshold = _namespace_get(args, "support_threshold", None)
-    if isinstance(support_threshold, (int, float)) and not (0 <= support_threshold <= 90):
+    if (
+        isinstance(support_threshold, (int, float))
+        and not isinstance(support_threshold, bool)
+        and (not _is_finite_number(support_threshold) or not (0 <= support_threshold <= 90))
+    ):
         return f"--support-threshold must be between 0 and 90 degrees (got {support_threshold})"
     fan_speed = _namespace_get(args, "fan_speed", None)
-    if isinstance(fan_speed, (int, float)) and not (0 <= fan_speed <= 100):
+    if (
+        isinstance(fan_speed, (int, float))
+        and not isinstance(fan_speed, bool)
+        and (not _is_finite_number(fan_speed) or not (0 <= fan_speed <= 100))
+    ):
         return f"--fan-speed must be between 0 and 100 (got {fan_speed})"
     flow_ratio = _namespace_get(args, "flow_ratio", None)
-    if isinstance(flow_ratio, (int, float)) and not (0 < flow_ratio <= 2.0):
+    if (
+        isinstance(flow_ratio, (int, float))
+        and not isinstance(flow_ratio, bool)
+        and (not _is_finite_number(flow_ratio) or not (0 < flow_ratio <= 2.0))
+    ):
         return f"--flow-ratio must be between 0 and 2.0 (got {flow_ratio})"
+    support_interface_density = _namespace_get(args, "support_interface_density", None)
+    if (
+        isinstance(support_interface_density, (int, float))
+        and not isinstance(support_interface_density, bool)
+        and (not _is_finite_number(support_interface_density) or not (0 <= support_interface_density <= 100))
+    ):
+        return f"--support-interface-density must be between 0 and 100 (got {support_interface_density})"
+    threads = _namespace_get(args, "threads", None)
+    if (
+        isinstance(threads, (int, float))
+        and not isinstance(threads, bool)
+        and (not _is_finite_number(threads) or threads < 1)
+    ):
+        return f"--threads must be >= 1 (got {threads})"
+    for flag, attr in (("--walls", "walls"), ("--top-layers", "top_layers"), ("--bottom-layers", "bottom_layers")):
+        val = _namespace_get(args, attr, None)
+        if isinstance(val, (int, float)) and not isinstance(val, bool) and (not _is_finite_number(val) or val < 0):
+            return f"{flag} must be >= 0 (got {val})"
+    for flag, attr in (
+        ("--accel-wall", "accel_wall"),
+        ("--accel-wall-outer", "accel_wall_outer"),
+        ("--accel-infill", "accel_infill"),
+        ("--accel-travel", "accel_travel"),
+        ("--accel-first-layer", "accel_first_layer"),
+    ):
+        val = _namespace_get(args, attr, None)
+        if isinstance(val, (int, float)) and not isinstance(val, bool) and (not _is_finite_number(val) or val <= 0):
+            return f"{flag} must be > 0 (got {val})"
 
     # Generic overrides: fail fast on malformed KEY=VALUE / bad JSON.
     try:

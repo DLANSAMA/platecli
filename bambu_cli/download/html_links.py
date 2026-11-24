@@ -11,6 +11,37 @@ from bambu_cli.constants import (
 from bambu_cli.download.naming import _file_extension
 from bambu_cli.fsutil import _portable_basename
 
+_NON_MODEL_WEB_EXTENSIONS = frozenset(
+    {
+        ".html",
+        ".htm",
+        ".xhtml",
+        ".js",
+        ".mjs",
+        ".cjs",
+        ".css",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".svg",
+        ".webp",
+        ".ico",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".eot",
+        ".map",
+        ".xml",
+        ".json",
+        ".txt",
+        ".pdf",
+        ".md",
+        ".mp4",
+        ".webm",
+    }
+)
+
 
 def _is_html_content_type(content_type):
     return (content_type or "").split(";", 1)[0].strip().lower() in ("text/html", "application/xhtml+xml")
@@ -72,7 +103,7 @@ class _ModelLinkParser(HTMLParser):
             return
         name = _portable_basename(unquote(parsed.path))
         ext = _file_extension(name)
-        if ext not in DOWNLOAD_CANDIDATE_EXTENSIONS and filename_hint:
+        if ext not in DOWNLOAD_CANDIDATE_EXTENSIONS and ext not in _NON_MODEL_WEB_EXTENSIONS and filename_hint:
             name = filename_hint
             ext = _file_extension(name)
         if ext in DOWNLOAD_CANDIDATE_EXTENSIONS:

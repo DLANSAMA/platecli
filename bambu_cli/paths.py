@@ -96,5 +96,5 @@ def exception_for_message(exc):
     for attr in ("filename", "filename2"):
         path = getattr(exc, attr, None)
         if path is not None:
-            message = message.replace(str(path), display_path(path))
+            message = message.replace(str(path), path_for_message(path))
     return message

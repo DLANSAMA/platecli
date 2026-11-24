@@ -20,6 +20,8 @@ __all__ = [
     "redact_url_credentials",
 ]
 
+_EMBEDDED_CRED_URL_RE = re.compile(r"(?:[a-zA-Z][a-zA-Z0-9+.-]*://|(?<!\S)//)[^\s<>\"']*@[^\s<>\"']*")
+
 
 def json_mode_requested(args):
     return bool(getattr(args, "json", False))
@@ -35,7 +37,11 @@ def looks_like_schemeless_credential_url(value):
     try:
         parsed = urlparse(f"https://{text}")
         host = parsed.hostname or ""
-        return bool(parsed.netloc and (parsed.username is not None or parsed.password is not None) and "." in host)
+        return bool(
+            parsed.netloc
+            and (parsed.username is not None or parsed.password is not None)
+            and ("." in host or host == "localhost")
+        )
     except Exception:
         return False
 
@@ -94,39 +100,31 @@ def looks_like_split_userinfo(text, parsed=None):
     return "@" in segment and not segment.startswith("@")
 
 
-def redact_url_credentials(value):
-    """Return URL text with any userinfo removed before logging or JSON output."""
-    text = str(value or "")
-    if "@" not in text:
-        return value
+def _redact_url_token(token: str) -> str:
     try:
-        parsed = urlparse(text)
+        parsed = urlparse(token)
     except ValueError:
         # e.g. an unbalanced IPv6 bracket after the userinfo: user:pw@[x/a.stl
-        return _strip_through_last_at(text)
-    after_netloc = _after_netloc(text, parsed) if parsed.netloc else ""
+        return _strip_through_last_at(token)
+    after_netloc = _after_netloc(token, parsed) if parsed.netloc else ""
     if parsed.netloc and _port_is_invalid(parsed) and "@" in after_netloc:
         # A password holding "/", "?" or "#" (user:pa/ss@host) makes the parser
         # read "user" as the host and the password as the port, so there is no
         # userinfo to strip and the secret would be echoed as-is.
-        return _strip_through_last_at(text)
-    if looks_like_split_userinfo(text, parsed):
+        return _strip_through_last_at(token)
+    if looks_like_split_userinfo(token, parsed):
         # The same with a password that starts with digits: user:1234/pw@host.
-        return _strip_through_last_at(text)
-    if len(parsed.scheme) > 1 and not parsed.netloc and text[len(parsed.scheme) + 1 :].startswith(("/", "\\")):
+        return _strip_through_last_at(token)
+    if len(parsed.scheme) > 1 and not parsed.netloc and token[len(parsed.scheme) + 1 :].startswith(("/", "\\")):
         # https:///user:pw@host, https:/user:pw@host, https:\\user:pw@host: no
         # authority for the parser, but a lenient reader still finds userinfo.
         # (A one-letter "scheme" is a Windows drive: C:\\Users\\a@b\\x.stl.)
-        return _strip_through_last_at(text)
-    if "://" not in text and looks_like_schemeless_credential_url(text):
-        redacted = redact_url_credentials(f"https://{text}")
-        prefix = "https://"
-        return redacted[len(prefix) :] if isinstance(redacted, str) and redacted.startswith(prefix) else redacted
+        return _strip_through_last_at(token)
     # Scheme-relative URLs (//user:pass@host/…) parse with an empty scheme but a
     # populated netloc; strip userinfo while preserving the leading "//".
     if (
         not parsed.scheme
-        and text.startswith("//")
+        and token.startswith("//")
         and parsed.netloc
         and (parsed.username is not None or parsed.password is not None)
     ):
@@ -141,7 +139,7 @@ def redact_url_credentials(value):
             host = f"{host}:{port}"
         return urlunparse(("", host, parsed.path, parsed.params, parsed.query, parsed.fragment))
     if not parsed.scheme or not parsed.netloc or (parsed.username is None and parsed.password is None):
-        return value
+        return token
     host = parsed.hostname or ""
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
@@ -152,3 +150,19 @@ def redact_url_credentials(value):
     if port is not None:
         host = f"{host}:{port}"
     return urlunparse((parsed.scheme, host, parsed.path, parsed.params, parsed.query, parsed.fragment))
+
+
+def redact_url_credentials(value):
+    """Return URL text with any userinfo removed before logging or JSON output."""
+    text = str(value or "")
+    if "@" not in text:
+        return value
+    if "://" not in text and looks_like_schemeless_credential_url(text):
+        redacted = _redact_url_token(f"https://{text}")
+        prefix = "https://"
+        return redacted[len(prefix) :] if isinstance(redacted, str) and redacted.startswith(prefix) else redacted
+    if any(char.isspace() for char in text):
+        scrubbed = _EMBEDDED_CRED_URL_RE.sub(lambda match: _redact_url_token(match.group(0)), text)
+        return value if scrubbed == text else scrubbed
+    scrubbed = _redact_url_token(text)
+    return value if scrubbed == text else scrubbed

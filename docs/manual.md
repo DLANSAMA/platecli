@@ -14,6 +14,7 @@ The complete reference for `plate` — setup, configuration, slicing, monitoring
 - [Camera snapshots](#camera-snapshots)
 - [Global flags](#global-flags)
 - [Slicing & AMS](#slicing--ams)
+- [Orientation: how the model sits on the plate](#orientation-how-the-model-sits-on-the-plate)
 - [Config reference](#config-reference)
 - [Use with AI agents](#use-with-ai-agents)
 - [Features in depth](#features-in-depth)
@@ -254,7 +255,8 @@ Without the extra, `plate tui` exits `1` (config error) with the install command
 | Screen | What it does |
 |--------|--------------|
 | **Dashboard** | The printer's state in words in the top bar (*Printing*, *Paused*, *Offline*…). The job panel shows the percent done in large type, time left and the clock time it should finish, the layer, and which tray is feeding. Nozzle and bed cards show the reading, what the heater is doing (*heating to 220 °C*, *heater off*) and the last few minutes of history. The AMS shows tray cards in each filament's reported colour, named A1–A4 / B1–B4 like Bambu Studio, with the active tray marked ▶ and how much is left. Refreshes on `r` and every 10 s while it is the active screen. An unreachable printer renders inline, and the app never crashes on it. |
-| **Prepare** (`n`) | Source box (URL or local path, validated as you submit), material and quality presets with guidance, and a supports checkbox. The AMS-detected filament is pre-selected and tagged *(detected in AMS)* — unless you already picked something, in which case a slow AMS read never overrides you. "Prepare" downloads and slices in the background and shows the same preview the wizard prints (model, printer, material line, time/filament estimate). If the printer or OrcaSlicer is not configured, this screen is replaced by a message pointing at `plate setup` — the TUI never embeds setup. |
+| **Prepare** (`n`) | Source box (URL or local path, validated as you submit), material and quality presets with guidance, and a supports checkbox. The AMS-detected filament is pre-selected and tagged *(detected in AMS)* — unless you already picked something, in which case a slow AMS read never overrides you. "Prepare" downloads and slices in the background and shows the same preview the wizard prints (model, printer, material line, orientation, time/filament estimate). Above it, before *Start print…* can be pressed, it draws the pose that was sliced (from above and from the front) with one line about it: *Auto turned this model 90° about X · o, then 0, keeps the file's orientation* when auto turned it, or a warning when the pose may not print. If the printer or OrcaSlicer is not configured, this screen is replaced by a message pointing at `plate setup` — the TUI never embeds setup. |
+| **Orientation** (`o` or *Orient…* from prepare) | The model on the plate, drawn in the terminal (two pixels per character cell, in colour, so any terminal shows it), with surface that needs support tinted orange. Beside it: the pose's height, footprint, bed contact and overhang, whether it stands on its own, the CLI flags that select it (`--face 2 --rotate z=15`), and the ranked faces. It opens on the pose Prepare slices: the one chosen here before, or auto (face 1). `f`/`F` lays it on the next or previous face (face 1 is what `--orient auto` picks), `x`/`y`/`z` turn it 90° (with Shift, back), `[`/`]` spin it 15° on the plate, `a` picks face 1, `0` goes back to the pose it was exported in, `v` changes the view. Enter uses the pose; the next Prepare slices it that way and draws it. A link or zip is downloaded once to show it, and re-slicing in a new pose reuses that download. Not offered for a pre-sliced file. |
 | **Settings** (`s` from prepare) | Advanced slice settings — the named `slice` flags grouped by Quality / Strength / Supports / Adhesion / Filament / Speed / Plate. Flags with a fixed set of options are dropdowns. Below the form, **Add an override** takes any other setting as a name, a bucket (*process* or *filament*, matching `--set` / `--set-filament`) and a value — run `plate slice --list-settings` to see what your profiles accept. Pending overrides are listed; click one to edit it, or remove it. A blank field keeps the profile default, exactly like leaving a flag off. Unsafe values are refused inline by the same checks the CLI runs. Disabled for pre-sliced sources, which are printed as-is. |
 | **Confirm** | Start print / Upload only / Cancel. |
 | **Monitor** (`m`) | Follows a running job with the dashboard's job panel and heater cards, polling faster, until the job reaches a terminal state (`FINISH` / `FAILED` / `STOP` / `IDLE`, the same set `plate status --monitor` uses). |
@@ -268,7 +270,9 @@ Without the extra, `plate tui` exits `1` (config error) with the install command
 | `r` | Refresh the dashboard now |
 | `n` | New print (prepare flow) |
 | `m` | Monitor the running job |
+| `o` | See or change how the model lies on the plate (from the prepare screen) |
 | `s` | Advanced slice settings (from the prepare screen) |
+| `f` `F` `x` `y` `z` `[` `]` `a` `0` `v` | On the orientation screen: face, turn, spin, auto, as exported, view |
 | `Esc` | Back — from prepare, from the confirm dialog, or from the monitor |
 | `q` / `Ctrl-Q` | Quit (refused while an upload or print-start is in flight) |
 | `Ctrl-P` | Command palette; *Change theme* switches to the light `platecli-light` theme for the rest of the session |
@@ -342,7 +346,7 @@ P1/A1-class printers are captured directly over TLS port 6000 — no extra softw
 
 ## Slicing & AMS
 
-`slice` accepts common mesh formats in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. When mapping filaments to AMS slots, mapping arguments take zero-or-positive slot indexes.
+`slice` accepts common mesh formats in the precedence order STL > STEP/STP > OBJ > 3MF > G-code. It decides which way up the model prints, and shows you, before OrcaSlicer runs; see [Orientation](#orientation-how-the-model-sits-on-the-plate). When mapping filaments to AMS slots, mapping arguments take zero-or-positive slot indexes.
 
 To decide that mapping, read what is actually loaded first: `plate status`
 shows each AMS unit's trays (filament type, colour, and remaining %), and
@@ -364,6 +368,80 @@ shows each AMS unit's trays (filament type, colour, and remaining %), and
 `ams` is `null` on printers without an AMS. `active` marks the currently loaded
 tray (absolute index `unit * 4 + slot`); feed the `slot` indexes to
 `--ams-mapping` when printing with `--use-ams`.
+
+## Orientation: how the model sits on the plate
+
+Before OrcaSlicer runs, platecli decides which way up the model is printed, and
+shows you before anything is sliced or sent. `slice`, `job`, `send` and
+`plate go` all take the flags below.
+
+**Default: `--orient auto`.** (The one switch is `DEFAULT_ORIENT_MODE` in `bambu_cli/constants.py`.)
+
+- **`--orient auto`**: lays the model on its best face. Faces are ranked by how
+  much down-facing surface would need support, then by height, by how much
+  rests on the bed, and whether the centre of mass sits over it (a pose that
+  would tip over ranks last). When the file's own pose is already the best,
+  the file is sliced untouched.
+- **`--orient keep`**: the pose the file was exported in, untouched. platecli
+  still measures it; if the model rests on a point or an edge (a figurine
+  exported upside down, a bracket standing on its rim), `slice` warns and names
+  the face `auto` would use. If OrcaSlicer then fails, the error's
+  `next_command` is that `--orient auto` slice.
+- **`--face N`**: lays it on face *N* of the ranking `plate orient` prints
+  (face 1 is what `auto` picks).
+- **`--rotate AXIS=DEG`**: turns it about the plate's x, y or z axis, e.g.
+  `--rotate x=90` or `--rotate z=45` to spin it on the plate. Repeat it; turns
+  apply in order, after the face: the `--orient` mode's (the default above
+  without one), `--face N`'s, or with `--orient keep` the file's own pose.
+
+**You always see the pose.** In a terminal, `slice`, `job`, `send` and
+`plate go` draw the model (from above and from the front, overhangs tinted
+orange) before slicing, followed by one line: how tall it is and how much
+rests on the bed. When auto turned the model from the file's pose, the line
+says so, e.g. `Auto turned this model 90° about X … --orient keep slices it
+as exported`. The picture needs a colour terminal; with `--json`, `NO_COLOR`,
+`TERM=dumb` or output that is not a terminal it is left out, and the line
+alone is logged. In `plate tui` the prepare screen shows the same pose before
+you confirm. If auto cannot read a file (or a 3MF holds several objects, or the
+file is over 64 MiB), the model is sliced as exported and a warning says why.
+
+```bash
+plate orient bracket.stl              # draw the pose and rank the faces it can lie on
+plate preview bracket.stl --face 2    # bracket_preview.png: that pose, plus every ranked face
+plate slice bracket.stl --face 2 --rotate z=90
+plate job bracket.stl --orient keep --confirm
+```
+
+`plate orient` draws the selected pose, prints one line per face (bed contact,
+overhang, height, and whether it stands on its own), marks the face `auto`
+would pick and the pose as exported, and ends with the `plate slice` flags for
+the pose you are looking at. It takes the same flags, so you can try a pose
+before slicing it. `plate preview` draws it into a PNG, with support-needing
+surface tinted orange and a face that tips over labelled in red. Both speak
+`--json` ([`orient.json`](schemas/orient.json),
+[`preview.json`](schemas/preview.json)), and `slice`/`job` report the pose
+they used as an `orientation` object: `mode`, `face`, `turned` (e.g.
+`"90° about X"`), the `rotation` matrix, height and bed contact, and a
+`warning` to pass on when there is one. For a picture in a `--json` workflow,
+run `plate preview` with the same flags and read its `output` path.
+
+In `plate tui`, Prepare draws the pose it sliced before you can confirm, and
+`o` on the prepare screen changes it with the model in front of you: see
+[Full-screen mode](#full-screen-mode-plate-tui).
+
+What it applies to: STL, OBJ, STEP/STP (converted to STL first) and a 3MF that
+holds one object and no G-code. For that 3MF only the object's placement
+changes; its settings, paint and modifiers are copied byte for byte. **A
+pre-sliced 3MF is never re-oriented**: the pose is baked into its G-code, so it
+is sent as it is, and `--orient auto`, `--face` or `--rotate` on one is refused
+before anything is sliced or uploaded. A 3MF with several objects can be
+ranked but not turned; orient it in OrcaSlicer, or export the part you want as
+STL.
+
+platecli turns the model itself and hands OrcaSlicer a file already in the pose,
+with OrcaSlicer's own auto-orient switched off (`--orient 0`), so the pose you
+see is the pose that prints. (OrcaSlicer 2.3.1's `--rotate` flags crash it,
+and it does not drop a 3MF object onto the bed.)
 
 ## Config reference
 

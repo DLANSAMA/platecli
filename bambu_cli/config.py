@@ -480,6 +480,9 @@ def load_access_code():
                 "using the file and ignoring the stale inline value "
                 "(run: plate setup --migrate-access-code to remove the inline key)."
             )
+        if not code_file.strip():
+            logger.error("access_code_file must be a non-empty path string.")
+            abort("", exit_code=EXIT_CONFIG_ERROR)
         path = _expand_path(code_file)
         _enforce_secret_file_permissions(path, _display_path(path))
         try:

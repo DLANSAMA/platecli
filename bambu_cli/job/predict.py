@@ -37,6 +37,23 @@ def _ext_would_slice(ext):
     return ext in SLICEABLE_EXTENSIONS
 
 
+def _path_would_slice(path, ext):
+    """``_ext_would_slice`` for a file on disk: an unsliced 3MF project is sliced too.
+
+    A 3MF with no ``Metadata/plate_<n>.gcode`` is a model, not a printable, so
+    job slices it like an STL instead of failing at plate selection. A 3MF that
+    is not a readable package stays on the printer-ready path, whose plate check
+    reports it.
+    """
+    if _ext_would_slice(ext):
+        return True
+    if ext != ".3mf":
+        return False
+    from bambu_cli.mesh import is_unsliced_3mf
+
+    return is_unsliced_3mf(path)
+
+
 def _predicted_download_slice_extension(url, args):
     """Predict the extension a URL download hands to the slicer, matching the doer.
 
@@ -96,6 +113,12 @@ def _slice_args_for_job(filepath, args, output_dir):
         set_process=getattr(args, "set_process", None),
         set_filament=getattr(args, "set_filament", None),
         settings_json=getattr(args, "settings_json", None),
+        orient=getattr(args, "orient", None),
+        face=getattr(args, "face", None),
+        rotate=getattr(args, "rotate", None),
+        # Draw the pose in the terminal for a person; a --json run, or a
+        # front-end that shows it itself (the TUI), turns it off.
+        orient_preview=getattr(args, "orient_preview", not getattr(args, "json", False)),
     )
 
 
@@ -130,8 +153,9 @@ def _predicted_url_remote_name(url, args):
     if predicted_ext not in DOWNLOADABLE_EXTENSIONS:
         return None
     filename = _download_target_filename(args, url)
-    if predicted_ext in SLICEABLE_EXTENSIONS:
+    actual_ext = _file_extension(filename)
+    if actual_ext in SLICEABLE_EXTENSIONS:
         return _predicted_sliced_remote_name(filename, getattr(args, "copies", 1))
-    if predicted_ext in PRINT_READY_EXTENSIONS:
+    if actual_ext in PRINT_READY_EXTENSIONS:
         return filename
     return None

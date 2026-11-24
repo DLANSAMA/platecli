@@ -120,8 +120,9 @@ def test_file_listing_does_not_pass_terminal_escapes(capsys, monkeypatch):
         def list_files(self, *args, **kwargs):
             return ["\x1b]52;c;ZWNobw==\x07evil.3mf", "\x1b[2Jcube.3mf"]
 
-    # cmd_files builds its printer through get_printer(), as tests/test_cmd_files.py patches it.
-    monkeypatch.setattr(printer_mod, "get_printer", lambda *a, **k: _ListingPrinter())
-    cmd_files(argparse.Namespace(json=False, path=None), ctx=argparse.Namespace())
+    cmd_files(
+        argparse.Namespace(json=False, path=None),
+        ctx=argparse.Namespace(printer=lambda: _ListingPrinter()),
+    )
     captured = capsys.readouterr()
     assert "\x1b" not in captured.out + captured.err

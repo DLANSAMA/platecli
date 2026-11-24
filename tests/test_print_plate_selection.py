@@ -97,13 +97,17 @@ def test_estimate_is_for_the_first_or_requested_plate(tmp_path):
 # --- job ----------------------------------------------------------------------
 
 
-def _job(source, *extra):
+def _job(source, *extra, slice_=None):
     from bambu_cli.cliparse import build_parser
     from bambu_cli.job.orchestrate import _run_job
     from bambu_cli.job.steps import JobSteps
     from tests.bambu_test_base import settings_ctx
 
     calls = {}
+
+    def record_slice(ns):
+        calls["slice"] = ns
+        return slice_(ns)
 
     def upload(ns):
         calls["upload"] = ns
@@ -116,7 +120,8 @@ def _job(source, *extra):
     from bambu_cli.context import RuntimeContext
 
     with settings_ctx():
-        _run_job(RuntimeContext.for_request(args), args, JobSteps(upload=upload, print_=print_))
+        steps = JobSteps(upload=upload, print_=print_, slice=record_slice if slice_ else None)
+        _run_job(RuntimeContext.for_request(args), args, steps)
     return calls
 
 
@@ -141,12 +146,36 @@ def test_job_refuses_a_plate_that_is_not_sliced(tmp_path, capsys):
     assert payload["failed_step"] == "validate" and "1, 2" in payload["error"]
 
 
-def test_job_refuses_an_unsliced_3mf_before_uploading(tmp_path, capsys):
+def test_job_slices_an_unsliced_3mf_project(tmp_path, capsys):
+    """A 3MF with a model and no plate G-code is a project: job slices it, then prints that."""
+    source = _three_mf(tmp_path / "model.3mf", [])
+    sliced = _three_mf(tmp_path / "model_sliced.3mf", [1])
+    calls = _job(source, "--orient", "auto", slice_=lambda ns: sliced)
+    assert calls["slice"].file == source
+    assert calls["slice"].orient == "auto"
+    assert calls["upload"].file == sliced
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] != "error"
+
+
+def test_job_refuses_a_3mf_with_neither_model_nor_gcode_before_uploading(tmp_path, capsys):
+    path = tmp_path / "empty.3mf"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
     with pytest.raises(BambuError) as caught:
-        _job(_three_mf(tmp_path / "model.3mf", []))
+        _job(str(path))
     assert caught.value.exit_code == EXIT_FILE_ERROR
     payload = json.loads(capsys.readouterr().out)
     assert "not sliced" in payload["error"] and payload["uploaded"] is False
+
+
+def test_job_refuses_to_reorient_a_presliced_3mf_before_uploading(tmp_path, capsys):
+    with pytest.raises(BambuError) as caught:
+        _job(_three_mf(tmp_path / "model.3mf", [1]), "--rotate", "z=90")
+    assert caught.value.exit_code == EXIT_COMMAND_ERROR
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["failed_step"] == "validate" and "never re-orients" in payload["error"]
+    assert payload["uploaded"] is False
 
 
 def test_job_rejects_plate_for_a_model_it_slices(tmp_path, capsys):

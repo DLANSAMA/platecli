@@ -13,6 +13,14 @@ workers and post their result back through ``App.call_from_thread``; neither can
 raise into the UI (``PipelineService.prepare`` returns failures as values), so a
 download or slicer failure renders inline instead of crashing the app.
 
+A prepare slices the model in the default pose (auto: its best face) and the
+results column draws that pose, with a line saying when auto turned the model
+and how to keep the file's orientation, before anything can be confirmed.
+Before or after a prepare the user can open the orientation screen (``o`` or
+"Orient…") to choose how the model lies on the plate; the next prepare slices
+it in that pose. A downloaded model is fetched once: posing it, and slicing it
+again in a new pose, reuse the same file instead of downloading it again.
+
 From the preview the user can open the confirmation modal, which is the only
 code path that may start a print. Opening it *transfers* ownership of the temp
 workdir (see ``screens/confirm.py``'s docstring for the full ownership rules):
@@ -22,6 +30,7 @@ this screen deletes the workdir only while it still holds it.
 from __future__ import annotations
 
 import argparse
+import os
 from functools import partial
 from typing import Any
 
@@ -40,9 +49,13 @@ from bambu_cli.interactive.core import (
     SliceOverrides,
     detect_ams_material,
     make_workdir,
+    under_workdir,
     validate_source,
 )
-from bambu_cli.tui.services import PrepareResult
+from bambu_cli.paths import expand_path
+from bambu_cli.tui.orient_model import DEFAULT_REQUEST, pose_line
+from bambu_cli.tui.services import PrepareResult, carry_fetched_model, needs_fetch
+from bambu_cli.tui.widgets.model_view import ModelView, draw_views
 from bambu_cli.tui.widgets.summary import summary_grid
 from bambu_cli.tui.widgets.topbar import TopBar
 
@@ -59,6 +72,7 @@ _RESULTS_PLACEHOLDER = (
 # so the prepare screen stacks them instead (see PrepareScreen._apply_layout).
 TWO_COLUMN_MIN_WIDTH = 100
 _PRESLICED_SETTINGS_CAVEAT = "Settings unavailable — pre-sliced file, material and slice settings are not applied."
+_PRESLICED_ORIENT_CAVEAT = "Pre-sliced file: its orientation is fixed in the G-code."
 
 
 class PreflightErrorScreen(Screen):
@@ -104,6 +118,7 @@ class PrepareScreen(Screen):
     BINDINGS = [
         ("escape", "back", "Back"),
         ("s", "settings", "Settings"),
+        ("o", "orient", "Orient"),
         ("f1", "app.help", "Help"),
     ]
 
@@ -132,6 +147,18 @@ class PrepareScreen(Screen):
         # Advanced slice overrides collected on the settings screen. Empty until
         # the user opens it, so an untouched flow slices exactly as before.
         self.overrides = SliceOverrides()
+        # How the model should lie on the plate (an ``OrientRequest``); None
+        # is the default pose, as ``plate slice`` without flags.
+        self.orientation: Any = None
+        self._pose_draws = 0  # bumped per picture of the sliced pose; a stale one is dropped
+        # (source, model path, workdir) of the model the last fetch or prepare
+        # produced, so posing it or slicing it again needs no second download.
+        self._fetched: tuple[str, str, str | None] | None = None
+        self._fetching = False
+        # The source ``orientation`` was chosen for: a pose picked for one model
+        # means nothing for another, so a new source starts on the default.
+        self._orientation_source: str | None = None
+        self._posing_source: str | None = None
 
     # --- composition --------------------------------------------------------
 
@@ -185,13 +212,18 @@ class PrepareScreen(Screen):
                 # fit an 80x24 terminal with the result below it.
                 with Horizontal(id="prepare-actions"):
                     yield Button("Prepare", id="prepare-button", variant="primary", compact=True)
+                    yield Button("Orient…", id="orient-button", compact=True)
                     yield Button("Settings…", id="settings-button", compact=True)
                 # Beside the button it annotates ("Overrides: …", or why the
                 # settings door is shut) rather than in the results column,
                 # where it read as part of the preview.
                 yield Static("", id="settings-summary", markup=False)
+                yield Static("", id="orient-summary", markup=False)
             with VerticalScroll(id="prepare-output"):
                 yield Static(_RESULTS_PLACEHOLDER, id="prepare-status", markup=False)
+                # The pose that was sliced, drawn before anything can be confirmed.
+                yield ModelView("", id="pose-view")
+                yield Static("", id="pose-line", markup=False)
                 yield Static("", id="preview", markup=False)
                 yield Button("Start print…", id="print-button", disabled=True, variant="primary", compact=True)
         yield Footer()
@@ -245,6 +277,8 @@ class PrepareScreen(Screen):
         workdir = self._workdir
         self._workdir = None
         self.result = None
+        if self._fetched is not None and self._fetched[2] is not None:
+            self._fetched = None  # it lived in the workdir going away
         if workdir:
             self._deps.get_pipeline().cleanup_workdir(workdir)
 
@@ -314,6 +348,8 @@ class PrepareScreen(Screen):
             self.start_prepare()
         elif event.button.id == "settings-button":
             self.action_settings()
+        elif event.button.id == "orient-button":
+            self.action_orient()
         elif event.button.id == "print-button":
             self.open_confirm()
 
@@ -357,7 +393,166 @@ class PrepareScreen(Screen):
             self._discard_workdir()
             self.query_one("#print-button", Button).disabled = True
             self.query_one("#preview", Static).update("")
+            self._clear_pose()
             self.query_one("#prepare-status", Static).update("Settings changed — prepare again to apply them.")
+
+    # --- orientation ----------------------------------------------------------
+
+    def _fetched_for(self, source: str) -> str | None:
+        """The model already fetched for ``source`` and still on disk, or None."""
+        fetched = self._fetched
+        if fetched is None or fetched[0] != source:
+            return None
+        _source, model_path, workdir = fetched
+        if workdir is not None and workdir != self._workdir:
+            return None  # handed to the confirm modal, or deleted
+        return model_path if os.path.isfile(model_path) else None
+
+    def action_orient(self) -> None:
+        """Open the orientation screen for the source in the box (fetching it first if needed)."""
+        if self._preparing or self._fetching:
+            self.app.notify("Preparing — orientation can be changed once it finishes.", severity="warning")
+            return
+        if self.result is not None and not getattr(self.result.state, "sliced", False):
+            self.query_one("#orient-summary", Static).update(_PRESLICED_ORIENT_CAVEAT)
+            self.app.notify(_PRESLICED_ORIENT_CAVEAT, severity="warning")
+            return
+        source, error = validate_source(self.query_one("#source-input", Input).value)
+        if source is None:
+            self.query_one("#source-error", Static).update(error or "Invalid source.")
+            return
+        self._forget_other_pose(source)
+        model_path = self._fetched_for(source)
+        if model_path is None and not needs_fetch(source):
+            model_path = expand_path(source)
+            self._fetched = (source, model_path, None)
+        if model_path is not None:
+            self._open_orient(source, model_path)
+            return
+        # A link or a zip: fetch the model into a fresh workdir first.
+        self._discard_workdir()
+        self.query_one("#print-button", Button).disabled = True
+        self.query_one("#preview", Static).update("")
+        self._clear_pose()
+        self._workdir = make_workdir(prefix="bambu-tui-")
+        self._fetching = True
+        self.query_one("#prepare-button", Button).disabled = True
+        self.query_one("#prepare-status", Static).update("Downloading the model to show it…")
+        self.run_worker(
+            partial(self._fetch_worker, self._workdir, source),
+            thread=True,
+            exclusive=True,
+            group="prepare",
+            exit_on_error=False,
+        )
+
+    def _fetch_worker(self, workdir: str, source: str) -> None:
+        result = self._deps.get_pipeline().fetch(self._args, source=source, workdir=workdir)
+        self.app.call_from_thread(self._fetched_result, workdir, source, result)
+
+    def _fetched_result(self, workdir: str, source: str, result: Any) -> None:
+        if self._left_screen:
+            return
+        self._fetching = False
+        self.query_one("#prepare-button", Button).disabled = False
+        if not result.ok or workdir != self._workdir:
+            self.query_one("#prepare-status", Static).update(result.error or "Fetching the model failed.")
+            return
+        self._fetched = (source, result.model_path, workdir)
+        self.query_one("#prepare-status", Static).update(_RESULTS_PLACEHOLDER)
+        self._open_orient(source, result.model_path)
+
+    def _forget_other_pose(self, source: str) -> None:
+        """Drop a pose chosen for a different source."""
+        if self.orientation is not None and self._orientation_source != source:
+            self.orientation = None
+            self._orientation_source = None
+            self._show_orientation()
+
+    def _open_orient(self, source: str, model_path: str) -> None:
+        from bambu_cli.tui.screens.orient import OrientScreen
+
+        self._posing_source = source
+        self.app.push_screen(OrientScreen(self._deps, model_path, self.orientation), self._orient_closed)
+
+    def _orient_closed(self, request: Any) -> None:
+        from bambu_cli.tui.screens.orient import CANCELLED
+
+        if request is CANCELLED:
+            return
+        changed = _pose_key(request) != _pose_key(self.orientation)
+        self.orientation = request
+        self._orientation_source = self._posing_source if request is not None else None
+        self._show_orientation()
+        if changed and self.result is not None:
+            # The preview describes the old pose: drop it (the fetched model
+            # stays) and let the user prepare again.
+            self.result = None
+            self.query_one("#print-button", Button).disabled = True
+            self.query_one("#preview", Static).update("")
+            self._clear_pose()
+            self.query_one("#prepare-status", Static).update(
+                "Orientation changed — prepare again to slice it that way."
+            )
+
+    def _show_orientation(self) -> None:
+        """The line under the buttons: the pose the next prepare slices, once one was chosen."""
+        label = self.query_one("#orient-summary", Static)
+        label.set_class(False, "warning")
+        label.update(f"Orientation: {self.orientation.describe()}" if self.orientation is not None else "")
+
+    # --- the sliced pose, drawn in the results column -------------------------
+
+    def _clear_pose(self) -> None:
+        self._pose_draws += 1  # any picture still being drawn is for the old run
+        view = self.query_one("#pose-view", ModelView)
+        view.update("")
+        view.set_class(False, "shown")
+        line = self.query_one("#pose-line", Static)
+        line.update("")
+        line.set_class(False, "warning")
+
+    def _show_pose(self, summary: dict | None, model_path: str | None) -> None:
+        """Say how the sliced model lies and draw it (when the slice reported its rotation)."""
+        self._clear_pose()
+        said = pose_line(summary)
+        if said is None:
+            return
+        text, warn = said
+        line = self.query_one("#pose-line", Static)
+        line.update(text)
+        line.set_class(warn, "warning")
+        rotation = (summary or {}).get("rotation")
+        if not model_path or not rotation:
+            return
+        self.query_one("#pose-view", ModelView).set_class(True, "shown")
+        ticket = self._pose_draws
+        self.call_after_refresh(partial(self._start_pose_draw, ticket, model_path, rotation))
+
+    def _start_pose_draw(self, ticket: int, model_path: str, rotation: Any) -> None:
+        if self._left_screen or ticket != self._pose_draws:
+            return
+        columns, rows = self.query_one("#pose-view", ModelView).cell_size()
+        self.run_worker(
+            partial(self._pose_worker, ticket, model_path, rotation, columns, rows),
+            thread=True,
+            exclusive=True,
+            group="pose-draw",
+            exit_on_error=False,
+        )
+
+    def _pose_worker(self, ticket: int, model_path: str, rotation: Any, columns: int, rows: int) -> None:
+        loaded, _error = self._deps.get_pipeline().load_pose_model(model_path)
+        if loaded is None:
+            return  # the line still says how it lies
+        (a, b, c), (d, e, f), (g, h, i) = ([float(v) for v in row] for row in rotation)
+        picture = draw_views(loaded.mesh, ((a, b, c), (d, e, f), (g, h, i)), columns, rows)
+        self.app.call_from_thread(self._pose_drawn, ticket, picture)
+
+    def _pose_drawn(self, ticket: int, picture: Any) -> None:
+        if self._left_screen or ticket != self._pose_draws:
+            return
+        self.query_one("#pose-view", ModelView).update(picture)
 
     # --- ownership handoff --------------------------------------------------
 
@@ -421,7 +616,7 @@ class PrepareScreen(Screen):
 
     def start_prepare(self) -> None:
         """Validate the source, then run the pipeline in a thread worker."""
-        if self._preparing:
+        if self._preparing or self._fetching:
             return
         raw = self.query_one("#source-input", Input).value
         source, error = validate_source(raw)
@@ -429,27 +624,44 @@ class PrepareScreen(Screen):
             self.query_one("#source-error", Static).update(error or "Invalid source.")
             return
         self.query_one("#source-error", Static).update("")
+        self._forget_other_pose(source)
 
-        # A previous run's temp workdir is dead the moment we start another one.
-        self._discard_workdir()
+        # A model fetched for this source (to pose it, or by the last prepare)
+        # is sliced again instead of downloaded again.
+        fetched = self._fetched_for(source)
+        old_workdir = self._workdir
+        if fetched is not None and self.result is None and old_workdir is not None:
+            # Fetched to be posed, not sliced yet: slice it where it is.
+            workdir = old_workdir
+        else:
+            # A previous run's temp workdir is dead the moment we start another
+            # one. Create the new one on this side of the worker: the screen must
+            # be able to delete it on unmount without waiting for a result that
+            # may never arrive (Escape mid-prepare).
+            workdir = make_workdir(prefix="bambu-tui-")
+            if fetched is not None and old_workdir is not None:
+                fetched = carry_fetched_model(fetched, old_workdir, workdir) or (
+                    fetched if not under_workdir(fetched, old_workdir) else None
+                )
+            self._discard_workdir()
+            self._workdir = workdir
         self.query_one("#print-button", Button).disabled = True
-        # Create the workdir on this side of the worker: the screen must be able
-        # to delete it on unmount without waiting for a result that may never
-        # arrive (Escape mid-prepare).
-        self._workdir = make_workdir(prefix="bambu-tui-")
 
         self._preparing = True
         self.query_one("#prepare-button", Button).disabled = True
-        self.query_one("#prepare-status", Static).update("Downloading and slicing — this can take a minute or two…")
+        busy = "Slicing" if fetched is not None else "Downloading and slicing"
+        self.query_one("#prepare-status", Static).update(f"{busy} — this can take a minute or two…")
         self.run_worker(
             partial(
                 self._prepare_worker,
-                self._workdir,
+                workdir,
                 source,
                 self.selected_material(),
                 self.selected_quality(),
                 self.selected_supports(),
                 self.overrides,
+                self.orientation,
+                fetched,
             ),
             thread=True,
             exclusive=True,
@@ -465,6 +677,8 @@ class PrepareScreen(Screen):
         quality: str,
         supports: bool,
         overrides: SliceOverrides,
+        orientation: Any = None,
+        model_path: str | None = None,
     ) -> None:
         result = self._deps.get_pipeline().prepare(
             self._args,
@@ -476,6 +690,8 @@ class PrepareScreen(Screen):
             overrides=overrides,
             detected_material=self._detected_material,
             detected_slot=self._detected_slot,
+            orientation=orientation,
+            model_path=model_path,
         )
         self.app.call_from_thread(self._apply_result, result)
 
@@ -492,22 +708,36 @@ class PrepareScreen(Screen):
         preview = self.query_one("#preview", Static)
         if not result.ok:
             self.result = None
+            if self._fetched is not None and not os.path.isfile(self._fetched[1]):
+                self._fetched = None
             self.query_one("#print-button", Button).disabled = True
             status.update(result.error or "Preparing the model failed.")
             preview.update("")
+            self._clear_pose()
             # Stacked layout: the failure message lands below the fold exactly
             # like a success does, and a run that silently appears to do nothing
             # is the worse of the two.
             self.call_after_refresh(partial(self._scroll_result_into_view, "#prepare-status"))
             return
         self.result = result
+        state = result.state
+        if result.model_path and getattr(state, "source", None):
+            workdir = state.workdir if under_workdir(result.model_path, state.workdir) else None
+            self._fetched = (state.source, result.model_path, workdir)
         self.query_one("#print-button", Button).disabled = False
         # A pre-sliced .3mf/.gcode is printed as-is: no slicer runs, so slice
-        # overrides cannot apply. Disable the door rather than pretend.
-        presliced = not getattr(result.state, "sliced", False)
+        # overrides cannot apply and the pose is fixed. Disable the doors
+        # rather than pretend.
+        presliced = not getattr(state, "sliced", False)
         self.query_one("#settings-button", Button).disabled = presliced
+        self.query_one("#orient-button", Button).disabled = presliced
         if presliced:
             self.query_one("#settings-summary", Static).update(_PRESLICED_SETTINGS_CAVEAT)
+            self.query_one("#orient-summary", Static).update(_PRESLICED_ORIENT_CAVEAT)
+            self._clear_pose()
+        else:
+            self._show_orientation()
+            self._show_pose(getattr(state, "orientation_summary", None), result.model_path)
         status.update('Ready. Press "Start print…" to confirm.')
         # A grid, not f"{label:<11}{value}": a wrapped value used to continue in
         # column 0 — inside the label column — so "Bambu Lab P1S, 0.4mm nozzle"
@@ -531,6 +761,12 @@ class PrepareScreen(Screen):
         if self._left_screen:
             return
         self.query_one(selector).scroll_visible(animate=False)
+
+
+def _pose_key(request: Any) -> tuple:
+    """What makes two orientation requests slice the same pose (None is the default one)."""
+    request = request or DEFAULT_REQUEST
+    return (request.mode, request.face, tuple(request.rotations))
 
 
 def _material_label(name: str, *, detected: bool = False) -> str:

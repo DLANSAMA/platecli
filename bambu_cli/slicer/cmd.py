@@ -12,8 +12,9 @@ from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.config import MODEL_MAPPING, get_slicer_timeout, supported_models_text
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_CONFIG_ERROR, EXIT_FILE_ERROR, EXIT_TIMEOUT
 from bambu_cli.context import current_settings
-from bambu_cli.errors import BambuError
+from bambu_cli.errors import BambuError, FileError
 from bambu_cli.logging_utils import logger
+from bambu_cli.mesh import is_3mf_sliced
 from bambu_cli.paths import display_path as _display_path
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
@@ -26,7 +27,8 @@ from bambu_cli.slicer.options import (
     setting_catalog,
 )
 from bambu_cli.slicer.orca import _build_orcaslicer_cmd, _run_orcaslicer
-from bambu_cli.slicer.output import _finalize_slice, _output_snapshot
+from bambu_cli.slicer.orientation import apply_orientation, asks_to_turn, presliced_refusal
+from bambu_cli.slicer.output import _finalize_slice, _is_valid_sliced_3mf, _output_snapshot
 from bambu_cli.slicer.profiles import (
     _available_layer_heights,
     _create_temp_machine,
@@ -131,7 +133,16 @@ def cmd_slice(
     slice_option_error = _validate_slice_options(args)
     if slice_option_error:
         emit_json_error(args, "slice", EXIT_COMMAND_ERROR, slice_option_error, failed_step="validate", file=filepath)
+    try:
+        # Contradictory flags, or a pose change asked of a pre-sliced 3MF, fail
+        # here, before any profile work or STEP conversion. The default (auto)
+        # never refuses: a pre-sliced file without flags is sliced as it is.
+        if asks_to_turn(args) and filepath.lower().endswith(".3mf") and is_3mf_sliced(filepath):
+            raise presliced_refusal(os.path.basename(filepath))
+    except BambuError as exc:
+        emit_json_error(args, "slice", exc.exit_code, str(exc), failed_step="validate", file=filepath)
     copies = getattr(args, "copies", 1)
+    orientation_summary: dict | None = None
 
     step_converted = False
     tmp_process = None
@@ -236,7 +247,13 @@ def cmd_slice(
         requested_filament = str(requested_filament_name).lower()
 
         if os.path.isdir(filament_dir):
-            files = sorted(f for f in os.listdir(filament_dir) if requested_filament in f.lower())
+            files = sorted(
+                f
+                for f in os.listdir(filament_dir)
+                if f.endswith(".json")
+                and os.path.isfile(os.path.join(filament_dir, f))
+                and requested_filament in f.lower()
+            )
             base_files = [f for f in files if "@base" in f]
             candidates = base_files or files
             exact_stems = {requested_filament, f"bambu {requested_filament}"}
@@ -398,6 +415,15 @@ def cmd_slice(
                 file=filepath,
                 output=outdir,
             )
+        try:
+            oriented = apply_orientation(args, filepath, work_dir, display_name=os.path.basename(source_filepath))
+        except BambuError as exc:
+            emit_json_error(
+                args, "slice", exc.exit_code, str(exc), failed_step=exc.failed_step or "orient", file=filepath
+            )
+        orientation_summary = oriented.summary
+        # Recorded on the namespace so job/TUI callers can report the pose too.
+        args.orientation_result = orientation_summary
         cmd = _build_orcaslicer_cmd(
             settings,
             args,
@@ -407,7 +433,8 @@ def cmd_slice(
             outfile,
             work_dir,
             copies,
-            filepath,
+            oriented.path,
+            arrange=oriented.reoriented_3mf or None,
         )
 
         layer_height = layer.split(" ")[0]
@@ -474,6 +501,30 @@ def cmd_slice(
             )
         produced = os.path.join(work_dir, outfile)
         if os.path.isfile(produced):
+            if pre_snapshot is not None:
+                try:
+                    produced_size = os.path.getsize(produced)
+                except OSError as exc:
+                    raise FileError(
+                        f"Could not read sliced output file: {_exception_for_message(exc)}",
+                        exit_code=EXIT_FILE_ERROR,
+                        failed_step="slicer",
+                        extra={"file": source_filepath, "output": outpath},
+                    ) from exc
+                if produced_size <= 0:
+                    raise FileError(
+                        f"Slicing produced an empty output file: {_path_for_message(outpath)}",
+                        exit_code=EXIT_FILE_ERROR,
+                        failed_step="slicer",
+                        extra={"file": source_filepath, "output": outpath, "bytes": produced_size},
+                    )
+                if not _is_valid_sliced_3mf(produced):
+                    raise FileError(
+                        f"Slicing produced a corrupt or incomplete .3mf: {_path_for_message(outpath)}",
+                        exit_code=EXIT_FILE_ERROR,
+                        failed_step="slicer",
+                        extra={"file": source_filepath, "output": outpath, "bytes": produced_size},
+                    )
             # Only a file OrcaSlicer actually wrote replaces outpath, so
             # _finalize_slice's freshness check still catches a stale one. A
             # failed run must not overwrite an earlier good output; with none
@@ -498,4 +549,25 @@ def cmd_slice(
             # don't cause a leak the way a bare os.rmdir(empty-dir-only) would.
             shutil.rmtree(os.path.dirname(filepath), ignore_errors=True)
 
-    return _finalize_slice(result, outpath, args, filepath, step_converted, pre_snapshot=pre_snapshot)
+    try:
+        return _finalize_slice(
+            result,
+            outpath,
+            args,
+            source_filepath,
+            step_converted,
+            pre_snapshot=pre_snapshot,
+            orientation=orientation_summary,
+        )
+    except BambuError as exc:
+        # A model kept (--orient keep) in a pose that cannot stand, on a point
+        # or an edge, is the likeliest reason OrcaSlicer refused it: say what to run.
+        kept_unstable = (
+            orientation_summary is not None
+            and orientation_summary.get("mode") == "keep"
+            and orientation_summary.get("stable") is False
+        )
+        if kept_unstable and not exc.next_command:
+            exc.next_command = ["slice", source_filepath, "--orient", "auto"]
+            logger.info(f"   Try: plate slice {os.path.basename(source_filepath)} --orient auto")
+        raise

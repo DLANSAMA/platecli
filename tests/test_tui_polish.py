@@ -189,6 +189,8 @@ def test_help_rows_only_document_keys_that_are_really_bound():
     """The overlay must not advertise a key nothing answers to."""
     from textual.binding import Binding
 
+    from bambu_cli.tui.screens.orient import OrientScreen
+
     bound: set[str] = set()
     for node in (
         PlateApp,
@@ -198,6 +200,7 @@ def test_help_rows_only_document_keys_that_are_really_bound():
         ConfirmModal,
         MonitorScreen,
         HelpScreen,
+        OrientScreen,
     ):
         for entry in node.BINDINGS:
             key = entry.key if isinstance(entry, Binding) else entry[0]
@@ -206,8 +209,9 @@ def test_help_rows_only_document_keys_that_are_really_bound():
     # text mentions for the source box.
     bound.update({"ctrl+q", "enter"})
     bound.update({k for entry in bound for k in str(entry).split(",")})
-    documented = {key for _section, rows in HELP_ROWS for key, _desc in rows}
-    normalized = {"?": "question_mark"}
+    # A row may list several keys ("x y z"); each must be bound.
+    documented = {key for _section, rows in HELP_ROWS for keys, _desc in rows for key in keys.split()}
+    normalized = {"?": "question_mark", "[": "left_square_bracket", "]": "right_square_bracket"}
     for key in documented:
         assert normalized.get(key, key) in bound, f"help documents unbound key {key!r}"
 

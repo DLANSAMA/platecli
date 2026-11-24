@@ -338,8 +338,13 @@ def _step_confirm_print(args: argparse.Namespace, deps: GoDeps, state: WizardSta
 
 
 def _run_go(args: argparse.Namespace, deps: GoDeps) -> None:
+    from bambu_cli.slicer.orientation import explicit_request
+
     state = WizardState()
     try:
+        # --orient/--face/--rotate, as for slice; None slices the default pose.
+        # A contradiction (--face with --orient) fails before the first prompt.
+        state.orientation = explicit_request(args)
         _step_preflight(args, deps)
         _step_source(args, deps, state)
         _step_printer(args, deps, state)

@@ -46,13 +46,14 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 | `fsutil.py` | Pure path/file mechanics (`_portable_basename`, `_remove_partial_file`, `_download_partial_path`, `_noncolliding_path`) shared by slicer/download without either importing the other |
 | `jsonio.py` | JSON-mode detection + URL-credential redaction for logs/JSON output |
 | `argutils.py` | argparse/`Namespace` coercion helpers (`namespace_get`, `exit_code_from_system_exit`, `setup_args_provided`) |
-| `commands/` | Printer subcommand handlers (`status`, `device`, `files`, `print_cmd`, `doctor`, `gcode`, thin `setup_wrappers`) |
+| `commands/` | Printer subcommand handlers (`status`, `device`, `files`, `print_cmd`, `doctor`, `gcode`, thin `setup_wrappers`) and the local `orient`/`preview` commands |
 | `download/` | URL/filename validation, HTML scraping, ZIP extraction, `download` command |
 | `printables/` | Printables.com integration behind a strict adapter. `client.py` (the undocumented GraphQL wire format) is **sealed** — import only from `bambu_cli.printables`. `adapter.py` guarantees no Printables failure escapes as an exception |
 | `contracts/` | Typed `--json` payload shapes (frozen dataclasses). **Generates `docs/schemas/*.json`** via `scripts/gen_schemas.py`; do not hand-edit a schema |
 | `job/` | One-shot `job`/`send` orchestration, dry-run predict, print payloads, injectable `JobSteps` |
 | `setup_cmd/` | Guided/non-interactive setup, mDNS, config show/validate, preflight |
-| `slicer/` | OrcaSlicer integration |
+| `slicer/` | OrcaSlicer integration; `orientation.py` turns the model into the requested pose before OrcaSlicer runs (OrcaSlicer's own orient stays off) |
+| `mesh/` | Stdlib-only model geometry (no numpy): read STL/OBJ/3MF, rank the faces a model can lie on (`orient.py`), rotate and write it back (a 3MF keeps every byte but its build item's placement), and rasterize previews (`render.py`, `sheet.py`) |
 | `interactive/` | Shared wizard core (`core.py`: `GoSteps`, presets, override validation) + the `plate go` session. Both interactive front-ends inject at this one seam |
 | `tui/` | Textual full-screen UI (`plate tui`), optional `[tui]` extra. A front-end over `interactive/core.py` — **not** an agent surface (see "human only" above) |
 | `tlspin.py` | The single `verify_cert_fingerprint` used by mqtt, ftps, and camera (fail-closed; B.5) |
@@ -73,6 +74,7 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 50  commands/  interactive/  tui/         45  job/       40  download/  setup_cmd/
 35  printer.py                            30  protocols/ | slicer/ | printables/   <- MUST NOT import each other
 25  cliparse.py                           20  utils config context netsafety ams
+15  mesh/ (pure geometry: no settings, no I/O beyond the model files it is handed)
 10  constants errors paths logging_utils argutils jsonio tlspin fsutil contracts
 ```
 

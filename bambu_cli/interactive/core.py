@@ -159,6 +159,16 @@ class WizardState:
     detected_ams_slot: int | None = None
     # Advanced slice settings collected by a front-end (empty for ``plate go``).
     overrides: SliceOverrides = field(default_factory=SliceOverrides)
+    # How the model should sit on the plate (``mesh.OrientRequest``); None is
+    # the default pose (``DEFAULT_ORIENT_MODE``), exactly what ``slice`` does
+    # without flags.
+    orientation: Any = None
+    # Draw the pose in the terminal while slicing (``plate go``); the TUI shows
+    # it in its own widgets, so it turns this off.
+    orient_preview: bool = True
+    # The ``orientation`` object the slice reported (contracts.Orientation
+    # fields), or None when nothing was sliced or the slicer did not say.
+    orientation_summary: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -423,16 +433,26 @@ def make_workdir(prefix: str = "bambu-go-") -> str:
     return tempfile.mkdtemp(prefix=prefix)
 
 
-def run_prepare_pipeline(steps: Any, state: WizardState, workdir: str) -> str:
+def run_prepare_pipeline(steps: Any, state: WizardState, workdir: str, *, model_path: str | None = None) -> str:
     """Download (if needed), extract a zip member (if needed), then slice.
 
     Mutates ``state.printable_path`` / ``state.sliced`` and returns the path of
     the *model* the printable came from (the preview names that file). Raises
     ``BambuError`` through ``abort`` on any unusable intermediate result.
+
+    ``model_path`` is a model :func:`fetch_model` already fetched into
+    ``workdir`` for this source; passing it slices that file again (a new pose,
+    new settings) without downloading it a second time.
     """
+    if model_path is None:
+        model_path = fetch_model(steps, state, workdir)
+    return slice_fetched_model(steps, state, workdir, model_path)
+
+
+def fetch_model(steps: Any, state: WizardState, workdir: str) -> str:
+    """Download ``state.source`` (or take the local path) and unpack a zip: the model to slice."""
     from bambu_cli.download import _extract_zip_model, _is_http_url
     from bambu_cli.download.naming import _file_extension
-    from bambu_cli.job.predict import _slice_args_for_job
 
     assert state.source is not None  # set by the source step  # noqa: S101
     source = state.source
@@ -477,14 +497,32 @@ def run_prepare_pipeline(steps: Any, state: WizardState, workdir: str) -> str:
         except ValueError as exc:
             abort(str(exc), exit_code=EXIT_FILE_ERROR, failed_step="extract")
         model_path = extracted_path
+    return model_path
 
+
+def slice_fetched_model(steps: Any, state: WizardState, workdir: str, model_path: str) -> str:
+    """Slice a fetched model with the state's presets, overrides and pose (or pass a printable through)."""
+    from bambu_cli.download.naming import _file_extension
+    from bambu_cli.job.predict import _path_would_slice, _slice_args_for_job
+    from bambu_cli.slicer.orientation import presliced_refusal
+
+    assert state.source is not None  # set by the source step  # noqa: S101
     ext = _file_extension(model_path)
-    preset_ns = preset_to_job_args(state.material, state.quality, state.supports, source)
+    preset_ns = preset_to_job_args(state.material, state.quality, state.supports, state.source)
+    state.orientation_summary = None
+    orientation = state.orientation
 
-    if ext in SLICEABLE_EXTENSIONS:
+    # An STL/STEP/OBJ, or a 3MF that holds a model but no sliced plate.
+    if _path_would_slice(model_path, ext):
         utils._LAST_ERROR_PAYLOAD = None
         try:
-            slice_ns = apply_overrides(_slice_args_for_job(model_path, preset_ns, workdir), state.overrides)
+            slice_ns = _slice_args_for_job(model_path, preset_ns, workdir)
+            slice_ns.orient_preview = state.orient_preview
+            if orientation is not None:
+                slice_ns.orient = orientation.mode if orientation.face is None else None
+                slice_ns.face = orientation.face
+                slice_ns.rotate = list(orientation.rotations) or None
+            slice_ns = apply_overrides(slice_ns, state.overrides)
             printable_path = steps.get_slice()(slice_ns)
         except BambuError as exc:
             if not exc.next_command:
@@ -492,13 +530,53 @@ def run_prepare_pipeline(steps: Any, state: WizardState, workdir: str) -> str:
             raise
         state.printable_path = printable_path
         state.sliced = True
+        state.orientation_summary = getattr(slice_ns, "orientation_result", None)
     else:
         # .3mf / .gcode: already printer-ready, no slicing. The preset material
         # was NOT applied — the preview flags this so we don't imply otherwise.
+        # Its pose is fixed in the G-code too: asking to change it is refused.
+        if orientation is not None and orientation.changes_pose:
+            raise presliced_refusal(display_safe(os.path.basename(model_path)))
         state.printable_path = model_path
         state.sliced = False
 
     return model_path
+
+
+def orientation_line(summary: dict | None) -> str | None:
+    """The preview's Orientation value, e.g. ``auto (face 1) · turned 90° about X · 3.0 mm tall``; None when unknown."""
+    if not summary or summary.get("presliced"):
+        return None
+    mode = summary.get("mode") or "keep"
+    turns = []
+    for spec in summary.get("rotations") or ():
+        axis, _, degrees = str(spec).partition("=")
+        try:
+            turns.append(f"{axis}{float(degrees):+g}°")
+        except ValueError:
+            turns.append(str(spec))
+    if mode == "face" and summary.get("face"):
+        base = f"face {summary['face']}"
+    elif mode == "auto":
+        base = f"auto (face {summary['face']})" if summary.get("face") else "auto"
+    else:
+        base = "as exported"
+    parts = [", ".join([base, *turns])]
+    if mode != "keep" and "turned" in summary:
+        turned = summary["turned"]
+        parts.append(f"turned {turned}" if turned else "lies as exported")
+    height = summary.get("height_mm")
+    if isinstance(height, (int, float)):
+        parts.append(f"{height:.1f} mm tall")
+    warning = summary.get("warning")
+    if warning and "stable" in summary:
+        parts.append("rests on a point or an edge: it may not print")
+    elif warning:
+        # Auto could not read the file (or it holds several objects).
+        parts.append("auto could not choose a face")
+    elif summary.get("stable") is False:
+        parts.append("may tip over")
+    return "  ·  ".join(parts)
 
 
 def preview_rows(state: WizardState, model_path: str) -> list[tuple[str, str]]:
@@ -549,6 +627,9 @@ def preview_rows(state: WizardState, model_path: str) -> list[tuple[str, str]]:
         ("Temperatures", _temperatures_line(state.printable_path or model_path)),
         ("Estimate", estimate_line),
     ]
+    orientation = orientation_line(state.orientation_summary) if state.sliced else None
+    if orientation:
+        rows.insert(3, ("Orientation", orientation))
     # Only when something was actually overridden.
     if state.sliced and not state.overrides.is_empty():
         rows.append(("Overrides", state.overrides.summary()))

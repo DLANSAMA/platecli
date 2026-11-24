@@ -122,17 +122,16 @@ def _extract_zip_model(zip_path, outdir, args, *, noncolliding_path=None):
                         if extracted > max_bytes:
                             raise ValueError(_archive_member_exceeded_limit_message(member_filename, max_bytes))
                         dst.write(chunk)
+                size = os.path.getsize(partial_path)
+                if size <= 0:
+                    raise ValueError(f"ZIP member is empty: {member_filename}")
+                if replace_on_success:
+                    os.replace(partial_path, outpath)
             except BaseException:
                 # BaseException, not Exception: a Ctrl-C mid-extraction must not
                 # leave a .part file or a 0-byte placeholder behind either.
                 _cleanup_reservation()
                 raise
-            size = os.path.getsize(partial_path)
-            if size <= 0:
-                _cleanup_reservation()
-                raise ValueError(f"ZIP member is empty: {member_filename}")
-            if replace_on_success:
-                os.replace(partial_path, outpath)
             logger.info(f"📦 Extracted from ZIP: {member_filename} → {_path_for_message(outpath)} ({size // 1024}KB)")
             return outpath, filename, member_filename, size
     except zipfile.BadZipFile as exc:
