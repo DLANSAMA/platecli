@@ -620,6 +620,48 @@ class PrepareResult:
     error: str | None = None
 
 
+def needs_fetch(source: str) -> bool:
+    """True when ``source`` must be downloaded or unzipped before there is a model file to look at."""
+    import os
+
+    from bambu_cli.constants import ARCHIVE_DOWNLOAD_EXTENSIONS
+    from bambu_cli.download import _is_http_url
+
+    return _is_http_url(source) or os.path.splitext(source)[1].lower() in ARCHIVE_DOWNLOAD_EXTENSIONS
+
+
+def carry_fetched_model(model_path: str, old_workdir: str, new_workdir: str) -> str | None:
+    """Move a model fetched into ``old_workdir`` to ``new_workdir``; its new path, or None.
+
+    A re-prepare starts in a fresh workdir (the old one, with its sliced
+    output, is deleted), but the model it was fetched from need not be
+    downloaded again. A model outside ``old_workdir`` (a local file) is
+    never moved.
+    """
+    import os
+    import shutil
+
+    from bambu_cli.interactive.core import under_workdir
+
+    if not under_workdir(model_path, old_workdir) or not os.path.isfile(model_path):
+        return None
+    target = os.path.join(new_workdir, os.path.basename(model_path))
+    try:
+        shutil.move(model_path, target)
+    except OSError:
+        return None
+    return target
+
+
+@dataclass(frozen=True)
+class FetchResult:
+    """A model fetched for posing: ``model_path`` on success, ``error`` otherwise."""
+
+    ok: bool
+    model_path: str | None = None
+    error: str | None = None
+
+
 class PipelineService:
     """Run the wizard's prepare pipeline for the TUI, without any prompts.
 
@@ -636,8 +678,16 @@ class PipelineService:
     created here and the caller cleans it through ``cleanup``/``cleanup_workdir``.
     """
 
-    def __init__(self, steps: Any = None) -> None:
+    def __init__(self, steps: Any = None, convert_step: Any = None) -> None:
+        import threading
+
         self._steps = steps
+        self._convert_step = convert_step
+        # The last model read for posing, keyed on (path, size, mtime): the
+        # orientation screen and the prepare screen's picture of the sliced
+        # pose both ask for it, and a big mesh takes a second to read and rank.
+        self._pose_cache: tuple[tuple, Any] | None = None
+        self._pose_lock = threading.Lock()
 
     def _get_steps(self) -> Any:
         if self._steps is not None:
@@ -658,12 +708,17 @@ class PipelineService:
         workdir: str | None = None,
         detected_material: str | None = None,
         detected_slot: int | None = None,
+        orientation: Any = None,
+        model_path: str | None = None,
     ) -> PrepareResult:
         """Download/slice ``source`` with the chosen presets and preview it.
 
         Never raises: any failure from the pipeline (bad download, slicer
         failure, unexpected OSError) comes back as
-        ``PrepareResult(ok=False, error=...)`` with the workdir cleaned up.
+        ``PrepareResult(ok=False, error=...)`` with the workdir cleaned up —
+        unless ``model_path`` names a model already fetched into ``workdir``
+        (a re-slice in a new pose), which is kept so the next try needs no
+        second download.
         """
         from bambu_cli.errors import BambuError
         from bambu_cli.interactive.core import (
@@ -672,6 +727,7 @@ class PipelineService:
             make_workdir,
             preview_rows,
             run_prepare_pipeline,
+            under_workdir,
         )
 
         state = WizardState(
@@ -684,20 +740,107 @@ class PipelineService:
         )
         if overrides is not None:
             state.overrides = overrides
+        state.orientation = orientation
+        # The prepare screen draws the pose itself; a picture written to
+        # stderr would land in Textual's capture, not on screen.
+        state.orient_preview = False
         state.workdir = workdir if workdir is not None else make_workdir(prefix="bambu-tui-")
+        keep_fetched = model_path is not None and workdir is not None and under_workdir(model_path, workdir)
         try:
-            model_path = run_prepare_pipeline(self._get_steps(), state, state.workdir)
+            model_path = run_prepare_pipeline(self._get_steps(), state, state.workdir, model_path=model_path)
             rows = preview_rows(state, model_path)
         except BambuError as exc:
-            cleanup_workdir(state)
+            if not keep_fetched:
+                cleanup_workdir(state)
             return PrepareResult(ok=False, state=state, error=str(exc) or "Preparing the model failed.")
         except Exception as exc:  # noqa: BLE001 -- see docstring: a worker must never crash the UI
             # The pipeline is supposed to speak BambuError, but this runs in a
             # Textual thread worker: an unexpected OSError from a collaborator
             # must still surface as an inline message with the workdir cleaned up.
-            cleanup_workdir(state)
+            if not keep_fetched:
+                cleanup_workdir(state)
             return PrepareResult(ok=False, state=state, error=_prepare_error(exc))
         return PrepareResult(ok=True, state=state, rows=rows, model_path=model_path)
+
+    def fetch(self, args: argparse.Namespace, *, source: str, workdir: str) -> FetchResult:
+        """Download (and unzip) ``source`` into ``workdir`` without slicing, so it can be posed first.
+
+        Never raises. A failure leaves ``workdir`` for the caller, who owns it.
+        """
+        from bambu_cli.errors import BambuError
+        from bambu_cli.interactive.core import WizardState, fetch_model
+
+        try:
+            return FetchResult(ok=True, model_path=fetch_model(self._get_steps(), WizardState(source=source), workdir))
+        except BambuError as exc:
+            return FetchResult(ok=False, error=str(exc) or "Fetching the model failed.")
+        except Exception as exc:  # noqa: BLE001 -- runs in a thread worker: never crash the UI
+            return FetchResult(ok=False, error=_prepare_error(exc))
+
+    def load_pose_model(self, path: str) -> tuple[Any, str | None]:
+        """Read and rank ``path`` for posing: ``(model, None)`` or ``(None, why not)``; cached. Never raises."""
+        import os
+
+        try:
+            stat = os.stat(path)
+            key: tuple | None = (os.path.realpath(path), stat.st_size, stat.st_mtime_ns)
+        except OSError:
+            key = None
+        with self._pose_lock:
+            cached = self._pose_cache
+        if key is not None and cached is not None and cached[0] == key:
+            return cached[1], None
+        loaded, error = self._load_pose_model(path)
+        if loaded is not None and key is not None:
+            with self._pose_lock:
+                self._pose_cache = (key, loaded)
+        return loaded, error
+
+    def _load_pose_model(self, path: str) -> tuple[Any, str | None]:
+        """Read and rank ``path`` for the orientation screen: ``(model, None)`` or ``(None, why not)``.
+
+        A STEP file is converted to STL first, as ``slice`` does, so the faces
+        offered are the faces the slicer will see; the converted copy is
+        deleted once the mesh is in memory. Never raises.
+        """
+        import os
+        import shutil
+
+        from bambu_cli.mesh import MeshError
+        from bambu_cli.tui.orient_model import load_pose_model
+
+        converted_dir = None
+        try:
+            load_path = path
+            if os.path.splitext(path)[1].lower() in (".step", ".stp"):
+                converted, ok = self._step_converter()(path)
+                if not ok or not converted:
+                    return None, "Converting the STEP file failed; it can still be sliced as it is."
+                converted_dir = os.path.dirname(converted)
+                load_path = converted
+            loaded = load_pose_model(load_path)
+            if converted_dir:
+                # Name it after the user's file, not the temporary STL.
+                from dataclasses import replace
+
+                from bambu_cli.textsafe import display_safe
+
+                loaded = replace(loaded, name=display_safe(os.path.basename(path)))
+            return loaded, None
+        except MeshError as exc:
+            return None, str(exc)
+        except Exception as exc:  # noqa: BLE001 -- runs in a thread worker: never crash the UI
+            return None, _prepare_error(exc)
+        finally:
+            if converted_dir:
+                shutil.rmtree(converted_dir, ignore_errors=True)
+
+    def _step_converter(self) -> Any:
+        if self._convert_step is not None:
+            return self._convert_step
+        from bambu_cli.slicer.step_convert import _convert_step_to_stl
+
+        return _convert_step_to_stl
 
     def cleanup(self, state: Any) -> None:
         """Delete the temp workdir a prepare run created (safe to call twice)."""

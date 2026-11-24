@@ -45,26 +45,27 @@ HELP_ROWS: list[tuple[str, list[tuple[str, str]]]] = [
         "Prepare",
         [
             ("enter", "Prepare the model"),
+            ("o", "See or change how it lies"),
             ("s", "Slice settings"),
             ("escape", "Back to the dashboard"),
         ],
     ),
     (
-        "Settings",
+        # Enter (use this pose) and esc (keep the old one) are in its footer.
+        "Orientation",
         [
-            ("escape", "Back without applying"),
+            ("f F", "Next / previous face"),
+            ("x y z", "Turn 90° (shift: back)"),
+            ("[ ] v", "Spin 15° / change view"),
+            ("a 0", "Auto / as exported"),
         ],
     ),
     (
-        "Confirm",
+        # One section: their only key is the same, and three one-row sections
+        # pushed the overlay past an 80x24 terminal once orientation came in.
+        "Settings, confirm, monitor",
         [
             ("escape", "Back; nothing is sent"),
-        ],
-    ),
-    (
-        "Monitor",
-        [
-            ("escape", "Back; it keeps printing"),
         ],
     ),
 ]

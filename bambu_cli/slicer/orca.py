@@ -31,8 +31,15 @@ def _build_orcaslicer_cmd(
     outdir: str,
     copies: int,
     filepath: str,
+    *,
+    arrange: bool | None = None,
 ) -> list[str]:
-    """Assemble the OrcaSlicer CLI argv, prefixing xvfb/nice wrappers as needed."""
+    """Assemble the OrcaSlicer CLI argv, prefixing xvfb/nice wrappers as needed.
+
+    ``arrange`` forces OrcaSlicer's arrange on (a 3MF whose object platecli
+    re-oriented has a new footprint that may cross the bed edge) or leaves the
+    default rule in charge when ``None``.
+    """
     cmd: list[str] = []
     if platform.system() == "Linux":
         # Prefer a real display (gives working GPU GL + thumbnails). Only fall back
@@ -62,7 +69,10 @@ def _build_orcaslicer_cmd(
             outdir,
         ]
     )
-    if copies > 1 or not filepath.lower().endswith(".3mf"):
+    # platecli decides the pose before OrcaSlicer runs (slicer/orientation.py);
+    # OrcaSlicer must not re-orient it on its own.
+    cmd.extend(["--orient", "0"])
+    if arrange or copies > 1 or not filepath.lower().endswith(".3mf"):
         # Loose meshes (STL/STEP/OBJ) may sit off-plate, so let Orca arrange
         # them; a single-copy 3MF project keeps its embedded plate placement.
         cmd.extend(["--arrange", "1"])

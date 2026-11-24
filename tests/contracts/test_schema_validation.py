@@ -89,8 +89,10 @@ _COMMAND_SCHEMAS = {
     "go": ["go.json"],
     "job": ["job_ok.json", "job_error.json"],
     "light": ["light.json"],
+    "orient": ["orient.json"],
     "pause": ["pause.json"],
     "preflight": ["preflight.json"],
+    "preview": ["preview.json"],
     "print": ["print.json"],
     "resume": ["resume.json"],
     # `send` is first-class but emits the same envelopes as `job`.

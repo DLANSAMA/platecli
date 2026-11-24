@@ -47,6 +47,9 @@ RANKS: dict[str, int] = {
     # Typed --json payload shapes. Pure data: stdlib only, imports nothing from
     # the package, and generates docs/schemas/. Any layer may build one.
     "contracts": 10,
+    # 15 — pure geometry (mesh I/O, orientation, rendering). Stdlib only; the
+    #      slicer, commands and TUI all read models through it.
+    "mesh": 15,
     # 20 — core services: process-wide config/runtime state and shared helpers.
     "utils": 20,
     "config": 20,

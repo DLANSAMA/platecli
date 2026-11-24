@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platecli.local/schemas/orient.json",
+  "title": "platecli orient envelope",
+  "type": "object",
+  "description": "Ranked poses for laying a model on the bed. Face 1 is what --orient auto uses; pass --face N to slice/job to use another. Nothing is sliced or written.",
+  "required": [
+    "status",
+    "command",
+    "file",
+    "format",
+    "triangles",
+    "objects",
+    "as_exported",
+    "faces",
+    "selected",
+    "rotation"
+  ],
+  "properties": {
+    "status": {
+      "const": "ok",
+      "type": "string"
+    },
+    "command": {
+      "const": "orient",
+      "type": "string"
+    },
+    "file": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "format": {
+      "description": "stl, obj or 3mf.",
+      "type": "string"
+    },
+    "triangles": {
+      "type": "integer"
+    },
+    "objects": {
+      "type": "integer"
+    },
+    "as_exported": {
+      "properties": {
+        "face": {
+          "description": "1-based rank; absent for the as-exported pose.",
+          "type": "integer"
+        },
+        "down": {
+          "description": "Direction in the model file's frame that ends up facing the bed.",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "height_mm": {
+          "type": "number"
+        },
+        "size_mm": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "bed_contact_mm2": {
+          "type": "number"
+        },
+        "overhang_mm2": {
+          "type": "number"
+        },
+        "stable": {
+          "type": "boolean"
+        },
+        "rotation": {
+          "description": "3x3 row-major rotation applied to the model as exported.",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "required": [],
+      "additionalProperties": true
+    },
+    "faces": {
+      "items": {
+        "properties": {
+          "face": {
+            "description": "1-based rank; absent for the as-exported pose.",
+            "type": "integer"
+          },
+          "down": {
+            "description": "Direction in the model file's frame that ends up facing the bed.",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "height_mm": {
+            "type": "number"
+          },
+          "size_mm": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "bed_contact_mm2": {
+            "type": "number"
+          },
+          "overhang_mm2": {
+            "type": "number"
+          },
+          "stable": {
+            "type": "boolean"
+          },
+          "rotation": {
+            "description": "3x3 row-major rotation applied to the model as exported.",
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [],
+        "additionalProperties": true
+      },
+      "type": "array"
+    },
+    "selected": {
+      "properties": {
+        "mode": {
+          "description": "auto (best-ranked face), keep (the file's own pose) or face (--face N). keep with a warning: auto could not read the file, so it was sliced as exported.",
+          "type": "string"
+        },
+        "changed": {
+          "description": "True when platecli rotated the model.",
+          "type": "boolean"
+        },
+        "turned": {
+          "description": "The turn from the file's pose in words, e.g. '90\u00b0 about X'; null when it lies as exported.",
+          "type": "string"
+        },
+        "rotation": {
+          "description": "3x3 rotation applied to the file's coordinates (v' = R\u00b7v), row by row.",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "face": {
+          "description": "Ranked face (1-based, as 'plate orient' lists them) the model lies on, if any.",
+          "type": "integer"
+        },
+        "rotations": {
+          "description": "--rotate steps applied after the face, in order, e.g. ['x=90'].",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "presliced": {
+          "description": "True for a pre-sliced 3MF: its pose is never changed.",
+          "type": "boolean"
+        },
+        "height_mm": {
+          "type": "number"
+        },
+        "size_mm": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "bed_contact_mm2": {
+          "description": "Area of the model resting on the bed.",
+          "type": "number"
+        },
+        "overhang_mm2": {
+          "description": "Down-facing area steeper than 45\u00b0 past vertical.",
+          "type": "number"
+        },
+        "stable": {
+          "description": "Whether its centre of mass sits over what touches the bed.",
+          "type": "boolean"
+        },
+        "warning": {
+          "description": "Say this to the person: the kept pose rests on a point or an edge, or auto could not run.",
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "mode",
+        "changed"
+      ],
+      "additionalProperties": true
+    },
+    "rotation": {
+      "description": "The selected pose's 3x3 row-major rotation.",
+      "items": {
+        "items": {
+          "type": "number"
+        },
+        "type": "array"
+      },
+      "type": "array"
+    }
+  },
+  "additionalProperties": true
+}

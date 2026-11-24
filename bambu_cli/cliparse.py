@@ -19,7 +19,7 @@ argparse's own ``self.exit`` so ``bambu_cli.cli`` stays the only module holding
 import argparse
 import sys
 
-from bambu_cli.constants import DEFAULT_MAX_DOWNLOAD_MB, EXIT_COMMAND_ERROR
+from bambu_cli.constants import DEFAULT_MAX_DOWNLOAD_MB, DEFAULT_ORIENT_MODE, EXIT_COMMAND_ERROR
 from bambu_cli.utils import emit_json
 
 
@@ -129,6 +129,42 @@ class JsonArgumentParser(argparse.ArgumentParser):
             }
         )
         self.exit(EXIT_COMMAND_ERROR)
+
+
+def rotation_spec(value):
+    """argparse type for ``--rotate``: ``AXIS=DEGREES`` -> ``(axis, degrees)``."""
+    from bambu_cli.mesh.orient import parse_rotation
+
+    try:
+        return parse_rotation(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def _add_orient_args(parser):
+    """How the model stands on the bed; shared by slice, job/send, orient and preview."""
+    group = parser.add_argument_group(
+        "orientation",
+        "How the model stands on the bed (STL/OBJ/STEP and unsliced 3MF; a pre-sliced file is never re-oriented). "
+        "See the ranked faces with 'plate orient FILE' or 'plate preview FILE'.",
+    )
+    group.add_argument(
+        "--orient",
+        choices=["keep", "auto"],
+        default=None,
+        help="auto: lay it on the best-ranked face, shown before slicing. keep: the pose the file was exported in. "
+        f"Default: {DEFAULT_ORIENT_MODE}",
+    )
+    group.add_argument(
+        "--face", type=positive_int, metavar="N", help="Lay the model on ranked face N (see 'plate orient FILE')"
+    )
+    group.add_argument(
+        "--rotate",
+        action="append",
+        type=rotation_spec,
+        metavar="AXIS=DEG",
+        help="Then rotate about a bed axis (repeatable, in order), e.g. --rotate x=90 --rotate z=45",
+    )
 
 
 def _add_slice_override_args(parser):
@@ -278,6 +314,7 @@ def _add_job_arguments(parser):
     parser.add_argument("--skip-flow-cali", action="store_true", help="Skip flow calibration")
     parser.add_argument("--threads", type=int, help="Limit OrcaSlicer CPU threads")
     _add_slice_override_args(parser)
+    _add_orient_args(parser)
 
 
 def first_run_text() -> str:
@@ -454,9 +491,10 @@ def build_parser():
         ),
     )
     p_go.add_argument("source", nargs="?", help="Model URL or local file (skips the first prompt)")
+    _add_orient_args(p_go)
 
     p_slice = sub.add_parser("slice", parents=[get_global_parser()], help="Slice a model file into .3mf")
-    p_slice.add_argument("file", nargs="?", help="Path to .stl, .step, .stp, or .obj file")
+    p_slice.add_argument("file", nargs="?", help="Path to .stl, .step, .stp, .obj, or .3mf file")
     p_slice.add_argument("--quality", default="standard", help="draft/standard/high (default: standard)")
     p_slice.add_argument("--filament", type=str, default="PLA Basic", help="Filament type (e.g. 'PLA Basic', 'PETG')")
     p_slice.add_argument("--infill", type=int, default=15, help="Infill density %% (default: 15)")
@@ -493,12 +531,30 @@ def build_parser():
     p_slice.add_argument("--output", help="Output directory (default: same as input)")
     p_slice.add_argument("--threads", type=int, help="Limit OrcaSlicer CPU threads")
     _add_slice_override_args(p_slice)
+    _add_orient_args(p_slice)
     p_slice.add_argument(
         "--list-settings",
         dest="list_settings",
         action="store_true",
         help="List every settable OrcaSlicer process/filament setting and exit (pair with --json for agents).",
     )
+
+    p_orient = sub.add_parser(
+        "orient",
+        parents=[get_global_parser()],
+        help="Rank the faces a model can lie on and show the pose the flags pick (no slicing)",
+    )
+    p_orient.add_argument("file", help="Path to .stl, .obj, .step/.stp, or unsliced .3mf file")
+    _add_orient_args(p_orient)
+
+    p_preview = sub.add_parser(
+        "preview",
+        parents=[get_global_parser()],
+        help="Draw the model's pose and its ranked faces into a PNG (no slicing)",
+    )
+    p_preview.add_argument("file", help="Path to .stl, .obj, .step/.stp, or unsliced .3mf file")
+    p_preview.add_argument("--output", help="PNG file or directory (default: <model>_preview.png beside the model)")
+    _add_orient_args(p_preview)
 
     p_gc = sub.add_parser("gcode", parents=[get_global_parser()], help="Send raw G-code to printer")
     p_gc.add_argument("code", help="G-code command (e.g. 'M104 S220')")

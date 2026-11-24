@@ -106,6 +106,8 @@ form when looking a code up; the human-readable log line shows both.
 | [`download.json`](schemas/download.json) | `download` success |
 | [`slice.json`](schemas/slice.json) | `slice` success |
 | [`slice_list_settings.json`](schemas/slice_list_settings.json) | `slice --list-settings` |
+| [`orient.json`](schemas/orient.json) | `orient` (ranked faces, selected pose) |
+| [`preview.json`](schemas/preview.json) | `preview` (PNG sheet written) |
 | [`job_ok.json`](schemas/job_ok.json) | `job` / `send` success / dry-run |
 | [`job_error.json`](schemas/job_error.json) | `job` / `send` failure |
 | [`print.json`](schemas/print.json) | `print` (incl. confirmation_required) |
@@ -247,9 +249,39 @@ Success after OrcaSlicer produces a valid `.gcode.3mf` (schema: [`slice.json`](s
   "path": "~/models/cube.gcode.3mf",
   "filename": "cube.gcode.3mf",
   "bytes": 4096,
-  "step_converted": false
+  "step_converted": false,
+  "orientation": {
+    "mode": "auto",
+    "changed": true,
+    "turned": "180° about X",
+    "rotation": [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]],
+    "face": 1,
+    "rotations": [],
+    "height_mm": 30.0,
+    "size_mm": [40.0, 40.0, 30.0],
+    "bed_contact_mm2": 1600.0,
+    "overhang_mm2": 0.0,
+    "stable": true
+  }
 }
 ```
+
+`orientation` says how the model stood on the bed when it was sliced. `mode` is
+`auto` (ranked face 1), `keep` (the file's own pose) or `face` (`--face N`);
+without orientation flags it is the default the
+[manual](manual.md#orientation-how-the-model-sits-on-the-plate) names. `rotations` lists
+`--rotate` steps in the order they were applied. `changed` is true when platecli
+rotated the model, `turned` says how in words (`null` when it lies as exported),
+and `rotation` is the 3×3 matrix applied to the file's coordinates. Pass
+`warning` on to the person when it is present: in `keep` mode a pose that rests
+on a point or an edge (a failed slice then carries `next_command` with
+`--orient auto`), or, as `mode: keep` without measurements, a file auto could not
+read, a 3MF with several objects, or one over 64 MiB, which is then sliced as
+exported. With `--json` nothing is drawn; `preview` with the same flags writes
+the picture to a PNG. A pre-sliced 3MF reports `"presliced": true` and is never
+re-oriented: `--orient auto`, `--face` or `--rotate` on one is refused with exit
+`5`, `failed_step: validate` (no flags, or `--orient keep`, sends it as it is).
+`--face` together with `--orient` is refused the same way.
 
 Errors use [`error_envelope.json`](schemas/error_envelope.json). Missing profiles
 errors may include `profiles_dir` and `detected_profiles_dir`.
@@ -270,6 +302,53 @@ The listing omits G-code and script settings, because `--set`, `--set-filament` 
 `--settings-json` refuse them (exit 5, `failed_step: validate`), along with printer
 (machine) settings such as `printable_area` and any temperature outside the safety
 bounds or not written as plain numbers.
+
+### `orient`
+
+`orient FILE [--orient auto|keep | --face N] [--rotate AXIS=DEG ...] --json` ranks
+the faces the model can lie on and reports the pose the flags select, without
+slicing anything (schema: [`orient.json`](schemas/orient.json)). It takes the same
+orientation flags as `slice` and `job`, so the pose it reports is the pose they slice.
+
+```json
+{
+  "status": "ok",
+  "command": "orient",
+  "file": "~/models/bracket.stl",
+  "format": "stl",
+  "triangles": 1204,
+  "objects": 1,
+  "as_exported": {"down": [0.0, 0.0, -1.0], "height_mm": 40.0, "size_mm": [60.0, 3.0, 40.0],
+                  "bed_contact_mm2": 180.0, "overhang_mm2": 0.0, "stable": true, "rotation": [[1,0,0],[0,1,0],[0,0,1]]},
+  "faces": [
+    {"face": 1, "down": [0.0, 1.0, 0.0], "height_mm": 3.0, "size_mm": [60.0, 40.0, 3.0],
+     "bed_contact_mm2": 2400.0, "overhang_mm2": 0.0, "stable": true, "rotation": [[1,0,0],[0,0,1],[0,-1,0]]}
+  ],
+  "selected": {"mode": "auto", "changed": true, "turned": "-90° about X", "face": 1, "rotations": [],
+               "height_mm": 3.0, "stable": true},
+  "rotation": [[1,0,0],[0,0,1],[0,-1,0]]
+}
+```
+
+`faces` is best first (at most 8): face 1 is what `--orient auto` picks. `down` is
+the direction, in the model file's own frame, that ends up facing the bed;
+`rotation` is the 3×3 row-major rotation applied to the model as exported.
+`stable` is false when the centre of mass does not sit over what touches the bed.
+A pre-sliced 3MF is refused (exit `5`); a 3MF placing more than one object can be
+ranked but not re-oriented (without flags its `selected` pose is `keep`).
+
+### `preview`
+
+`preview FILE [orientation flags] [--output PNG] --json` draws the selected pose
+(from above and from the front) and every ranked face into one PNG, with
+down-facing surface that needs support tinted (schema:
+[`preview.json`](schemas/preview.json)). The default output is
+`<model>_preview.png` beside the model.
+
+```json
+{"status": "ok", "command": "preview", "file": "~/models/bracket.stl", "output": "~/models/bracket_preview.png",
+ "width": 1200, "height": 786, "faces_shown": 6, "selected": {"mode": "keep", "changed": false, "rotations": []}}
+```
 
 ### `download`
 
@@ -333,9 +412,16 @@ Print start requires `--confirm`. Without it, download → slice → upload stil
 For a pre-sliced 3MF, `job` reads which plates carry G-code and prints plate 1,
 or the only sliced plate when plate 1 is not sliced; `--plate N` chooses one.
 The summary reports it as `plate`, and a `next_command` carries `--plate`. A 3MF
-with no sliced plate is refused before upload (exit `3`, `failed_step:
-validate`), as is a `--plate` that is not sliced (exit `5`). `--plate` other
-than 1 is refused for a model that `job` slices itself.
+that holds a model but no sliced plate is a project, not a printable: `job`
+slices it like an STL. A 3MF with neither is refused before upload (exit `3`,
+`failed_step: validate`), as is a `--plate` that is not sliced (exit `5`).
+`--plate` other than 1 is refused for a model that `job` slices itself.
+
+`job` takes the same `--orient`, `--face` and `--rotate` flags as `slice`; when it
+slices, the summary carries the same `orientation` object. On a printer-ready
+source (a sliced 3MF or G-code) a flag that would turn the model is refused
+before anything is uploaded (exit `5`, `failed_step: validate`); without flags
+the file is sent as it is.
 
 ### `go`
 

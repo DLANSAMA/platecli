@@ -78,6 +78,12 @@ UPLOAD_TIMEOUT = 300.0
 # Download safety limits
 HTML_LINK_SCAN_LIMIT = 1024 * 1024
 DEFAULT_MAX_DOWNLOAD_MB = 2048
+
+# How slice, job, send, plate go and the TUI lay a model on the plate when no
+# --orient/--face/--rotate is given. "auto" lays it on its best-ranked face and
+# always shows the pose before printing; "keep" slices it as exported. This one
+# name flips every front-end (docs/manual.md, "Orientation", says it in a line).
+DEFAULT_ORIENT_MODE = "auto"
 MAX_DOWNLOAD_FILENAME_LENGTH = 160
 DNS_CACHE_TTL = 300
 SLICE_INFO_MAX_READ_BYTES = 65536  # 64 KB limit for .3mf slice_info.config
@@ -166,7 +172,7 @@ PRINTER_CONFIG_COMMANDS = {
     "gcode",
     "doctor",
 }
-LOCAL_COMMANDS = {"slice", "download", "preflight", "setup", "config", "go", "tui"}
+LOCAL_COMMANDS = {"slice", "orient", "preview", "download", "preflight", "setup", "config", "go", "tui"}
 PRINTER_NETWORK_COMMANDS = PRINTER_CONFIG_COMMANDS - LOCAL_COMMANDS
 
 # Printer families whose camera is captured with the direct port-6000 TLS grab

@@ -48,6 +48,79 @@
     "plan_fingerprint": {
       "description": "SHA-256 of the canonical plan (printer, source, local file content, slice and print options). Pass it to --expect-plan on the real run to refuse if anything changed since review.",
       "type": "string"
+    },
+    "orientation": {
+      "properties": {
+        "mode": {
+          "description": "auto (best-ranked face), keep (the file's own pose) or face (--face N). keep with a warning: auto could not read the file, so it was sliced as exported.",
+          "type": "string"
+        },
+        "changed": {
+          "description": "True when platecli rotated the model.",
+          "type": "boolean"
+        },
+        "turned": {
+          "description": "The turn from the file's pose in words, e.g. '90\u00b0 about X'; null when it lies as exported.",
+          "type": "string"
+        },
+        "rotation": {
+          "description": "3x3 rotation applied to the file's coordinates (v' = R\u00b7v), row by row.",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "face": {
+          "description": "Ranked face (1-based, as 'plate orient' lists them) the model lies on, if any.",
+          "type": "integer"
+        },
+        "rotations": {
+          "description": "--rotate steps applied after the face, in order, e.g. ['x=90'].",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "presliced": {
+          "description": "True for a pre-sliced 3MF: its pose is never changed.",
+          "type": "boolean"
+        },
+        "height_mm": {
+          "type": "number"
+        },
+        "size_mm": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "bed_contact_mm2": {
+          "description": "Area of the model resting on the bed.",
+          "type": "number"
+        },
+        "overhang_mm2": {
+          "description": "Down-facing area steeper than 45\u00b0 past vertical.",
+          "type": "number"
+        },
+        "stable": {
+          "description": "Whether its centre of mass sits over what touches the bed.",
+          "type": "boolean"
+        },
+        "warning": {
+          "description": "Say this to the person: the kept pose rests on a point or an edge, or auto could not run.",
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "mode",
+        "changed"
+      ],
+      "additionalProperties": true,
+      "description": "How a sliced model was stood on the bed."
     }
   },
   "additionalProperties": true

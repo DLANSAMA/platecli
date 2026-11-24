@@ -42,6 +42,7 @@ from bambu_cli.job.payload import _parse_print_options, _print_next_command
 from bambu_cli.job.plan import plan_fingerprint
 from bambu_cli.job.predict import (
     _ext_would_slice,
+    _path_would_slice,
     _predicted_download_slice_extension,
     _predicted_sliced_remote_name,
     _predicted_url_remote_name,
@@ -65,6 +66,7 @@ from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
 from bambu_cli.printables import is_printables_url
 from bambu_cli.slicer import _directory_input_message, _is_directory_input, _validate_slice_options
+from bambu_cli.slicer.orientation import asks_to_turn, presliced_refusal
 
 
 def _cmd_job(args, steps):
@@ -116,6 +118,10 @@ def _run_job(ctx, args, steps=None):
     slice_option_error = _validate_slice_options(args)
     if slice_option_error:
         _job_fail(args, summary, "validate", EXIT_COMMAND_ERROR, slice_option_error)
+    try:
+        orientation_requested = asks_to_turn(args)
+    except BambuError as exc:
+        _job_fail(args, summary, "validate", exc.exit_code, str(exc))
 
     # Validate print options on every path, not just `--confirm`. `--dry-run` is
     # documented as no-side-effect validation and is the intended agent pre-check, so
@@ -271,7 +277,7 @@ def _run_job(ctx, args, steps=None):
             max_download_mb_error = _max_download_mb_error(args)
             if max_download_mb_error:
                 _job_fail(args, summary, "validate", EXIT_COMMAND_ERROR, max_download_mb_error)
-        if ext in SLICEABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS:
+        if ext in SLICEABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS or _path_would_slice(source_path, ext):
             if not workdir:
                 workdir = _prepare_job_output_dir(args, summary)
                 if not workdir and not getattr(args, "dry_run", False):
@@ -398,7 +404,7 @@ def _run_job(ctx, args, steps=None):
             summary["extracted_path"] = extracted_path
             summary["archive_entry"] = archive_entry
 
-        if _ext_would_slice(ext):
+        if _path_would_slice(source_path, ext):
             summary["would_slice"] = True
             if _namespace_get(args, "plate") not in (None, 1):
                 _job_fail(
@@ -454,7 +460,10 @@ def _run_job(ctx, args, steps=None):
                 return source_path
             try:
                 utils._LAST_ERROR_PAYLOAD = None
-                printable_path = steps.get_slice()(_slice_args_for_job(source_path, args, workdir))
+                slice_ns = _slice_args_for_job(source_path, args, workdir)
+                printable_path = steps.get_slice()(slice_ns)
+                if getattr(slice_ns, "orientation_result", None):
+                    summary["orientation"] = slice_ns.orientation_result
             except BambuError as exc:
                 summary["printable_path"] = source_path
                 detail = _last_error_for("slice", ctx, exc)
@@ -468,6 +477,16 @@ def _run_job(ctx, args, steps=None):
                 )
                 raise
         elif ext in PRINT_READY_EXTENSIONS:
+            if orientation_requested:
+                # The pose of a sliced file is fixed in its G-code; turning it
+                # would need a re-slice, which job never does behind your back.
+                _job_fail(
+                    args,
+                    summary,
+                    "validate",
+                    EXIT_COMMAND_ERROR,
+                    str(presliced_refusal(_portable_basename(source_path))),
+                )
             remote_candidate = _portable_basename(source_path)
             if _safe_remote_name(remote_candidate) is None:
                 _job_fail(

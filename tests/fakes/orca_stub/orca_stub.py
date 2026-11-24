@@ -45,6 +45,12 @@ Extra knobs (all optional):
                        run was handed (via --load-settings / --load-filaments)
                        are written to this path as one JSON object, so a test
                        can read back what the slicer would actually have used
+    ORCA_STUB_ARGV_DUMP
+                       if set, ``{"argv": sys.argv[1:]}`` is written to this path
+                       as JSON and every model file the run was given (the
+                       trailing positional args) is copied into the dump's
+                       directory, so a test can read back the exact model the
+                       slicer received (platecli deletes its work dir afterwards)
 
 The stub never touches anything outside the ``--outputdir`` it is told to use
 (plus the optional marker and profile-dump files), so tests stay confined to
@@ -138,6 +144,22 @@ def _dump_profiles(argv: list[str], dest: str) -> None:
         json.dump(out, fh)
 
 
+def _dump_argv(argv: list[str], dest: str) -> None:
+    """Write the argv as JSON to *dest* and copy each trailing model file beside it."""
+    import shutil
+
+    with open(dest, "w", encoding="utf-8") as fh:
+        json.dump({"argv": argv}, fh)
+    dest_dir = os.path.dirname(os.path.abspath(dest))
+    models = []
+    for tok in reversed(argv):
+        if tok.startswith("--") or not os.path.isfile(tok):
+            break
+        models.append(tok)
+    for model in models:
+        shutil.copyfile(model, os.path.join(dest_dir, os.path.basename(model)))
+
+
 def main(argv: list[str]) -> int:
     scenario = os.environ.get("ORCA_STUB_SCENARIO", "success")
 
@@ -149,6 +171,10 @@ def main(argv: list[str]) -> int:
             fh.write(scenario + "\n")
 
     outpath = _resolve_output_path(argv)
+
+    argv_dump = os.environ.get("ORCA_STUB_ARGV_DUMP")
+    if argv_dump:
+        _dump_argv(argv, argv_dump)
 
     dump = os.environ.get("ORCA_STUB_PROFILE_DUMP")
     if dump:

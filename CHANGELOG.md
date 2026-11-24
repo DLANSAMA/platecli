@@ -15,6 +15,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   uploads or prints. It proves the run is the one that was reviewed, not that a person
   reviewed it, and a URL source is bound to the URL, not the bytes it serves later.
 
+### Added
+
+- **Models are laid on their best face before slicing, and you see it.**
+  `slice`, `job`, `send` and `plate go` orient STL, OBJ, STEP and unsliced
+  3MF models automatically, draw the pose in the terminal before anything is
+  sliced or sent, and say when they turned it ("Auto turned this model 90°
+  about X … --orient keep slices it as exported"). All four take
+  `--orient keep` to keep the pose the file was exported in (with a warning
+  when it rests on a point or an edge), `--face N` to pick a face from the
+  ranking, and `--rotate AXIS=DEG` (repeatable) to turn it further. A file auto cannot read is sliced as
+  exported, with a warning. platecli turns the model itself and slices with
+  OrcaSlicer's own auto-orient off, so the pose shown is the pose printed;
+  `--json` reports it as an `orientation` object (`mode`, `face`, `turned`,
+  `rotation`, …).
+- **`plate orient FILE`** draws the pose and ranks the faces a model can lie
+  on (bed contact, overhang, height, whether it stands), and **`plate preview
+  FILE`** draws the chosen pose and every ranked face into a PNG. Both take the
+  same flags and speak `--json` (`orient.json`, `preview.json`).
+- **See and change the orientation in `plate tui`.** After Prepare, the
+  results draw the pose that was sliced (from above and from the front)
+  before *Start print…*, with a line saying when auto turned the model and
+  that `o`, then `0`, keeps the file's orientation. `o` (or *Orient…*) shows
+  the model on the plate, drawn in the terminal with the surface that needs
+  support tinted, beside its height, bed contact, overhang and ranked faces.
+  Keys lay it on a face (`f`/`F`), turn it (`x`/`y`/`z`, Shift to turn
+  back), spin it on the plate (`[`/`]`), pick the best face (`a`) or go back
+  to the pose it was exported in (`0`). The next Prepare slices it that way,
+  and the CLI flags for the pose are shown so it can be repeated with
+  `plate slice`. A downloaded model is fetched once, so a new pose re-slices
+  without downloading it again. The preview in `plate tui` and `plate go`
+  gains an *Orientation* row.
+- **A 3MF that holds a model but no G-code is sliced**, by `slice` and `job`
+  alike, instead of being refused. Only its object's placement changes when
+  it is turned. A pre-sliced 3MF is never re-oriented: asking to is refused
+  before anything is uploaded.
+
 ### Fixed
 
 - **A command the printer did not acknowledge no longer hangs forever.** On a P1P with

@@ -68,6 +68,64 @@ class FilamentSettings:
 
 
 @dataclass(frozen=True)
+class Orientation:
+    """How the model was stood on the bed before slicing (``slice``, ``job``, ``orient``, ``preview``)."""
+
+    mode: str = spec(
+        required=True,
+        default="keep",
+        description="auto (best-ranked face), keep (the file's own pose) or face (--face N). "
+        "keep with a warning: auto could not read the file, so it was sliced as exported.",
+    )
+    changed: bool = spec(required=True, default=False, description="True when platecli rotated the model.")
+    turned: str | None = spec(
+        default=None,
+        description="The turn from the file's pose in words, e.g. '90° about X'; null when it lies as exported.",
+    )
+    rotation: list[list[float]] | None = spec(
+        default=None, description="3x3 rotation applied to the file's coordinates (v' = R·v), row by row."
+    )
+    face: int | None = spec(
+        default=None, description="Ranked face (1-based, as 'plate orient' lists them) the model lies on, if any."
+    )
+    rotations: list[str] = spec(
+        default_factory=list, description="--rotate steps applied after the face, in order, e.g. ['x=90']."
+    )
+    presliced: bool | None = spec(default=None, description="True for a pre-sliced 3MF: its pose is never changed.")
+    height_mm: float | None = None
+    size_mm: list[float] | None = None
+    bed_contact_mm2: float | None = spec(default=None, description="Area of the model resting on the bed.")
+    overhang_mm2: float | None = spec(default=None, description="Down-facing area steeper than 45° past vertical.")
+    stable: bool | None = spec(default=None, description="Whether its centre of mass sits over what touches the bed.")
+    warning: str | None = spec(
+        default=None,
+        description="Say this to the person: the kept pose rests on a point or an edge, or auto could not run.",
+    )
+
+    @classmethod
+    def from_summary(cls, summary: dict[str, Any] | None) -> Orientation | None:
+        return None if summary is None else cls(**summary)
+
+
+@dataclass(frozen=True)
+class OrientFace:
+    """One pose in ``plate orient``'s ranking."""
+
+    face: int | None = spec(default=None, description="1-based rank; absent for the as-exported pose.")
+    down: list[float] = spec(
+        default_factory=list, description="Direction in the model file's frame that ends up facing the bed."
+    )
+    height_mm: float = 0.0
+    size_mm: list[float] = spec(default_factory=list)
+    bed_contact_mm2: float = 0.0
+    overhang_mm2: float = 0.0
+    stable: bool = False
+    rotation: list[list[float]] = spec(
+        default_factory=list, description="3x3 row-major rotation applied to the model as exported."
+    )
+
+
+@dataclass(frozen=True)
 class AmsTray:
     slot: int | None = None
     type: str | None = None
@@ -366,6 +424,49 @@ class Slice(Contract):
     filename: str = spec(required=True, min_length=1)
     bytes: int = spec(required=True)
     step_converted: bool = spec(required=True)
+    orientation: Orientation | None = None
+
+
+@dataclass(frozen=True)
+class Orient(Contract):
+    """``orient``: the faces a model can lie on, ranked, and the pose the flags pick."""
+
+    schema_name: ClassVar[str] = "orient"
+    schema_title: ClassVar[str] = "platecli orient envelope"
+    schema_description: ClassVar[str] = (
+        "Ranked poses for laying a model on the bed. Face 1 is what --orient auto uses; pass --face N to "
+        "slice/job to use another. Nothing is sliced or written."
+    )
+
+    status: Literal["ok"]
+    command: Literal["orient"]
+    file: str = spec(required=True, min_length=1)
+    format: str = spec(required=True, default="stl", description="stl, obj or 3mf.")
+    triangles: int = spec(required=True, default=0)
+    objects: int = spec(required=True, default=1)
+    as_exported: OrientFace | None = spec(required=True, default=None)
+    faces: list[OrientFace] = spec(required=True, default_factory=list)
+    selected: Orientation | None = spec(required=True, default=None)
+    rotation: list[list[float]] = spec(
+        required=True, default_factory=list, description="The selected pose's 3x3 row-major rotation."
+    )
+
+
+@dataclass(frozen=True)
+class Preview(Contract):
+    """``preview``: a PNG sheet of the selected pose and the ranked faces."""
+
+    schema_name: ClassVar[str] = "preview"
+    schema_title: ClassVar[str] = "platecli preview envelope"
+
+    status: Literal["ok"]
+    command: Literal["preview"]
+    file: str = spec(required=True, min_length=1)
+    output: str = spec(required=True, min_length=1, default="")
+    width: int = spec(required=True, default=0)
+    height: int = spec(required=True, default=0)
+    faces_shown: int = spec(required=True, default=0)
+    selected: Orientation | None = spec(required=True, default=None)
 
 
 @dataclass(frozen=True)
@@ -518,6 +619,7 @@ class JobOk(Contract):
             "Pass it to --expect-plan on the real run to refuse if anything changed since review."
         ),
     )
+    orientation: Orientation | None = spec(default=None, description="How a sliced model was stood on the bed.")
 
 
 @dataclass(frozen=True)

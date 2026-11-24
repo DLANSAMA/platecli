@@ -194,6 +194,40 @@ SAMPLES = [
     contracts.Slice(
         status="sliced", command="slice", file="a.stl", path="/tmp/a.3mf", filename="a.3mf", bytes=9, step_converted=False
     ),
+    contracts.Slice(
+        status="sliced",
+        command="slice",
+        file="a.stl",
+        path="/tmp/a.3mf",
+        filename="a.3mf",
+        bytes=9,
+        step_converted=False,
+        orientation=contracts.Orientation(
+            mode="auto", changed=True, face=1, height_mm=3.0, bed_contact_mm2=2400.0, stable=True
+        ),
+    ),
+    contracts.Orient(
+        status="ok",
+        command="orient",
+        file="a.stl",
+        format="stl",
+        triangles=12,
+        objects=1,
+        as_exported=contracts.OrientFace(down=[0.0, 0.0, -1.0], height_mm=40.0, stable=True),
+        faces=[contracts.OrientFace(face=1, down=[0.0, 1.0, 0.0], height_mm=3.0, bed_contact_mm2=2400.0, stable=True)],
+        selected=contracts.Orientation(mode="keep", changed=False),
+        rotation=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+    ),
+    contracts.Preview(
+        status="ok",
+        command="preview",
+        file="a.stl",
+        output="a_preview.png",
+        width=1200,
+        height=786,
+        faces_shown=6,
+        selected=contracts.Orientation(mode="face", changed=True, face=2, rotations=["z=45"]),
+    ),
     contracts.SliceListSettings(
         status="ok",
         command="slice",
