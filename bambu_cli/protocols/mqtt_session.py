@@ -63,6 +63,7 @@ class MqttSession:
         self._version_modules: Any = None
         self._version_event = threading.Event()
         self._connect_failed = False
+        self._closed: bool = False
         self._connected_event = threading.Event()
 
     def _make_client(self) -> Any:
@@ -80,6 +81,7 @@ class MqttSession:
     def close(self) -> None:
         """Stop the loop and disconnect. Safe to call twice."""
         with self._op_lock:
+            self._closed = True
             self._reset_client()
 
     def _reset_client(self) -> None:
@@ -205,6 +207,8 @@ class MqttSession:
 
     def ensure_connected(self, timeout: float) -> bool:
         """Connect (or reconnect after a drop). Returns False on broker rc != 0."""
+        if self._closed:
+            return False
         if self._client is not None and self._live:
             return True
         self._reset_client()
@@ -357,6 +361,13 @@ class MqttSession:
                     self._version_modules = None
                     self._version_event = threading.Event()
                     if not self.ensure_connected(timeout):
+                        failed_broker = getattr(self, "_connect_failed", False)
+                        self._reset_client()
+                        if failed_broker or self._closed:
+                            return None
+                        if attempt < retries:
+                            sleeper(2**attempt)
+                            continue
                         return None
                     if self._client is not None:
                         self._client.publish(f"device/{self._printer.serial}/request", request)

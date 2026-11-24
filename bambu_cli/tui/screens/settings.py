@@ -218,6 +218,9 @@ class SettingsScreen(Screen[SliceOverrides | None]):
         if not key:
             error_box.update("Type the name of the setting to override.")
             return
+        if "=" in key:
+            error_box.update("Setting name cannot contain '='.")
+            return
         error_box.update("")
         # The value is sent as typed -- an empty one included. Clearing a setting
         # (a custom g-code block, say) is a legitimate override, and this is what

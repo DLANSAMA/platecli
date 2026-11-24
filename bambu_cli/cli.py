@@ -231,8 +231,20 @@ def main():
     if _json_setup_should_be_noninteractive(args):
         try:
             _cmd_setup_noninteractive(args)
+        except (KeyboardInterrupt, EOFError):
+            _handle_interrupt(args, "setup")
         except BambuError as exc:
             _handle_bambu_error(exc, "setup")
+        except Exception as exc:
+            if _json_mode_requested(args) and not utils._JSON_EMITTED:
+                write_error_envelope(
+                    args,
+                    "setup",
+                    EXIT_COMMAND_ERROR,
+                    f"Unexpected error: {str(exc)}",
+                )
+            _safe_log_error(f"Uncaught exception: {exc}", exc_info=True)
+            sys.exit(EXIT_COMMAND_ERROR)
         return
 
     # Global settings validation

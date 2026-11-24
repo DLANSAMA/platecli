@@ -563,6 +563,7 @@ def _cmd_download(
                         os.replace(archive_path, target_archive_path)
                         archive_path = target_archive_path
                     except OSError as exc:
+                        _remove_partial_file(target_archive_path)
                         logger.debug(f"Could not rename preserved archive to {canonical_name}: {exc}")
                     logger.info(
                         f"📦 Archive contains multiple model files; preserved archive at {_path_for_message(archive_path)}"
@@ -699,6 +700,10 @@ def _cmd_download(
     except BambuError:
         # Internal abort() paths (oversized, early-end, extract failure, etc.)
         # raise BambuError; drop any 0-byte reserved placeholder they left behind.
+        _cleanup_reserved()
+        raise
+    except KeyboardInterrupt:
+        _remove_partial_file(partial_path)
         _cleanup_reserved()
         raise
     except Exception as e:

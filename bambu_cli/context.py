@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 
-def _stream_host_port(camera_port: str, default: str = "1985") -> str:
+def _stream_host_port(camera_port: Any, default: str = "1985") -> str:
     """Extract the published host port from a docker ``-p`` spec for building the
     localhost streamer URL.
 
@@ -27,6 +27,8 @@ def _stream_host_port(camera_port: str, default: str = "1985") -> str:
     range (``"1985-1990:1984-1989"``) — are not derivable, so fall back to the
     documented default; users with such specs should set ``camera_stream_url``.
     """
+    if not isinstance(camera_port, str):
+        return default
     parts = camera_port.split(":")
     if len(parts) >= 2 and parts[-2].isdigit():
         return parts[-2]

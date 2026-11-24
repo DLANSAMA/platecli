@@ -12,9 +12,11 @@ Nothing outside ``bambu_cli.printables`` should import this module.
 from __future__ import annotations
 
 import json
+import math
 import re
 import urllib.error
 import urllib.request
+from typing import Any
 from urllib.parse import urlparse
 
 from bambu_cli.constants import DEFAULT_NETWORK_TIMEOUT
@@ -113,13 +115,20 @@ def _raise_for_graphql_errors(result, model_id):
     raise PrintablesModelUnavailable(f"Printables API returned an error for model #{model_id}{detail}")
 
 
+def _entry_file_size(entry: dict[str, Any]) -> int:
+    val = entry.get("fileSize")
+    if isinstance(val, (int, float)) and not isinstance(val, bool) and math.isfinite(val) and val >= 0:
+        return int(val)
+    return 0
+
+
 def _select_file(files, file_desc, type_key="stl"):
     if len(files) > 1:
         logger.info(f"   Found {len(files)} {file_desc} files:")
         for entry in files:
-            logger.info(f"      • {entry.get('name', '?')} ({entry.get('fileSize', 0) // 1024}KB)")
-    chosen = max(files, key=lambda x: x.get("fileSize", 0))
-    logger.info(f"   → Using {file_desc}: {chosen.get('name', '?')} ({chosen.get('fileSize', 0) // 1024}KB)")
+            logger.info(f"      • {entry.get('name', '?')} ({_entry_file_size(entry) // 1024}KB)")
+    chosen = max(files, key=_entry_file_size)
+    logger.info(f"   → Using {file_desc}: {chosen.get('name', '?')} ({_entry_file_size(chosen) // 1024}KB)")
     return chosen, type_key
 
 
@@ -176,9 +185,9 @@ def get_file_info(model_id, headers, opener):
         chosen, file_type = _select_file(steps, "STEP", "stl")
     elif threemfs:
         logger.warning("   ⚠️  No STL/STEP files — falling back to 3MF (cannot re-slice with custom settings)")
-        chosen = max(threemfs, key=lambda x: x.get("fileSize", 0))
+        chosen = max(threemfs, key=_entry_file_size)
         file_type = "gcode" if chosen in gcodes_raw else "stl"
-        logger.info(f"   → Using 3MF: {chosen.get('name', '?')} ({chosen.get('fileSize', 0) // 1024}KB)")
+        logger.info(f"   → Using 3MF: {chosen.get('name', '?')} ({_entry_file_size(chosen) // 1024}KB)")
     else:
         raise PrintablesModelUnavailable("No STL, STEP, or 3MF files found for this model.")
 

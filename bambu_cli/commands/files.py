@@ -13,7 +13,7 @@ from bambu_cli.download.naming import (
     _print_ready_error_message,
     _safe_remote_name,
 )
-from bambu_cli.errors import abort
+from bambu_cli.errors import BambuError, abort
 from bambu_cli.fsutil import _portable_basename
 from bambu_cli.gcode_limits import file_heater_problem
 from bambu_cli.logging_utils import logger
@@ -275,12 +275,10 @@ def cmd_upload(args, ctx=None):
 
 def cmd_files(args, ctx=None):
     """List files on the printer."""
-    from bambu_cli.printer import get_printer
-
     ctx = ctx or RuntimeContext.for_request(args)
     json_mode = bool(_namespace_get(args, "json", False))
     try:
-        printer = get_printer()
+        printer = ctx.printer()
         files = printer.list_files("/model/")
         if files is None:
             raise Exception("Failed to list files via printer API")
@@ -305,6 +303,8 @@ def cmd_files(args, ctx=None):
             # Names come from the printer's FTP listing; never let one write
             # terminal control sequences (OSC 52 clipboard, screen clears).
             logger.info(f"   {display_safe(f)}")
+    except BambuError:
+        raise
     except Exception as e:
         message = f"Error listing files: {e}"
         abort(
@@ -317,8 +317,6 @@ def cmd_files(args, ctx=None):
 
 def cmd_delete(args, ctx=None):
     """Delete a file from the printer via FTPS."""
-    from bambu_cli.printer import get_printer
-
     ctx = ctx or RuntimeContext.for_request(args)
     filename = str(args.file or "")
     if _safe_remote_name(filename) is None:
@@ -346,7 +344,7 @@ def cmd_delete(args, ctx=None):
         abort("", exit_code=EXIT_COMMAND_ERROR)
 
     try:
-        printer = get_printer()
+        printer = ctx.printer()
         if printer.delete_file(f"/model/{filename}"):
             logger.info(f"🗑️  Deleted {filename} from printer")
             if bool(_namespace_get(args, "json", False)):
@@ -355,6 +353,8 @@ def cmd_delete(args, ctx=None):
                 emit_json(Delete(status="deleted", command="delete", file=filename, deleted=True))
         else:
             raise Exception("Delete operation failed in printer client.")
+    except BambuError:
+        raise
     except Exception as e:
         message = f"Delete failed: {e}"
         abort(

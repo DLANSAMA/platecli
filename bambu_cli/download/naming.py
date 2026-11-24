@@ -45,9 +45,21 @@ def _download_filename_with_extension(filename, url, fallback_name=None):
     stem, ext = os.path.splitext(filename)
     if ext.lower() in DOWNLOADABLE_EXTENSIONS + ARCHIVE_DOWNLOAD_EXTENSIONS:
         if ext.lower() != source_ext:
-            return f"{stem}{source_ext}"
-        return filename
-    return filename + source_ext
+            base_stem = stem
+            final_ext = source_ext
+        else:
+            base_stem = stem
+            final_ext = ext
+    else:
+        base_stem = filename
+        final_ext = source_ext
+    candidate = f"{base_stem}{final_ext}"
+    if not _within_name_budget(candidate):
+        ext_bytes = len(final_ext.encode("utf-8"))
+        stem_budget = max(0, MAX_DOWNLOAD_FILENAME_LENGTH - ext_bytes)
+        truncated_stem = _utf8_truncate(base_stem, stem_budget).rstrip(" .")
+        candidate = f"{truncated_stem}{final_ext}" if truncated_stem else f"model{source_ext}"
+    return candidate
 
 
 def _download_target_filename(args, url, resolved_name=None):

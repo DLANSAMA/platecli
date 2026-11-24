@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import math
 import re
+import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -56,18 +57,24 @@ class StatusService:
     def __init__(self, ctx: Any = None) -> None:
         self._ctx = ctx
         self._printer: Any = None
+        self._lock = threading.Lock()
+        self._closed = False
 
     def fetch(self, args: argparse.Namespace) -> StatusSnapshot:
         try:
             from bambu_cli.ams import parse_ams
             from bambu_cli.context import RuntimeContext
 
-            if self._printer is None:
-                if self._ctx is None:
-                    self._ctx = RuntimeContext.for_request(args)
-                self._printer = self._ctx.printer()
-                self._printer.hold_mqtt()
-            data = self._printer.status()
+            with self._lock:
+                if self._closed:
+                    return StatusSnapshot(ok=False, error="Status service closed.")
+                if self._printer is None:
+                    if self._ctx is None:
+                        self._ctx = RuntimeContext.for_request(args)
+                    self._printer = self._ctx.printer()
+                    self._printer.hold_mqtt()
+                printer = self._printer
+            data = printer.status()
             if not isinstance(data, dict) or not data:
                 return StatusSnapshot(ok=False, error="Printer returned no status.")
             ams = parse_ams(data)
@@ -77,8 +84,10 @@ class StatusService:
 
     def close(self) -> None:
         """Drop the held MQTT session. Safe to call twice or before any fetch."""
-        printer = self._printer
-        self._printer = None
+        with self._lock:
+            self._closed = True
+            printer = self._printer
+            self._printer = None
         if printer is not None:
             printer.release_mqtt()
 

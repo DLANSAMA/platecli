@@ -230,6 +230,7 @@ class BambuPrinter:
                                         logger.info(
                                             f"✅ Uploaded {remote_path} ({filesize // 1024}KB, verified remotely)"
                                         )
+                                        self.last_size_verified = True
                                         return True
                                     # Same-size remote file but we haven't actually
                                     # transferred anything yet this run (e.g. the

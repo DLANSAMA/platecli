@@ -80,12 +80,25 @@ def _json_path(path):
 
 
 def _display_path(path):
-    if not path:
+    if not path or not _HOME_DIR:
         return path
     # Require a separator boundary after the home prefix so a sibling directory
     # whose name merely starts with the home dir name (e.g. /home/user2 vs
     # /home/user) is not mangled into "~2/…" — that path would not exist and
     # could not be expanded back by a JSON consumer.
+    is_windows = os.sep == "\\" or (len(_HOME_DIR) >= 2 and _HOME_DIR[1] == ":")
+    if is_windows:
+        home_norm = _HOME_DIR.replace("\\", "/")
+        path_norm = path.replace("\\", "/")
+        home_cmp = home_norm.lower()
+        path_cmp = path_norm.lower()
+        if path_cmp == home_cmp:
+            return "~"
+        prefix = home_cmp if home_cmp.endswith("/") else home_cmp + "/"
+        if path_cmp.startswith(prefix):
+            offset = len(home_norm) - 1 if home_norm.endswith("/") else len(home_norm)
+            return "~" + path[offset:]
+        return path
     if path == _HOME_DIR:
         return "~"
     for sep in (os.sep, os.altsep):
@@ -101,7 +114,10 @@ def _compact_all_strings(val):
         return [_compact_all_strings(v) for v in val]
     if isinstance(val, str):
         redacted = _redact_url_credentials(val)
-        return redacted if redacted != val else _display_path(val)
+        if redacted != val:
+            return redacted
+        compacted = _display_path(val)
+        return _json_path(compacted) if compacted != val else compacted
     if isinstance(val, float) and not math.isfinite(val):
         return None
     return val

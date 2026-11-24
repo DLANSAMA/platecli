@@ -39,8 +39,8 @@ _PRINT_OPTIONS = (
     "name",
 )
 
-# Slice-argument fields that name a place or a resource limit, not the result.
-_NOT_PLAN_SLICE_FIELDS = frozenset({"file", "output", "threads"})
+# Slice-argument fields that name a place, UI preview, or resource limit, not the result.
+_NOT_PLAN_SLICE_FIELDS = frozenset({"file", "output", "threads", "orient_preview"})
 
 
 def _local_file_sha256(path: str) -> str | None:

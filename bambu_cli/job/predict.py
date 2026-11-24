@@ -153,8 +153,9 @@ def _predicted_url_remote_name(url, args):
     if predicted_ext not in DOWNLOADABLE_EXTENSIONS:
         return None
     filename = _download_target_filename(args, url)
-    if predicted_ext in SLICEABLE_EXTENSIONS:
+    actual_ext = _file_extension(filename)
+    if actual_ext in SLICEABLE_EXTENSIONS:
         return _predicted_sliced_remote_name(filename, getattr(args, "copies", 1))
-    if predicted_ext in PRINT_READY_EXTENSIONS:
+    if actual_ext in PRINT_READY_EXTENSIONS:
         return filename
     return None

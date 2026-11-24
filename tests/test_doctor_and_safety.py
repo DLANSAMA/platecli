@@ -26,7 +26,6 @@ class TestBambuDoctor(unittest.TestCase):
     @patch("bambu_cli.logging_utils._BACKEND")
     def test_cmd_doctor_mqtt_fail(self, mock_logger, mock_exit, mock_get_status, mock_load, mock_probe):
         from bambu_cli.commands import cmd_doctor
-        from bambu_cli.context import current_settings
 
         mock_load.return_value = {"printer_ip": "1.2.3.4"}
         mock_get_status.return_value = None
@@ -37,7 +36,7 @@ class TestBambuDoctor(unittest.TestCase):
 
         self.assertEqual(getattr(cm.exception, "exit_code", getattr(cm.exception, "code", None)), 2)
         mock_logger.error.assert_any_call(
-            f"   ❌ MQTT connection failed. Ensure printer at {current_settings().printer_ip} is on and access code is correct."
+            "   ❌ MQTT connection failed. Ensure printer at <redacted> is on and access code is correct."
         )
 
     @patch("bambu_cli.protocols.mqtt.probe_cert_fingerprint", return_value=None)

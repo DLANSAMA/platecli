@@ -156,9 +156,10 @@ One-shot query returns printer state, temperatures, and a normalized AMS block:
 {
   "status": "ok",
   "command": "status",
-  "printer": { "...raw printer map..." },
-  "gcode_state": "IDLE",
-  "mc_percent": 0,
+  "printer": {
+    "gcode_state": "IDLE",
+    "mc_percent": 0
+  },
   "ams": null
 }
 ```

@@ -60,7 +60,7 @@ items are **accepted 1.0 residuals** in [SECURITY.md](../SECURITY.md), not open 
 | Correctness / bugs | **A+** | No known dead flags; property tests on filenames/SSRF/ZIP/temps in `tests/test_properties_safety.py` |
 | Typing | **A** | Full-package mypy + `check_untyped_defs`. A+ (`mypy --strict`) is **1521** errors — not this release |
 | Error model | **A+** | `sys.exit` only in `cli.py`; `emit_json_error` is `NoReturn`; domain uses `abort` / `BambuError` |
-| Tests | **A+** | **2656** non-live tests passing (2026-11-06, local Linux; 1 skipped, 1 live deselected). A column cleared. Measured **94.5%** branch coverage over 12084 statements; A+ threshold met. `protocols/ftps.py` and `netsafety.py` are at 100% (`tests/test_transport_edges.py`) |
+| Tests | **A+** | **2830** non-live tests passing (2026-11-23, local Linux; 1 skipped, 1 live deselected). A column cleared. Measured **94.9%** branch coverage over 12221 statements; A+ threshold met. `protocols/ftps.py` and `netsafety.py` are at 100% (`tests/test_transport_edges.py`) |
 | CI / release | **A+** | `--cov-fail-under=92` (raised 90→92 on 2026-11-07; the full matrix passed it: Linux 3.10/3.12/3.14, Windows, macOS; Linux measured 94.1%). Blocking audit, one test runner, single-sourced version |
 | Docs / governance | **A+** | Roadmap + backlog match this measurement; stability policy + support matrix in `docs/api.md`; docs-consistency pins floor / % / count |
 | Product polish | **A−** | Support matrix + hermetic Orca stub; still **Beta / pre-1.0** (no Production/Stable, no v1.0.0 tag). A+ is the §5 checklist |

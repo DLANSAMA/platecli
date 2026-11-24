@@ -44,6 +44,7 @@ from bambu_cli.protocols.camera import (
 from bambu_cli.utils import _ensure_parent_dir, emit_json, emit_json_error
 
 _CONTAINER_PORT_RE = re.compile(r"^\d{1,5}(-\d{1,5})?(/(tcp|udp|sctp))?$", re.IGNORECASE)
+_MAX_SNAPSHOT_BYTES = 50 * 1024 * 1024  # 50 MiB safety limit for streamer responses
 
 
 def _utc_stamp(now: datetime.datetime | None = None) -> str:
@@ -159,6 +160,26 @@ def _require_localhost_streamer_url(args, streamer_url, outpath):
         )
 
 
+class _LocalhostRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject HTTP redirects from the camera streamer to non-localhost targets."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None:
+            try:
+                parsed = urlparse(redirected.full_url)
+            except ValueError as exc:
+                raise urllib.error.URLError("Refusing camera streamer redirect outside localhost") from exc
+            if parsed.scheme not in ("http", "https") or parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+                raise urllib.error.URLError("Refusing camera streamer redirect outside localhost")
+        return redirected
+
+
+def _build_localhost_streamer_opener() -> urllib.request.OpenerDirector:
+    """Build an HTTP opener for the localhost streamer with proxies disabled."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _LocalhostRedirectHandler())
+
+
 def _write_snapshot_atomic(outpath, data):
     outdir = os.path.dirname(outpath) or "."
     fd, temp_path = tempfile.mkstemp(dir=outdir, suffix=".jpg")
@@ -203,7 +224,7 @@ def cmd_snapshot(
     _which = which if which is not None else shutil.which
     _run = subprocess_run if subprocess_run is not None else subprocess.run
     _load_code = access_code_loader if access_code_loader is not None else load_access_code
-    _urlopen = urlopen if urlopen is not None else urllib.request.urlopen
+    _urlopen = urlopen if urlopen is not None else _build_localhost_streamer_opener().open
     _sleep = sleep if sleep is not None else time.sleep
 
     ctx = ctx or RuntimeContext.for_request(args)
@@ -402,7 +423,17 @@ def cmd_snapshot(
     try:
         req = urllib.request.Request(streamer_url, headers={"User-Agent": "Mozilla/5.0"})
         with _urlopen(req, timeout=DEFAULT_NETWORK_TIMEOUT) as resp:
-            data = resp.read()
+            data = resp.read(_MAX_SNAPSHOT_BYTES + 1)
+            if len(data) > _MAX_SNAPSHOT_BYTES:
+                message = f"Camera streamer response exceeded {_MAX_SNAPSHOT_BYTES // (1024 * 1024)} MB safety limit."
+                logger.error(message)
+                abort(
+                    message,
+                    exit_code=EXIT_NETWORK_ERROR,
+                    failed_step="snapshot",
+                    extra={"output": outpath},
+                    command="snapshot",
+                )
             _write_snapshot_atomic(outpath, data)
         size = os.path.getsize(outpath)
         captured_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

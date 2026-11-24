@@ -149,9 +149,7 @@ def cmd_doctor(args, ctx=None):
     if status:
         logger.info("   ✅ MQTT connection established. Printer identified.")
     else:
-        message = (
-            f"MQTT connection failed. Ensure printer at {ctx.settings.printer_ip} is on and access code is correct."
-        )
+        message = f"MQTT connection failed. Ensure printer at {shown_ip()} is on and access code is correct."
         logger.error(f"   ❌ {message}")
         log_pin_hint()
         extra = {"certificate_fingerprint": fp} if fp else None

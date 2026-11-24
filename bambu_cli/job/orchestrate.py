@@ -183,6 +183,7 @@ def _run_job(ctx, args, steps=None):
         )
 
     workdir = None
+    extracted_path = None
     temp_dirs = []  # every auto-created bambu-job-* dir; ALL are cleaned up in finally, no matter how workdir is reassigned
 
     try:
@@ -213,6 +214,14 @@ def _run_job(ctx, args, steps=None):
                 summary["would_extract"] = True
             elif _ext_would_slice(source_ext):
                 summary["would_slice"] = True
+                if _namespace_get(args, "plate") not in (None, 1):
+                    _job_fail(
+                        args,
+                        summary,
+                        "validate",
+                        EXIT_COMMAND_ERROR,
+                        "--plate only applies to a pre-sliced 3MF; a model platecli slices has a single plate (1).",
+                    )
             summary["remote_name"] = predicted_remote_name
             summary["would_upload"] = True
             summary["would_print"] = bool(getattr(args, "confirm", False)) and not bool(
@@ -499,7 +508,7 @@ def _run_job(ctx, args, steps=None):
             summary["remote_name"] = remote_candidate
             if ext == ".3mf":
                 summary["plate"] = _choose_plate(args, summary, source_path)
-            if not _is_http_url(source) and getattr(args, "output", None):
+            if not _is_http_url(source) and not extracted_path and getattr(args, "output", None):
                 logger.warning(
                     "⚠️  --output is only used when job/send downloads, extracts, or slices; ignoring it for a printer-ready local file."
                 )
