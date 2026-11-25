@@ -246,7 +246,7 @@ def _profiles_dir_candidates():
         # v2.5.2 installs to share/OrcaSlicer/profiles instead; that path is
         # deliberately not added until a Flatpak slice has been run, because
         # detecting the profiles would make `preflight` pass on an install the
-        # sandbox may not let plate slice with (see docs/plan/inbox.md).
+        # sandbox may not let plate slice with.
         "/var/lib/flatpak/app/com.orcaslicer.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
         "~/.local/share/flatpak/app/com.orcaslicer.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
         "/var/lib/flatpak/app/io.github.softfever.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
