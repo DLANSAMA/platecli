@@ -17,6 +17,7 @@ import pytest
 from bambu_cli import setup_cmd
 from bambu_cli.errors import BambuError
 from bambu_cli.interactive.core import slicer_preflight_problem
+from bambu_cli.paths import display_path
 from bambu_cli.setup_cmd.preflight import _profiles_dir_check
 from bambu_cli.slicer import cmd_slice
 from bambu_cli.slicer.options import _override_safety_problem, setting_catalog
@@ -659,7 +660,8 @@ def test_list_settings_reads_a_packed_install_and_names_the_configured_folder(tm
 
     listed = json.loads(capsys.readouterr().out)
     assert listed["action"] == "list_settings"
-    assert listed["profiles_dir"] == packed
+    # JSON output shortens the home folder to "~" (pytest's tmp_path is under it on Windows).
+    assert listed["profiles_dir"] == display_path(packed)
     assert "layer_height" in listed["process"]["settings"]
     assert "filament_type" in listed["filament"]["settings"]
     assert "include" not in listed["process"]["settings"]
