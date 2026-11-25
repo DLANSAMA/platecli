@@ -139,6 +139,34 @@ def test_inherits_cycle_is_an_error_not_a_hang(tmp_path):
         P._load_flattened_profile(a)
 
 
+@pytest.mark.parametrize("bad_ref", ["../other", "/etc/passwd", "sub\\file", "..", "."])
+def test_inherits_rejects_path_traversal_and_separators(tmp_path, bad_ref):
+    _write(tmp_path / "other.json", {"secret": True})
+    child = _write(tmp_path / "process" / "child.json", {"inherits": bad_ref})
+    with pytest.raises(ValueError, match="invalid profile inherits reference"):
+        P._load_flattened_profile(child)
+
+
+def test_inherits_rejects_symlink_escaping_profiles_dir(tmp_path):
+    outside = _write(tmp_path / "outside.json", {"secret": True})
+    prof_dir = tmp_path / "process"
+    prof_dir.mkdir(parents=True, exist_ok=True)
+    symlink_path = prof_dir / "evil.json"
+    try:
+        os.symlink(outside, symlink_path)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+    child = _write(prof_dir / "child.json", {"inherits": "evil"})
+    with pytest.raises(ValueError, match="escapes profiles directory"):
+        P._load_flattened_profile(child)
+
+
+def test_inherits_missing_plain_parent_keeps_inherits_reference(tmp_path):
+    child = _write(tmp_path / "process" / "child.json", {"inherits": "nonexistent_parent", "layer_height": "0.2"})
+    loaded = P._load_flattened_profile(child)
+    assert loaded == {"inherits": "nonexistent_parent", "layer_height": "0.2"}
+
+
 def test_cmd_slice_hands_orca_the_printer_bed_type(tmp_path, monkeypatch):
     from bambu_cli.slicer import cmd as slice_cmd
     from tests.bambu_test_base import settings_ctx

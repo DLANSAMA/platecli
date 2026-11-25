@@ -671,13 +671,14 @@ def test_job_sends_a_sliced_3mf_without_flags(tmp_path, capsys):
 
 
 def test_job_reports_orientation_from_the_slice_step(tmp_path, capsys):
+    from bambu_cli.slicer import SliceResult
+
     stl = write_model(tmp_path / "plate.stl", box(60, 3, 40))
     sliced = _sliced_3mf(tmp_path / "plate_sliced.3mf")
     result = {"mode": "auto", "changed": True, "face": 1, "rotations": [], "height_mm": 3.0}
 
-    def slice_(slice_ns):
-        slice_ns.orientation_result = result
-        return sliced
+    def slice_(_slice_ns):
+        return SliceResult(sliced, orientation=result)
 
     calls = _drive_job(stl, "--orient", "auto", "--output", str(tmp_path), slice_=slice_)
     assert calls["upload"].file == sliced

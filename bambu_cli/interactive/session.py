@@ -29,7 +29,6 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
-from bambu_cli import utils
 from bambu_cli.constants import (
     EXIT_COMMAND_ERROR,
     EXIT_CONFIG_ERROR,
@@ -296,8 +295,6 @@ def _run_print(args: argparse.Namespace, deps: GoDeps, state: WizardState, *, co
             deps.get_prompts().print(f"{problem} {_kept_note(state)}".strip())
             abort(problem, exit_code=EXIT_PRINTER_ERROR, failed_step="ams", logged=True)
     job_ns = _build_job_namespace(state, args, confirm=confirm)
-    utils._LAST_ERROR_PAYLOAD = None
-    utils._LAST_DOWNLOAD_PAYLOAD = None
     try:
         deps.get_steps().get_job()(job_ns)
     except BambuError:

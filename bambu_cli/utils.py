@@ -58,6 +58,10 @@ _JSON_PATH_KEYS = {
 }
 
 _JSON_EMITTED = False
+# Compatibility mirrors populated for existing unit tests that inspect the last
+# emitted error/download payload. Production orchestrators (job/, interactive/)
+# do not read or clear these; they use BambuError.to_error_payload(),
+# DownloadResult, and SliceResult instead.
 _LAST_ERROR_PAYLOAD = None
 _LAST_DOWNLOAD_PAYLOAD = None
 

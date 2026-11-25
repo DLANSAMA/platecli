@@ -5,6 +5,7 @@ import os
 import subprocess
 import zipfile
 from enum import Enum, auto
+from typing import Any
 
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
@@ -24,6 +25,23 @@ class SliceOutcome(Enum):
     EMPTY_OUTPUT = auto()
     CORRUPT_3MF = auto()
     SLICER_ERROR = auto()
+
+
+class SliceResult(str):
+    """Sliced output path carrying typed orientation metadata.
+
+    Subclasses ``str`` so callers and tests treating ``cmd_slice``'s return
+    value as a path string keep working unchanged, while orchestrators read
+    ``result.orientation`` directly instead of a mutated attribute on the
+    input ``argparse.Namespace``.
+    """
+
+    orientation: dict[str, Any] | None
+
+    def __new__(cls, path: str, *, orientation: dict[str, Any] | None = None) -> SliceResult:
+        obj = super().__new__(cls, path)
+        obj.orientation = orientation
+        return obj
 
 
 def _classify_slice_result(
@@ -123,7 +141,7 @@ def _finalize_slice(
     step_converted: bool,
     pre_snapshot: tuple[bool, float, int] | None = None,
     orientation: dict | None = None,
-) -> str:
+) -> SliceResult:
     """Evaluate the OrcaSlicer result, emit success/error output, and return the .3mf path."""
     _fresh = _was_written_this_run(outpath, pre_snapshot)
     file_exists = os.path.exists(outpath)
@@ -203,7 +221,7 @@ def _finalize_slice(
                     orientation=Orientation.from_summary(orientation),
                 )
             )
-        return outpath
+        return SliceResult(outpath, orientation=orientation)
 
     # outcome == SliceOutcome.SLICER_ERROR
     message = f"Slicing failed (RC={rc})"

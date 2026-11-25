@@ -227,17 +227,18 @@ class SafeHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
         new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new_req is not None:
             new_req._bambu_redirect_hops = hop_count  # type: ignore[attr-defined]
-            if _host_of(newurl) != _host_of(req.full_url):
+            if _origin_of(newurl) != _origin_of(req.full_url):
                 # urllib copies every request header onto the redirected
-                # request, whatever host it names. Credentials scoped to the
-                # first host must not follow a redirect to a second one, and
-                # the User-Agent policy is per host (honest token for
-                # first-party API hosts, browser-shaped elsewhere), so re-pick
-                # it for the host we are actually about to talk to.
+                # request, whatever host, scheme, or port it names. Credentials
+                # scoped to the first origin must not follow a redirect across a
+                # scheme, host, or port change (e.g. https -> http downgrade).
                 for name in CROSS_HOST_STRIPPED_HEADERS:
                     new_req.remove_header(name)
-                if req.has_header("User-agent"):
-                    new_req.add_header("User-Agent", user_agent_for_url(newurl))
+            if _host_of(newurl) != _host_of(req.full_url) and req.has_header("User-agent"):
+                # User-Agent policy is per host (honest token for first-party
+                # API hosts, browser-shaped elsewhere), so re-pick it for the
+                # host we are actually about to talk to.
+                new_req.add_header("User-Agent", user_agent_for_url(newurl))
         return new_req
 
 
@@ -323,6 +324,20 @@ def _host_of(url) -> str:
         return ""
 
 
+def _origin_of(url) -> tuple[str, str, int | None]:
+    """Best-effort ``(scheme, host, port)`` origin tuple. Never raises."""
+    try:
+        parsed = urlparse(url)
+        scheme = (parsed.scheme or "").lower()
+        host = (parsed.hostname or "").lower()
+        port = parsed.port
+    except (TypeError, ValueError, AttributeError):
+        return ("", "", None)
+    if port is None:
+        port = 80 if scheme == "http" else 443 if scheme == "https" else None
+    return (scheme, host, port)
+
+
 def user_agent_for_url(url) -> str:
     """Pick the UA policy for ``url``: honest for first-party API hosts,
     browser-compatible for arbitrary user-supplied download URLs."""
@@ -402,6 +417,10 @@ def polite_open(opener, req, timeout=None, sleep=time.sleep):
             if err.code not in (429, 503) or attempt >= MAX_RATE_LIMIT_RETRIES:
                 raise
             delay = _retry_after_seconds(err)
+            try:
+                err.close()
+            except Exception:
+                pass
             logger.warning(f"Rate limited by {host or 'server'} (HTTP {err.code}); waiting {delay:.0f}s before retry")
             attempt += 1
             sleep(delay)

@@ -60,6 +60,37 @@ def _produced_is_accepted(result, produced: str) -> bool:
     return outcome in (SliceOutcome.SUCCESS, SliceOutcome.BENIGN_GL_WARNING)
 
 
+def _resolve_filament_profile(filament_dir: str, requested_filament_name: str) -> tuple[str | None, bool]:
+    """Resolve *requested_filament_name* inside *filament_dir*.
+
+    Returns ``(matched_path_or_none, has_any_profiles)``.
+    """
+    if not os.path.isdir(filament_dir):
+        return None, False
+
+    all_json = sorted(
+        f for f in os.listdir(filament_dir) if f.endswith(".json") and os.path.isfile(os.path.join(filament_dir, f))
+    )
+    requested_filament = str(requested_filament_name).lower()
+    files = [f for f in all_json if requested_filament in f.lower()]
+    base_files = [f for f in files if "@base" in f]
+    candidates = base_files or files
+    exact_stems = {requested_filament, f"bambu {requested_filament}"}
+
+    def _filament_rank(name: str) -> tuple[bool, int, str]:
+        stem = name[: -len(".json")] if name.endswith(".json") else name
+        stem = stem.lower().replace(" @base", "").strip()
+        return (stem not in exact_stems, len(name), name)
+
+    if candidates:
+        best = min(candidates, key=_filament_rank)
+        if len(candidates) > 1:
+            logger.info(f"Filament '{requested_filament_name}' matched {len(candidates)} profiles; using {best}")
+        return os.path.join(filament_dir, best), True
+
+    return None, bool(all_json)
+
+
 def _list_settings(args: argparse.Namespace, settings) -> str:
     """Discovery: dump every settable OrcaSlicer process/filament key + example.
 
@@ -263,40 +294,8 @@ def cmd_slice(
         process = os.path.join(profiles_dir, "process", process_file)
 
         filament_dir = os.path.join(profiles_dir, "filament")
-        filament = None
         requested_filament_name = _namespace_get(args, "filament", "PLA Basic") or "PLA Basic"
-        requested_filament = str(requested_filament_name).lower()
-
-        if os.path.isdir(filament_dir):
-            files = sorted(
-                f
-                for f in os.listdir(filament_dir)
-                if f.endswith(".json")
-                and os.path.isfile(os.path.join(filament_dir, f))
-                and requested_filament in f.lower()
-            )
-            base_files = [f for f in files if "@base" in f]
-            candidates = base_files or files
-            exact_stems = {requested_filament, f"bambu {requested_filament}"}
-
-            def _filament_rank(name: str) -> tuple[bool, int, str]:
-                stem = name[: -len(".json")] if name.endswith(".json") else name
-                stem = stem.lower().replace(" @base", "").strip()
-                return (stem not in exact_stems, len(name), name)
-
-            if candidates:
-                best = min(candidates, key=_filament_rank)
-                filament = os.path.join(filament_dir, best)
-                if len(candidates) > 1:
-                    logger.info(
-                        f"Filament '{requested_filament_name}' matched {len(candidates)} profiles; using {best}"
-                    )
-
-        if not filament or not os.path.exists(filament):
-            logger.warning(
-                f"⚠️  Filament matching '{requested_filament_name}' not found. Falling back to Bambu PLA Basic."
-            )
-            filament = os.path.join(filament_dir, "Bambu PLA Basic @base.json")
+        filament, has_filament_profiles = _resolve_filament_profile(filament_dir, requested_filament_name)
 
         slicer_problem = _slicer_executable_problem(settings.orca_slicer)
         if slicer_problem:
@@ -386,6 +385,19 @@ def cmd_slice(
             if numeric_quality:
                 layer = os.path.basename(process)[: -len(".json")]
 
+        if not filament:
+            if has_filament_profiles:
+                emit_json_error(
+                    args,
+                    "slice",
+                    EXIT_COMMAND_ERROR,
+                    f"No filament profile matching '{requested_filament_name}' found in {_path_for_message(filament_dir)}.",
+                    failed_step="validate",
+                    file=filepath,
+                    filament=str(requested_filament_name),
+                )
+            filament = os.path.join(filament_dir, "Bambu PLA Basic @base.json")
+
         for path, name in [(machine, "machine"), (filament, "filament")]:
             if not os.path.exists(path):
                 message = f"Missing {name} profile: {_path_for_message(path)}"
@@ -445,7 +457,8 @@ def cmd_slice(
                 args, "slice", exc.exit_code, str(exc), failed_step=exc.failed_step or "orient", file=filepath
             )
         orientation_summary = oriented.summary
-        # Recorded on the namespace so job/TUI callers can report the pose too.
+        # Compatibility mirror for callers/tests inspecting the input namespace;
+        # production orchestrators read ``SliceResult.orientation`` instead.
         args.orientation_result = orientation_summary
         cmd = _build_orcaslicer_cmd(
             settings,
@@ -524,7 +537,7 @@ def cmd_slice(
             )
         produced = os.path.join(work_dir, outfile)
         if os.path.isfile(produced):
-            if pre_snapshot is not None:
+            if pre_snapshot is not None and result is not None and result.returncode == 0:
                 try:
                     produced_size = os.path.getsize(produced)
                 except OSError as exc:

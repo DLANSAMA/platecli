@@ -33,7 +33,7 @@ from bambu_cli.mesh import (
     load_model,
     plan_orientation,
 )
-from bambu_cli.slicer.orientation import request_flags
+from bambu_cli.slicer.orientation import parse_orientation_summary, request_flags
 from bambu_cli.textsafe import display_safe
 
 QUARTER_TURN = 90.0
@@ -112,29 +112,28 @@ def pose_line(summary: dict | None) -> tuple[str, bool] | None:
     Says when auto turned the model and how to keep the file's orientation
     instead (``o``, then ``0``). None when there is no pose to talk about.
     """
-    if not summary or summary.get("presliced"):
+    parsed = parse_orientation_summary(summary)
+    if parsed is None:
         return None
-    mode = summary.get("mode")
-    turned = summary.get("turned")
-    rotations = summary.get("rotations") or []
-    tips = summary.get("stable") is False
-    if summary.get("warning") and "stable" not in summary:
+    if parsed.auto_failed:
         return "Auto could not read this model, so it is sliced as exported.", True
-    if mode == "keep" and not rotations:
-        if summary.get("warning"):
+    tips = parsed.tips_over
+    tip_suffix = " · it may tip over" if tips else ""
+    if parsed.mode == "keep" and not parsed.rotations:
+        if parsed.unstable_keep:
             return "As exported it rests on a point or an edge · o, then a, lays it on its best face", True
-        return "As exported" + (" · it may tip over" if tips else "") + " · o changes it", tips
-    if mode == "auto" and not rotations:
-        if turned:
-            line = f"Auto turned this model {turned} · o, then 0, keeps the file's orientation"
+        return f"As exported{tip_suffix} · o changes it", tips
+    if parsed.mode == "auto" and not parsed.rotations:
+        if parsed.turned:
+            line = f"Auto turned this model {parsed.turned} · o, then 0, keeps the file's orientation"
         else:
             line = "Auto: it already lies on its best face, as exported · o changes it"
-        return line + (" · it may tip over" if tips else ""), tips
-    base = f"Face {summary.get('face')}" if mode == "face" else ("Auto" if mode == "auto" else "As exported")
-    turns = ", ".join(str(spec) for spec in rotations)
+        return f"{line}{tip_suffix}", tips
+    base = f"Face {parsed.face}" if parsed.mode == "face" else ("Auto" if parsed.mode == "auto" else "As exported")
+    turns = ", ".join(parsed.rotations)
     what = f"{base} + {turns}" if turns else base
-    moved = f"turned {turned} from the file" if turned else "the file's own pose"
-    return f"{what}: {moved}" + (" · it may tip over" if tips else "") + " · o changes it", tips
+    moved = f"turned {parsed.turned} from the file" if parsed.turned else "the file's own pose"
+    return f"{what}: {moved}{tip_suffix} · o changes it", tips
 
 
 class PoseEditor:

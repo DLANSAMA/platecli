@@ -310,6 +310,54 @@ def test_redirect_hop_cap_rejects_over_limit():
     with pytest.raises(urllib.error.URLError, match="Too many redirects"):
         handler.redirect_request(req, None, 302, "Found", {}, "https://example.com/next")
 
+
+def test_redirect_same_host_https_to_http_downgrade_strips_credentials():
+    handler = SafeHTTPRedirectHandler()
+    req = urllib.request.Request(
+        "https://example.com/a",
+        headers={
+            "Authorization": "Bearer SECRET",
+            "Proxy-Authorization": "Basic c2VjcmV0",
+            "Cookie": "sid=1",
+            "X-Custom": "kept",
+        },
+    )
+    new_req = handler.redirect_request(req, None, 302, "Found", {}, "http://example.com/b")
+    assert new_req is not None
+    assert not new_req.has_header("Authorization")
+    assert not new_req.has_header("Proxy-authorization")
+    assert not new_req.has_header("Cookie")
+    assert new_req.get_header("X-custom") == "kept"
+
+
+def test_redirect_same_host_port_change_strips_credentials():
+    handler = SafeHTTPRedirectHandler()
+    req = urllib.request.Request(
+        "https://example.com/a",
+        headers={
+            "Authorization": "Bearer SECRET",
+            "Cookie": "sid=1",
+            "X-Custom": "kept",
+        },
+    )
+    new_req = handler.redirect_request(req, None, 302, "Found", {}, "https://example.com:8443/b")
+    assert new_req is not None
+    assert not new_req.has_header("Authorization")
+    assert not new_req.has_header("Cookie")
+    assert new_req.get_header("X-custom") == "kept"
+
+
+def test_redirect_explicit_default_port_equivalence_keeps_credentials():
+    handler = SafeHTTPRedirectHandler()
+    req = urllib.request.Request(
+        "https://example.com/a",
+        headers={"Authorization": "Bearer SECRET", "Cookie": "sid=1"},
+    )
+    new_req = handler.redirect_request(req, None, 302, "Found", {}, "https://example.com:443/b")
+    assert new_req is not None
+    assert new_req.get_header("Authorization") == "Bearer SECRET"
+    assert new_req.get_header("Cookie") == "sid=1"
+
 def test_safe_https_connect_wraps_socket():
     conn = netsafety.SafeHTTPSConnection("example.com", 443)
     conn.timeout = 5
@@ -404,6 +452,45 @@ def test_polite_open_retries_on_429_and_honors_retry_after(monkeypatch):
     with pytest.raises(urllib.error.HTTPError):
         netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=slept.append)
     assert opener.open.call_count == 1
+
+
+def test_polite_open_closes_retried_errors_and_leaves_reraised_open(monkeypatch):
+    monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 0.0)
+    sentinel = object()
+
+    # Retried 429 and 503 responses are closed before sleeping.
+    for code in (429, 503):
+        netsafety._last_request_at.clear()
+        err = _http_error(code, "0")
+        err.close = MagicMock(wraps=err.close)
+        opener = MagicMock()
+        opener.open.side_effect = [err, sentinel]
+        assert netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=lambda _: None) is sentinel
+        err.close.assert_called_once_with()
+
+    # Non-retried 404 is re-raised unclosed so the caller can inspect/read it.
+    netsafety._last_request_at.clear()
+    err_404 = _http_error(404)
+    err_404.close = MagicMock(wraps=err_404.close)
+    opener = MagicMock()
+    opener.open.side_effect = [err_404]
+    with pytest.raises(urllib.error.HTTPError):
+        netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=lambda _: None)
+    err_404.close.assert_not_called()
+
+    # Exhausted 429 retries close earlier attempts but leave the final raised error open.
+    netsafety._last_request_at.clear()
+    errs = [_http_error(429, "0") for _ in range(1 + netsafety.MAX_RATE_LIMIT_RETRIES)]
+    for err in errs:
+        err.close = MagicMock(wraps=err.close)
+    opener = MagicMock()
+    opener.open.side_effect = errs
+    with pytest.raises(urllib.error.HTTPError) as excinfo:
+        netsafety.polite_open(opener, _fake_req(), timeout=5, sleep=lambda _: None)
+    assert excinfo.value is errs[-1]
+    for err in errs[:-1]:
+        err.close.assert_called_once_with()
+    errs[-1].close.assert_not_called()
 
 def test_throttle_host_enforces_min_interval_per_host(monkeypatch):
     monkeypatch.setattr(netsafety, "MIN_HOST_REQUEST_INTERVAL", 1.0)

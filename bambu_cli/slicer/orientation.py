@@ -147,6 +147,48 @@ def plan_summary(
     return summary
 
 
+@dataclass(frozen=True)
+class ParsedOrientationSummary:
+    """Normalized reading of a ``plan_summary`` dict shared by UI formatters."""
+
+    mode: str
+    face: int | None
+    rotations: tuple[str, ...]
+    has_turned: bool
+    turned: str | None
+    height_mm: float | None
+    stable: bool | None
+    warning: str | None
+    auto_failed: bool
+    unstable_keep: bool
+
+    @property
+    def tips_over(self) -> bool:
+        return self.stable is False
+
+
+def parse_orientation_summary(summary: dict | None) -> ParsedOrientationSummary | None:
+    """Parse a ``plan_summary`` dict into structured fields, or None if absent/pre-sliced."""
+    if not summary or summary.get("presliced"):
+        return None
+    warning = summary.get("warning") or None
+    has_stable = "stable" in summary
+    height = summary.get("height_mm")
+    height_mm = float(height) if isinstance(height, (int, float)) and not isinstance(height, bool) else None
+    return ParsedOrientationSummary(
+        mode=summary.get("mode") or "keep",
+        face=summary.get("face"),
+        rotations=tuple(str(spec) for spec in (summary.get("rotations") or ())),
+        has_turned="turned" in summary,
+        turned=summary.get("turned"),
+        height_mm=height_mm,
+        stable=summary.get("stable") if has_stable else None,
+        warning=warning,
+        auto_failed=bool(warning and not has_stable),
+        unstable_keep=bool(warning and has_stable),
+    )
+
+
 @dataclass
 class OrientOutcome:
     path: str  # the file OrcaSlicer should load

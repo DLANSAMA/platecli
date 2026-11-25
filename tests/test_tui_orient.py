@@ -142,11 +142,13 @@ def _sliced_3mf(tmp_path, name="out.gcode.3mf"):
 
 
 def _slicer(tmp_path, summary=None):
+    from bambu_cli.slicer import SliceResult
+
     sliced = _sliced_3mf(tmp_path)
 
-    def run(ns):
+    def run(_ns):
         if summary is not None:
-            ns.orientation_result = summary
+            return SliceResult(sliced, orientation=summary)
         return sliced
 
     return Recorder(side_effect=run)
@@ -958,12 +960,13 @@ async def test_failed_prepare_clears_the_pose(tmp_path):
     calls = {"n": 0}
     sliced = _sliced_3mf(tmp_path)
 
-    def run(ns):
+    def run(_ns):
+        from bambu_cli.slicer import SliceResult
+
         calls["n"] += 1
         if calls["n"] > 1:
             raise BambuError("slicer fell over", exit_code=4)
-        ns.orientation_result = _TURNED
-        return sliced
+        return SliceResult(sliced, orientation=_TURNED)
 
     app = PlateApp(_args(), _deps(GoSteps(download=Recorder(), slice=Recorder(side_effect=run))))
     async with app.run_test(size=(120, 36)) as pilot:
