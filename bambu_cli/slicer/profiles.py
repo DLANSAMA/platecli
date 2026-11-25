@@ -178,8 +178,38 @@ def _available_layer_heights(profiles_dir: str, model_code: str, compatible_prin
     return sorted(heights)
 
 
+def machine_profile_path(profiles_dir: str, full_model_name: str, nozzle_size: str) -> str:
+    """Where the machine profile for this printer and nozzle sits in a loose tree.
+
+    ``profiles_dir`` is the folder ``resolve_profiles_dir`` returned. ``plate
+    slice`` and ``plate preflight`` both look here, so a preflight pass means
+    the slice will find the same file.
+    """
+    return os.path.join(profiles_dir, "machine", f"{full_model_name} {nozzle_size} nozzle.json")
+
+
+# Fields of a profile JSON that describe the preset itself. An included preset
+# contributes its settings, never its identity.
+_PRESET_BOOKKEEPING_KEYS = frozenset(
+    {
+        "type",
+        "name",
+        "from",
+        "instantiation",
+        "setting_id",
+        "filament_id",
+        "base_id",
+        "description",
+        "version",
+        "renamed_from",
+        "inherits",
+        "include",
+    }
+)
+
+
 def _load_flattened_profile(path: str) -> dict:
-    """Load an OrcaSlicer profile with its ``inherits`` chain merged in.
+    """Load an OrcaSlicer profile with its ``inherits`` and ``include`` presets merged in.
 
     OrcaSlicer does not resolve ``inherits`` for a profile loaded from a temp
     file outside its profiles tree. Every inherited value then falls back to a
@@ -190,27 +220,65 @@ def _load_flattened_profile(path: str) -> dict:
     and ``inherits`` is dropped. A parent is looked up next to its child (same
     kind directory); a missing parent leaves the reference in place, and a
     cycle is an error rather than infinite recursion.
-    """
-    seen: set[str] = set()
 
-    def _resolve(current: str) -> dict:
+    OrcaSlicer 2.5 added ``include``: a list of presets whose settings are laid
+    over the parent's and under the profile's own, in the order listed. Bambu's
+    2.5.x machine profiles take their start, end, filament-change, layer-change
+    and time-lapse G-code only from such includes, so a missing one is an error
+    here: leaving it out would slice with the generic start G-code.
+    """
+    base_dir = os.path.realpath(os.path.dirname(path))
+
+    def _sibling(current: str, reference: object, field: str) -> str:
+        if (
+            not isinstance(reference, str)
+            or not reference
+            or any(sep in reference for sep in ("/", "\\", os.path.sep))
+            or (os.path.altsep and os.path.altsep in reference)
+            or reference in (".", "..")
+            or ".." in reference.split("/")
+        ):
+            raise ValueError(f"invalid profile {field} reference: {reference!r}")
+        sibling_path = os.path.join(os.path.dirname(current), f"{reference}.json")
+        real_sibling = os.path.realpath(sibling_path)
+        try:
+            inside = os.path.commonpath([base_dir, real_sibling]) == base_dir and real_sibling != base_dir
+        except ValueError:
+            inside = False
+        if not inside:
+            raise ValueError(f"profile {field} escapes profiles directory: {reference!r}")
+        return sibling_path
+
+    def _resolve(current: str, chain: tuple[str, ...]) -> dict:
         real = os.path.realpath(current)
-        if real in seen:
+        if real in chain:
             raise ValueError(f"profile inherits cycle at {os.path.basename(current)}")
-        seen.add(real)
+        chain = (*chain, real)
         with open(current, encoding="utf-8") as f:
             data = json.load(f)
+        merged: dict = {}
         parent = data.get("inherits")
         if parent:
-            parent_path = os.path.join(os.path.dirname(current), f"{parent}.json")
+            parent_path = _sibling(current, parent, "inherits")
             if os.path.exists(parent_path):
-                merged = _resolve(parent_path)
+                merged = _resolve(parent_path, chain)
                 del data["inherits"]
-                merged.update(data)
-                return merged
-        return data
+        includes = data.pop("include", None)
+        if includes:
+            if not isinstance(includes, list):
+                raise ValueError(f"invalid profile include list in {os.path.basename(current)}")
+            for reference in includes:
+                include_path = _sibling(current, reference, "include")
+                if not os.path.exists(include_path):
+                    raise ValueError(
+                        f"profile {os.path.basename(current)} includes {reference!r}, which is not in the profiles directory"
+                    )
+                included = _resolve(include_path, chain)
+                merged.update({k: v for k, v in included.items() if k not in _PRESET_BOOKKEEPING_KEYS})
+        merged.update(data)
+        return merged
 
-    return _resolve(path)
+    return _resolve(path, ())
 
 
 # What every Bambu printer definition in OrcaSlicer's BBL profiles declares.

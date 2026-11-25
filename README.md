@@ -46,15 +46,16 @@ model URL or file  →  download  →  slice (OrcaSlicer)  →  upload  →  pri
 
 ## Install
 
-**Requirements:** Python 3.10+, and [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/releases) installed locally to slice — it is a **second slicer app, not Bambu Studio**, and `plate` cannot slice without it. `plate go`, `plate job`, and `plate slice` shell out to the OrcaSlicer binary; `download`, `status`, `upload`, and `print` do not need it. `plate setup` auto-detects the usual install locations (macOS app bundle, Windows Program Files, and on Linux a `$PATH` binary, Flatpak export, or AppImage), and `plate preflight` (or `plate config validate`) tells you if it can't find one.
+**Requirements:** Python 3.10+, and [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/releases) installed locally to slice — it is a **second slicer app, not Bambu Studio**, and `plate` cannot slice without it. `plate go`, `plate job`, and `plate slice` shell out to the OrcaSlicer binary; `download`, `status`, `upload`, and `print` do not need it. `plate setup` auto-detects the usual install locations (macOS app bundle, Windows Program Files, and on Linux a `$PATH` binary or an extracted AppImage), and `plate preflight` (or `plate config validate`) tells you if it can't find one. The OrcaSlicer releases slicing is tested with are listed in the [manual](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md#supported-versions), the current one included (it ships its Bambu profiles packed in one file, which `plate` reads); a release whose profiles `plate` cannot read yet is refused by `preflight` and `slice`, which name the newest one that works, instead of slicing with the wrong settings.
 
 Fastest way to get OrcaSlicer, if you don't have it:
 
 ```bash
 winget install --id SoftFever.OrcaSlicer          # Windows
 brew install --cask orcaslicer                    # macOS
-flatpak install -y flathub com.orcaslicer.OrcaSlicer   # Linux
 ```
+
+On Linux, download the AppImage from the [releases page](https://github.com/OrcaSlicer/OrcaSlicer/releases) and extract it; the [manual](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md#orcaslicer) has the four commands. The Flatpak build is not supported yet.
 
 ```bash
 pipx install platecli

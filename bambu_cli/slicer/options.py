@@ -16,6 +16,7 @@ from functools import lru_cache
 from typing import Any
 
 from bambu_cli.argutils import namespace_get as _namespace_get
+from bambu_cli.errors import BambuError
 from bambu_cli.fsutil import _portable_basename
 from bambu_cli.logging_utils import logger
 from bambu_cli.paths import path_for_message as _path_for_message
@@ -27,6 +28,7 @@ _NON_SETTING_KEYS = frozenset(
         "name",
         "type",
         "inherits",
+        "include",
         "from",
         "setting_id",
         "instantiation",
@@ -318,6 +320,15 @@ def _override_safety_problem(args: argparse.Namespace) -> str | None:
     from bambu_cli.context import current_settings
 
     profiles_dir = current_settings().profiles_dir
+    try:
+        # Lazy: packed_profiles is only needed once an override is checked.
+        from bambu_cli.slicer.packed_profiles import resolve_profiles_dir
+
+        profiles_dir = resolve_profiles_dir(profiles_dir) if profiles_dir else profiles_dir
+    except BambuError:
+        # An unreadable packed cache is reported by the slice itself; here the
+        # built-in machine-key list still applies.
+        profiles_dir = ""
     for kind, section in _override_sections(args):
         for key, value in section.items():
             key = str(key)

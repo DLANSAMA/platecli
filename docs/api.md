@@ -285,7 +285,9 @@ re-oriented: `--orient auto`, `--face` or `--rotate` on one is refused with exit
 `--face` together with `--orient` is refused the same way.
 
 Errors use [`error_envelope.json`](schemas/error_envelope.json). Missing profiles
-errors may include `profiles_dir` and `detected_profiles_dir`.
+errors may include `profiles_dir` and `detected_profiles_dir`. When OrcaSlicer's
+packed profiles (`BBL.opc`, 2.5.x) cannot be read the error has
+`failed_step: profiles`, `packed_profiles` (the file) and `newest_supported_orca`.
 
 `slice --list-settings [--json]`: [`slice_list_settings.json`](schemas/slice_list_settings.json).
 

@@ -17,6 +17,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Added
 
+- **`plate` slices with OrcaSlicer 2.5.** The 2.5 release builds ship the Bambu
+  profiles packed in one file (`resources/profiles/BBL.opc`) instead of loose
+  JSON, and their printer profiles take start and end G-code from included
+  templates. `plate` reads the packed file, unpacks it once into your cache
+  folder (`PLATE_CACHE_DIR` moves it) and applies the includes. `profiles_dir`
+  stays the same `resources/profiles/BBL` folder. Tested with the 2.5.0, 2.5.1
+  and 2.5.2 Linux AppImages; 2.3.1 slices exactly as before. A packed file in a
+  format `plate` does not know is refused by `preflight` and `slice` ("This
+  OrcaSlicer version is not supported yet", naming the newest version that
+  works; `slice --json` carries `failed_step: "profiles"` and
+  `newest_supported_orca`). It is never sliced with generic start G-code.
 - **Models are laid on their best face before slicing, and you see it.**
   `slice`, `job`, `send` and `plate go` orient STL, OBJ, STEP and unsliced
   3MF models automatically, draw the pose in the terminal before anything is
@@ -53,6 +64,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Fixed
 
+- **`plate preflight` no longer passes on an install it cannot slice with.** The
+  `profiles-dir` check passed whenever the folder existed, so an OrcaSlicer
+  whose profiles `plate` could not read looked ready until `plate slice` failed.
+  It now needs the printer profile for the configured `model` and `nozzle`, the
+  file `plate slice` loads, and says which one is missing.
 - **A command the printer did not acknowledge no longer hangs forever.** On a P1P with
   firmware 01.09.01.00, `plate light on` was applied by the printer but never
   acknowledged. The wait timed out, then closing the MQTT connection blocked for good:
@@ -65,6 +81,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 
+- **On Linux the install hint is the AppImage, not the Flatpak.** The first-run
+  text, the "OrcaSlicer is not installed" errors from `preflight` and `slice`,
+  the README and the manual now send Linux users to the extracted AppImage, the
+  one Linux install slicing is tested with. The Flatpak has never been run with
+  `plate`, and OrcaSlicer's Flatpak manifest puts the profiles where
+  auto-detection does not look and keeps the sandbox out of the temp folder
+  `plate` writes its settings files to. The manual lists it as not supported
+  yet.
 - **`plate tui` has a new look.** It has its own dark theme, with a light one
   in the command palette (`ctrl+p`). A one-line bar at the top names the
   printer and says its state in words ("Printing", "Paused", "Offline"), not

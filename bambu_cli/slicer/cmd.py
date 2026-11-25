@@ -29,6 +29,7 @@ from bambu_cli.slicer.options import (
 from bambu_cli.slicer.orca import _build_orcaslicer_cmd, _run_orcaslicer
 from bambu_cli.slicer.orientation import apply_orientation, asks_to_turn, presliced_refusal
 from bambu_cli.slicer.output import _finalize_slice, _is_valid_sliced_3mf, _output_snapshot
+from bambu_cli.slicer.packed_profiles import packed_cache_path, resolve_profiles_dir
 from bambu_cli.slicer.profiles import (
     _available_layer_heights,
     _create_temp_machine,
@@ -37,6 +38,7 @@ from bambu_cli.slicer.profiles import (
     _discover_process_profile,
     _profiles_dir_diagnostic,
     _slicer_executable_problem,
+    machine_profile_path,
 )
 from bambu_cli.slicer.step_convert import _convert_step_to_stl
 from bambu_cli.utils import _ensure_output_dir, emit_json_error
@@ -67,7 +69,9 @@ def _list_settings(args: argparse.Namespace, settings) -> str:
     from bambu_cli.utils import emit_json
 
     profiles_dir = settings.profiles_dir
-    catalog = setting_catalog(profiles_dir)
+    # A packed install (OrcaSlicer 2.5.x) is read from its unpacked copy; the
+    # payload still names the folder the user configured.
+    catalog = setting_catalog(resolve_profiles_dir(profiles_dir))
     process = catalog["process"]
     filament = catalog["filament"]
     if not process and not filament:
@@ -237,11 +241,28 @@ def cmd_slice(
         # The machine profile carries the bed size and start G-code, so there is
         # deliberately no fallback to another model or nozzle size: a missing
         # profile is reported below as a config error.
-        machine_file = f"{full_model_name} {settings.nozzle_size} nozzle.json"
-        machine = os.path.join(settings.profiles_dir, "machine", machine_file)
-        process = os.path.join(settings.profiles_dir, "process", process_file)
+        #
+        # Every lookup below reads `profiles_dir`: the configured folder for a
+        # loose tree, the unpacked copy for a packed install (OrcaSlicer 2.5.x).
+        # Error payloads keep naming settings.profiles_dir, what the user set.
+        try:
+            profiles_dir = resolve_profiles_dir(settings.profiles_dir)
+        except BambuError as exc:
+            emit_json_error(
+                args,
+                "slice",
+                exc.exit_code,
+                str(exc),
+                failed_step="profiles",
+                file=filepath,
+                profiles_dir=settings.profiles_dir,
+                **exc.extra,
+            )
+        packed_cache = packed_cache_path(settings.profiles_dir)
+        machine = machine_profile_path(profiles_dir, full_model_name, settings.nozzle_size)
+        process = os.path.join(profiles_dir, "process", process_file)
 
-        filament_dir = os.path.join(settings.profiles_dir, "filament")
+        filament_dir = os.path.join(profiles_dir, "filament")
         filament = None
         requested_filament_name = _namespace_get(args, "filament", "PLA Basic") or "PLA Basic"
         requested_filament = str(requested_filament_name).lower()
@@ -311,7 +332,9 @@ def cmd_slice(
                 "slice",
                 EXIT_CONFIG_ERROR,
                 f"Missing machine profile for {full_model_name} with a {settings.nozzle_size} mm nozzle: "
-                f'{_path_for_message(machine)}. Check "model" and "nozzle" in config.json, or point '
+                f"{_path_for_message(machine)}"
+                + (f" (unpacked from {_path_for_message(packed_cache)})" if packed_cache else "")
+                + '. Check "model" and "nozzle" in config.json, or point '
                 "profiles_dir at an OrcaSlicer install that has this printer.",
                 failed_step="profiles",
                 file=filepath,
@@ -328,11 +351,11 @@ def cmd_slice(
                 quality_map,
                 model_code=model_code,
                 compatible_printer=compatible_printer,
-                profiles_dir=settings.profiles_dir,
+                profiles_dir=profiles_dir,
                 fallback=not numeric_quality,
             )
             if not discovered_process and numeric_quality:
-                heights = _available_layer_heights(settings.profiles_dir, model_code, compatible_printer)
+                heights = _available_layer_heights(profiles_dir, model_code, compatible_printer)
                 emit_json_error(
                     args,
                     "slice",
@@ -385,9 +408,9 @@ def cmd_slice(
 
         try:
             tmp_process, tmp_filament = _create_temp_profiles(
-                process, filament, args, bed_type=_default_bed_type(settings.profiles_dir, full_model_name)
+                process, filament, args, bed_type=_default_bed_type(profiles_dir, full_model_name)
             )
-            tmp_machine = _create_temp_machine(machine, settings.profiles_dir)
+            tmp_machine = _create_temp_machine(machine, profiles_dir)
         except Exception as exc:
             message = f"Failed to prepare OrcaSlicer profiles: {_exception_for_message(exc)}"
             emit_json_error(

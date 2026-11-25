@@ -393,13 +393,20 @@ def slicer_preflight_problem(settings: Any) -> str | None:
     Shared by the wizard's step 0 and the TUI's pre-form preflight: the checks
     that do not need a prompt (OrcaSlicer executable, profiles directory).
     """
+    from bambu_cli.errors import BambuError
+    from bambu_cli.slicer.packed_profiles import resolve_profiles_dir
     from bambu_cli.slicer.profiles import _profiles_dir_diagnostic, _slicer_executable_problem
 
     problem = _slicer_executable_problem(settings.orca_slicer)
     if problem:
         return problem
 
-    if not os.path.isdir(os.path.join(settings.profiles_dir, "process")):
+    try:
+        # A packed install (OrcaSlicer 2.5.x) is checked through its unpacked copy.
+        profiles_dir = resolve_profiles_dir(settings.profiles_dir)
+    except BambuError as exc:
+        return str(exc)
+    if not os.path.isdir(os.path.join(profiles_dir, "process")):
         hint, _detected = _profiles_dir_diagnostic(settings.profiles_dir)
         return hint or (
             f"OrcaSlicer profiles not found under {settings.profiles_dir}. "
