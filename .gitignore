@@ -87,3 +87,7 @@ mutants/
 docs/job-hero.mp4
 docs/*-raw.mp4
 docs/*-raw.gif
+
+# Local planning notes (kept out of the public repo)
+/docs/MASTER-PLAN.md
+/docs/plan/

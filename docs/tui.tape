@@ -22,9 +22,8 @@
 # rows, 610 is the supported 24-row minimum). 37 rows is deliberate: the
 # Result column needs about 35 to show the pose drawing, the summary and
 # "Start print…" at once. Shorter than that it scrolls to the button, the
-# pose sits above the fold, and the scrollbar breaks the drawing (both in
-# docs/plan/inbox.md, 2026-11-24). If you change FontSize, Padding or Height,
-# recompute this and re-check the frames.
+# pose sits above the fold, and the scrollbar breaks the drawing. If you change
+# FontSize, Padding or Height, recompute this and re-check the frames.
 #
 # Before committing a re-record: extract frames with ffmpeg and LOOK at them
 # for IP/serial/home-path leaks — do not trust the tape (media lesson,
