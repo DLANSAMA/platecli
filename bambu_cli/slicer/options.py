@@ -16,6 +16,7 @@ from functools import lru_cache
 from typing import Any
 
 from bambu_cli.argutils import namespace_get as _namespace_get
+from bambu_cli.errors import BambuError
 from bambu_cli.fsutil import _portable_basename
 from bambu_cli.logging_utils import logger
 from bambu_cli.paths import path_for_message as _path_for_message
@@ -27,6 +28,7 @@ _NON_SETTING_KEYS = frozenset(
         "name",
         "type",
         "inherits",
+        "include",
         "from",
         "setting_id",
         "instantiation",
@@ -147,7 +149,10 @@ def _generic_section_overrides(args: argparse.Namespace, kind: str) -> dict[str,
         section = blob.get(kind, {}) if isinstance(blob, dict) else {}
         if isinstance(section, dict):
             for key, value in section.items():
-                overrides[str(key)] = value if isinstance(value, str) else json.dumps(value)
+                clean_key = str(key).strip()
+                if not clean_key:
+                    continue
+                overrides[clean_key] = value if isinstance(value, str) else json.dumps(value)
     dest = "set_process" if kind == "process" else "set_filament"
     label = "set" if kind == "process" else "set-filament"
     overrides.update(_parse_kv_overrides(_namespace_get(args, dest, None), label))
@@ -246,14 +251,17 @@ def _temperature_values(value: Any) -> list[float] | None:
 
 
 def _is_bed_temp_key(key: str) -> bool:
-    """True for any bed-plate temperature filament key (``*_plate_temp`` or its
-    ``*_plate_temp_initial_layer`` companion), e.g. ``supertack_plate_temp``.
+    """True for any bed-plate temperature filament key (``*_plate_temp``,
+    ``*_plate_temp_initial_layer``, or ``*bed_temp*``), e.g. ``supertack_plate_temp``.
 
     Bed temps must be range-checked against MAX_BED_TEMP_C regardless of plate
     type; new Orca bed types (SuperTack, etc.) must not slip past validation just
     because they are absent from the legacy BED_PLATE_TYPES list.
     """
-    return isinstance(key, str) and (key.endswith("_plate_temp") or key.endswith("_plate_temp_initial_layer"))
+    if not isinstance(key, str):
+        return False
+    lowered = key.lower()
+    return lowered.endswith(("_plate_temp", "_plate_temp_initial_layer")) or "bed_temp" in lowered
 
 
 def _is_temperature_key(key: str) -> bool:
@@ -280,7 +288,7 @@ def _override_sections(args: argparse.Namespace) -> list[tuple[str, dict[str, An
             for kind in ("filament", "process"):
                 section = blob.get(kind, {})
                 if isinstance(section, dict):
-                    sections.append((kind, section))
+                    sections.append((kind, {str(k).strip(): v for k, v in section.items()}))
     for kind, dest, label in (("filament", "set_filament", "set-filament"), ("process", "set_process", "set")):
         try:
             sections.append((kind, _parse_kv_overrides(_namespace_get(args, dest, None), label)))
@@ -318,9 +326,18 @@ def _override_safety_problem(args: argparse.Namespace) -> str | None:
     from bambu_cli.context import current_settings
 
     profiles_dir = current_settings().profiles_dir
+    try:
+        # Lazy: packed_profiles is only needed once an override is checked.
+        from bambu_cli.slicer.packed_profiles import resolve_profiles_dir
+
+        profiles_dir = resolve_profiles_dir(profiles_dir) if profiles_dir else profiles_dir
+    except BambuError:
+        # An unreadable packed cache is reported by the slice itself; here the
+        # built-in machine-key list still applies.
+        profiles_dir = ""
     for kind, section in _override_sections(args):
         for key, value in section.items():
-            key = str(key)
+            key = str(key).strip()
             if _SCRIPT_KEY_RE.search(key):
                 return (
                     f"'{key}' cannot be overridden: G-code and post-processing scripts are not "
@@ -500,8 +517,12 @@ def _validate_slice_options(args: argparse.Namespace) -> str | None:
         if not isinstance(blob, dict):
             return "--settings-json must be a JSON object with 'process' and/or 'filament' keys"
         for section in ("process", "filament"):
-            if section in blob and not isinstance(blob[section], dict):
-                return f"--settings-json '{section}' must be an object of key/value overrides"
+            if section in blob:
+                if not isinstance(blob[section], dict):
+                    return f"--settings-json '{section}' must be an object of key/value overrides"
+                for key in blob[section]:
+                    if not str(key).strip():
+                        return f"Invalid --settings-json '{section}' key '{key}': empty setting name"
 
     # Safety: overrides must not push temps past the printer-safety bounds, and
     # G-code, scripts and printer settings cannot be overridden at all.

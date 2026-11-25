@@ -17,7 +17,7 @@ import pytest
 
 pytest.importorskip("textual")
 
-from textual.widgets import Input, RadioButton, Static  # noqa: E402
+from textual.widgets import Button, Input, RadioButton, Static  # noqa: E402
 
 from bambu_cli import context as _context  # noqa: E402
 from bambu_cli.errors import BambuError  # noqa: E402
@@ -211,6 +211,67 @@ async def test_presliced_3mf_shows_material_not_applied_caveat(tmp_path):
     # row here (model, printer, estimate), so its absence is the whole guard.
     assert "PETG" not in preview
     assert slicer.calls == []
+
+async def test_editing_source_after_presliced_3mf_unlocks_settings_and_orient(tmp_path):
+    _install_ready_settings(tmp_path)
+    presliced = _sliced_3mf(tmp_path, name="ready.gcode.3mf")
+    stl = _make_stl(tmp_path)
+    steps = GoSteps(download=Recorder(), slice=Recorder())
+
+    app = PlateApp(_args(), _deps(steps))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = await _open_prepare(pilot)
+        await _submit_source(pilot, screen, presliced)
+        assert screen.result is not None
+        assert screen.query_one("#settings-button", Button).disabled is True
+        assert screen.query_one("#orient-button", Button).disabled is True
+        assert screen.settings_lock_reason() is not None
+
+        screen.query_one("#source-input", Input).value = stl
+        await pilot.pause()
+
+        assert screen.result is None
+        assert screen.query_one("#print-button", Button).disabled is True
+        assert screen.query_one("#settings-button", Button).disabled is False
+        assert screen.query_one("#orient-button", Button).disabled is False
+        assert _text(screen.query_one("#settings-summary", Static)) == ""
+        assert _text(screen.query_one("#orient-summary", Static)) == ""
+        assert _text(screen.query_one("#preview", Static)) == ""
+        assert screen.settings_lock_reason() is None
+
+async def test_failed_prepare_after_presliced_3mf_unlocks_settings_and_orient(tmp_path):
+    _install_ready_settings(tmp_path)
+    model = _sliced_3mf(tmp_path, name="ready.3mf")
+    steps = GoSteps(
+        download=Recorder(),
+        slice=Recorder(raises=BambuError("slicer exploded", exit_code=4)),
+    )
+
+    app = PlateApp(_args(), _deps(steps))
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        screen = await _open_prepare(pilot)
+        await _submit_source(pilot, screen, model)
+        assert screen.result is not None
+        assert screen.query_one("#settings-button", Button).disabled is True
+        assert screen.query_one("#orient-button", Button).disabled is True
+        assert "pre-sliced" in _text(screen.query_one("#settings-summary", Static)).lower()
+        assert "pre-sliced" in _text(screen.query_one("#orient-summary", Static)).lower()
+
+        # Replace with an un-sliced 3MF without changing #source-input so the
+        # next prepare enters the slicer and fails while controls are locked.
+        with zipfile.ZipFile(model, "w") as zf:
+            zf.writestr("3D/3dmodel.model", "<model/>")
+        await _submit_source(pilot, screen, model)
+
+        assert screen.result is None
+        assert "slicer exploded" in _text(screen.query_one("#prepare-status", Static))
+        assert screen.query_one("#settings-button", Button).disabled is False
+        assert screen.query_one("#orient-button", Button).disabled is False
+        assert _text(screen.query_one("#settings-summary", Static)) == ""
+        assert _text(screen.query_one("#orient-summary", Static)) == ""
+        assert screen.settings_lock_reason() is None
 
 async def test_ams_detected_material_is_preselected(tmp_path):
     _install_ready_settings(tmp_path)

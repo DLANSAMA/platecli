@@ -1,13 +1,12 @@
 # TUI recording for the README. Regenerate from the repo root with:
 #   vhs docs/tui.tape
 # Requires: vhs, an installed `plate` in .venv/bin WITH the tui extra
-# (uv pip install -e '.[tui]'), and a reachable printer. Recorded against a
-# REAL printer, mid-print: the dashboard is a live view, and an idle printer
-# records as 0% with a static progress row, which undersells it. Start the
-# print first, wait for RUNNING, then run this tape.
-#
-# `plate tui --sim` also records fine and needs no printer, if you ever want a
-# capture that shows populated AMS trays on a machine that has no AMS.
+# (uv pip install -e '.[tui]'), OrcaSlicer configured, and 3dbenchy.stl in the
+# repo root (the README's example model; *.stl is gitignored):
+#   plate download "https://www.printables.com/model/3161-3d-benchy" --output .
+# Uses `--sim` so it shows populated AMS tray cards, the two-column Prepare
+# screen, the interactive Orientation editor (`o`), and the sliced result (pose
+# drawing, time and filament) without needing a live printer.
 #
 # There is no dark/light pair for this one, unlike demo-*/doctor-*: Textual
 # paints its own background, so the terminal theme barely shows through. One
@@ -16,15 +15,16 @@
 # Window must be at least 100 COLUMNS wide: below that the prepare screen
 # deliberately collapses to a single column (see PrepareScreen._apply_layout),
 # which is not the layout we want to show off. vhs Width/Height are PIXELS,
-# not cells — at FontSize 15 Hack a cell is ~10.5x18.6 px, and Margin(36)+
-# Padding(24) eat 120 px of each axis, so 1100 px is only ~93 columns and
-# records a layout no user sees. 1200x570 is ~103x24 — 24 rows is the
-# SUPPORTED MINIMUM, and recording at it is both honest and the tightest
-# framing that still fits everything. Go shorter and the dashboard's progress
-# bar scrolls out of frame (17 rows loses it); go much taller and the screen
-# floats in dead space, which is what made the first cut of this GIF
-# unreadable. If you change FontSize
-# or Padding, recompute this and re-check the frames.
+# not cells — at FontSize 15 Hack a cell is ~10.5x18.5 px. Margin(36)+
+# Padding(24) eat 120 px of each axis and WindowBarSize(44) another 44 px of
+# the height, so 1100 px is only ~93 columns and records a layout no user
+# sees. rows = (Height - 164) / 18.5, so 1200x850 is ~103x37 (570 is only 22
+# rows, 610 is the supported 24-row minimum). 37 rows is deliberate: the
+# Result column needs about 35 to show the pose drawing, the summary and
+# "Start print…" at once. Shorter than that it scrolls to the button, the
+# pose sits above the fold, and the scrollbar breaks the drawing (both in
+# docs/plan/inbox.md, 2026-11-24). If you change FontSize, Padding or Height,
+# recompute this and re-check the frames.
 #
 # Before committing a re-record: extract frames with ffmpeg and LOOK at them
 # for IP/serial/home-path leaks — do not trust the tape (media lesson,
@@ -38,7 +38,7 @@ Set Shell "bash"
 Set FontFamily "Hack"
 Set FontSize 15
 Set Width 1200
-Set Height 570
+Set Height 850
 Set Padding 24
 Set Margin 36
 Set MarginFill "#16295e"
@@ -52,19 +52,47 @@ Type "export PATH=$PWD/.venv/bin:$PATH && clear"
 Enter
 Show
 
-Type "plate tui"
+Type "plate tui --sim"
 Sleep 500ms
 Enter
 
-# Dashboard: hold long enough to actually read it, and long enough for the
-# 10 s refresh timer to tick the progress forward on screen.
-Sleep 12s
+# Dashboard: redesigned top bar, heater cards, and color-coded AMS A trays.
+Sleep 4.5s
 
-# The job monitor.
-Type "m"
-Sleep 9s
+# New print (two-column Prepare screen).
+Type "n"
+Sleep 1.5s
+Type "3dbenchy.stl"
+Sleep 1.2s
 
+# Move focus off the input and open the interactive 3D Orientation editor.
+Tab
+Sleep 400ms
+Type "o"
+Sleep 3.5s
+
+# Cycle through ranked faces, then snap back to auto and accept.
+Type "f"
+Sleep 2s
+Type "f"
+Sleep 2s
+Type "a"
+Sleep 1.5s
+Enter
+Sleep 1s
+
+# Run Prepare (real local OrcaSlicer slice) to show the pose + time/filament preview.
+Tab
+Sleep 200ms
+Tab
+Sleep 200ms
+Tab
+Sleep 300ms
+Enter
+Sleep 10s
+
+# Return to dashboard and quit cleanly.
 Escape
 Sleep 1s
 Type "q"
-Sleep 2s
+Sleep 1.5s

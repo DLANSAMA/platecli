@@ -8,6 +8,7 @@ namespace. Re-exports below are for convenient imports, not for mock targets.
 """
 
 from bambu_cli.download.downloader import (  # noqa: F401
+    DownloadResult,
     _cmd_download,
     _response_header,
     _response_url,

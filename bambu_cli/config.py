@@ -242,7 +242,11 @@ def _profiles_dir_candidates():
         # flatpak app-tree layout and have NOT been verified against a real
         # Flathub OrcaSlicer install.  They are additive and harmless if wrong
         # (non-existent candidates are skipped).  Current id listed first,
-        # legacy id kept for pre-rename installs.
+        # legacy id kept for pre-rename installs.  OrcaSlicer's manifest at
+        # v2.5.2 installs to share/OrcaSlicer/profiles instead; that path is
+        # deliberately not added until a Flatpak slice has been run, because
+        # detecting the profiles would make `preflight` pass on an install the
+        # sandbox may not let plate slice with (see docs/plan/inbox.md).
         "/var/lib/flatpak/app/com.orcaslicer.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
         "~/.local/share/flatpak/app/com.orcaslicer.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
         "/var/lib/flatpak/app/io.github.softfever.OrcaSlicer/current/active/files/share/OrcaSlicer/resources/profiles/BBL",
@@ -293,13 +297,29 @@ ORCA_RELEASES_URL = "https://github.com/OrcaSlicer/OrcaSlicer/releases"
 _ORCA_INSTALL_COMMANDS = {
     "win32": "winget install --id SoftFever.OrcaSlicer",
     "darwin": "brew install --cask orcaslicer",
-    "linux": "flatpak install -y flathub com.orcaslicer.OrcaSlicer",
 }
 
+# Linux has no one-line install that plate has ever sliced with. The Flatpak
+# was never run, and OrcaSlicer's own manifest gives two reasons to expect it
+# to fail: it installs the profiles at share/OrcaSlicer/profiles (not the
+# .../resources/profiles this module probes), and its sandbox is granted the
+# home folder but not the temp folder plate writes its settings files to. The
+# extracted AppImage is the route that is tested, and this layout is on the
+# auto-detection list above.
+ORCA_APPIMAGE_PATH = "~/tools/OrcaSlicer.AppImage"
+ORCA_APPIMAGE_EXTRACT_COMMAND = "cd ~/tools && chmod +x OrcaSlicer.AppImage && ./OrcaSlicer.AppImage --appimage-extract"
 
-def orca_install_command():
-    """Return the fastest one-line OrcaSlicer install command for this platform."""
-    return _ORCA_INSTALL_COMMANDS.get(sys.platform, _ORCA_INSTALL_COMMANDS["linux"])
+
+def orca_install_lines():
+    """Return the shortest tested way to install OrcaSlicer here, one line per step."""
+    command = _ORCA_INSTALL_COMMANDS.get(sys.platform)
+    if command:
+        return (command,)
+    return (
+        f"Download the Linux AppImage from {ORCA_RELEASES_URL}",
+        f"and save it as {ORCA_APPIMAGE_PATH}, then extract it:",
+        f"  {ORCA_APPIMAGE_EXTRACT_COMMAND}",
+    )
 
 
 def orca_install_hint():
@@ -309,7 +329,13 @@ def orca_install_hint():
     on the machine — at that point suggesting a config edit is useless, because
     there is nothing to point the config at.
     """
-    return f"Install it with `{orca_install_command()}` (or download from {ORCA_RELEASES_URL}), then run `plate setup`."
+    command = _ORCA_INSTALL_COMMANDS.get(sys.platform)
+    if command:
+        return f"Install it with `{command}` (or download from {ORCA_RELEASES_URL}), then run `plate setup`."
+    return (
+        f"Download the Linux AppImage from {ORCA_RELEASES_URL}, save it as {ORCA_APPIMAGE_PATH} "
+        f"and extract it with `{ORCA_APPIMAGE_EXTRACT_COMMAND}`, then run `plate setup`."
+    )
 
 
 _DEFAULT_ORCA = _default_orca_path()

@@ -1,7 +1,10 @@
 # Demo recording for README. Regenerate from the repo root with:
 #   vhs docs/demo-dark.tape
-# Requires: vhs, an installed `plate` in .venv/bin, a reachable printer
-# (status is read-only), and side-v2a.stl (or any STL) in the repo root.
+# Requires: vhs, an installed `plate` in .venv/bin, OrcaSlicer configured,
+# and 3dbenchy.stl in the repo root (the README example model: plate download
+# "https://www.printables.com/model/3161-3d-benchy" --output .). `--sim status` means no
+# live printer is required (and no real IP/serial can leak); slicing runs
+# against local OrcaSlicer. Delete `3dbenchy_sliced.3mf` afterwards.
 # Styling matches the repo social-preview card (dark, rounded, traffic lights).
 
 Output docs/demo-dark.gif
@@ -10,7 +13,7 @@ Set Shell "bash"
 Set FontFamily "Hack"
 Set FontSize 15
 Set Width 1100
-Set Height 420
+Set Height 540
 Set Padding 24
 Set Margin 36
 Set MarginFill "#16295e"
@@ -24,12 +27,12 @@ Type "export PATH=$PWD/.venv/bin:$PATH && clear"
 Enter
 Show
 
-Type "plate status"
+Type "plate --sim status"
 Sleep 500ms
 Enter
-Sleep 6s
+Sleep 4.5s
 
-Type "plate slice side-v2a.stl"
+Type "plate slice 3dbenchy.stl"
 Sleep 500ms
 Enter
-Sleep 6s
+Sleep 8s

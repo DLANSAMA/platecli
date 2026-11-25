@@ -57,6 +57,8 @@ class MqttSession:
         self._awaiting_require_complete = True
         self._status_event = threading.Event()
         self._pending_payload: str | None = None
+        self._pending_mid: int | None = None
+        self._non_command_mids: set[int] = set()
         self._command_issued = False
         self._publish_ok = False
         self._publish_event = threading.Event()
@@ -91,6 +93,8 @@ class MqttSession:
         self._connect_failed = False
         with self._state_lock:
             self._print_state = {}
+            self._pending_mid = None
+            self._non_command_mids.clear()
         if client is None:
             return
         _teardown_mqtt_client(client)
@@ -110,13 +114,15 @@ class MqttSession:
         properties: Any = None,
     ) -> None:
         if rc == 0:
-            self._live = True
-            self._connect_failed = False
             try:
                 client.subscribe(f"device/{self._printer.serial}/report")
             except Exception as exc:
-                logger.debug(f"MQTT session subscribe failed: {exc}")
-            self._issue_pending()
+                self._live = False
+                logger.warning(f"MQTT session subscribe failed: {exc}")
+            else:
+                self._live = True
+                self._connect_failed = False
+                self._issue_pending()
         else:
             self._live = False
             self._connect_failed = True
@@ -152,6 +158,14 @@ class MqttSession:
                 self._awaiting_status = False
                 self._status_event.set()
 
+    def _record_non_command_mid(self, info: Any) -> None:
+        mid = getattr(info, "mid", None)
+        if isinstance(mid, int) and not isinstance(mid, bool):
+            with self._state_lock:
+                if len(self._non_command_mids) > 64:
+                    self._non_command_mids.clear()
+                self._non_command_mids.add(mid)
+
     def _on_publish(
         self,
         client: Any,
@@ -160,8 +174,17 @@ class MqttSession:
         reason_code: Any = None,
         properties: Any = None,
     ) -> None:
-        self._publish_ok = True
-        self._publish_event.set()
+        with self._state_lock:
+            if not self._command_issued:
+                return
+            if isinstance(mid, int) and not isinstance(mid, bool):
+                if mid in self._non_command_mids:
+                    self._non_command_mids.discard(mid)
+                    return
+                if self._pending_mid is not None and mid != self._pending_mid:
+                    return
+            self._publish_ok = True
+            self._publish_event.set()
 
     def _issue_pending(self) -> None:
         """Publish a queued command once. Called from the paho network thread."""
@@ -173,24 +196,22 @@ class MqttSession:
             if client is None:
                 return
             self._command_issued = True
-        client.publish(
+        info = client.publish(
             f"device/{self._printer.serial}/request",
             payload,
             qos=1,
         )
+        pub_mid = getattr(info, "mid", None)
+        if isinstance(pub_mid, int) and not isinstance(pub_mid, bool):
+            with self._state_lock:
+                self._pending_mid = pub_mid
 
     def _publish_pushall(self) -> None:
         if self._client is None:
             return
         push = json.dumps({"pushing": {"sequence_id": get_sequence_id(), "command": "pushall"}})
-        self._client.publish(f"device/{self._printer.serial}/request", push)
-
-    def _arm_status_wait(self, require_complete: bool) -> threading.Event:
-        with self._state_lock:
-            self._awaiting_status = True
-            self._awaiting_require_complete = require_complete
-            self._status_event = threading.Event()
-        return self._status_event
+        info = self._client.publish(f"device/{self._printer.serial}/request", push)
+        self._record_non_command_mid(info)
 
     def _snapshot(self) -> dict[str, Any]:
         with self._state_lock:
@@ -204,6 +225,15 @@ class MqttSession:
         if require_complete and not status_is_complete(snapshot):
             return None
         return snapshot
+
+    def _snapshot_or_arm(self, require_complete: bool) -> tuple[dict[str, Any] | None, threading.Event | None]:
+        with self._state_lock:
+            if self._print_state and (not require_complete or status_is_complete(self._print_state)):
+                return dict(self._print_state), None
+            self._awaiting_status = True
+            self._awaiting_require_complete = require_complete
+            self._status_event = threading.Event()
+            return None, self._status_event
 
     def ensure_connected(self, timeout: float) -> bool:
         """Connect (or reconnect after a drop). Returns False on broker rc != 0."""
@@ -253,13 +283,11 @@ class MqttSession:
                     # Background reports may already have assembled a usable
                     # snapshot. Request a refresh, but do not block or raise
                     # if the printer stays silent on this pushall.
-                    ready = self._ready_snapshot(require_complete)
-                    if ready is not None:
-                        self._publish_pushall()
-                        return ready
-                    event = self._arm_status_wait(require_complete)
+                    ready, event = self._snapshot_or_arm(require_complete)
                     self._publish_pushall()
-                    if event.wait(timeout):
+                    if ready is not None:
+                        return ready
+                    if event is not None and event.wait(timeout):
                         ready = self._ready_snapshot(require_complete)
                         if ready is not None:
                             return ready
@@ -307,6 +335,7 @@ class MqttSession:
         with self._op_lock:
             with self._state_lock:
                 self._pending_payload = payload
+                self._pending_mid = None
                 # Reset once per command, not per attempt: this is what stops a
                 # retry (or a reconnect's on_connect) from re-issuing it.
                 self._command_issued = False
@@ -351,6 +380,8 @@ class MqttSession:
             finally:
                 with self._state_lock:
                     self._pending_payload = None
+                    self._pending_mid = None
+                    self._command_issued = False
 
     def get_version(self, timeout: float, retries: int = 1) -> Any:
         sleeper = _sleep_fn(self._sleep)
@@ -370,7 +401,8 @@ class MqttSession:
                             continue
                         return None
                     if self._client is not None:
-                        self._client.publish(f"device/{self._printer.serial}/request", request)
+                        info = self._client.publish(f"device/{self._printer.serial}/request", request)
+                        self._record_non_command_mid(info)
                     if self._version_event.wait(timeout):
                         return self._version_modules
                     if attempt < retries:

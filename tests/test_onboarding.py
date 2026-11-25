@@ -107,7 +107,7 @@ def test_orca_install_hint_is_platform_specific():
     expected = {
         "win32": "winget install --id SoftFever.OrcaSlicer",
         "darwin": "brew install --cask orcaslicer",
-        "linux": "flatpak install -y flathub com.orcaslicer.OrcaSlicer",
+        "linux": "./OrcaSlicer.AppImage --appimage-extract",
     }
     for platform_name, command in expected.items():
         with patch("bambu_cli.config.sys.platform", platform_name):
@@ -115,6 +115,27 @@ def test_orca_install_hint_is_platform_specific():
         assert command in hint
         assert config.ORCA_RELEASES_URL in hint
         assert "plate setup" in hint
+
+
+def test_linux_install_hint_is_the_appimage_layout_auto_detection_finds():
+    """The Linux hint names the one route slicing is tested with, not the Flatpak.
+
+    What it tells the user to create must be what `plate setup` then detects,
+    or following the hint ends in "OrcaSlicer not found" all the same.
+    """
+    with patch("bambu_cli.config.sys.platform", "linux"), patch("bambu_cli.config.shutil.which", return_value=None):
+        hint = config.orca_install_hint()
+        lines = config.orca_install_lines()
+        binaries = config._orca_binary_candidates()
+        profiles = config._profiles_dir_candidates()
+
+    assert "flatpak" not in hint.lower()
+    assert "flatpak" not in "\n".join(lines).lower()
+    assert config.ORCA_APPIMAGE_PATH in hint
+    assert config.ORCA_APPIMAGE_PATH in binaries
+    assert "~/tools/squashfs-root/resources/profiles/BBL" in profiles
+    assert config.ORCA_APPIMAGE_EXTRACT_COMMAND.startswith("cd ~/tools ")
+    assert any(config.ORCA_APPIMAGE_EXTRACT_COMMAND in line for line in lines)
 
 
 def test_orca_install_hint_falls_back_for_unknown_platform():

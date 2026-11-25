@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 
-from bambu_cli import utils
 from bambu_cli.argutils import namespace_get as _namespace_get
 from bambu_cli.constants import EXIT_COMMAND_ERROR, EXIT_FILE_ERROR
 from bambu_cli.errors import BambuError, abort
@@ -131,16 +130,12 @@ def _validate_predicted_remote_name_or_fail(args, summary, remote_name, message_
 
 
 def _last_error_for(command, ctx=None, exc=None):
-    """Return the error payload for ``command`` from ``exc`` or the last abort.
+    """Return the error payload for ``command`` from ``exc``.
 
-    Prefer the raised ``BambuError`` (the single write path). Fall back to
-    ``utils._LAST_ERROR_PAYLOAD`` only for steps that still record then raise.
+    ``BambuError.to_error_payload`` is the single structured error channel;
+    orchestrators no longer read the legacy ``utils._LAST_ERROR_PAYLOAD`` global.
     """
-    payload = None
-    if isinstance(exc, BambuError):
-        payload = exc.to_error_payload(command)
-    elif isinstance(utils._LAST_ERROR_PAYLOAD, dict) and utils._LAST_ERROR_PAYLOAD.get("command") == command:
-        payload = utils._LAST_ERROR_PAYLOAD
+    payload = exc.to_error_payload(command) if isinstance(exc, BambuError) else None
     if ctx is not None:
         ctx.last_error = payload
     return payload

@@ -378,3 +378,98 @@ def test_hold_mqtt_and_release_are_idempotent():
     printer.release_mqtt()
     assert printer.mqtt_held is False
     assert created[0].disconnects == 1
+
+
+def test_subscribe_failure_in_on_connect_returns_false():
+    class SubFailClient(FakeBrokerClient):
+        def subscribe(self, topic):
+            raise RuntimeError("subscribe failed")
+
+    clients = []
+
+    def factory(_printer):
+        client = SubFailClient()
+        clients.append(client)
+        return client
+
+    printer = _printer()
+    session = _held(printer, factory)
+    try:
+        session._pending_payload = '{"print":{"command":"pause"}}'
+        assert session.ensure_connected(1) is False
+        assert session._live is False
+        assert session._command_issued is False
+        assert clients[0].publishes == []
+    finally:
+        printer.release_mqtt()
+
+
+def test_send_command_ignores_unrelated_and_pushall_mids():
+    import threading
+    from types import SimpleNamespace
+
+    class MidTrackingClient(FakeBrokerClient):
+        def __init__(self):
+            super().__init__()
+            self._next_mid = 10
+            self.command_published = threading.Event()
+
+        def publish(self, topic, payload, qos=0):
+            self.publishes.append((topic, payload, qos))
+            mid = self._next_mid
+            self._next_mid += 1
+            data = json.loads(payload)
+            if isinstance(data, dict) and "pushing" in data:
+                self._deliver({"print": dict(_FULL)})
+                return SimpleNamespace(rc=0, mid=mid)
+            self.command_published.set()
+            return SimpleNamespace(rc=0, mid=mid)
+
+    client = MidTrackingClient()
+    printer = _printer()
+    session = _held(printer, lambda _p: client)
+    try:
+        assert get_status(printer, timeout=1) is not None
+        pushall_mid = 10
+
+        result_holder = []
+
+        def run_cmd():
+            result_holder.append(send_command(printer, '{"print":{"command":"pause"}}', timeout=2, retries=0))
+
+        t = threading.Thread(target=run_cmd)
+        t.start()
+        assert client.command_published.wait(timeout=1.0)
+        # Wait briefly until _issue_pending records _pending_mid.
+        deadline = threading.Event()
+        while session._pending_mid is None:
+            deadline.wait(0.005)
+        cmd_mid = session._pending_mid
+
+        # Unrelated pushall mid and another wrong integer mid must be ignored.
+        client.on_publish(client, None, pushall_mid)
+        assert session._publish_event.is_set() is False
+        client.on_publish(client, None, cmd_mid + 99)
+        assert session._publish_event.is_set() is False
+
+        # Matching mid resolves send_command.
+        client.on_publish(client, None, cmd_mid)
+        t.join(timeout=1.0)
+        assert not t.is_alive()
+        assert result_holder == [True]
+    finally:
+        printer.release_mqtt()
+
+
+def test_on_publish_ignored_when_no_command_issued():
+    printer = _printer()
+    session = _held(printer, lambda _p: FakeBrokerClient())
+    try:
+        assert session.ensure_connected(1)
+        session._publish_ok = False
+        session._publish_event.clear()
+        session._on_publish(session._client, None, 1)
+        assert session._publish_event.is_set() is False
+        assert session._publish_ok is False
+    finally:
+        printer.release_mqtt()

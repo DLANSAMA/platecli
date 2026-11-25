@@ -53,12 +53,12 @@ def _printer(timeout=0.2):
     return SimpleNamespace(simulation_mode=False, serial="SN", mqtt_timeout=timeout)
 
 
-def _run(client, *, connect=lambda p, c: None, timeout=0.2):
+def _run(client, *, connect=lambda p, c: None, timeout=0.2, json_mode=True):
     with (
         mock.patch.object(mqtt_monitor, "_client_factory", lambda f: lambda printer, **_kw: client),
         mock.patch.object(mqtt_monitor, "_connect", connect),
     ):
-        return mqtt_monitor.monitor_status(argparse.Namespace(json=True), _printer(timeout))
+        return mqtt_monitor.monitor_status(argparse.Namespace(json=json_mode), _printer(timeout))
 
 
 def test_refused_connection_is_a_network_error(capsys):
@@ -110,3 +110,88 @@ def test_messages_count_as_connected(capsys):
 
     _run(_Client(on_loop_start=deliver))
     assert '"terminal"' in capsys.readouterr().out
+
+
+def test_hostile_mqtt_payloads_dropped_and_finish_terminates(capsys):
+    import json
+
+    deep_json = (b'{"a":' * 35) + b"1" + (b"}" * 35)
+    hostile_payloads = [
+        deep_json,
+        b"[1]",
+        b"\xff\xfe",
+        json.dumps({"print": {"gcode_state": "FINISH", "mc_percent": 100}}).encode(),
+    ]
+
+    def deliver(c):
+        c.on_connect(c, c.userdata, None, 0)
+        for payload in hostile_payloads:
+            msg = mock.MagicMock()
+            msg.payload = payload
+            c.on_message(c, c.userdata, msg)
+
+    _run(_Client(on_loop_start=deliver))
+    lines = [json.loads(line) for line in capsys.readouterr().out.strip().splitlines()]
+    assert [entry["event"] for entry in lines] == ["update", "terminal"]
+    assert lines[-1]["gcode_state"] == "FINISH"
+    assert lines[-1]["mc_percent"] == 100
+
+
+def test_non_numeric_mc_percent_coerced_in_monitor_status(capsys):
+    import json
+
+    payloads = [
+        {"print": {"gcode_state": "RUNNING", "mc_percent": "bad"}},
+        {"print": {"gcode_state": "RUNNING", "mc_percent": None}},
+        {"print": {"gcode_state": "RUNNING", "mc_percent": True}},
+        {"print": {"gcode_state": "RUNNING", "mc_percent": "42"}},
+        {"print": {"gcode_state": "FINISH", "mc_percent": "100"}},
+    ]
+
+    def deliver(c):
+        c.on_connect(c, c.userdata, None, 0)
+        for payload in payloads:
+            msg = mock.MagicMock()
+            msg.payload = json.dumps(payload).encode()
+            c.on_message(c, c.userdata, msg)
+
+    _run(_Client(on_loop_start=deliver), json_mode=True)
+    lines = [json.loads(line) for line in capsys.readouterr().out.strip().splitlines()]
+    assert [(entry["event"], entry["mc_percent"]) for entry in lines] == [
+        ("update", 0),
+        ("update", 42),
+        ("update", 100),
+        ("terminal", 100),
+    ]
+    assert all(type(entry["mc_percent"]) is int for entry in lines)
+
+
+def test_non_numeric_mc_percent_coerced_in_human_progress_mode():
+    import json
+
+    payloads = [
+        {"print": {"gcode_state": "RUNNING", "mc_percent": "bad"}},
+        {"print": {"gcode_state": "RUNNING", "mc_percent": None}},
+        {"print": {"gcode_state": "RUNNING", "mc_percent": "42"}},
+        {"print": {"gcode_state": "FINISH", "mc_percent": "100"}},
+    ]
+
+    def deliver(c):
+        c.on_connect(c, c.userdata, None, 0)
+        for payload in payloads:
+            msg = mock.MagicMock()
+            msg.payload = json.dumps(payload).encode()
+            c.on_message(c, c.userdata, msg)
+
+    with (
+        mock.patch("sys.stdout.isatty", return_value=False),
+        mock.patch.object(mqtt_monitor.logger, "info") as info_mock,
+    ):
+        _run(_Client(on_loop_start=deliver), json_mode=False)
+
+    logged = " ".join(str(call) for call in info_mock.call_args_list)
+    assert "Progress=0%" in logged
+    assert "Progress=42%" in logged
+    assert "Progress=100%" in logged
+    assert "Progress=bad%" not in logged
+    assert "Progress=None%" not in logged

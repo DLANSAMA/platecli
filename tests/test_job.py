@@ -974,18 +974,16 @@ def test_url_download_success_flows_into_slice_and_upload(tmp_path, capsys):
 
 
 def test_url_download_reports_extracted_archive_member(tmp_path, capsys):
-    # Simulate cmd_download having transparently extracted a ZIP: it records a
-    # _LAST_DOWNLOAD_PAYLOAD with an archive_entry, which job/send surfaces.
+    # Simulate cmd_download having transparently extracted a ZIP: it returns a
+    # DownloadResult with archive_entry, which job/send surfaces without globals.
+    from bambu_cli.download import DownloadResult
+
     extracted = tmp_path / "part.stl"
     extracted.write_bytes(b"solid x")
     out = tmp_path / "out"
 
     def _download(_a):
-        utils._LAST_DOWNLOAD_PAYLOAD = {
-            "path": str(extracted),
-            "archive_entry": "part.stl",
-        }
-        return str(extracted)
+        return DownloadResult(str(extracted), archive_entry="part.stl", extracted_path=str(extracted))
 
     args = _parse(["job", "https://example.com/bundle.zip", "--json", "--output", str(out)])
     steps = default_steps(

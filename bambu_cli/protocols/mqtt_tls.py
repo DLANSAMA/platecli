@@ -98,7 +98,7 @@ class _SimMqttClient:
     def subscribe(self, topic):
         pass
 
-    def publish(self, topic, payload):
+    def publish(self, topic, payload, qos=0):
         if self.on_publish:
             self.on_publish(self, None, 1)
 

@@ -225,6 +225,31 @@ plate setup --orca-slicer /path/to/orca-slicer --profiles-dir /path/to/resources
 On Linux/macOS the binary must also be executable; if it is not, `preflight`
 says so and suggests `chmod +x`.
 
+### "have no machine profile for ..." / "holds no OrcaSlicer printer profiles"
+
+The `profiles-dir` check looks for the machine profile `plate slice` will load:
+`machine/<printer> <nozzle> nozzle.json` for the `model` and `nozzle` in
+`config.json`. If the folder exists but that file does not, check those two
+values first (`plate config show`); a 0.6 mm nozzle needs a 0.6 profile. If the
+folder has no `machine/` at all, `profiles_dir` points at something that is not
+OrcaSlicer's `resources/profiles/BBL` folder.
+
+### "This OrcaSlicer version is not supported yet"
+
+OrcaSlicer 2.5 ships its Bambu profiles packed in `resources/profiles/BBL.opc`
+instead of loose JSON files. `plate` reads the format used by 2.5.0 to 2.5.2 and
+unpacks it into your cache folder (see
+[Supported versions](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md#supported-versions)).
+This message means the file next to your `profiles_dir` is in a format `plate`
+does not know, most likely from a newer OrcaSlicer, or is damaged. It names the
+newest version that works; install that one and run `plate setup`. The `--json`
+error from `slice` carries `newest_supported_orca` and `packed_profiles` (the
+file that could not be read).
+
+"Could not unpack OrcaSlicer's packed profiles" means the file was read but the
+cache folder could not be written; set `PLATE_CACHE_DIR` to a folder you can
+write to.
+
 ### If OrcaSlicer is not installed at all
 
 When there is no OrcaSlicer anywhere on the machine there is nothing to point
@@ -235,9 +260,12 @@ platform. The fastest way to get it:
 |----------|---------|
 | Windows | `winget install --id SoftFever.OrcaSlicer` |
 | macOS | `brew install --cask orcaslicer` |
-| Linux | `flatpak install -y flathub com.orcaslicer.OrcaSlicer` |
+| Linux | Download the AppImage from [the releases page](https://github.com/OrcaSlicer/OrcaSlicer/releases), save it as `~/tools/OrcaSlicer.AppImage`, then `cd ~/tools && chmod +x OrcaSlicer.AppImage && ./OrcaSlicer.AppImage --appimage-extract` |
 
-Or download a build from [the releases page](https://github.com/OrcaSlicer/OrcaSlicer/releases).
+On Windows and macOS you can also download a build from
+[the releases page](https://github.com/OrcaSlicer/OrcaSlicer/releases). On
+Linux the extracted AppImage is the install slicing is tested with; the Flatpak
+is not supported yet (the user guide says why).
 Then run `plate setup` — it auto-detects the install and writes both paths for
 you. Verify with `plate preflight`.
 

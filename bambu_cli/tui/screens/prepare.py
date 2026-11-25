@@ -338,6 +338,18 @@ class PrepareScreen(Screen):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "source-input":
             self.query_one("#source-error", Static).update("")
+            if (
+                not self._preparing
+                and not self._fetching
+                and self.result is not None
+                and not getattr(self.result.state, "sliced", False)
+                and event.value.strip() != (getattr(self.result.state, "source", None) or "")
+            ):
+                self._discard_workdir()
+                self.query_one("#print-button", Button).disabled = True
+                self.query_one("#preview", Static).update("")
+                self._clear_pose()
+                self._unlock_slice_controls()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "source-input":
@@ -501,6 +513,15 @@ class PrepareScreen(Screen):
         label.set_class(False, "warning")
         label.update(f"Orientation: {self.orientation.describe()}" if self.orientation is not None else "")
 
+    def _unlock_slice_controls(self) -> None:
+        """Re-enable slice-only controls (Settings and Orient) and restore their summaries."""
+        self.query_one("#settings-button", Button).disabled = False
+        self.query_one("#orient-button", Button).disabled = False
+        self.query_one("#settings-summary", Static).update(
+            f"Overrides: {self.overrides.summary()}" if not self.overrides.is_empty() else ""
+        )
+        self._show_orientation()
+
     # --- the sliced pose, drawn in the results column -------------------------
 
     def _clear_pose(self) -> None:
@@ -608,6 +629,7 @@ class PrepareScreen(Screen):
         # The modal consumed the run: the preview no longer describes a file we
         # own, so the print action goes back to disabled.
         self.query_one("#print-button", Button).disabled = True
+        self._unlock_slice_controls()
         self.query_one("#prepare-status", Static).update(outcome.message)
         if outcome.kind == PRINTED:
             self.app.open_monitor()
@@ -714,6 +736,7 @@ class PrepareScreen(Screen):
             status.update(result.error or "Preparing the model failed.")
             preview.update("")
             self._clear_pose()
+            self._unlock_slice_controls()
             # Stacked layout: the failure message lands below the fold exactly
             # like a success does, and a run that silently appears to do nothing
             # is the worse of the two.

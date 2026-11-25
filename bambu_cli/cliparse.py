@@ -328,8 +328,9 @@ def first_run_text() -> str:
     """
     # Local import: config probes the filesystem for defaults at import time,
     # and parser construction should stay side-effect free.
-    from bambu_cli.config import orca_install_command
+    from bambu_cli.config import orca_install_lines
 
+    install = "".join(f"       {line}\n" for line in orca_install_lines())
     return (
         "plate — print to a Bambu Lab printer from your terminal, no cloud account.\n"
         "\n"
@@ -337,7 +338,7 @@ def first_run_text() -> str:
         "\n"
         "  1. Install OrcaSlicer. plate uses it to slice. It is a separate slicer app,\n"
         "     not Bambu Studio:\n"
-        f"       {orca_install_command()}\n"
+        f"{install}"
         "  2. On the printer's touchscreen turn on LAN mode, then note the IP address,\n"
         "     serial number, and LAN access code shown there. That code is not your\n"
         "     Bambu account password, and it changes whenever LAN mode is toggled or\n"

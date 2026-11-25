@@ -95,41 +95,47 @@ Check what was detected at any time:
 plate preflight     # emits explicit `orca-slicer` and `profiles-dir` checks
 ```
 
+The `profiles-dir` check passes only when the machine profile for your
+configured `model` and `nozzle` is really there, the same file `plate slice`
+loads; a folder that merely exists is not enough.
+
+### Supported versions
+
+Slicing is tested with OrcaSlicer **2.3.1** and **2.5.0 to 2.5.2** (Linux
+AppImage builds; 2.4.x and the macOS and Windows builds of 2.5 have not been
+run, and the Flatpak is [not supported yet](#install)).
+
+OrcaSlicer 2.5 changed how the Bambu profiles ship. Up to 2.4 they are loose
+JSON files under `resources/profiles/BBL/machine`, `process` and `filament`.
+The 2.5 release builds pack them into one file, `resources/profiles/BBL.opc`,
+and the `BBL` folder beside it keeps only a few lookup tables. (A 2.5 built from
+source keeps the loose files, which `plate` reads as before; that was checked
+with 2.5.2 and gives the same G-code as the packed file.) `profiles_dir` is the
+same `resources/profiles/BBL` folder either way: when it has no `machine/`
+folder and a `BBL.opc` sits next to it, `plate` reads the packed file and writes
+it out once as loose JSON in your cache folder
+(`~/.cache/platecli/orca-profiles` on Linux, `~/Library/Caches/platecli` on
+macOS, `%LOCALAPPDATA%\platecli` on Windows; set `PLATE_CACHE_DIR` to move it).
+It is written again only when OrcaSlicer's file changes, and deleting it is
+safe.
+
+If a later OrcaSlicer changes the packed format, `plate preflight` and
+`plate slice` stop with "This OrcaSlicer version is not supported yet" and name
+the newest version that is. They do not guess: a half-read profile would slice
+with generic start G-code.
+
 ### Install
 
 **Linux — distro package (simplest, if your distro has it)**
 
 ```bash
 sudo pacman -S orca-slicer          # Arch
-# Fedora/Debian: no official package; use Flatpak or the AppImage below
+# Fedora/Debian: no official package; use the AppImage below
 ```
 
-**Linux — Flatpak (recommended)**
+**Linux — AppImage (recommended)**
 
-```bash
-flatpak install flathub com.orcaslicer.OrcaSlicer
-flatpak run com.orcaslicer.OrcaSlicer   # first run, to let it unpack resources
-```
-
-> Auto-detection knows both the current Flathub app id
-> (`com.orcaslicer.OrcaSlicer`) and the legacy one (`io.github.softfever.OrcaSlicer`),
-> so a standard Flathub install should be picked up automatically. Manual paths are
-> only needed for a non-standard install location — see
-> [Overriding the paths](#overriding-the-paths).
->
-> **Note:** The Flatpak profile-directory paths are inferred and have not been
-> verified against a real Flathub install. If `plate preflight` reports profiles
-> not found after a Flatpak install, set `profiles_dir` manually:
->
-> ```bash
-> flatpak info --show-location com.orcaslicer.OrcaSlicer
-> # then look under <location>/files/share/OrcaSlicer/resources/profiles/BBL
-> plate setup --profiles-dir <path>
-> ```
-
-**Linux — AppImage**
-
-Download the AppImage from the [OrcaSlicer releases page](https://github.com/OrcaSlicer/OrcaSlicer/releases),
+This is the Linux install slicing is tested with. Download the AppImage from the [OrcaSlicer releases page](https://github.com/OrcaSlicer/OrcaSlicer/releases),
 then extract it so the `profiles/BBL` directory is reachable (an un-extracted
 AppImage hides its resources):
 
@@ -147,6 +153,23 @@ Also install `xvfb` on a headless Linux machine — OrcaSlicer needs a display
 even when slicing from the command line (`preflight` warns if `xvfb-run` is
 missing).
 
+**Linux — Flatpak (not supported yet)**
+
+Slicing has never been run with the Flathub build
+(`com.orcaslicer.OrcaSlicer`), and OrcaSlicer's own Flatpak manifest gives two
+reasons to expect it to fail:
+
+- It installs the profiles at `<location>/files/share/OrcaSlicer/profiles/BBL`
+  (`flatpak info --show-location com.orcaslicer.OrcaSlicer` prints the
+  location). Auto-detection tries `.../share/OrcaSlicer/resources/profiles/BBL`,
+  which was a guess, so it does not find them.
+- Its sandbox can read your home folder but not the system temp folder, where
+  `plate` writes the settings files it hands to OrcaSlicer.
+
+`plate setup` still finds the Flatpak's launcher, so on a machine with only the
+Flatpak `plate preflight` reports the profiles as missing. Use the AppImage for
+now.
+
 **macOS**
 
 Install OrcaSlicer from its `.dmg` into `/Applications` (or `~/Applications`),
@@ -163,7 +186,7 @@ Best-match-first, exactly as auto-detection tries them:
 
 | Platform | Binary | `profiles/BBL` |
 |---|---|---|
-| Linux | `orca-slicer` / `OrcaSlicer` / `orcaslicer` on `$PATH`, then `/usr/bin/orca-slicer`, `/usr/local/bin/orca-slicer`, `/opt/OrcaSlicer/orca-slicer`, the Flatpak exports (`{/var/lib,~/.local/share}/flatpak/exports/bin/<app-id>` for **both** app ids — current `com.orcaslicer.OrcaSlicer` first, legacy `io.github.softfever.OrcaSlicer` after), `~/Applications/OrcaSlicer.AppImage`, `~/tools/OrcaSlicer.AppImage` | `/usr/share/OrcaSlicer/resources/profiles/BBL`, `/opt/OrcaSlicer/resources/profiles/BBL`, the Flatpak app trees (`{/var/lib,~/.local/share}/flatpak/app/<app-id>/current/active/files/share/OrcaSlicer/resources/profiles/BBL`, both app ids — these are inferred, see the note above), `~/tools/squashfs-root/resources/profiles/BBL` |
+| Linux | `orca-slicer` / `OrcaSlicer` / `orcaslicer` on `$PATH`, then `/usr/bin/orca-slicer`, `/usr/local/bin/orca-slicer`, `/opt/OrcaSlicer/orca-slicer`, the Flatpak exports (`{/var/lib,~/.local/share}/flatpak/exports/bin/<app-id>` for **both** app ids — current `com.orcaslicer.OrcaSlicer` first, legacy `io.github.softfever.OrcaSlicer` after), `~/Applications/OrcaSlicer.AppImage`, `~/tools/OrcaSlicer.AppImage` | `/usr/share/OrcaSlicer/resources/profiles/BBL`, `/opt/OrcaSlicer/resources/profiles/BBL`, the Flatpak app trees (`{/var/lib,~/.local/share}/flatpak/app/<app-id>/current/active/files/share/OrcaSlicer/resources/profiles/BBL`, both app ids — these were inferred and do not match where the current Flatpak puts them, see [Install](#install)), `~/tools/squashfs-root/resources/profiles/BBL` |
 | macOS | `/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer`, `~/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer` | the matching `.../Contents/Resources/profiles/BBL` |
 | Windows | Each of the three directories is probed for `orca-slicer.exe` first (current installer), then `OrcaSlicer.exe` (older builds): `%PROGRAMFILES%\OrcaSlicer\`, `%LOCALAPPDATA%\Programs\OrcaSlicer\`, `%PROGRAMFILES(X86)%\OrcaSlicer\` | the matching `...\OrcaSlicer\resources\profiles\BBL` |
 
@@ -177,8 +200,8 @@ The supported way is `plate setup` — it accepts both as flags and writes them 
 
 ```bash
 plate setup \
-  --orca-slicer /var/lib/flatpak/exports/bin/com.orcaslicer.OrcaSlicer \
-  --profiles-dir ~/tools/squashfs-root/resources/profiles/BBL
+  --orca-slicer ~/apps/OrcaSlicer.AppImage \
+  --profiles-dir ~/apps/squashfs-root/resources/profiles/BBL
 ```
 
 Or edit `config.json` directly and set the `orca_slicer` and `profiles_dir`

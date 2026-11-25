@@ -29,6 +29,7 @@ from bambu_cli.slicer.options import (
 from bambu_cli.slicer.orca import _build_orcaslicer_cmd, _run_orcaslicer
 from bambu_cli.slicer.orientation import apply_orientation, asks_to_turn, presliced_refusal
 from bambu_cli.slicer.output import _finalize_slice, _is_valid_sliced_3mf, _output_snapshot
+from bambu_cli.slicer.packed_profiles import packed_cache_path, resolve_profiles_dir
 from bambu_cli.slicer.profiles import (
     _available_layer_heights,
     _create_temp_machine,
@@ -37,6 +38,7 @@ from bambu_cli.slicer.profiles import (
     _discover_process_profile,
     _profiles_dir_diagnostic,
     _slicer_executable_problem,
+    machine_profile_path,
 )
 from bambu_cli.slicer.step_convert import _convert_step_to_stl
 from bambu_cli.utils import _ensure_output_dir, emit_json_error
@@ -58,6 +60,37 @@ def _produced_is_accepted(result, produced: str) -> bool:
     return outcome in (SliceOutcome.SUCCESS, SliceOutcome.BENIGN_GL_WARNING)
 
 
+def _resolve_filament_profile(filament_dir: str, requested_filament_name: str) -> tuple[str | None, bool]:
+    """Resolve *requested_filament_name* inside *filament_dir*.
+
+    Returns ``(matched_path_or_none, has_any_profiles)``.
+    """
+    if not os.path.isdir(filament_dir):
+        return None, False
+
+    all_json = sorted(
+        f for f in os.listdir(filament_dir) if f.endswith(".json") and os.path.isfile(os.path.join(filament_dir, f))
+    )
+    requested_filament = str(requested_filament_name).lower()
+    files = [f for f in all_json if requested_filament in f.lower()]
+    base_files = [f for f in files if "@base" in f]
+    candidates = base_files or files
+    exact_stems = {requested_filament, f"bambu {requested_filament}"}
+
+    def _filament_rank(name: str) -> tuple[bool, int, str]:
+        stem = name[: -len(".json")] if name.endswith(".json") else name
+        stem = stem.lower().replace(" @base", "").strip()
+        return (stem not in exact_stems, len(name), name)
+
+    if candidates:
+        best = min(candidates, key=_filament_rank)
+        if len(candidates) > 1:
+            logger.info(f"Filament '{requested_filament_name}' matched {len(candidates)} profiles; using {best}")
+        return os.path.join(filament_dir, best), True
+
+    return None, bool(all_json)
+
+
 def _list_settings(args: argparse.Namespace, settings) -> str:
     """Discovery: dump every settable OrcaSlicer process/filament key + example.
 
@@ -67,7 +100,9 @@ def _list_settings(args: argparse.Namespace, settings) -> str:
     from bambu_cli.utils import emit_json
 
     profiles_dir = settings.profiles_dir
-    catalog = setting_catalog(profiles_dir)
+    # A packed install (OrcaSlicer 2.5.x) is read from its unpacked copy; the
+    # payload still names the folder the user configured.
+    catalog = setting_catalog(resolve_profiles_dir(profiles_dir))
     process = catalog["process"]
     filament = catalog["filament"]
     if not process and not filament:
@@ -237,45 +272,30 @@ def cmd_slice(
         # The machine profile carries the bed size and start G-code, so there is
         # deliberately no fallback to another model or nozzle size: a missing
         # profile is reported below as a config error.
-        machine_file = f"{full_model_name} {settings.nozzle_size} nozzle.json"
-        machine = os.path.join(settings.profiles_dir, "machine", machine_file)
-        process = os.path.join(settings.profiles_dir, "process", process_file)
+        #
+        # Every lookup below reads `profiles_dir`: the configured folder for a
+        # loose tree, the unpacked copy for a packed install (OrcaSlicer 2.5.x).
+        # Error payloads keep naming settings.profiles_dir, what the user set.
+        try:
+            profiles_dir = resolve_profiles_dir(settings.profiles_dir)
+        except BambuError as exc:
+            emit_json_error(
+                args,
+                "slice",
+                exc.exit_code,
+                str(exc),
+                failed_step="profiles",
+                file=filepath,
+                profiles_dir=settings.profiles_dir,
+                **exc.extra,
+            )
+        packed_cache = packed_cache_path(settings.profiles_dir)
+        machine = machine_profile_path(profiles_dir, full_model_name, settings.nozzle_size)
+        process = os.path.join(profiles_dir, "process", process_file)
 
-        filament_dir = os.path.join(settings.profiles_dir, "filament")
-        filament = None
+        filament_dir = os.path.join(profiles_dir, "filament")
         requested_filament_name = _namespace_get(args, "filament", "PLA Basic") or "PLA Basic"
-        requested_filament = str(requested_filament_name).lower()
-
-        if os.path.isdir(filament_dir):
-            files = sorted(
-                f
-                for f in os.listdir(filament_dir)
-                if f.endswith(".json")
-                and os.path.isfile(os.path.join(filament_dir, f))
-                and requested_filament in f.lower()
-            )
-            base_files = [f for f in files if "@base" in f]
-            candidates = base_files or files
-            exact_stems = {requested_filament, f"bambu {requested_filament}"}
-
-            def _filament_rank(name: str) -> tuple[bool, int, str]:
-                stem = name[: -len(".json")] if name.endswith(".json") else name
-                stem = stem.lower().replace(" @base", "").strip()
-                return (stem not in exact_stems, len(name), name)
-
-            if candidates:
-                best = min(candidates, key=_filament_rank)
-                filament = os.path.join(filament_dir, best)
-                if len(candidates) > 1:
-                    logger.info(
-                        f"Filament '{requested_filament_name}' matched {len(candidates)} profiles; using {best}"
-                    )
-
-        if not filament or not os.path.exists(filament):
-            logger.warning(
-                f"⚠️  Filament matching '{requested_filament_name}' not found. Falling back to Bambu PLA Basic."
-            )
-            filament = os.path.join(filament_dir, "Bambu PLA Basic @base.json")
+        filament, has_filament_profiles = _resolve_filament_profile(filament_dir, requested_filament_name)
 
         slicer_problem = _slicer_executable_problem(settings.orca_slicer)
         if slicer_problem:
@@ -311,7 +331,9 @@ def cmd_slice(
                 "slice",
                 EXIT_CONFIG_ERROR,
                 f"Missing machine profile for {full_model_name} with a {settings.nozzle_size} mm nozzle: "
-                f'{_path_for_message(machine)}. Check "model" and "nozzle" in config.json, or point '
+                f"{_path_for_message(machine)}"
+                + (f" (unpacked from {_path_for_message(packed_cache)})" if packed_cache else "")
+                + '. Check "model" and "nozzle" in config.json, or point '
                 "profiles_dir at an OrcaSlicer install that has this printer.",
                 failed_step="profiles",
                 file=filepath,
@@ -328,11 +350,11 @@ def cmd_slice(
                 quality_map,
                 model_code=model_code,
                 compatible_printer=compatible_printer,
-                profiles_dir=settings.profiles_dir,
+                profiles_dir=profiles_dir,
                 fallback=not numeric_quality,
             )
             if not discovered_process and numeric_quality:
-                heights = _available_layer_heights(settings.profiles_dir, model_code, compatible_printer)
+                heights = _available_layer_heights(profiles_dir, model_code, compatible_printer)
                 emit_json_error(
                     args,
                     "slice",
@@ -363,6 +385,19 @@ def cmd_slice(
             if numeric_quality:
                 layer = os.path.basename(process)[: -len(".json")]
 
+        if not filament:
+            if has_filament_profiles:
+                emit_json_error(
+                    args,
+                    "slice",
+                    EXIT_COMMAND_ERROR,
+                    f"No filament profile matching '{requested_filament_name}' found in {_path_for_message(filament_dir)}.",
+                    failed_step="validate",
+                    file=filepath,
+                    filament=str(requested_filament_name),
+                )
+            filament = os.path.join(filament_dir, "Bambu PLA Basic @base.json")
+
         for path, name in [(machine, "machine"), (filament, "filament")]:
             if not os.path.exists(path):
                 message = f"Missing {name} profile: {_path_for_message(path)}"
@@ -385,9 +420,9 @@ def cmd_slice(
 
         try:
             tmp_process, tmp_filament = _create_temp_profiles(
-                process, filament, args, bed_type=_default_bed_type(settings.profiles_dir, full_model_name)
+                process, filament, args, bed_type=_default_bed_type(profiles_dir, full_model_name)
             )
-            tmp_machine = _create_temp_machine(machine, settings.profiles_dir)
+            tmp_machine = _create_temp_machine(machine, profiles_dir)
         except Exception as exc:
             message = f"Failed to prepare OrcaSlicer profiles: {_exception_for_message(exc)}"
             emit_json_error(
@@ -422,7 +457,8 @@ def cmd_slice(
                 args, "slice", exc.exit_code, str(exc), failed_step=exc.failed_step or "orient", file=filepath
             )
         orientation_summary = oriented.summary
-        # Recorded on the namespace so job/TUI callers can report the pose too.
+        # Compatibility mirror for callers/tests inspecting the input namespace;
+        # production orchestrators read ``SliceResult.orientation`` instead.
         args.orientation_result = orientation_summary
         cmd = _build_orcaslicer_cmd(
             settings,
@@ -501,7 +537,7 @@ def cmd_slice(
             )
         produced = os.path.join(work_dir, outfile)
         if os.path.isfile(produced):
-            if pre_snapshot is not None:
+            if pre_snapshot is not None and result is not None and result.returncode == 0:
                 try:
                     produced_size = os.path.getsize(produced)
                 except OSError as exc:

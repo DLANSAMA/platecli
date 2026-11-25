@@ -128,6 +128,38 @@ def test_facets_open_mesh_uses_area_centroid():
     assert f.nz[0] == pytest.approx(1)
 
 
+def test_facets_translated_open_planar_mesh_stays_open_and_unflipped():
+    for z in (-10.0, 10.0):
+        m = make_mesh([(0, 0, z), (4, 0, z), (0, 4, z)], [(0, 1, 2)])
+        f = m.facets()
+        assert not f.closed
+        assert f.nz[0] == pytest.approx(1)
+        assert f.centroid == pytest.approx((4 / 3, 4 / 3, z))
+
+
+def test_facets_open_nonplanar_tiny_negative_vol6_not_flipped():
+    # Two triangles: first defines ref_origin (0,0,0), second gives v6 = -1e-10
+    # which is negative yet below the closed-mesh threshold (~1e-9).
+    m = make_mesh(
+        [(0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 1e-10)],
+        [(0, 1, 2), (1, 3, 2)],
+    )
+    f = m.facets()
+    assert not f.closed
+    assert f.nz[0] == pytest.approx(1)
+    assert f.nz[1] == pytest.approx(1)
+
+
+def test_facets_closed_box_far_from_origin():
+    origin = (10000.0, -10000.0, 10000.0)
+    expected_centroid = (10005.0, -9990.0, 10015.0)
+    for reverse in (False, True):
+        f = box(10, 20, 30, origin=origin, reverse=reverse).facets()
+        assert f.closed
+        assert f.centroid == pytest.approx(expected_centroid)
+        assert (f.nx[0], f.ny[0], f.nz[0]) == pytest.approx((0, 0, -1))
+
+
 def test_facets_degenerate_triangle_has_zero_normal_and_all_degenerate_raises():
     m = make_mesh([(0, 0, 0), (1, 0, 0), (2, 0, 0), (0, 1, 0)], [(0, 1, 2), (0, 1, 3)])
     f = m.facets()

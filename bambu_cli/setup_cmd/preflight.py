@@ -77,6 +77,64 @@ def _printer_model_check(cfg):
     return _preflight_result("ok", "printer-model", f"Printer model is {resolved}.")
 
 
+def _profiles_dir_check(profiles_dir, printer_model, nozzle_size):
+    """Check that a slice would find its machine profile in *profiles_dir*.
+
+    The folder existing is not enough: OrcaSlicer 2.5.x keeps a ``profiles/BBL``
+    folder that holds no printer profiles at all (they are packed in
+    ``BBL.opc``), and a loose tree may not have this printer or nozzle. So this
+    walks the path ``plate slice`` walks: the same resolver, then the same
+    machine-profile file.
+    """
+    from bambu_cli.config import MODEL_MAPPING, detect_profiles_dir
+    from bambu_cli.errors import BambuError
+    from bambu_cli.slicer.packed_profiles import packed_cache_path, resolve_profiles_dir
+    from bambu_cli.slicer.profiles import machine_profile_path
+
+    shown = _display_path(profiles_dir)
+    try:
+        effective = resolve_profiles_dir(profiles_dir)
+    except BambuError as exc:
+        return _preflight_result("error", "profiles-dir", str(exc))
+    packed = packed_cache_path(profiles_dir)
+    source = f"{shown} (packed in {os.path.basename(packed)})" if packed else shown
+
+    def _other_install_hint():
+        detected = detect_profiles_dir()
+        if detected and detected != profiles_dir:
+            return f' Detected profiles at {_display_path(detected)} — set "profiles_dir" to this in config.json.'
+        return ""
+
+    if not os.path.isdir(os.path.join(effective, "machine")):
+        return _preflight_result(
+            "error",
+            "profiles-dir",
+            f"{shown} holds no OrcaSlicer printer profiles (no machine/ folder). Point "
+            '"profiles_dir" at the resources/profiles/BBL folder of an OrcaSlicer install.' + _other_install_hint(),
+        )
+    model_info = MODEL_MAPPING.get(printer_model)
+    if model_info is None:
+        # The printer-model check reports the unknown model; there is no
+        # machine profile to look for until it is fixed.
+        return _preflight_result("ok", "profiles-dir", f"OrcaSlicer profiles found at {source}.")
+    full_name = model_info["full_name"]
+    machine = machine_profile_path(effective, full_name, nozzle_size)
+    if not os.path.isfile(machine):
+        return _preflight_result(
+            "error",
+            "profiles-dir",
+            f"OrcaSlicer profiles at {source} have no machine profile for {full_name} with a "
+            f'{nozzle_size} mm nozzle ({os.path.basename(machine)}). Check "model" and "nozzle" in '
+            "config.json, or point profiles_dir at an OrcaSlicer install that has this printer."
+            + _other_install_hint(),
+        )
+    return _preflight_result(
+        "ok",
+        "profiles-dir",
+        f"OrcaSlicer profiles found at {source}, with a machine profile for {full_name} and a {nozzle_size} mm nozzle.",
+    )
+
+
 def _timeouts_check(cfg):
     """Error when a *_timeout key in config.json is not positive, finite seconds."""
     from bambu_cli.config import TIMEOUT_CONFIG_KEYS, config_timeout_problem
@@ -330,9 +388,7 @@ def collect_preflight_checks():
             message += f" {orca_install_hint()}"
         checks.append(_preflight_result("error", "profiles-dir", message))
     elif os.path.isdir(profiles_dir):
-        checks.append(
-            _preflight_result("ok", "profiles-dir", f"OrcaSlicer profiles found at {_display_path(profiles_dir)}.")
-        )
+        checks.append(_profiles_dir_check(profiles_dir, settings.printer_model, settings.nozzle_size))
     else:
         message = f"OrcaSlicer BBL profiles not found at {_display_path(profiles_dir)}."
         detected_profiles = detect_profiles_dir()

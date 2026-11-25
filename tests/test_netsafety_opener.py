@@ -45,11 +45,19 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
     # Set by the cross-host tests below; a Location for /redirect-elsewhere.
     redirect_target = "/final"
+    # Set by the 429 retry test below; counts remaining 429 responses for /rate-limit-once.
+    rate_limit_remaining = 0
 
     def do_GET(self):  # noqa: N802 -- BaseHTTPRequestHandler's required spelling
         path = self.path
         if path == "/final":
             self._send(200, BODY)
+        elif path == "/rate-limit-once":
+            if type(self).rate_limit_remaining > 0:
+                type(self).rate_limit_remaining -= 1
+                self._send(429, b"rate limited", headers=[("Retry-After", "0")])
+            else:
+                self._send(200, BODY)
         elif path == "/echo":
             import json
 
@@ -144,6 +152,16 @@ def test_polite_open_surfaces_httperror_so_its_retry_policy_can_see_it(server):
         polite_open(opener, req, timeout=10, sleep=lambda _: None)
     assert excinfo.value.code == 404
     excinfo.value.close()
+
+
+def test_polite_open_retries_429_and_closes_discarded_response_cleanly(server):
+    _Handler.rate_limit_remaining = 1
+    opener = build_safe_opener()
+    req = urllib.request.Request(f"{server}/rate-limit-once")
+    with settings_ctx(allow_private_ips=True), polite_open(opener, req, timeout=10, sleep=lambda _: None) as resp:
+        assert resp.status == 200
+        assert resp.read() == BODY
+    assert _Handler.rate_limit_remaining == 0
 
 
 # --- the user-visible consequence ------------------------------------------

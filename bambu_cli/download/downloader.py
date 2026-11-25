@@ -1,5 +1,7 @@
 """The `download` command: HTTP fetch loop, redirects, HTML resolution, limits."""
 
+from __future__ import annotations
+
 import http.client
 import os
 import tempfile
@@ -45,7 +47,8 @@ from bambu_cli.netsafety import BlockedAddressError, build_safe_opener, polite_o
 from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.paths import path_for_message as _path_for_message
-from bambu_cli.printables import is_printables_url, resolve_printables_url
+from bambu_cli.printables import PrintablesResolution, is_printables_url
+from bambu_cli.printables import resolve_printables as _default_resolve_printables
 from bambu_cli.utils import _ensure_output_dir, _record_download_success, emit_json_error
 
 # Appended to the two "this HTML page is not a model" errors so the next step is
@@ -54,6 +57,31 @@ _HTML_SOURCE_HINT = (
     "Use a direct model URL such as https://example.com/model.stl (.stl/.step/.stp/.obj/.3mf/.gcode/.zip), "
     "a Printables model page, or a local file."
 )
+
+
+class DownloadResult(str):
+    """Downloaded local path carrying structured archive metadata.
+
+    Subclasses ``str`` so callers and tests treating ``cmd_download``'s return
+    value as a path string keep working unchanged, while orchestrators read
+    ``archive_entry`` / ``extracted_path`` directly instead of the legacy
+    ``utils._LAST_DOWNLOAD_PAYLOAD`` global.
+    """
+
+    archive_entry: str | None
+    extracted_path: str | None
+
+    def __new__(
+        cls,
+        path: str,
+        *,
+        archive_entry: str | None = None,
+        extracted_path: str | None = None,
+    ) -> DownloadResult:
+        obj = super().__new__(cls, path)
+        obj.archive_entry = archive_entry
+        obj.extracted_path = extracted_path
+        return obj
 
 
 def _response_header(resp, name):
@@ -89,7 +117,7 @@ def _cmd_download(
     from bambu_cli import utils
 
     _openers = opener_factory if opener_factory is not None else build_safe_opener
-    _resolve = resolve_printables if resolve_printables is not None else resolve_printables_url
+    _resolve = resolve_printables if resolve_printables is not None else _default_resolve_printables
     _noncolliding = noncolliding_path if noncolliding_path is not None else _noncolliding_path
 
     utils._LAST_DOWNLOAD_PAYLOAD = None
@@ -137,22 +165,38 @@ def _cmd_download(
         "Accept": "*/*",
     }
 
-    resolved_url, stl_name = _resolve(url)
+    resolution = _resolve(url)
+    if isinstance(resolution, PrintablesResolution):
+        resolved_url = resolution.url if resolution.ok else None
+        stl_name = resolution.filename if resolution.ok else None
+        res_failure = resolution if not resolution.ok else None
+    else:
+        resolved_url, stl_name = resolution
+        res_failure = None
 
     # If the URL was a Printables page, it may have been resolved successfully.
-    # If it was a Printables page and failed, we should return to match original behavior.
+    # If it was a Printables page and failed, surface why and what to do.
     if is_printables_model:
         if not resolved_url:
+            extra: dict[str, str] = {}
+            error_message = "Failed to resolve Printables model URL."
+            if res_failure is not None:
+                if res_failure.error:
+                    error_message = res_failure.error
+                if res_failure.reason:
+                    extra["reason"] = res_failure.reason
+                if res_failure.remedy:
+                    extra["remedy"] = res_failure.remedy
             emit_json_error(
                 args,
                 "download",
                 EXIT_COMMAND_ERROR,
-                "Failed to resolve Printables model URL.",
+                error_message,
                 failed_step="resolve",
                 source=source_report,
                 normalized_source=normalized_source_report,
+                **extra,
             )
-            abort("", exit_code=EXIT_COMMAND_ERROR)  # Failed to resolve, error message already printed
         url = resolved_url
         _reject_unsupported_download_extension(args, source_url, normalized_source, url, stl_name)
         _reject_unsupported_download_extension(args, source_url, normalized_source, url, urlparse(url).path)
@@ -534,6 +578,9 @@ def _cmd_download(
                     with zipfile.ZipFile(archive_path) as zf:
                         models_in_archive = 0
                         for info in zf.infolist():
+                            mode = (info.external_attr >> 16) & 0o170000
+                            if mode == 0o120000:
+                                continue
                             if not info.is_dir() and info.file_size > 0:
                                 ext = _file_extension(_portable_basename(info.filename))
                                 if ext in DOWNLOADABLE_EXTENSIONS:
@@ -586,7 +633,7 @@ def _cmd_download(
                         "bytes": size,
                     },
                 )
-                return extracted_path
+                return DownloadResult(extracted_path, archive_entry=archive_entry, extracted_path=extracted_path)
             logger.info(f"✅ Downloaded: {_path_for_message(outpath)} ({size // 1024}KB)")
             _record_download_success(
                 args,
@@ -601,7 +648,7 @@ def _cmd_download(
                     "bytes": size,
                 },
             )
-            return outpath
+            return DownloadResult(outpath)
 
         message = f"Could not resolve HTML page to a direct model file. {_HTML_SOURCE_HINT}"
         emit_json_error(

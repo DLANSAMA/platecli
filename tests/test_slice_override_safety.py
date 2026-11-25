@@ -168,3 +168,50 @@ def test_list_settings_does_not_advertise_refused_gcode_keys(tmp_path):
     S._known_setting_keys.cache_clear()
     assert "filament_flow_ratio" in catalog["filament"]
     assert "filament_start_gcode" not in catalog["filament"]
+
+
+@pytest.mark.parametrize(
+    ("blob", "expected"),
+    [
+        ({"filament": {" hot_plate_temp ": 200}}, "bed temperature override"),
+        ({"process": {" machine_start_gcode ": "G28"}}, "cannot be overridden"),
+        ({"filament": {" nozzle_temperature ": 500}}, "nozzle temperature override"),
+    ],
+)
+def test_whitespace_padded_settings_json_keys_are_caught_by_safety_checks(blob, expected):
+    err = S._validate_slice_options(_args(settings_json=json.dumps(blob)))
+    assert err is not None and expected in err
+
+
+@pytest.mark.parametrize(
+    "blob",
+    [
+        {"process": {"   ": "1"}},
+        {"filament": {"": "1"}},
+    ],
+)
+def test_whitespace_only_settings_json_key_is_rejected(blob):
+    err = S._validate_slice_options(_args(settings_json=json.dumps(blob)))
+    assert err is not None and "empty setting name" in err
+
+
+@pytest.mark.parametrize(
+    "entry",
+    ["Hot_Plate_Temp=200", "bed_temperature=200", "Bed_Temperature=200"],
+)
+def test_mixed_case_and_bed_temperature_keys_use_bed_temp_limit(entry):
+    err = S._validate_slice_options(_args(set_filament=[entry]))
+    assert err is not None and "bed temperature override" in err
+
+
+def test_generic_section_overrides_strips_whitespace_padded_settings_json_keys():
+    args = _args(
+        settings_json=json.dumps(
+            {
+                "process": {" wall_loops ": 4, "   ": "ignored"},
+                "filament": {" hot_plate_temp ": 65},
+            }
+        )
+    )
+    assert S._generic_section_overrides(args, "process") == {"wall_loops": "4"}
+    assert S._generic_section_overrides(args, "filament") == {"hot_plate_temp": "65"}

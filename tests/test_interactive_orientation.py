@@ -13,6 +13,7 @@ from bambu_cli.context import RuntimeContext, Settings
 from bambu_cli.errors import BambuError
 from bambu_cli.interactive import core
 from bambu_cli.mesh import OrientRequest
+from bambu_cli.slicer import SliceResult
 
 
 @pytest.fixture(autouse=True)
@@ -36,7 +37,7 @@ class Recorder:
     def __call__(self, ns=None, **kwargs):
         self.calls.append(ns)
         if self.summary is not None:
-            ns.orientation_result = self.summary  # what cmd_slice records
+            return SliceResult(self.return_value, orientation=self.summary)
         return self.return_value
 
 

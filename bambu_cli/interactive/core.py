@@ -18,11 +18,11 @@ import argparse
 import os
 import shutil
 import tempfile
+import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from bambu_cli import utils
 from bambu_cli.ams import tray_label
 from bambu_cli.constants import (
     ARCHIVE_DOWNLOAD_EXTENSIONS,
@@ -33,6 +33,7 @@ from bambu_cli.constants import (
 )
 from bambu_cli.errors import BambuError, abort
 from bambu_cli.interactive.presets import parse_args_or_abort, preset_to_job_args
+from bambu_cli.paths import exception_for_message as _exception_for_message
 from bambu_cli.paths import expand_path as _expand_path
 from bambu_cli.slicer.estimate import format_estimate, read_3mf_estimate
 from bambu_cli.textsafe import display_safe
@@ -393,13 +394,20 @@ def slicer_preflight_problem(settings: Any) -> str | None:
     Shared by the wizard's step 0 and the TUI's pre-form preflight: the checks
     that do not need a prompt (OrcaSlicer executable, profiles directory).
     """
+    from bambu_cli.errors import BambuError
+    from bambu_cli.slicer.packed_profiles import resolve_profiles_dir
     from bambu_cli.slicer.profiles import _profiles_dir_diagnostic, _slicer_executable_problem
 
     problem = _slicer_executable_problem(settings.orca_slicer)
     if problem:
         return problem
 
-    if not os.path.isdir(os.path.join(settings.profiles_dir, "process")):
+    try:
+        # A packed install (OrcaSlicer 2.5.x) is checked through its unpacked copy.
+        profiles_dir = resolve_profiles_dir(settings.profiles_dir)
+    except BambuError as exc:
+        return str(exc)
+    if not os.path.isdir(os.path.join(profiles_dir, "process")):
         hint, _detected = _profiles_dir_diagnostic(settings.profiles_dir)
         return hint or (
             f"OrcaSlicer profiles not found under {settings.profiles_dir}. "
@@ -458,8 +466,6 @@ def fetch_model(steps: Any, state: WizardState, workdir: str) -> str:
     source = state.source
 
     if _is_http_url(source):
-        utils._LAST_ERROR_PAYLOAD = None
-        utils._LAST_DOWNLOAD_PAYLOAD = None
         model_path = steps.get_download()(
             argparse.Namespace(
                 url=source,
@@ -479,6 +485,7 @@ def fetch_model(steps: Any, state: WizardState, workdir: str) -> str:
             exit_code=EXIT_FILE_ERROR,
             failed_step="download",
         )
+    model_path = str(model_path)
 
     # A local .zip never went through the download layer's extraction, so extract
     # its model member the same way _run_job does — reusing _extract_zip_model —
@@ -487,15 +494,22 @@ def fetch_model(steps: Any, state: WizardState, workdir: str) -> str:
     # "printer-ready" branch and later be sliced by cmd_job at PLA defaults,
     # silently discarding the chosen material (see plan §11 Q3).
     if _file_extension(model_path) in ARCHIVE_DOWNLOAD_EXTENSIONS:
-        utils._LAST_ERROR_PAYLOAD = None
         try:
             extracted_path, _filename, _entry, _size = _extract_zip_model(
                 model_path,
                 workdir,
                 argparse.Namespace(name=None, max_download_mb=DEFAULT_MAX_DOWNLOAD_MB),
             )
+        except zipfile.BadZipFile:
+            abort("ZIP archive is invalid or corrupt.", exit_code=EXIT_FILE_ERROR, failed_step="extract")
         except ValueError as exc:
             abort(str(exc), exit_code=EXIT_FILE_ERROR, failed_step="extract")
+        except OSError as exc:
+            abort(
+                f"Could not extract ZIP archive: {_exception_for_message(exc)}",
+                exit_code=EXIT_FILE_ERROR,
+                failed_step="extract",
+            )
         model_path = extracted_path
     return model_path
 
@@ -505,6 +519,7 @@ def slice_fetched_model(steps: Any, state: WizardState, workdir: str, model_path
     from bambu_cli.download.naming import _file_extension
     from bambu_cli.job.predict import _path_would_slice, _slice_args_for_job
     from bambu_cli.slicer.orientation import presliced_refusal
+    from bambu_cli.slicer.output import SliceResult
 
     assert state.source is not None  # set by the source step  # noqa: S101
     ext = _file_extension(model_path)
@@ -514,7 +529,6 @@ def slice_fetched_model(steps: Any, state: WizardState, workdir: str, model_path
 
     # An STL/STEP/OBJ, or a 3MF that holds a model but no sliced plate.
     if _path_would_slice(model_path, ext):
-        utils._LAST_ERROR_PAYLOAD = None
         try:
             slice_ns = _slice_args_for_job(model_path, preset_ns, workdir)
             slice_ns.orient_preview = state.orient_preview
@@ -523,14 +537,17 @@ def slice_fetched_model(steps: Any, state: WizardState, workdir: str, model_path
                 slice_ns.face = orientation.face
                 slice_ns.rotate = list(orientation.rotations) or None
             slice_ns = apply_overrides(slice_ns, state.overrides)
-            printable_path = steps.get_slice()(slice_ns)
+            slice_result = steps.get_slice()(slice_ns)
         except BambuError as exc:
             if not exc.next_command:
                 exc.next_command = ["slice", model_path, "-v"]
             raise
-        state.printable_path = printable_path
+        if isinstance(slice_result, SliceResult):
+            state.printable_path = str(slice_result)
+            state.orientation_summary = slice_result.orientation
+        else:
+            state.printable_path = slice_result
         state.sliced = True
-        state.orientation_summary = getattr(slice_ns, "orientation_result", None)
     else:
         # .3mf / .gcode: already printer-ready, no slicing. The preset material
         # was NOT applied — the preview flags this so we don't imply otherwise.
@@ -543,38 +560,41 @@ def slice_fetched_model(steps: Any, state: WizardState, workdir: str, model_path
     return model_path
 
 
-def orientation_line(summary: dict | None) -> str | None:
-    """The preview's Orientation value, e.g. ``auto (face 1) · turned 90° about X · 3.0 mm tall``; None when unknown."""
-    if not summary or summary.get("presliced"):
-        return None
-    mode = summary.get("mode") or "keep"
-    turns = []
-    for spec in summary.get("rotations") or ():
-        axis, _, degrees = str(spec).partition("=")
+def _format_rotation_turns(rotations: tuple[str, ...]) -> list[str]:
+    turns: list[str] = []
+    for spec in rotations:
+        axis, _, degrees = spec.partition("=")
         try:
             turns.append(f"{axis}{float(degrees):+g}°")
         except ValueError:
-            turns.append(str(spec))
-    if mode == "face" and summary.get("face"):
-        base = f"face {summary['face']}"
-    elif mode == "auto":
-        base = f"auto (face {summary['face']})" if summary.get("face") else "auto"
+            turns.append(spec)
+    return turns
+
+
+def orientation_line(summary: dict | None) -> str | None:
+    """The preview's Orientation value, e.g. ``auto (face 1) · turned 90° about X · 3.0 mm tall``; None when unknown."""
+    from bambu_cli.slicer.orientation import parse_orientation_summary
+
+    parsed = parse_orientation_summary(summary)
+    if parsed is None:
+        return None
+    if parsed.mode == "face" and parsed.face:
+        base = f"face {parsed.face}"
+    elif parsed.mode == "auto":
+        base = f"auto (face {parsed.face})" if parsed.face else "auto"
     else:
         base = "as exported"
-    parts = [", ".join([base, *turns])]
-    if mode != "keep" and "turned" in summary:
-        turned = summary["turned"]
-        parts.append(f"turned {turned}" if turned else "lies as exported")
-    height = summary.get("height_mm")
-    if isinstance(height, (int, float)):
-        parts.append(f"{height:.1f} mm tall")
-    warning = summary.get("warning")
-    if warning and "stable" in summary:
+    parts = [", ".join([base, *_format_rotation_turns(parsed.rotations)])]
+    if parsed.mode != "keep" and parsed.has_turned:
+        parts.append(f"turned {parsed.turned}" if parsed.turned else "lies as exported")
+    if parsed.height_mm is not None:
+        parts.append(f"{parsed.height_mm:.1f} mm tall")
+    if parsed.unstable_keep:
         parts.append("rests on a point or an edge: it may not print")
-    elif warning:
+    elif parsed.auto_failed:
         # Auto could not read the file (or it holds several objects).
         parts.append("auto could not choose a face")
-    elif summary.get("stable") is False:
+    elif parsed.tips_over:
         parts.append("may tip over")
     return "  ·  ".join(parts)
 

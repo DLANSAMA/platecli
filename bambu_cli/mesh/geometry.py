@@ -222,6 +222,9 @@ class Mesh:
         vol6 = 0.0
         cvx = cvy = cvz = 0.0  # volume-weighted centroid accumulators
         cax = cay = caz = 0.0  # area-weighted centroid accumulators
+        if not tris:
+            raise MeshError("The model has no surface (every triangle is degenerate).")
+        ox, oy, oz = xs[tris[0]], ys[tris[0]], zs[tris[0]]
         for t in range(0, len(tris), 3):
             i, j, k = tris[t], tris[t + 1], tris[t + 2]
             ax, ay, az = xs[i], ys[i], zs[i]
@@ -248,22 +251,27 @@ class Mesh:
             cax += a * mx
             cay += a * my
             caz += a * mz
-            # Signed volume of the tetrahedron (origin, a, b, c), times 6.
-            v6 = ax * cx + ay * cy + az * cz
+            # Signed volume of the tetrahedron (ref_origin, a, b, c), times 6.
+            # Shifting to a vertex on the mesh keeps open planar meshes at zero
+            # volume regardless of translation and avoids far-origin cancellation.
+            v6 = (ax - ox) * cx + (ay - oy) * cy + (az - oz) * cz
             vol6 += v6
-            # Tetra centroid is (a+b+c)/4 = 0.75 * triangle centroid.
-            cvx += v6 * 0.75 * mx
-            cvy += v6 * 0.75 * my
-            cvz += v6 * 0.75 * mz
+            # Tetra centroid relative to ref_origin is 0.75 * (tri_centroid - ref_origin).
+            cvx += v6 * 0.75 * (mx - ox)
+            cvy += v6 * 0.75 * (my - oy)
+            cvz += v6 * 0.75 * (mz - oz)
         if total <= 0.0:
             raise MeshError("The model has no surface (every triangle is degenerate).")
         # A closed, consistently wound mesh has a real volume; an open or
         # inconsistent one does not, and its surface centroid is the best guess.
         closed = abs(vol6) > 1e-9 * max(total, 1.0) ** 1.5
-        centroid = (cvx / vol6, cvy / vol6, cvz / vol6) if closed else (cax / total, cay / total, caz / total)
-        if vol6 < 0.0:
-            # Wound inside out (normals point inward): every "down-facing"
-            # test would read the model upside down, so flip them.
+        centroid = (
+            (ox + cvx / vol6, oy + cvy / vol6, oz + cvz / vol6) if closed else (cax / total, cay / total, caz / total)
+        )
+        if closed and vol6 < 0.0:
+            # Closed mesh wound inside out (normals point inward): flip them
+            # so every "down-facing" test sees outward normals. Never flip an
+            # open mesh whose tiny residual signed volume happens to be negative.
             for arr in (nx, ny, nz):
                 for idx in range(len(arr)):
                     arr[idx] = -arr[idx]

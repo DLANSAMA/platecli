@@ -90,6 +90,11 @@ def test_first_run_text_names_the_platform_install_command(monkeypatch):
     assert "brew install --cask orcaslicer" in first_run_text()
     monkeypatch.setattr(sys, "platform", "win32")
     assert "winget install --id SoftFever.OrcaSlicer" in first_run_text()
+    monkeypatch.setattr(sys, "platform", "linux")
+    linux = first_run_text()
+    assert "./OrcaSlicer.AppImage --appimage-extract" in linux
+    assert "flatpak" not in linux.lower()
+    assert len(linux.splitlines()) < 25
 
 
 def test_bare_plate_non_tty_prints_first_run_text_not_help(monkeypatch, tmp_path, capsys):
@@ -409,8 +414,12 @@ def test_preflight_empty_home_names_each_missing_piece_separately(monkeypatch, t
     assert "OrcaSlicer path is not configured" in by_name["orca-slicer"]
     assert "OrcaSlicer profile directory is not configured" in by_name["profiles-dir"]
     # Each names an install / config step of its own, and the summary counts all three.
+    # (The install step is worded per platform: a command on Windows and macOS,
+    # the AppImage download and extract on Linux.)
+    from bambu_cli.config import orca_install_hint
+
     for name in ("orca-slicer", "profiles-dir"):
-        assert "Install it with" in by_name[name] and "config.json" in by_name[name], by_name[name]
+        assert orca_install_hint() in by_name[name] and "config.json" in by_name[name], by_name[name]
     assert any("Preflight failed: 3 error(s)" in m for m in _messages(log, "error"))
 
 

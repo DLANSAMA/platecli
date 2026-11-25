@@ -45,7 +45,11 @@ def _convert_step_to_stl(
             logger.error("STEP conversion failed.")
             return None, False
 
-        size = os.path.getsize(stl_path) // 1024
+        raw_size = os.path.getsize(stl_path)
+        if raw_size <= 0:
+            logger.error("STEP conversion produced an empty STL file.")
+            return None, False
+        size = raw_size // 1024
     except FileNotFoundError:
         logger.error("STEP conversion failed. Please install gmsh for your platform.")
         return None, False
