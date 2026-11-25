@@ -17,7 +17,7 @@ import pytest
 from bambu_cli import setup_cmd
 from bambu_cli.errors import BambuError
 from bambu_cli.interactive.core import slicer_preflight_problem
-from bambu_cli.paths import display_path
+from bambu_cli.paths import json_path
 from bambu_cli.setup_cmd.preflight import _profiles_dir_check
 from bambu_cli.slicer import cmd_slice
 from bambu_cli.slicer.options import _override_safety_problem, setting_catalog
@@ -30,6 +30,7 @@ from bambu_cli.slicer.packed_profiles import (
     resolve_profiles_dir,
 )
 from bambu_cli.slicer.profiles import _create_temp_machine, _load_flattened_profile, machine_profile_path
+from bambu_cli.utils import _display_path
 from tests.bambu_test_base import settings_ctx
 from tests.fakes import opc_builder as opc
 from tests.fakes.orca_stub import build_profiles_dir, make_orca_launcher, write_stl
@@ -660,8 +661,9 @@ def test_list_settings_reads_a_packed_install_and_names_the_configured_folder(tm
 
     listed = json.loads(capsys.readouterr().out)
     assert listed["action"] == "list_settings"
-    # JSON output shortens the home folder to "~" (pytest's tmp_path is under it on Windows).
-    assert listed["profiles_dir"] == display_path(packed)
+    # JSON output shortens the home folder to "~" and then uses "/" separators
+    # (pytest's tmp_path is under the home folder on Windows).
+    assert listed["profiles_dir"] == json_path(_display_path(packed))
     assert "layer_height" in listed["process"]["settings"]
     assert "filament_type" in listed["filament"]["settings"]
     assert "include" not in listed["process"]["settings"]
