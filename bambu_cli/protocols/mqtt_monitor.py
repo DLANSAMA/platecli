@@ -18,29 +18,33 @@ from bambu_cli.protocols.mqtt_cmd import (
     _connect,
     _sleep,
     _teardown_mqtt_client,
+    decode_report,
 )
 from bambu_cli.textsafe import display_safe
 from bambu_cli.utils import get_sequence_id
 
 
+def _coerce_int(value, default=0):
+    """Coerce an MQTT report field to int, returning default on bool or invalid values."""
+    if isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
 def _status_event(p, event):
     """Build a compact, agent-friendly status event from a raw MQTT print payload."""
-
-    def _int(value, default=0):
-        try:
-            return int(value)
-        except (TypeError, ValueError, OverflowError):
-            return default
-
     return StatusEvent(
         event=event,
         command="status",
         gcode_state=p.get("gcode_state", "UNKNOWN"),
-        mc_percent=_int(p.get("mc_percent", 0)),
+        mc_percent=_coerce_int(p.get("mc_percent", 0)),
     ).to_payload(
-        layer_num=_int(p.get("layer_num", 0)),
-        total_layer_num=_int(p.get("total_layer_num", 0)),
-        mc_remaining_time=_int(p.get("mc_remaining_time", 0)),
+        layer_num=_coerce_int(p.get("layer_num", 0)),
+        total_layer_num=_coerce_int(p.get("total_layer_num", 0)),
+        mc_remaining_time=_coerce_int(p.get("mc_remaining_time", 0)),
         nozzle_temper=p.get("nozzle_temper"),
         nozzle_target_temper=p.get("nozzle_target_temper"),
         bed_temper=p.get("bed_temper"),
@@ -104,12 +108,14 @@ def monitor_status(args, printer):
     def on_message(client, userdata, msg):
         connected.set()
         try:
-            data = json.loads(msg.payload.decode("utf-8"))
-            if isinstance(data, dict) and isinstance(data.get("print"), dict):
+            data = decode_report(msg)
+            if data is None:
+                return
+            if isinstance(data.get("print"), dict):
                 merged.update(data["print"])
                 p = merged
                 state = p.get("gcode_state", "UNKNOWN")
-                pct = p.get("mc_percent", 0)
+                pct = _coerce_int(p.get("mc_percent", 0))
 
                 if state != last_state[0] or pct != last_pct[0]:
                     if "progress" not in userdata and not show_progress_bar:
@@ -154,8 +160,6 @@ def monitor_status(args, printer):
                     else:
                         logger.info(display_safe(f"🏁 Reached terminal state: {state}"))
                     received_terminal.set()
-        except (UnicodeDecodeError, json.JSONDecodeError) as e:
-            logger.debug(f"MQTT decode error: {e}")
         except Exception as e:
             logger.warning(f"MQTT message handling error: {e}")
 

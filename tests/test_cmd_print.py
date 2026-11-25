@@ -125,7 +125,11 @@ class TestBambuCmdPrint(unittest.TestCase):
         printer = _test_printer()
         execute_print_command(printer, payload, basename)
 
-        mock_create_mqtt.assert_called_once_with(printer, "bambu_print")
+        mock_create_mqtt.assert_called_once()
+        self.assertIs(mock_create_mqtt.call_args.args[0], printer)
+        client_id = mock_create_mqtt.call_args.args[1]
+        self.assertTrue(client_id.startswith("bambu_print-"))
+        self.assertLessEqual(len(client_id), 23)
         mock_client.connect.assert_called_once()
         mock_client.loop_start.assert_called_once()
         mock_client.loop_stop.assert_called_once()

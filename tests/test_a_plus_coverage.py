@@ -219,14 +219,14 @@ def test_session_reset_swallows_teardown_errors():
     session.close()  # second close is a no-op
 
 
-def test_session_subscribe_failure_still_connects():
+def test_session_subscribe_failure_refuses_live_session():
     class NoSub(FakeBrokerClient):
         def subscribe(self, topic):
             raise RuntimeError("no sub")
 
     printer = _printer()
     _held(printer, lambda _p: NoSub())
-    assert mqtt_mod.get_status(printer, timeout=1)["gcode_state"] == "IDLE"
+    assert mqtt_mod.get_status(printer, timeout=1, retries=0) is None
     printer.release_mqtt()
 
 

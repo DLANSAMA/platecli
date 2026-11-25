@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 import threading
 
 from bambu_cli.config import get_command_timeout
@@ -116,7 +117,9 @@ def execute_print_command(
         logger.info(f"🤖 [SIM] Print started: {basename}")
         return
 
-    client = _factory(printer, "bambu_print")
+    # Unique per-run client ID (<= 23 bytes per MQTT 3.1.1) so concurrent runs
+    # do not kick each other off the printer's broker.
+    client = _factory(printer, f"bambu_print-{secrets.token_hex(5)}")
 
     print_error = [None]
     reject_reason: list[str | None] = [None]
@@ -130,7 +133,7 @@ def execute_print_command(
             client.subscribe(f"device/{printer.serial}/report")
             if not published[0]:
                 published[0] = True
-                client.publish(f"device/{printer.serial}/request", payload)
+                client.publish(f"device/{printer.serial}/request", payload, qos=1)
         else:
             logger.error(f"Connection failed: rc={rc}")
             connect_failed[0] = True
