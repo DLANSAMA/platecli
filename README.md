@@ -13,10 +13,10 @@
 <!-- Tests/coverage are hand-updated static badges (no coverage service wired up).
      Re-measure and edit both after any release:
      uv run python -m pytest tests/ -q -m "not live" --cov=bambu_cli --cov-report=term -->
-[![Tests](https://img.shields.io/badge/tests-2309%20passing-brightgreen)](#tested-and-hardened)
-[![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)](#tested-and-hardened)
+[![Tests](https://img.shields.io/badge/tests-2887%20passing-brightgreen)](#tested-and-hardened)
+[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](#tested-and-hardened)
 
-[Install](#install) · [Print something](#print-something) · [Try it without a printer](#try-it-in-30-seconds) · [Quality](#tested-and-hardened) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) · [For AI agents](#built-for-ai-agents)
+[Install](#install) · [Print something](#print-something) · [Try it without a printer](#try-it-in-30-seconds) · [Orientation](#orient-before-you-slice) · [Quality](#tested-and-hardened) · [User guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) · [Troubleshooting](https://github.com/DLANSAMA/platecli/blob/main/docs/troubleshooting.md) · [For AI agents](#built-for-ai-agents)
 
 <sub>Built and maintained by **[Dylan Reed](https://github.com/DLANSAMA)** · CI on Linux, macOS, and Windows across Python 3.10–3.14</sub>
 
@@ -25,14 +25,14 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/demo-dark.gif">
   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/demo-light.gif">
-  <img alt="platecli demo: live printer status and slicing from the terminal" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/demo-dark.gif">
+  <img alt="platecli demo: printer status with AMS trays, terminal orientation preview, and local slicing" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/demo-dark.gif">
 </picture>
 
-Paste a Printables link, get a physical print. `plate` downloads the model, slices it with OrcaSlicer, and sends it to your Bambu Lab printer — one guided command, entirely on your local network. No cloud account, no telemetry. Runs on **Linux, macOS, and Windows**, driven by hand or by AI agents.
+Paste a Printables link, get a physical print. `plate` downloads the model, lays it on its best face, slices it with OrcaSlicer, and sends it to your Bambu Lab printer — one guided command, entirely on your local network. No cloud account, no telemetry. Runs on **Linux, macOS, and Windows**, driven by hand or by AI agents.
 
 ```text
-model URL or file  →  download  →  slice (OrcaSlicer)  →  upload  →  print
-                        one command:  plate go
+model URL or file  →  download  →  orient & slice (OrcaSlicer)  →  upload  →  print
+                            one command:  plate go
 ```
 
 **Who it's for**
@@ -112,12 +112,12 @@ plate tui    # or: plate tui --sim to explore it without a printer
 shell's Python does not reach a `pipx` / `uv tool` environment. Already installed
 without it? `pipx install --force 'platecli[tui]'` (or `pipx inject platecli textual`).</sub>
 
-`plate tui` is a live view of your printer on one screen that keeps updating. It shows the job in large type (percent, time left and the clock time it should finish, layer, and which tray is feeding), the nozzle and bed with their recent history, and the AMS trays in each filament's own colour. There is also a job monitor that follows a running print to completion. You can start a print from it too, through the same prepare-and-confirm flow the wizard uses, so you never have to leave the screen.
+`plate tui` is a live view of your printer on one screen that keeps updating (dark theme by default, with a light theme in the `Ctrl-P` palette). It shows the job in large type (percent, time left and the clock time it should finish, layer, and which tray is feeding), the nozzle and bed with their recent history, and the AMS trays (A1–A4 / B1–B4) in each filament's own colour. There is also a job monitor that follows a running print to completion. You can start a print from it too, through the same prepare-and-confirm flow the wizard uses — including a terminal preview of the sliced pose and an interactive **Orientation** editor (`o` / *Orient…*) to flip between ranked faces or rotate the model right on the plate.
 
-It is a front-end, not new machinery: it slices and builds the `job` request through the same shared code `plate go` runs, so the two cannot drift. Every safety rule holds — a print only ever starts from the confirm dialog, cancelling keeps the sliced file, and leaving the monitor never stops a print. Textual is an optional extra and never a runtime dependency, so `plate go` keeps working with nothing extra installed on SSH, dumb terminals, and with screen readers.
+It is a front-end, not new machinery: it slices and builds the `job` request through the same shared code `plate go` runs, so the two cannot drift. Every safety rule holds — a print only ever starts from the confirm dialog (which re-checks the AMS before sending), cancelling keeps the sliced file, and leaving the monitor never stops a print. Textual is an optional extra and never a runtime dependency, so `plate go` keeps working with nothing extra installed on SSH, dumb terminals, and with screen readers.
 
 <p align="center">
-  <img alt="plate tui: a live printer dashboard — state, temperatures, progress and AMS trays — and the two-column prepare screen it starts prints from" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/tui.gif">
+  <img alt="plate tui: live dashboard with AMS filament cards, two-column prepare screen, interactive orientation editor on a 3DBenchy, and the sliced result with its pose drawing, time and filament estimate" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/tui.gif">
 </p>
 
 ## Try it in 30 seconds
@@ -144,15 +144,31 @@ plate --sim status
 
 <sub>Timestamps and log-level prefixes trimmed for brevity.</sub>
 
+## Orient before you slice
+
+Before OrcaSlicer runs, `slice`, `job`, `send`, and `plate go` automatically lay STL, OBJ, STEP, and unsliced 3MF models on their best face (`--orient auto`, ranking by overhang, height, bed contact, and stability) and draw the pose in your terminal before anything is sliced or sent. Pre-sliced 3MFs are never re-oriented. Override anytime with `--orient keep` (as exported), `--face N`, or repeatable `--rotate x=90` / `--rotate z=45` flags — or inspect the model up front with `plate orient` (terminal ranking) and `plate preview` (a PNG contact sheet of the chosen pose plus every ranked face):
+
+```bash
+plate download "https://www.printables.com/model/3161-3d-benchy" --output .   # saves 3dbenchy.stl
+plate orient 3dbenchy.stl                 # rank faces + draw pose in the terminal
+plate preview 3dbenchy.stl                # write 3dbenchy_preview.png contact sheet
+plate slice 3dbenchy.stl --rotate z=45    # slice it turned 45° on the bed
+```
+
+<p align="center">
+  <img alt="plate preview contact sheet: chosen pose from above and from the front alongside every ranked face with stability warnings" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/preview.png">
+</p>
+
 ## Why platecli
 
-- **One command, whole pipeline** — `plate go` asks the questions; `plate job <url> --confirm` takes flags. Both download, slice, upload, and print in one shot; or run `download` / `slice` / `upload` / `print` individually.
+- **One command, whole pipeline** — `plate go` asks the questions; `plate job <url> --confirm` takes flags. Both download, orient, slice, upload, and print in one shot; or run `download` / `orient` / `preview` / `slice` / `upload` / `print` individually.
+- **See the pose before you slice** — automatic orientation for STL, OBJ, STEP, and unsliced 3MF models with terminal previews, PNG contact sheets (`plate preview`), and an interactive TUI orientation editor.
 - **Fully local & private** — talks straight to the printer over your LAN; no Bambu cloud account, ever.
 - **Deliberate-action gate** — physical commands refuse without `--confirm` (exit `5`), so a typo, a truncated argument list, or a replayed read-only command can't start a print. It is a gate against *accidents*, not an authorization boundary: `plate` cannot tell your `--confirm` from an agent's, so anything you let run `plate` can pass the flag. Sandbox agents accordingly.
-- **AI-agent ready** — every command speaks `--json` with published schemas, plus a `--sim` mode for hardware-free automation.
-- **Watch it live** — `plate status --monitor` follows a print with a live progress bar until it finishes, or run the full-screen `plate tui` (optional `[tui]` extra) for a dashboard you can also start a print from.
+- **AI-agent ready** — every command speaks `--json` with published schemas, `plan_fingerprint` / `--expect-plan` locks a reviewed dry run to execution, and `--sim` provides a fake printer for hardware-free automation.
+- **Watch it live** — `plate status --monitor` follows a print with a live progress bar until it finishes, or run the full-screen `plate tui` (optional `[tui]` extra) for a dashboard you can also orient and start prints from.
 - **Fixes itself findable** — `plate doctor` checks network, FTPS, and MQTT health and tells you exactly what's wrong.
-- **Hardened where it counts** — TLS certificate pinning, SSRF-guarded downloads, and size-capped ZIP extraction.
+- **Hardened where it counts** — TLS certificate pinning, SSRF-guarded downloads, size-capped ZIP extraction, heater-limit checks on raw G-code and pre-sliced files, and at-most-once printer commands (never silently resent on reconnect).
 
 ## Tested and hardened
 
@@ -160,8 +176,8 @@ The numbers in the badges are measured on this repo, not aspirational:
 
 | | |
 |---|---|
-| **Tests** | 2,217 passing (`pytest -m "not live"`, v0.6.0) — unit, contract, property-based (Hypothesis), and Textual pilot tests |
-| **Coverage** | **94.1%** line+branch across the package; CI fails the build below **92%** |
+| **Tests** | 2,887 passing (`pytest -m "not live"`) — unit, contract, property-based (Hypothesis), and Textual pilot tests |
+| **Coverage** | **95.0%** line+branch across the package; CI fails the build below **92%** |
 | **Platforms** | Linux, macOS, and Windows in CI, on Python 3.10 / 3.12 / 3.14 |
 | **Blocking gates** | `ruff`, `ruff format`, `mypy` (whole package, `check_untyped_defs`), `bandit`, `pip-audit`, plus layer-boundary and JSON-schema-drift checks |
 | **Mutation testing** | Nightly whenever `main` has changed, scoped to the safety-critical modules (download validation, SSRF guards, slicer options, job payload) |
@@ -172,8 +188,9 @@ excluded from the report (see `[tool.coverage.report]` in `pyproject.toml`), so 
 number is not inflated by hiding error paths.
 
 Security posture is documented rather than implied: TLS certificate pinning for the
-printer connection, SSRF-guarded model downloads, size-capped archive extraction, and
-a written threat model with its known limitations in
+printer connection, SSRF-guarded model downloads, size-capped archive extraction,
+heater-limit enforcement on raw G-code and pre-sliced files, at-most-once command
+delivery, and a written threat model with its known limitations in
 [SECURITY.md](https://github.com/DLANSAMA/platecli/blob/main/SECURITY.md).
 
 ## How it compares
@@ -183,9 +200,9 @@ these is the better answer:
 
 | Project | What it is | Reach for it when |
 |---|---|---|
-| [Bambuddy](https://github.com/maziggy/bambuddy) (~2.6k ★) | Self-hosted web command center, from a single printer up to a print farm | You want a polished dashboard, a print farm, or a full cloud replacement |
-| [ha-bambulab](https://github.com/greghesp/ha-bambulab) (~2.3k ★) | The Home Assistant integration — sensors, cameras, automations | Your printer should be part of your smart home |
-| [bambulabs_api](https://github.com/BambuTools/bambulabs_api) (~320 ★) / [pybambu](https://github.com/greghesp/pybambu) (~60 ★) | Maintained Python libraries for the printer protocols | You're writing your own application, not running a tool |
+| [Bambuddy](https://github.com/maziggy/bambuddy) (~3.4k ★) | Self-hosted web command center, from a single printer up to a print farm | You want a polished dashboard, a print farm, or a full cloud replacement |
+| [ha-bambulab](https://github.com/greghesp/ha-bambulab) (~2.5k ★) | The Home Assistant integration — sensors, cameras, automations | Your printer should be part of your smart home |
+| [bambulabs_api](https://github.com/BambuTools/bambulabs_api) (~330 ★) / [pybambu](https://github.com/greghesp/pybambu) (~60 ★) | Maintained Python libraries for the printer protocols | You're writing your own application, not running a tool |
 | [davglass/bambu-cli](https://github.com/davglass/bambu-cli) (~95 ★, archived) | A Node.js CLI with a rich command set (unrelated project, same name) | You live in Node and are happy with a project that is no longer maintained |
 | **platecli** | This — a Python CLI for the whole pipeline | You want one command from a model link to a finished print, scriptable and cloud-free |
 
@@ -200,7 +217,14 @@ you can put in a shell script or hand to an agent, use this.
 
 ## Built for AI agents
 
-Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/), `--sim` provides a canned printer (not a protocol test) for development without hardware, and the `--confirm` gate means a print never starts by accident — note that `job` / `send` without `--confirm` still upload (`uploaded_not_printed`); only the six direct printer commands refuse outright. Two commands are deliberately human-only — the `go` wizard and the `tui` full-screen UI refuse `--json` and a non-TTY stdin with exit `5`; `plate job <url> --confirm` is the machine path that does the same work. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
+Every command emits machine-readable `--json` output backed by published [JSON Schemas](https://github.com/DLANSAMA/platecli/tree/main/docs/schemas/) (including `orient`, `preview`, and the `orientation` details on `slice` / `job`), `--sim` provides a canned printer (not a protocol test) for development without hardware, and the `--confirm` gate means a print never starts by accident — note that `job` / `send` without `--confirm` still upload (`uploaded_not_printed`); only the six direct printer commands refuse outright. For review-then-execute workflows, `job` / `send` emit a SHA-256 `plan_fingerprint` (covering the printer, source, local file bytes, and every slicing/print option) that you can enforce with `--expect-plan`:
+
+```bash
+plate job 3dbenchy.stl --dry-run --json                              # review plan_fingerprint
+plate job 3dbenchy.stl --json --confirm --expect-plan <fingerprint>  # exits 5 if anything changed
+```
+
+Two commands are deliberately human-only — the `go` wizard and the `tui` full-screen UI refuse `--json` and a non-TTY stdin with exit `5`; `plate job <url> --confirm` is the machine path that does the same work. See the [user guide](https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md) and [docs/api.md](https://github.com/DLANSAMA/platecli/blob/main/docs/api.md) for the JSON contracts and stability policy.
 
 ## Documentation
 
