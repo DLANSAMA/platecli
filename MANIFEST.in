@@ -1,12 +1,12 @@
 # Source distribution contents for platecli.
 #
 # Ship only user/agent-facing docs + runtime + tests/scripts needed to develop
-# from an sdist. Contributor-only planning docs stay on GitHub (not listed here).
+# from an sdist. Contributor docs stay on GitHub (not listed here).
 #
 # SHIP (sdist): README, AGENTS, SECURITY, CHANGELOG, docs/manual.md, docs/api.md,
 #   docs/troubleshooting.md, docs/schemas/*
 # DO NOT SHIP (repo-only): CONTRIBUTING.md, docs/quality-roadmap.md,
-#   docs/test-backlog.md, docs/mutation-baseline.md, docs/live-printer-smoke.md,
+#   docs/mutation-baseline.md, docs/live-printer-smoke.md, docs/releasing.md,
 #   CLAUDE.md (local exclude), and any other unlisted markdown under docs/.
 # Wheel: runtime package only (setuptools packages.find); no docs in package-data.
 
@@ -18,7 +18,7 @@ include CHANGELOG.md
 include MANIFEST.in
 include pyproject.toml
 
-# User guide + troubleshooting + agent JSON contracts (machine + human). Not the quality/planning docs.
+# User guide + troubleshooting + agent JSON contracts (machine + human). Not the contributor docs.
 include docs/manual.md
 include docs/api.md
 include docs/troubleshooting.md
@@ -33,10 +33,9 @@ recursive-include tests *.py
 # `job`/`print` runs from an sdist have nothing to slice.
 recursive-include tests/fixtures *.stl
 
-# Defense in depth: never pull contributor-only docs if a future recursive rule expands.
+# Defense in depth: never pull contributor docs if a future recursive rule expands.
 global-exclude CLAUDE.md
 global-exclude docs/quality-roadmap.md
-global-exclude docs/test-backlog.md
 global-exclude docs/mutation-baseline.md
 global-exclude docs/live-printer-smoke.md
 global-exclude docs/releasing.md

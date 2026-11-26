@@ -107,23 +107,33 @@ CI pins these tool versions (see `.github/workflows/ci.yml`); running them unpin
 
 A green `pytest` does **not** mean lint/types/security gates are green.
 
-## Quality roadmap
+## Writing tests
 
-Phased plan and **honest scoreboard** (GitHub checkout only — not in the PyPI sdist):
-**[docs/quality-roadmap.md](docs/quality-roadmap.md)**.  
-Remaining gaps: **[docs/test-backlog.md](docs/test-backlog.md)**.  
-Agent/runtime rules: **[AGENTS.md](AGENTS.md)** (ships in sdist).  
-Threat model: **[SECURITY.md](SECURITY.md)** (ships in sdist).  
-JSON contracts: **[docs/api.md](docs/api.md)** + **[docs/schemas/](docs/schemas/)** (ship in sdist).
+- Never touch a real printer or the open internet from the default suite. Use
+  `--sim` for CLI-level tests, or mock at module seams.
+- Patch a function in the module that calls it (for example
+  `bambu_cli.download.downloader.build_safe_opener`), and prefer injecting
+  collaborators over patching module globals.
+- Runtime config goes through `RuntimeContext` / `settings_ctx` / `config_ctx`,
+  not module globals.
+- JSON contracts: assert the full payload shape (`status`, `command`,
+  `failed_step`, `exit_code`, `next_command` where they apply). Schemas live in
+  `docs/schemas/`.
+- Production code must not know it is under test: no `isinstance(..., Mock)`,
+  no `"unittest" in sys.modules`, no `@mockable`.
 
-As of 2026-11-07: overall **A** (no scoreboard row below A−). The 2026-07 audit's four
-architecture/contract gaps have since closed — the domain→`cli` helper extraction
-(B.4), the single-sourced TLS pin verification (B.5), the remaining JSON schemas
-(now *generated* from `bambu_cli/contracts/`, one per `--json` subcommand), and the
-camera bind/pin-fallback hardenings. Main gaps to A+ / 1.0 are now strict typing,
-the camera residuals still listed in SECURITY.md, and the v1.0.0 tag itself
-(coverage is 94.1% on Linux and the CI floor is **92**). Do not read "A−/A" as "A+" — see the
-scoreboard for what is actually ticked.
+## Project docs
+
+- [docs/quality-roadmap.md](docs/quality-roadmap.md): current test and coverage
+  numbers, the quality scoreboard, and what is left before 1.0 (GitHub only).
+- [docs/mutation-baseline.md](docs/mutation-baseline.md): mutation testing scope
+  and floor (GitHub only).
+- [docs/live-printer-smoke.md](docs/live-printer-smoke.md): the opt-in
+  real-printer harness (GitHub only).
+- [docs/releasing.md](docs/releasing.md): release and yank procedure (GitHub only).
+- [AGENTS.md](AGENTS.md): architecture and agent safety rules.
+- [SECURITY.md](SECURITY.md): threat model and known limitations.
+- [docs/api.md](docs/api.md) and [docs/schemas/](docs/schemas/): JSON contracts.
 
 ## Code conventions
 
@@ -134,8 +144,8 @@ scoreboard for what is actually ticked.
   `exit_code`, `next_command` where applicable). When introducing agent-facing fields, edit the
   dataclass in `bambu_cli/contracts/` and run `python scripts/gen_schemas.py` — **never hand-edit
   `docs/schemas/*.json`**, it is generated and CI diffs it.
-- Follow `docs/quality-roadmap.md` and `docs/test-backlog.md` when adding tests.
-- Do not add Claude-Session or similar trailers to commits or PRs.
+- Follow [Writing tests](#writing-tests) when adding tests.
+- Do not add tool or session trailers to commits or PRs.
 
 ## Pull requests and CI
 

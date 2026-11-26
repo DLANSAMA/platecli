@@ -39,12 +39,15 @@
    `pip install platecli`.)
 5. If the release touched FTPS, gcode confirm, slice validation, or job upload, run the
    [live-printer smoke](live-printer-smoke.md) with a printer attached.
-6. **Bump main to the next dev version** (after 0.5.0, that is `0.6.0.dev0`) in a follow-up PR.
+6. **Bump main to the next dev version** (after 0.6.0, that is `0.7.0.dev0`) in a follow-up PR.
    Without this, `main` keeps claiming to be the released version: a contributor or
    agent running from a source checkout reports `plate X.Y.Z` while executing
-   unreleased code, and the bug-report template asks for exactly that string. This
-   step was missed after 0.3.0, which is why main spent a day identifying as 0.3.0
-   while seven commits ahead of the tag.
+   unreleased code, and the bug-report template asks for exactly that string.
+7. **Refresh the measured numbers.** The README's tests and coverage badges are static
+   (no coverage service is wired up). Re-measure with
+   `uv run python -m pytest tests/ -q -m "not live" --cov=bambu_cli --cov-report=term`
+   and update the two badges, the README's quality line, and
+   [quality-roadmap.md](quality-roadmap.md) together.
 
 ## Rollback: there is no rollback, only yank + forward
 

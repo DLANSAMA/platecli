@@ -27,7 +27,7 @@ Read-mostly by default (no motion / no print start):
 3. **job --upload-only** → upload appears in `files --json` as a new remote name.
 4. **Upload → download integrity** — after upload, downloads the remote file via
    the library FTPS path (`printer.download_file`) and checks local size equals
-   remote SIZE (the Phase 0 size-mismatch guard would fail a truncated transfer).
+   remote SIZE (the size-mismatch guard would fail a truncated transfer).
 5. **slice** (when source is sliceable or `BAMBU_LIVE_SLICE_SOURCE` is set) →
    output path is a structurally valid sliced `.3mf` (`_is_valid_sliced_3mf`).
 
@@ -113,4 +113,4 @@ job upload paths:
 4. Optionally enable `BAMBU_LIVE_CLEANUP=1` after success.
 5. Record the run date/host in the release notes if useful (no secrets).
 6. For 1.0 readiness criteria beyond this harness, see
-   [quality-roadmap.md](quality-roadmap.md) §5.
+   [quality-roadmap.md](quality-roadmap.md#before-v100).

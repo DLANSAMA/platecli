@@ -8,7 +8,7 @@ These are SHAPE-locking regression tests, not spec tests: where docs/api.md
 disagrees with actual CLI output we assert the actual output and flag the
 discrepancy, so an accidental shape change is caught here.
 
-Ground rules (docs/test-backlog.md): never touch a real printer/network -- use
+Ground rules (CONTRIBUTING.md, Writing tests): never touch a real printer/network -- use
 `--sim` and a scratch config path; drive the real argv/parser path through
 `bambu_cli.cli.main()`.
 """

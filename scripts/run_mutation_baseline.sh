@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reproduce the Phase 3 mutation-testing baseline for safety-critical pure modules.
+# Run the mutation-testing baseline for the safety-critical pure modules.
 # Config: [tool.mutmut] in pyproject.toml. Docs: docs/mutation-baseline.md.
 #
 # Nightly / workflow_dispatch CI uses this script and enforces MUTATION_SCORE_FLOOR.

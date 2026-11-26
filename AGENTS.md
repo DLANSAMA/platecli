@@ -56,7 +56,7 @@ Logic lives in focused packages; `bambu_cli/bambu.py` is a **thin entrypoint** (
 | `mesh/` | Stdlib-only model geometry (no numpy): read STL/OBJ/3MF, rank the faces a model can lie on (`orient.py`), rotate and write it back (a 3MF keeps every byte but its build item's placement), and rasterize previews (`render.py`, `sheet.py`) |
 | `interactive/` | Shared wizard core (`core.py`: `GoSteps`, presets, override validation) + the `plate go` session. Both interactive front-ends inject at this one seam |
 | `tui/` | Textual full-screen UI (`plate tui`), optional `[tui]` extra. A front-end over `interactive/core.py` — **not** an agent surface (see "human only" above) |
-| `tlspin.py` | The single `verify_cert_fingerprint` used by mqtt, ftps, and camera (fail-closed; B.5) |
+| `tlspin.py` | The single `verify_cert_fingerprint` used by mqtt, ftps, and camera (fail-closed) |
 | `netsafety.py` | SSRF / private-IP guards for download targets |
 | `ams.py` | AMS tray parsing and material matching |
 | `utils.py` | `emit_json` / `emit_json_error` envelopes and shared output helpers |
@@ -101,12 +101,12 @@ Editing a schema by hand will be overwritten and will red CI. Change the model, 
 
 New command logic goes in `commands/` (or a new focused package) using `get_printer()` / `RuntimeContext` and injectable collaborators.
 
-When adding tests, follow [docs/test-backlog.md](docs/test-backlog.md) and the quality plan in [docs/quality-roadmap.md](docs/quality-roadmap.md) (inject collaborators, JSON-contract assertions, no new test-awareness branches in production code).
+When adding tests, follow the rules in [CONTRIBUTING.md](CONTRIBUTING.md#writing-tests) (inject collaborators, JSON-contract assertions, no test-awareness branches in production code).
 
-### Known architecture debt (honest)
+### Known architecture debt
 
 - **`protocols/mqtt.py` is a facade** over `mqtt_tls` / `mqtt_cmd` / `mqtt_print` / `mqtt_monitor` / `mqtt_session`. Keep new MQTT logic in those siblings, not the facade.
-- For the current gap list, see [docs/quality-roadmap.md](docs/quality-roadmap.md).
+- For what is left before 1.0, see [docs/quality-roadmap.md](docs/quality-roadmap.md).
 
 ## Camera snapshots for agents
 
@@ -129,14 +129,14 @@ Published on PyPI as `platecli`; the installed command is `plate`.
 | **Wheel** | Runtime `bambu_cli` package only — no docs, scripts, or tests |
 | **Sdist** | Runtime + tests/scripts + **ship docs**: `README.md`, `AGENTS.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/api.md`, `docs/manual.md`, `docs/troubleshooting.md`, `docs/schemas/*` |
 
-**Repo-only (never in sdist/wheel):** `CONTRIBUTING.md`, `docs/quality-roadmap.md`, `docs/test-backlog.md`, `docs/mutation-baseline.md`, `docs/live-printer-smoke.md`, `docs/releasing.md`, `docs/README.md`, `docs/plans/*`, and local agent notes (not in repo). `MANIFEST.in` ships only the files it lists, and `tests/package_contents_smoke.py` additionally asserts the first six are absent from the sdist (`FORBIDDEN_SDIST_FILES`).
+**Repo-only (never in sdist/wheel):** `CONTRIBUTING.md`, `docs/quality-roadmap.md`, `docs/mutation-baseline.md`, `docs/live-printer-smoke.md`, `docs/releasing.md`, `docs/README.md`, the demo recordings, and local agent notes (not in repo). `MANIFEST.in` ships only the files it lists, and `tests/package_contents_smoke.py` additionally asserts the first five are absent from the sdist (`FORBIDDEN_SDIST_FILES`).
 
 ## Quality gates (agents)
 
 | Gate | Command / note |
 |------|----------------|
 | Default tests | `uv run python -m pytest tests/ -q -m "not live"` — never contacts a printer |
-| Coverage (CI) | `--cov-fail-under=92` (the A+ target — see roadmap) |
+| Coverage (CI) | `--cov-fail-under=92` (see [docs/quality-roadmap.md](docs/quality-roadmap.md)) |
 | Lint | `uvx ruff check bambu_cli` + `uvx ruff format --check bambu_cli` |
 | Types | `uvx mypy -p bambu_cli` |
 | Security lint | `uvx bandit -c pyproject.toml -r bambu_cli -ll` |
@@ -150,7 +150,7 @@ CI pins these tool versions (see `.github/workflows/ci.yml`); running them unpin
 The lint job runs the smokes and the type/security gates **separately from pytest** —
 a passing test suite is not evidence any of them are green.
 
-**Truth sources for quality status:** [docs/quality-roadmap.md](docs/quality-roadmap.md) (scoreboard) and [docs/test-backlog.md](docs/test-backlog.md) (remaining gaps). Prefer those over older blog-style claims.
+**Quality status:** [docs/quality-roadmap.md](docs/quality-roadmap.md) holds the current numbers and what is left before 1.0.
 
 ## Security (agent checklist)
 

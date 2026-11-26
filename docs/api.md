@@ -570,5 +570,4 @@ Machine-checkable schemas live in `docs/schemas/`. Contract tests under
 
 - [AGENTS.md](../AGENTS.md) — agent architecture and safety
 - [SECURITY.md](../SECURITY.md) — threat model
-- [quality-roadmap.md](https://github.com/DLANSAMA/platecli/blob/main/docs/quality-roadmap.md) — quality scoreboard (GitHub/repo only; not in the sdist)
-- [test-backlog.md](https://github.com/DLANSAMA/platecli/blob/main/docs/test-backlog.md) — remaining schema/coverage gaps (GitHub/repo only; not in the sdist)
+- [quality-roadmap.md](https://github.com/DLANSAMA/platecli/blob/main/docs/quality-roadmap.md) — quality scoreboard and what is left before 1.0 (on GitHub; not in the sdist)

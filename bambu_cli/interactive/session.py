@@ -5,7 +5,7 @@ answers through the injectable ``prompts`` layer, builds the same
 ``argparse.Namespace`` the ``job`` command uses, and drives the existing
 download/slice/print pipeline via ``cmd_download`` / ``cmd_slice`` / ``cmd_job``.
 
-Design (see docs/plans/interactive-mode-plan.md §5):
+Design:
 
 * Linear state machine, steps 0-7, each a small function over a plain
   ``WizardState`` dataclass so steps are unit-testable without a TTY.

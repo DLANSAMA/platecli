@@ -211,7 +211,7 @@ jobs:
       - name: no test-awareness in production code (blocking)
         run: |
           if grep -rnE 'isinstance\([^)]*\bMock\b|["'"'"']unittest["'"'"'] in sys\.modules|^\s*(import|from)\s+(unittest|pytest|mock)\b' bambu_cli/; then
-            echo "::error::Test-awareness branch found in production code (see docs/test-backlog.md ground rules)."
+            echo "::error::Test-awareness branch found in production code (see the Writing tests section of CONTRIBUTING.md)."
             exit 1
           fi
       - name: sys.exit only at CLI entry (blocking)

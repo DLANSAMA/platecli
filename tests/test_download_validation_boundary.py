@@ -19,7 +19,7 @@ text couples tests to copy-editing and is the kind of brittleness that makes a
 suite expensive without making it safer — mutants that only change wording are
 recorded as equivalent in docs/mutation-baseline.md rather than chased.
 
-Ground rules (docs/test-backlog.md): no network, no printer.
+Ground rules (CONTRIBUTING.md, Writing tests): no network, no printer.
 """
 
 from __future__ import annotations
