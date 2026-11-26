@@ -101,8 +101,8 @@ and (b) explicit model downloads you request. Key properties:
 
 ## Known limitations
 
-Documented residuals from the threat model and the 2026-07 security audit.
-Tracked for hardening; not all are “bugs” in the sense of broken claims.
+Residual risks from the threat model, and how each is handled. Not all of them
+are bugs; some are accepted trade-offs for a local-network tool.
 
 | Topic | Detail | Status |
 |-------|--------|--------|
@@ -131,5 +131,5 @@ already-compromised local machine or a malicious printer on your own LAN
 ## Related docs
 
 - [AGENTS.md](AGENTS.md) — agent safety checklist  
-- [docs/quality-roadmap.md](https://github.com/DLANSAMA/platecli/blob/main/docs/quality-roadmap.md) — security scoreboard (GitHub/repo only; not in the sdist)
+- [docs/quality-roadmap.md](https://github.com/DLANSAMA/platecli/blob/main/docs/quality-roadmap.md) — quality scoreboard (on GitHub; not in the sdist)
 - [docs/api.md](docs/api.md) — agent JSON contracts  

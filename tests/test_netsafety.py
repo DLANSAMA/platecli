@@ -4,7 +4,7 @@ Exercises `_get_safe_connection` (per-hop IP validation, DNS cache, TOCTOU-safe
 connect-to-resolved-IP) and `build_safe_opener` handler composition. All DNS
 and socket calls are mocked; the network is never touched.
 
-Ground rules (docs/test-backlog.md): patch runtime state via the RuntimeContext
+Ground rules (CONTRIBUTING.md, Writing tests): patch runtime state via the RuntimeContext
 (settings_ctx), never touch the network.
 """
 

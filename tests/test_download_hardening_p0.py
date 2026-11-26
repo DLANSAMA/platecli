@@ -1,11 +1,10 @@
-"""P0 hardening regression tests for the bambu_cli.download package.
+"""Hardening regression tests for the bambu_cli.download package.
 
-Covers gaps documented in docs/test-backlog.md P3: redirect revalidation
-(SSRF + extension), explicit redirect hop cap, mid-stream size enforcement,
-short-read detection, empty-file rejection, and Content-Disposition
-filename hardening (RFC 2231 decoding + extension re-check).
+Covers redirect revalidation (SSRF + extension), the explicit redirect hop cap,
+mid-stream size enforcement, short-read detection, empty-file rejection, and
+Content-Disposition filename hardening (RFC 2231 decoding + extension re-check).
 
-Ground rules (docs/test-backlog.md): patch functions in the module that
+Ground rules (CONTRIBUTING.md, Writing tests): patch functions in the module that
 injects collaborators into _cmd_download, patch runtime state via settings_ctx,
 never touch the network.
 """

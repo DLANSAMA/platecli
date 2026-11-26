@@ -77,7 +77,7 @@ Documentation = "https://github.com/DLANSAMA/platecli/blob/main/docs/manual.md"
 plate = "bambu_cli.bambu:main"
 
 # Package inventory is auto-discovered under bambu_cli* — do not hand-maintain
-# a packages= list (Phase 2 Stage A single source of truth).
+# a packages= list.
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["bambu_cli*"]
@@ -139,16 +139,13 @@ ignore = ["SIM105"]
 "bambu_cli/protocols/mqtt_monitor.py" = ["B023"]
 
 [tool.mypy]
-# Rot-proof gate: check the whole bambu_cli package by default (`uvx mypy -p bambu_cli`).
-# New modules under bambu_cli/ are type-checked automatically — no CI allowlist to keep
-# in sync. Exclude only residual modules that are not yet fully typed (Phase 3 work);
-# remove a path from `exclude` once it is clean rather than adding files to an allowlist.
+# Check the whole bambu_cli package (`uvx mypy -p bambu_cli`). New modules under
+# bambu_cli/ are type-checked automatically, so there is no allowlist to keep in sync.
 python_version = "3.10"
 follow_imports = "silent"
 ignore_missing_imports = true
 warn_unused_ignores = true
 check_untyped_defs = true
-# Full-package typing: no residual excludes (printer.py + slicer/ included).
 
 [tool.bandit]
 exclude_dirs = ["tests", ".claude", "scripts"]
@@ -157,10 +154,10 @@ exclude_dirs = ["tests", ".claude", "scripts"]
 # B402/B321 the printer only speaks FTPS -- that is the tool's purpose.
 skips = ["B101", "B310", "B104", "B402", "B321"]
 
-# Mutation testing (Phase 3 baseline; nightly + workflow_dispatch CI — not per-PR).
+# Mutation testing (nightly + workflow_dispatch CI, not per-PR).
 # Scope = pure safety logic only. Do NOT add subprocess runners (orca, step_convert),
 # live network (downloader), or orchestration I/O (job/orchestrate, job/steps).
-# See docs/mutation-baseline.md for score floor and surviving-mutant notes.
+# See docs/mutation-baseline.md for the score floor and surviving-mutant notes.
 [tool.mutmut]
 source_paths = ["bambu_cli"]
 only_mutate = [

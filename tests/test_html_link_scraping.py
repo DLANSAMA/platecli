@@ -4,7 +4,7 @@ Covers bambu_cli.download.html_links (`_ModelLinkParser`,
 `_resolve_html_model_link`, `_is_html_content_type`) — the fallback path
 that scrapes a direct model/print link out of an arbitrary HTML page when a
 URL is not a recognized Printables model page. Pure parsing logic, no
-network. Ground rules (docs/test-backlog.md): never touch the network.
+network. Ground rules (CONTRIBUTING.md, Writing tests): never touch the network.
 """
 
 from unittest.mock import patch

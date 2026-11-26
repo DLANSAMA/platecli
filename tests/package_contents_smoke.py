@@ -63,7 +63,6 @@ FORBIDDEN_SDIST_FILES = {
     "CONTRIBUTING.md",
     "CLAUDE.md",
     "docs/quality-roadmap.md",
-    "docs/test-backlog.md",
     "docs/mutation-baseline.md",
     "docs/live-printer-smoke.md",
     "docs/releasing.md",

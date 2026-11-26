@@ -1,7 +1,6 @@
 """Upload command: path validation, size/name limits, and the resume/retry path.
 
-Split out of the former 1333-line test_printer_commands.py (docs/test-backlog.md:
-one module per command surface, so a failure names the command it broke)."""
+One module per command surface, so a failure names the command it broke."""
 
 from tests.bambu_test_base import *  # noqa: F401,F403
 

@@ -545,14 +545,14 @@ pip install .
 
 ## Support matrix
 
-OS × Python is what CI runs. Printer models are honest: P1 series on real hardware, everything else best-effort. The full table (including camera caveats and firmware) lives in [docs/api.md](api.md#support-matrix).
+OS × Python is what CI runs. Printers: the P1 series is tested on real hardware, everything else is best-effort. The full table (including camera caveats and firmware) lives in [docs/api.md](api.md#support-matrix).
 
 ## Project layout
 
 - `bambu_cli/` — Runtime package used by the installed command (`plate`).
 - `scripts/bambu.py` — Compatibility wrapper for direct script usage without installing.
 - `tests/` — Unit, contract, security-marker, and smoke tests.
-- `docs/` — API, schemas, quality roadmap, test backlog, mutation baseline, live smoke.
+- `docs/` — User guide, troubleshooting, API reference, JSON schemas, and contributor docs.
 
 ## Documentation map
 
@@ -574,7 +574,6 @@ Wheels contain **runtime code only** (no docs).
 | Doc | Audience |
 |-----|----------|
 | [CONTRIBUTING.md](https://github.com/DLANSAMA/platecli/blob/main/CONTRIBUTING.md) | Dev setup, tests, releases |
-| [docs/quality-roadmap.md](https://github.com/DLANSAMA/platecli/blob/main/docs/quality-roadmap.md) | Quality scoreboard and phased plan |
-| [docs/test-backlog.md](https://github.com/DLANSAMA/platecli/blob/main/docs/test-backlog.md) | Remaining test / coverage gaps |
+| [docs/quality-roadmap.md](https://github.com/DLANSAMA/platecli/blob/main/docs/quality-roadmap.md) | Test and coverage numbers, quality scoreboard, what is left before 1.0 |
 | [docs/live-printer-smoke.md](https://github.com/DLANSAMA/platecli/blob/main/docs/live-printer-smoke.md) | Opt-in real-printer harness |
 | [docs/mutation-baseline.md](https://github.com/DLANSAMA/platecli/blob/main/docs/mutation-baseline.md) | Mutation testing scope and floor |

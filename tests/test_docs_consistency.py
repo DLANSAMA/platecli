@@ -163,9 +163,8 @@ def test_coverage_floor_matches_ci():
     ci_floor = _parse_ci_cov_floor()
 
     roadmap = (ROOT / "docs" / "quality-roadmap.md").read_text(encoding="utf-8")
-    backlog = (ROOT / "docs" / "test-backlog.md").read_text(encoding="utf-8")
 
-    for doc, text in [("quality-roadmap.md", roadmap), ("test-backlog.md", backlog)]:
+    for doc, text in [("quality-roadmap.md", roadmap)]:
         floor = _parse_doc_cov_floor(text)
         assert floor is not None, f"{doc}: could not find 'floor NN' coverage floor citation"
         assert floor == ci_floor, (
@@ -180,8 +179,7 @@ def test_documented_coverage_percent_at_or_above_floor():
     """
     ci_floor = float(_parse_ci_cov_floor())
     roadmap = (ROOT / "docs" / "quality-roadmap.md").read_text(encoding="utf-8")
-    backlog = (ROOT / "docs" / "test-backlog.md").read_text(encoding="utf-8")
-    for doc, text in [("quality-roadmap.md", roadmap), ("test-backlog.md", backlog)]:
+    for doc, text in [("quality-roadmap.md", roadmap)]:
         percent = _parse_doc_cov_percent(text)
         assert percent is not None, f"{doc}: could not find a bold coverage percent like **88.9%**"
         assert percent >= ci_floor, (
@@ -195,20 +193,17 @@ def test_documented_test_count_within_tolerance():
 
     5% catches the 666→718 drift (7.8%) while tolerating a few new tests
     without requiring an immediate doc update. If this test is triggered by
-    growth, update the snapshot numbers in docs/quality-roadmap.md and
-    docs/test-backlog.md.
+    growth, update the snapshot numbers in docs/quality-roadmap.md.
     """
     actual = _collect_test_count()
     tolerance = 0.05
 
     roadmap = (ROOT / "docs" / "quality-roadmap.md").read_text(encoding="utf-8")
-    backlog = (ROOT / "docs" / "test-backlog.md").read_text(encoding="utf-8")
 
     # Extract bold test counts like **718** from each doc.
     # Matches patterns like:
-    #   "**718** non-live tests passing" (quality-roadmap)
-    #   "**718** passing" (test-backlog table cell)
-    for doc, text in [("quality-roadmap.md", roadmap), ("test-backlog.md", backlog)]:
+    #   "**718** non-live tests passing"
+    for doc, text in [("quality-roadmap.md", roadmap)]:
         counts = [int(m) for m in re.findall(r"\*\*(\d{3,4})\*\*\s+(?:non-live\s+)?(?:tests?\s+)?passing", text)]
         assert counts, f"{doc}: could not find a bolded test count like **718** near 'passing'"
         for count in counts:

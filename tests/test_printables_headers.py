@@ -6,7 +6,7 @@ platecli must identify itself to Printables as a first-party API client
 browser-compatible User-Agent for CDN compatibility, with an honest,
 attributable token appended.
 
-Ground rules (docs/test-backlog.md): never touch the network.
+Ground rules (CONTRIBUTING.md, Writing tests): never touch the network.
 """
 
 import json

@@ -77,7 +77,7 @@ def _reset():
 #
 # Checked against build_parser() below instead of being a standalone list: a
 # hand-maintained inventory drifts (this test previously listed 19 names and had
-# already lost status.json), and CLAUDE.md forbids parallel hand-kept inventories.
+# already lost status.json).
 _COMMAND_SCHEMAS = {
     "config": ["config_cmd.json"],
     "delete": ["delete.json"],

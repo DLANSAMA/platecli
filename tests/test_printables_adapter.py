@@ -14,7 +14,7 @@ Two things are under test:
    real point of the package; it is what stops a schema change from taking down
    ``plate job``.
 
-Ground rules (docs/test-backlog.md): never touch the network.
+Ground rules (CONTRIBUTING.md, Writing tests): never touch the network.
 """
 
 from __future__ import annotations

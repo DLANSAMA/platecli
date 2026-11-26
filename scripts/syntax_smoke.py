@@ -3,7 +3,7 @@
 
 All of bambu_cli/, scripts/ and tests/ are auto-discovered. The tests/ list used
 to be a hand-curated sample, which went stale the moment a test module was
-renamed or split — the same failure mode CLAUDE.md warns about for package and
+renamed or split — the same failure mode as hand-kept package and
 help-command inventories. Nothing here is hand-maintained now.
 """
 

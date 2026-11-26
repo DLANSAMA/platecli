@@ -1,7 +1,7 @@
 """Tests for bambu_cli/job/: the job/send download->slice->upload->print
-orchestrator. Covers docs/test-backlog.md P1.
+orchestrator.
 
-Ground rules (docs/test-backlog.md): never touch a real printer or the
+Ground rules (CONTRIBUTING.md, Writing tests): never touch a real printer or the
 network; inject fake step callables via JobSteps instead of monkeypatching
 bambu.cmd_* where injection suffices; assert full JSON payload shapes, not
 just exit codes.

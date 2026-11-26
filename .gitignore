@@ -3,13 +3,24 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
+.coverage
 
-# Dependencies / Virtualenvs
-node_modules/
+# Virtualenvs and dependencies
 .venv/
 venv/
 env/
 bambu_venv/
+node_modules/
+bin/
+lib/
+lib64
+pyvenv.cfg
+
+# Build and release artifacts
+build/
+dist/
+wheelhouse/
 
 # Editors / OS
 .vscode/
@@ -20,74 +31,41 @@ Thumbs.db
 # Logs
 *.log
 
-# Local config / secrets (never commit real printer credentials)
+# Local config and secrets (never commit real printer credentials)
 .env
 .env.*
 config.json
+access_code
 
-# Runtime artifacts written by the CLI
-temp_leaked_study/
-# OrcaSlicer's CLI writes result.json (singular) into the working directory on
-# every slice. The `results.json` entry below never matched it.
+# Files the CLI and OrcaSlicer write into the working directory.
+# OrcaSlicer's CLI writes result.json (singular) on every slice.
 result.json
 results.json
 printer_capabilities.json
 printer_snap.png
-cf.log
-
-# Ignore docs/md files inside node_modules or sub-dependencies
-**/node_modules/**/*.md
-**/node_modules/**/*.markdown
-
-# Build / release artifacts (uv/pip venvs, wheels, sdists)
-bin/
-lib/
-lib64
-pyvenv.cfg
-build/
-dist/
-wheelhouse/
-
-# CLI-generated runtime artifacts and local secrets
-access_code
 printer_snapshot.jpg
-*.3mf
-*.gcode
 
-# local artifacts
-.coverage
-.claude/
-.ruff_cache/
-
-# Local model files
+# Models and sliced output
 downloads/
 *.stl
 *.3mf
 *.gcode
 *.step
-
-# ...except the committed test fixtures, which are the only models in the repo
-# and let `job`/`print` be exercised by hand without dropping a stray model in.
+# ...except the committed test fixtures, the only models in the repo.
 !tests/fixtures/*.stl
 !tests/fixtures/*.3mf
 
-# mutmut mutation testing artifacts
+# Mutation and property-test caches
 mutants/
 .mutmut-cache
-
-# hypothesis property-test cache (local machine paths; never ship)
 .hypothesis/
 
-
-# Raw VHS captures. The tapes write a full-length recording (docs/job-hero.mp4
-# is 2.3 MB of mostly dead air) and only the trimmed cut is worth committing —
-# scripts/trim_hero.sh turns one into the other. These are untracked AND were
-# unignored, so a `git add -A` swept a raw capture into an unrelated test PR
-# once (#102). Commit the *-post.* cut deliberately instead.
-docs/job-hero.mp4
-docs/*-raw.mp4
+# Raw screen recordings (only the finished README demos are committed)
+docs/*.mp4
 docs/*-raw.gif
 
-# Local planning notes (kept out of the public repo)
+# Local agent and planning notes (kept out of the public repo)
+.claude/
+.jules/
 /docs/MASTER-PLAN.md
 /docs/plan/
