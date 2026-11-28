@@ -134,7 +134,11 @@ plate tui                       # or: plate tui --sim to explore it without a pr
 It shares its slicing and job code with `plate go`, so the two cannot drift, and every safety rule holds: a print only starts from the confirm dialog, cancelling keeps the sliced file, and leaving the monitor never stops a print. Textual is never a required dependency, so `plate go` keeps working over SSH, on dumb terminals, and with screen readers.
 
 <p align="center">
-  <img alt="plate tui: live dashboard with AMS filament cards, two-column prepare screen, interactive orientation editor on a 3DBenchy, and the sliced result with its pose drawing, time and filament estimate" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/tui.gif">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/tui-dark.gif">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/tui-light.gif">
+  <img alt="plate tui: live dashboard with AMS filament cards, two-column prepare screen, interactive orientation editor on a 3DBenchy, and the sliced result with its pose drawing, time and filament estimate" src="https://raw.githubusercontent.com/DLANSAMA/platecli/main/docs/tui-dark.gif">
+</picture>
 </p>
 
 ## Orient before you slice

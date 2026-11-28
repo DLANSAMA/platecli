@@ -212,6 +212,17 @@ TrayCard > .tray--meter-low { color: $error; }
 TrayCard > .tray--track { color: $panel-lighten-2; }
 TrayCard > .tray--muted { color: $text-muted; }
 
+/* Light theme: lightening the panel colour gives near-white, which vanishes on
+   the pale background, so the quiet outlines and tracks darken it instead. */
+.-light-mode JobHero.-tone-idle, .-light-mode JobHero.-tone-busy { border: round $panel-darken-2; }
+.-light-mode TempCard { border: round $panel-darken-2; }
+.-light-mode .ams-unit { border: round $panel-darken-2; }
+.-light-mode .tray-card { border: round $panel-darken-2; }
+.-light-mode .tray-card.-active { border: round $primary; }
+.-light-mode WideBar > .widebar--todo { color: $panel-darken-2; }
+.-light-mode Spark > .spark--baseline { color: $panel-darken-2; }
+.-light-mode TrayCard > .tray--track { color: $panel-darken-2; }
+
 
 /* Prepare flow (Phase 2). */
 

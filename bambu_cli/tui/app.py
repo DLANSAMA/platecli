@@ -28,7 +28,7 @@ from bambu_cli.tui.screens.dashboard import DashboardScreen
 from bambu_cli.tui.screens.help import HelpScreen
 from bambu_cli.tui.screens.monitor import MonitorScreen
 from bambu_cli.tui.screens.prepare import PreflightErrorScreen, PrepareScreen
-from bambu_cli.tui.theme import DEFAULT_THEME, THEMES
+from bambu_cli.tui.theme import THEMES, resolve_theme
 
 _CSS_PATH = Path(__file__).with_name("styles.tcss")
 
@@ -55,7 +55,13 @@ class PlateApp(App):
         super().__init__()
         for theme in THEMES:
             self.register_theme(theme)
-        self.theme = DEFAULT_THEME
+        self.theme = resolve_theme()
+        # Textual itself reads TEXTUAL_THEME as the reactive's starting value,
+        # before our themes are registered. When that is the name we just
+        # resolved, the assignment above changes nothing, no watcher runs, and
+        # the app keeps the fallback dark styling under a light theme name.
+        # Re-apply it explicitly so the theme's classes and CSS are set.
+        self.mutate_reactive(App.theme)
         self._args = args
         self._deps = deps if deps is not None else TuiDeps()
         # True while an upload / print-start worker is running: quitting then

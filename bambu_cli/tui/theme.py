@@ -2,11 +2,15 @@
 
 ``platecli`` is the default: a dark theme in the project's teal, from the
 social card. ``platecli-light`` is its light twin, for anyone who switches theme
-from the command palette (ctrl+p). Every colour the TUI draws comes from these
+from the command palette (ctrl+p) or starts with ``TEXTUAL_THEME=platecli-light``
+(Textual's own variable; see ``resolve_theme``). Every colour the TUI draws comes from these
 theme variables, except an AMS swatch, which is the filament's own colour.
 """
 
 from __future__ import annotations
+
+import os
+from collections.abc import Mapping
 
 from textual.theme import Theme
 
@@ -42,3 +46,16 @@ PLATE_LIGHT = Theme(
 
 THEMES = (PLATE_DARK, PLATE_LIGHT)
 DEFAULT_THEME = PLATE_DARK.name
+THEME_ENV = "TEXTUAL_THEME"
+
+
+def resolve_theme(environ: Mapping[str, str] | None = None) -> str:
+    """The theme ``plate tui`` starts in: ``TEXTUAL_THEME`` if it names one of ours.
+
+    Only the two platecli themes are accepted. The stylesheet is drawn for
+    them, so a ``TEXTUAL_THEME`` set for some other Textual app (or misspelt)
+    falls back to the default instead of restyling or failing the UI.
+    """
+    env = os.environ if environ is None else environ
+    wanted = env.get(THEME_ENV, "").strip()
+    return wanted if wanted in {theme.name for theme in THEMES} else DEFAULT_THEME
