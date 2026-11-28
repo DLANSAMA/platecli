@@ -1057,3 +1057,37 @@ def test_draw_views_side_by_side_with_captions():
     # Two 19-cell pictures and a 2-cell gap on every picture row.
     assert all(len(line) == 40 for line in lines[:-1])
     assert all(line[19:21] == "  " for line in lines[:-1])
+
+
+def test_draw_model_paints_the_requested_backdrop():
+    text = draw_model(box(10, 10, 10), rotation_about("z", 0), 20, 6, background=(246, 248, 250))
+    corner = text.spans[0].style
+    assert corner.color.get_truecolor() == (246, 248, 250)
+    assert corner.bgcolor.get_truecolor() == (246, 248, 250)
+
+
+async def test_model_view_backdrop_follows_a_light_theme():
+    from textual.app import App
+
+    from bambu_cli.mesh.render import BACKGROUND
+    from bambu_cli.tui.theme import THEMES
+    from bambu_cli.tui.widgets.model_view import ModelView
+
+    class Host(App):
+        def compose(self):
+            yield ModelView(id="m")
+
+    app = Host()
+    for theme in THEMES:
+        app.register_theme(theme)
+    app.theme = "platecli"
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = app.query_one("#m", ModelView)
+        # Dark keeps the renderer's own backdrop, the same picture as `plate preview`.
+        assert view.backdrop() == BACKGROUND
+        app.theme = "platecli-light"
+        await pilot.pause()
+        backdrop = view.backdrop()
+        assert backdrop == tuple(view.background_colors[1].rgb)
+        assert min(backdrop) > 200  # a pale backdrop, not a black box on a light screen

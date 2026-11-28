@@ -298,7 +298,7 @@ Without the extra, `plate tui` exits `1` (config error) with the install command
 | `f` `F` `x` `y` `z` `[` `]` `a` `0` `v` | On the orientation screen: face, turn, spin, auto, as exported, view |
 | `Esc` | Back — from prepare, from the confirm dialog, or from the monitor |
 | `q` / `Ctrl-Q` | Quit (refused while an upload or print-start is in flight) |
-| `Ctrl-P` | Command palette; *Change theme* switches to the light `platecli-light` theme for the rest of the session |
+| `Ctrl-P` | Command palette; *Change theme* switches to the light `platecli-light` theme for the rest of the session (to start in it: `TEXTUAL_THEME=platecli-light plate tui`) |
 
 Each screen's footer lists only the keys that do something there; the help overlay lists all of them.
 

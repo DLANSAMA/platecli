@@ -1,5 +1,5 @@
-# TUI recording for the README. Regenerate from the repo root with:
-#   vhs docs/tui.tape
+# TUI recording for the README (light twin). Regenerate from the repo root with:
+#   vhs docs/tui-light.tape
 # Requires: vhs, an installed `plate` in .venv/bin WITH the tui extra
 # (uv pip install -e '.[tui]'), OrcaSlicer configured, and 3dbenchy.stl in the
 # repo root (the README's example model; *.stl is gitignored):
@@ -8,9 +8,13 @@
 # screen, the interactive Orientation editor (`o`), and the sliced result (pose
 # drawing, time and filament) without needing a live printer.
 #
-# There is no dark/light pair for this one, unlike demo-*/doctor-*: Textual
-# paints its own background, so the terminal theme barely shows through. One
-# capture serves both README color schemes.
+# Dark/light pair, like demo-*/doctor-*: tui-dark.tape and tui-light.tape share
+# one script and one window size and differ in three lines only: Output, the
+# window (MarginFill + Theme, the same as demo-dark/demo-light) and the
+# TEXTUAL_THEME exported in the Hide block. Textual paints its own background,
+# so the terminal theme alone barely shows; the hidden export starts the app in
+# its own `platecli` or `platecli-light` theme (bambu_cli/tui/theme.py). Change
+# the script in both tapes together.
 #
 # Window must be at least 100 COLUMNS wide: below that the prepare screen
 # deliberately collapses to a single column (see PrepareScreen._apply_layout),
@@ -31,7 +35,7 @@
 # fingerprint). --sim avoids real printer data, but the shell prompt and any
 # paths on screen are still yours.
 
-Output docs/tui.gif
+Output docs/tui-light.gif
 
 Set Shell "bash"
 Set FontFamily "Hack"
@@ -40,14 +44,14 @@ Set Width 1200
 Set Height 850
 Set Padding 24
 Set Margin 36
-Set MarginFill "#16295e"
+Set MarginFill "#1e3a8a"
 Set BorderRadius 14
 Set WindowBar Colorful
 Set WindowBarSize 44
-Set Theme { "name": "platecli", "background": "#1c1f26", "foreground": "#e6edf3", "cursor": "#5eead4", "black": "#2a2e38", "red": "#ff5f57", "green": "#28c840", "yellow": "#febc2e", "blue": "#58a6ff", "magenta": "#bc8cff", "cyan": "#5eead4", "white": "#e6edf3", "brightBlack": "#8b949e", "brightRed": "#ff7b72", "brightGreen": "#3fb950", "brightYellow": "#d29922", "brightBlue": "#79c0ff", "brightMagenta": "#d2a8ff", "brightCyan": "#5eead4", "brightWhite": "#f5f5f5" }
+Set Theme { "name": "platecli-light", "background": "#ffffff", "foreground": "#1f2328", "cursor": "#0f766e", "black": "#24292f", "red": "#cf222e", "green": "#1a7f37", "yellow": "#9a6700", "blue": "#0969da", "magenta": "#8250df", "cyan": "#0f766e", "white": "#6e7781", "brightBlack": "#57606a", "brightRed": "#a40e26", "brightGreen": "#1a7f37", "brightYellow": "#bf8700", "brightBlue": "#218bff", "brightMagenta": "#a475f9", "brightCyan": "#0f766e", "brightWhite": "#1f2328" }
 
 Hide
-Type "export PATH=$PWD/.venv/bin:$PATH && clear"
+Type "export PATH=$PWD/.venv/bin:$PATH TEXTUAL_THEME=platecli-light && clear"
 Enter
 Show
 

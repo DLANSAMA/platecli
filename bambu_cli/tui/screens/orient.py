@@ -27,6 +27,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Static
 
 from bambu_cli.mesh import OrientRequest
+from bambu_cli.mesh.render import RGB
 from bambu_cli.tui.orient_model import (
     FACE_HEADER,
     QUARTER_TURN,
@@ -167,18 +168,20 @@ class OrientScreen(Screen[Any]):
         if editor is None:
             return
         self._draws += 1
-        columns, rows = self.query_one("#orient-view", ModelView).cell_size()
+        model_view = self.query_one("#orient-view", ModelView)
+        columns, rows = model_view.cell_size()
+        backdrop = model_view.backdrop()
         self.run_worker(
-            partial(self._draw_worker, self._draws, editor.plan.rotation, editor.view, columns, rows),
+            partial(self._draw_worker, self._draws, editor.plan.rotation, editor.view, columns, rows, backdrop),
             thread=True,
             exclusive=True,
             group="orient-draw",
             exit_on_error=False,
         )
 
-    def _draw_worker(self, ticket: int, rotation: Any, view: str, columns: int, rows: int) -> None:
+    def _draw_worker(self, ticket: int, rotation: Any, view: str, columns: int, rows: int, backdrop: RGB) -> None:
         assert self.editor is not None  # noqa: S101 -- set before any draw is queued
-        picture = draw_model(self.editor.loaded.mesh, rotation, columns, rows, view=view)
+        picture = draw_model(self.editor.loaded.mesh, rotation, columns, rows, view=view, background=backdrop)
         self.app.call_from_thread(self._show, ticket, picture)
 
     def _show(self, ticket: int, picture: Text) -> None:

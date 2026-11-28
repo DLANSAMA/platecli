@@ -416,12 +416,58 @@ def _app(snapshots):
     return PlateApp(args, TuiDeps(status_provider=_Scripted(snapshots)))
 
 
-async def test_app_uses_the_platecli_theme():
+async def test_app_uses_the_platecli_theme(monkeypatch):
+    monkeypatch.delenv("TEXTUAL_THEME", raising=False)
     app = _app([_snap()])
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.theme == "platecli"
         assert "platecli-light" in app.available_themes
+
+
+async def test_textual_theme_env_starts_the_app_in_the_light_theme(monkeypatch):
+    monkeypatch.setenv("TEXTUAL_THEME", "platecli-light")
+    app = _app([_snap()])
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.theme == "platecli-light"
+        assert app.current_theme.dark is False
+
+
+def test_textual_theme_env_set_before_import_still_applies_the_light_styling():
+    """Textual reads TEXTUAL_THEME at import time as the theme's starting value.
+
+    Our assignment of the same name is then a no-op for the reactive, so the
+    app once kept dark styling under the light theme's name. Only a fresh
+    interpreter has the variable set before Textual is imported.
+    """
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "import argparse\n"
+        "from bambu_cli.tui.app import PlateApp\n"
+        "app = PlateApp(argparse.Namespace(cmd='tui', sim=False, json=False, verbose=False))\n"
+        "print(app.theme, app.has_class('-light-mode'), app.has_class('-dark-mode'),"
+        " app.has_class('-theme-platecli-light'))\n"
+    )
+    env = {**os.environ, "TEXTUAL_THEME": "platecli-light"}
+    result = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True)
+    assert result.stdout.split() == ["platecli-light", "True", "False", "True"]
+
+
+def test_resolve_theme_accepts_only_the_platecli_themes():
+    from bambu_cli.tui.theme import resolve_theme
+
+    assert resolve_theme({}) == "platecli"
+    assert resolve_theme({"TEXTUAL_THEME": "platecli-light"}) == "platecli-light"
+    assert resolve_theme({"TEXTUAL_THEME": " platecli-light "}) == "platecli-light"
+    assert resolve_theme({"TEXTUAL_THEME": "platecli"}) == "platecli"
+    # Set for some other Textual app, misspelt, or empty: keep the default.
+    assert resolve_theme({"TEXTUAL_THEME": "textual-dark"}) == "platecli"
+    assert resolve_theme({"TEXTUAL_THEME": "no-such-theme"}) == "platecli"
+    assert resolve_theme({"TEXTUAL_THEME": ""}) == "platecli"
 
 
 async def test_tray_card_paints_the_filament_colour():

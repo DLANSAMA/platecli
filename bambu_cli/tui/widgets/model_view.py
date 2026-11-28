@@ -14,7 +14,7 @@ from rich.text import Text
 from textual.widgets import Static
 
 from bambu_cli.mesh import Matrix, Mesh
-from bambu_cli.mesh.render import Image, render
+from bambu_cli.mesh.render import BACKGROUND, RGB, Image, render
 
 _HALF = "▀"
 
@@ -47,10 +47,12 @@ def half_blocks(image: Image) -> Text:
     return text
 
 
-def draw_model(mesh: Mesh, rotation: Matrix, columns: int, rows: int, *, view: str = "iso") -> Text:
+def draw_model(
+    mesh: Mesh, rotation: Matrix, columns: int, rows: int, *, view: str = "iso", background: RGB = BACKGROUND
+) -> Text:
     """Render ``mesh`` in ``rotation`` to fit ``columns`` × ``rows`` cells."""
     columns, rows = max(columns, 2), max(rows, 1)
-    return half_blocks(render(mesh, rotation, columns, rows * 2, view=view, grid=False))
+    return half_blocks(render(mesh, rotation, columns, rows * 2, view=view, background=background, grid=False))
 
 
 def draw_views(
@@ -60,11 +62,16 @@ def draw_views(
     rows: int,
     views: tuple[tuple[str, str], ...] = (("iso", "from above"), ("front", "from the front")),
     gap: int = 2,
+    *,
+    background: RGB = BACKGROUND,
 ) -> Text:
     """Several views of ``mesh`` side by side in ``columns`` × ``rows`` cells, captioned on the last row."""
     picture_rows = max(rows - 1, 1)
     width = max(2, (columns - gap * (len(views) - 1)) // len(views))
-    pictures = [draw_model(mesh, rotation, width, picture_rows, view=view).split("\n") for view, _label in views]
+    pictures = [
+        draw_model(mesh, rotation, width, picture_rows, view=view, background=background).split("\n")
+        for view, _label in views
+    ]
     text = Text(no_wrap=True, overflow="crop")
     for row in range(min(len(lines) for lines in pictures)):
         for n, lines in enumerate(pictures):
@@ -92,3 +99,15 @@ class ModelView(Static):
         """The cells available for the picture."""
         size = self.content_size
         return size.width, size.height
+
+    def backdrop(self) -> RGB:
+        """The colour behind the model: the renderer's own dark one, or this widget's in a light theme.
+
+        The dark theme keeps the renderer's backdrop (the same picture as
+        ``plate preview``); in a light theme that would be a black box on a
+        pale screen, so the picture takes the colour it is drawn on.
+        """
+        if self.app.current_theme.dark:
+            return BACKGROUND
+        red, green, blue = self.background_colors[1].rgb
+        return (red, green, blue)

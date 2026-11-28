@@ -52,6 +52,7 @@ from bambu_cli.interactive.core import (
     under_workdir,
     validate_source,
 )
+from bambu_cli.mesh.render import RGB
 from bambu_cli.paths import expand_path
 from bambu_cli.tui.orient_model import DEFAULT_REQUEST, pose_line
 from bambu_cli.tui.services import PrepareResult, carry_fetched_model, needs_fetch
@@ -553,21 +554,22 @@ class PrepareScreen(Screen):
     def _start_pose_draw(self, ticket: int, model_path: str, rotation: Any) -> None:
         if self._left_screen or ticket != self._pose_draws:
             return
-        columns, rows = self.query_one("#pose-view", ModelView).cell_size()
+        pose_view = self.query_one("#pose-view", ModelView)
+        columns, rows = pose_view.cell_size()
         self.run_worker(
-            partial(self._pose_worker, ticket, model_path, rotation, columns, rows),
+            partial(self._pose_worker, ticket, model_path, rotation, columns, rows, pose_view.backdrop()),
             thread=True,
             exclusive=True,
             group="pose-draw",
             exit_on_error=False,
         )
 
-    def _pose_worker(self, ticket: int, model_path: str, rotation: Any, columns: int, rows: int) -> None:
+    def _pose_worker(self, ticket: int, model_path: str, rotation: Any, columns: int, rows: int, backdrop: RGB) -> None:
         loaded, _error = self._deps.get_pipeline().load_pose_model(model_path)
         if loaded is None:
             return  # the line still says how it lies
         (a, b, c), (d, e, f), (g, h, i) = ([float(v) for v in row] for row in rotation)
-        picture = draw_views(loaded.mesh, ((a, b, c), (d, e, f), (g, h, i)), columns, rows)
+        picture = draw_views(loaded.mesh, ((a, b, c), (d, e, f), (g, h, i)), columns, rows, background=backdrop)
         self.app.call_from_thread(self._pose_drawn, ticket, picture)
 
     def _pose_drawn(self, ticket: int, picture: Any) -> None:
